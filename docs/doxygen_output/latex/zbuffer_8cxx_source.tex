@@ -1,0 +1,667 @@
+\doxysection{zbuffer.\+cxx}
+\hypertarget{zbuffer_8cxx_source}{}\label{zbuffer_8cxx_source}\index{panda/src/tinydisplay/zbuffer.cxx@{panda/src/tinydisplay/zbuffer.cxx}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00002\ \textcolor{comment}{}}
+\DoxyCodeLine{00003\ \textcolor{comment}{\ *\ Z\ buffer:\ 16\ bits\ Z\ /\ 32\ bits\ color}}
+\DoxyCodeLine{00004\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00005\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#include\ <stdlib.h>}}
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#include\ <stdio.h>}}
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#include\ <assert.h>}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#include\ <string.h>}}
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#include\ "{}zbuffer.h"{}}}
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnotify_8h}{pnotify.h}}"{}}}
+\DoxyCodeLine{00012\ }
+\DoxyCodeLine{00013\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00014\ \textcolor{keywordtype}{int}\ pixel\_count\_white\_untextured;}
+\DoxyCodeLine{00015\ \textcolor{keywordtype}{int}\ pixel\_count\_flat\_untextured;}
+\DoxyCodeLine{00016\ \textcolor{keywordtype}{int}\ pixel\_count\_smooth\_untextured;}
+\DoxyCodeLine{00017\ \textcolor{keywordtype}{int}\ pixel\_count\_white\_textured;}
+\DoxyCodeLine{00018\ \textcolor{keywordtype}{int}\ pixel\_count\_flat\_textured;}
+\DoxyCodeLine{00019\ \textcolor{keywordtype}{int}\ pixel\_count\_smooth\_textured;}
+\DoxyCodeLine{00020\ \textcolor{keywordtype}{int}\ pixel\_count\_white\_perspective;}
+\DoxyCodeLine{00021\ \textcolor{keywordtype}{int}\ pixel\_count\_flat\_perspective;}
+\DoxyCodeLine{00022\ \textcolor{keywordtype}{int}\ pixel\_count\_smooth\_perspective;}
+\DoxyCodeLine{00023\ \textcolor{keywordtype}{int}\ pixel\_count\_smooth\_multitex2;}
+\DoxyCodeLine{00024\ \textcolor{keywordtype}{int}\ pixel\_count\_smooth\_multitex3;}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \textcolor{keyword}{using\ }std::max;}
+\DoxyCodeLine{00028\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ \mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *}
+\DoxyCodeLine{00031\ ZB\_open(\textcolor{keywordtype}{int}\ xsize,\ \textcolor{keywordtype}{int}\ ysize,\ \textcolor{keywordtype}{int}\ mode,}
+\DoxyCodeLine{00032\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ nb\_colors,}
+\DoxyCodeLine{00033\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *color\_indexes,}
+\DoxyCodeLine{00034\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ *color\_table,}
+\DoxyCodeLine{00035\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{void}\ *frame\_buffer)\ \{}
+\DoxyCodeLine{00036\ \ \ \mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *zb;}
+\DoxyCodeLine{00037\ \ \ \textcolor{keywordtype}{int}\ size;}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \ \ zb\ =\ (\mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *)gl\_malloc(\textcolor{keyword}{sizeof}(\mbox{\hyperlink{structZBuffer}{ZBuffer}}));}
+\DoxyCodeLine{00040\ \ \ \textcolor{keywordflow}{if}\ (zb\ ==\ \textcolor{keyword}{nullptr})}
+\DoxyCodeLine{00041\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00042\ \ \ memset(zb,\ 0,\ \textcolor{keyword}{sizeof}(\mbox{\hyperlink{structZBuffer}{ZBuffer}}));}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00044\ \ \ \textcolor{comment}{/*\ xsize\ must\ be\ a\ multiple\ of\ 4\ */}}
+\DoxyCodeLine{00045\ \ \ xsize\ =\ (xsize\ +\ 3)\ \&\ \string~3;}
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00047\ \ \ zb-\/>xsize\ =\ xsize;}
+\DoxyCodeLine{00048\ \ \ zb-\/>ysize\ =\ ysize;}
+\DoxyCodeLine{00049\ \ \ zb-\/>mode\ =\ mode;}
+\DoxyCodeLine{00050\ \ \ zb-\/>linesize\ =\ (xsize\ *\ PSZB\ +\ 3)\ \&\ \string~3;}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \ \ \textcolor{keywordflow}{switch}\ (mode)\ \{}
+\DoxyCodeLine{00053\ \textcolor{preprocessor}{\#ifdef\ TGL\_FEATURE\_8\_BITS}}
+\DoxyCodeLine{00054\ \ \ \textcolor{keywordflow}{case}\ ZB\_MODE\_INDEX:}
+\DoxyCodeLine{00055\ \ \ \ \ ZB\_initDither(zb,\ nb\_colors,\ color\_indexes,\ color\_table);}
+\DoxyCodeLine{00056\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00057\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00058\ \textcolor{preprocessor}{\#ifdef\ TGL\_FEATURE\_32\_BITS}}
+\DoxyCodeLine{00059\ \ \ \textcolor{keywordflow}{case}\ ZB\_MODE\_RGBA:}
+\DoxyCodeLine{00060\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00061\ \textcolor{preprocessor}{\#ifdef\ TGL\_FEATURE\_24\_BITS}}
+\DoxyCodeLine{00062\ \ \ \textcolor{keywordflow}{case}\ ZB\_MODE\_RGB24:}
+\DoxyCodeLine{00063\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00064\ \ \ \textcolor{keywordflow}{case}\ ZB\_MODE\_5R6G5B:}
+\DoxyCodeLine{00065\ \ \ \ \ zb-\/>nb\_colors\ =\ 0;}
+\DoxyCodeLine{00066\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00067\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00068\ \ \ \ \ \textcolor{keywordflow}{goto}\ error;}
+\DoxyCodeLine{00069\ \ \ \}}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00071\ \ \ size\ =\ zb-\/>xsize\ *\ zb-\/>ysize\ *\ \textcolor{keyword}{sizeof}(ZPOINT);}
+\DoxyCodeLine{00072\ }
+\DoxyCodeLine{00073\ \ \ zb-\/>zbuf\ =\ (ZPOINT\ *)gl\_malloc(size);}
+\DoxyCodeLine{00074\ \ \ \textcolor{keywordflow}{if}\ (zb-\/>zbuf\ ==\ \textcolor{keyword}{nullptr})}
+\DoxyCodeLine{00075\ \ \ \ \ \textcolor{keywordflow}{goto}\ error;}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00077\ \ \ \textcolor{keywordflow}{if}\ (frame\_buffer\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00078\ \ \ \ \ zb-\/>pbuf\ =\ (PIXEL\ *)gl\_malloc(zb-\/>ysize\ *\ zb-\/>linesize);}
+\DoxyCodeLine{00079\ \ \ \ \ \textcolor{keywordflow}{if}\ (zb-\/>pbuf\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ gl\_free(zb-\/>zbuf);}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \textcolor{keywordflow}{goto}\ error;}
+\DoxyCodeLine{00082\ \ \ \ \ \}}
+\DoxyCodeLine{00083\ \ \ \ \ zb-\/>frame\_buffer\_allocated\ =\ 1;}
+\DoxyCodeLine{00084\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00085\ \ \ \ \ zb-\/>frame\_buffer\_allocated\ =\ 0;}
+\DoxyCodeLine{00086\ \ \ \ \ zb-\/>pbuf\ =\ (PIXEL\ *)frame\_buffer;}
+\DoxyCodeLine{00087\ \ \ \}}
+\DoxyCodeLine{00088\ }
+\DoxyCodeLine{00089\ \ \ \textcolor{keywordflow}{return}\ zb;}
+\DoxyCodeLine{00090\ \ error:}
+\DoxyCodeLine{00091\ \ \ gl\_free(zb);}
+\DoxyCodeLine{00092\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00093\ \}}
+\DoxyCodeLine{00094\ }
+\DoxyCodeLine{00095\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00096\ ZB\_close(\mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *\ zb)\ \{}
+\DoxyCodeLine{00097\ \textcolor{preprocessor}{\#ifdef\ TGL\_FEATURE\_8\_BITS}}
+\DoxyCodeLine{00098\ \ \ \textcolor{keywordflow}{if}\ (zb-\/>mode\ ==\ ZB\_MODE\_INDEX)}
+\DoxyCodeLine{00099\ \ \ \ \ ZB\_closeDither(zb);}
+\DoxyCodeLine{00100\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \ \ \textcolor{keywordflow}{if}\ (zb-\/>frame\_buffer\_allocated)}
+\DoxyCodeLine{00103\ \ \ \ \ gl\_free(zb-\/>pbuf);}
+\DoxyCodeLine{00104\ }
+\DoxyCodeLine{00105\ \ \ gl\_free(zb-\/>zbuf);}
+\DoxyCodeLine{00106\ \ \ gl\_free(zb);}
+\DoxyCodeLine{00107\ \}}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00110\ ZB\_resize(\mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *\ zb,\ \textcolor{keywordtype}{void}\ *frame\_buffer,\ \textcolor{keywordtype}{int}\ xsize,\ \textcolor{keywordtype}{int}\ ysize)\ \{}
+\DoxyCodeLine{00111\ \ \ \textcolor{keywordtype}{int}\ size;}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00113\ \ \ nassertv(zb\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \ \ \textcolor{comment}{/*\ xsize\ must\ be\ a\ multiple\ of\ 4\ */}}
+\DoxyCodeLine{00116\ \ \ xsize\ =\ (xsize\ +\ 3)\ \&\ \string~3;}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \ \ zb-\/>xsize\ =\ xsize;}
+\DoxyCodeLine{00119\ \ \ zb-\/>ysize\ =\ ysize;}
+\DoxyCodeLine{00120\ \ \ zb-\/>linesize\ =\ (xsize\ *\ PSZB\ +\ 3)\ \&\ \string~3;}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00122\ \ \ size\ =\ zb-\/>xsize\ *\ zb-\/>ysize\ *\ \textcolor{keyword}{sizeof}(ZPOINT);}
+\DoxyCodeLine{00123\ \ \ gl\_free(zb-\/>zbuf);}
+\DoxyCodeLine{00124\ \ \ zb-\/>zbuf\ =\ (ZPOINT\ *)gl\_malloc(size);}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \ \ \textcolor{keywordflow}{if}\ (zb-\/>frame\_buffer\_allocated)}
+\DoxyCodeLine{00127\ \ \ \ \ gl\_free(zb-\/>pbuf);}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00129\ \ \ \textcolor{keywordflow}{if}\ (frame\_buffer\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00130\ \ \ \ \ zb-\/>pbuf\ =\ (PIXEL\ *)gl\_malloc(zb-\/>ysize\ *\ zb-\/>linesize);}
+\DoxyCodeLine{00131\ \ \ \ \ zb-\/>frame\_buffer\_allocated\ =\ 1;}
+\DoxyCodeLine{00132\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00133\ \ \ \ \ zb-\/>pbuf\ =\ (PIXEL\ *)frame\_buffer;}
+\DoxyCodeLine{00134\ \ \ \ \ zb-\/>frame\_buffer\_allocated\ =\ 0;}
+\DoxyCodeLine{00135\ \ \ \}}
+\DoxyCodeLine{00136\ \}}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00139\ ZB\_copyBuffer(\textcolor{keyword}{const}\ \mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *\ zb,}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{void}\ *buf,}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ linesize)\ \{}
+\DoxyCodeLine{00142\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *p1;}
+\DoxyCodeLine{00143\ \ \ PIXEL\ *q;}
+\DoxyCodeLine{00144\ \ \ \textcolor{keywordtype}{int}\ y,\ n;}
+\DoxyCodeLine{00145\ }
+\DoxyCodeLine{00146\ \ \ q\ =\ zb-\/>pbuf;}
+\DoxyCodeLine{00147\ \ \ p1\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)buf;}
+\DoxyCodeLine{00148\ \ \ n\ =\ zb-\/>xsize\ *\ PSZB;}
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ zb-\/>ysize;\ y++)\ \{}
+\DoxyCodeLine{00150\ \ \ \ \ memcpy(p1,\ q,\ n);}
+\DoxyCodeLine{00151\ \ \ \ \ p1\ +=\ linesize;}
+\DoxyCodeLine{00152\ \ \ \ \ q\ =\ (PIXEL\ *)\ ((\textcolor{keywordtype}{char}\ *)\ q\ +\ zb-\/>linesize);}
+\DoxyCodeLine{00153\ \ \ \}}
+\DoxyCodeLine{00154\ \}}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00156\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00157\ ZB\_copyBufferNoAlpha(\textcolor{keyword}{const}\ \mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *\ zb,\ \textcolor{keywordtype}{void}\ *buf,\ \textcolor{keywordtype}{int}\ linesize)\ \{}
+\DoxyCodeLine{00158\ \ \ \textcolor{keyword}{const}\ PIXEL\ *q\ =\ zb-\/>pbuf;}
+\DoxyCodeLine{00159\ \ \ PIXEL\ *p\ =\ (PIXEL\ *)buf;}
+\DoxyCodeLine{00160\ \ \ \textcolor{keywordtype}{int}\ xsize\ =\ zb-\/>xsize;}
+\DoxyCodeLine{00161\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ zb-\/>ysize;\ ++y)\ \{}
+\DoxyCodeLine{00162\ \ \ \ \ \textcolor{keyword}{const}\ PIXEL\ *q1\ =\ q;}
+\DoxyCodeLine{00163\ \ \ \ \ PIXEL\ *p1\ =\ p;}
+\DoxyCodeLine{00164\ \ \ \ \ PIXEL\ *p2\ =\ p1\ +\ xsize;}
+\DoxyCodeLine{00165\ \ \ \ \ \textcolor{keywordflow}{while}\ (p1\ <\ p2)\ \{}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \textcolor{comment}{//\ Make\ sure\ the\ alpha\ bits\ are\ set\ to\ 0xff.}}
+\DoxyCodeLine{00167\ \textcolor{preprocessor}{\#ifdef\ WORDS\_BIGENDIAN}}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ *p1\ =\ *q1\ |\ 0x000000ff;}
+\DoxyCodeLine{00169\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ *p1\ =\ *q1\ |\ 0xff000000;}
+\DoxyCodeLine{00171\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ ++p1;}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ ++q1;}
+\DoxyCodeLine{00174\ \ \ \ \ \}}
+\DoxyCodeLine{00175\ \ \ \ \ p\ =\ (PIXEL\ *)\ ((\textcolor{keywordtype}{char}\ *)\ p\ +\ linesize);}
+\DoxyCodeLine{00176\ \ \ \ \ q\ =\ (\textcolor{keyword}{const}\ PIXEL\ *)\ ((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)\ q\ +\ zb-\/>linesize);}
+\DoxyCodeLine{00177\ \ \ \}}
+\DoxyCodeLine{00178\ \}}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00180\ \textcolor{preprocessor}{\#define\ RGB32\_TO\_RGB16(v)\ \(\backslash\)}}
+\DoxyCodeLine{00181\ \textcolor{preprocessor}{\ \ (((v\ >>\ 8)\ \&\ 0xf800)\ |\ (((v)\ >>\ 5)\ \&\ 0x07e0)\ |\ (((v)\ \&\ 0xff)\ >>\ 3))}}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ \textcolor{comment}{/*\ XXX:\ not\ optimized\ */}}
+\DoxyCodeLine{00184\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ ZB\_copyFrameBuffer5R6G5B(\textcolor{keyword}{const}\ \mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *\ zb,}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{void}\ *buf,\ \textcolor{keywordtype}{int}\ linesize)}
+\DoxyCodeLine{00186\ \{}
+\DoxyCodeLine{00187\ \ \ PIXEL\ *q;}
+\DoxyCodeLine{00188\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ *p,\ *p1;}
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordtype}{int}\ y,\ n;}
+\DoxyCodeLine{00190\ }
+\DoxyCodeLine{00191\ \ \ q\ =\ zb-\/>pbuf;}
+\DoxyCodeLine{00192\ \ \ p1\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ *)\ buf;}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00194\ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ zb-\/>ysize;\ y++)\ \{}
+\DoxyCodeLine{00195\ \ \ \ \ p\ =\ p1;}
+\DoxyCodeLine{00196\ \ \ \ \ n\ =\ zb-\/>xsize\ >>\ 2;}
+\DoxyCodeLine{00197\ \ \ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ p[0]\ =\ RGB32\_TO\_RGB16(q[0]);}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ p[1]\ =\ RGB32\_TO\_RGB16(q[1]);}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ p[2]\ =\ RGB32\_TO\_RGB16(q[2]);}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ p[3]\ =\ RGB32\_TO\_RGB16(q[3]);}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ q\ +=\ 4;}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ p\ +=\ 4;}
+\DoxyCodeLine{00204\ \ \ \ \ \}\ \textcolor{keywordflow}{while}\ (-\/-\/n\ >\ 0);}
+\DoxyCodeLine{00205\ \ \ \ \ p1\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ *)((\textcolor{keywordtype}{char}\ *)p1\ +\ linesize);}
+\DoxyCodeLine{00206\ \ \ \}}
+\DoxyCodeLine{00207\ \}}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00209\ \textcolor{comment}{/*\ XXX:\ not\ optimized\ */}}
+\DoxyCodeLine{00210\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ ZB\_copyFrameBufferRGB24(\textcolor{keyword}{const}\ \mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *\ zb,}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{void}\ *buf,\ \textcolor{keywordtype}{int}\ linesize)}
+\DoxyCodeLine{00212\ \{}
+\DoxyCodeLine{00213\ \ \ PIXEL\ *q;}
+\DoxyCodeLine{00214\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *p,\ *p1;}
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordtype}{int}\ y,\ n;}
+\DoxyCodeLine{00216\ }
+\DoxyCodeLine{00217\ \ \ fprintf(stderr,\ \textcolor{stringliteral}{"{}copyFrameBufferRGB24\(\backslash\)n"{}});}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00219\ \ \ q\ =\ zb-\/>pbuf;}
+\DoxyCodeLine{00220\ \ \ p1\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)\ buf;}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ zb-\/>ysize;\ y++)\ \{}
+\DoxyCodeLine{00223\ \ \ \ \ p\ =\ p1;}
+\DoxyCodeLine{00224\ \ \ \ \ n\ =\ zb-\/>xsize;}
+\DoxyCodeLine{00225\ \ \ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ p[0]\ =\ q[0];}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ p[1]\ =\ q[1];}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ p[2]\ =\ q[2];}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ q\ +=\ 4;}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ p\ +=\ 3;}
+\DoxyCodeLine{00231\ \ \ \ \ \}\ \textcolor{keywordflow}{while}\ (-\/-\/n\ >\ 0);}
+\DoxyCodeLine{00232\ \ \ \ \ p1\ +=\ linesize;}
+\DoxyCodeLine{00233\ \ \ \}}
+\DoxyCodeLine{00234\ \}}
+\DoxyCodeLine{00235\ }
+\DoxyCodeLine{00236\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00237\ ZB\_copyFrameBuffer(\textcolor{keyword}{const}\ \mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *\ zb,\ \textcolor{keywordtype}{void}\ *buf,}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ linesize)\ \{}
+\DoxyCodeLine{00239\ \ \ \textcolor{keywordflow}{switch}\ (zb-\/>mode)\ \{}
+\DoxyCodeLine{00240\ \textcolor{preprocessor}{\#ifdef\ TGL\_FEATURE\_16\_BITS}}
+\DoxyCodeLine{00241\ \ \ \textcolor{keywordflow}{case}\ ZB\_MODE\_5R6G5B:}
+\DoxyCodeLine{00242\ \ \ \ \ ZB\_copyFrameBuffer5R6G5B(zb,\ buf,\ linesize);}
+\DoxyCodeLine{00243\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00244\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00245\ \textcolor{preprocessor}{\#ifdef\ TGL\_FEATURE\_24\_BITS}}
+\DoxyCodeLine{00246\ \ \ \textcolor{keywordflow}{case}\ ZB\_MODE\_RGB24:}
+\DoxyCodeLine{00247\ \ \ \ \ ZB\_copyFrameBufferRGB24(zb,\ buf,\ linesize);}
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00249\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00250\ \textcolor{preprocessor}{\#ifdef\ TGL\_FEATURE\_32\_BITS}}
+\DoxyCodeLine{00251\ \ \ \textcolor{keywordflow}{case}\ ZB\_MODE\_RGBA:}
+\DoxyCodeLine{00252\ \ \ \ \ ZB\_copyBuffer(zb,\ buf,\ linesize);}
+\DoxyCodeLine{00253\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00254\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00255\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00256\ \ \ \ \ assert(0);}
+\DoxyCodeLine{00257\ \ \ \}}
+\DoxyCodeLine{00258\ \}}
+\DoxyCodeLine{00259\ }
+\DoxyCodeLine{00260\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00261\ ZB\_copyFrameBufferNoAlpha(\textcolor{keyword}{const}\ \mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *\ zb,\ \textcolor{keywordtype}{void}\ *buf,}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ linesize)\ \{}
+\DoxyCodeLine{00263\ \ \ \textcolor{keywordflow}{switch}\ (zb-\/>mode)\ \{}
+\DoxyCodeLine{00264\ \textcolor{preprocessor}{\#ifdef\ TGL\_FEATURE\_16\_BITS}}
+\DoxyCodeLine{00265\ \ \ \textcolor{keywordflow}{case}\ ZB\_MODE\_5R6G5B:}
+\DoxyCodeLine{00266\ \ \ \ \ ZB\_copyFrameBuffer5R6G5B(zb,\ buf,\ linesize);}
+\DoxyCodeLine{00267\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00268\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00269\ \textcolor{preprocessor}{\#ifdef\ TGL\_FEATURE\_24\_BITS}}
+\DoxyCodeLine{00270\ \ \ \textcolor{keywordflow}{case}\ ZB\_MODE\_RGB24:}
+\DoxyCodeLine{00271\ \ \ \ \ ZB\_copyFrameBufferRGB24(zb,\ buf,\ linesize);}
+\DoxyCodeLine{00272\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00273\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00274\ \textcolor{preprocessor}{\#ifdef\ TGL\_FEATURE\_32\_BITS}}
+\DoxyCodeLine{00275\ \ \ \textcolor{keywordflow}{case}\ ZB\_MODE\_RGBA:}
+\DoxyCodeLine{00276\ \ \ \ \ ZB\_copyBufferNoAlpha(zb,\ buf,\ linesize);}
+\DoxyCodeLine{00277\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00278\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00279\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00280\ \ \ \ \ assert(0);}
+\DoxyCodeLine{00281\ \ \ \}}
+\DoxyCodeLine{00282\ \}}
+\DoxyCodeLine{00283\ }
+\DoxyCodeLine{00284\ \textcolor{comment}{//\ Copy\ from\ (source\_xmin,source\_ymin)+(source\_xsize,source\_ysize)\ to}}
+\DoxyCodeLine{00285\ \textcolor{comment}{//\ \ (dest\_xmin,dest\_ymin)+(dest\_xsize,dest\_ysize).}}
+\DoxyCodeLine{00286\ \textcolor{keywordtype}{void}\ ZB\_zoomFrameBuffer(\mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *dest,\ \textcolor{keywordtype}{int}\ dest\_xmin,\ \textcolor{keywordtype}{int}\ dest\_ymin,\ \textcolor{keywordtype}{int}\ dest\_xsize,\ \textcolor{keywordtype}{int}\ dest\_ysize,}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *source,\ \textcolor{keywordtype}{int}\ source\_xmin,\ \textcolor{keywordtype}{int}\ source\_ymin,\ \textcolor{keywordtype}{int}\ source\_xsize,\ \textcolor{keywordtype}{int}\ source\_ysize)\ \{}
+\DoxyCodeLine{00288\ \ \ \textcolor{keywordtype}{int}\ tyinc\ =\ dest-\/>linesize\ /\ PSZB;}
+\DoxyCodeLine{00289\ \ \ \textcolor{keywordtype}{int}\ fyinc\ =\ source-\/>linesize\ /\ PSZB;}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00291\ \ \ \textcolor{keywordtype}{int}\ fyt\ =\ 0;}
+\DoxyCodeLine{00292\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ty\ =\ 0;\ ty\ <\ dest\_ysize;\ ++ty)\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{keywordtype}{int}\ fy\ =\ fyt\ /\ dest\_ysize;}
+\DoxyCodeLine{00294\ \ \ \ \ fyt\ +=\ source\_ysize;}
+\DoxyCodeLine{00295\ }
+\DoxyCodeLine{00296\ \ \ \ \ PIXEL\ *tp\ =\ dest-\/>pbuf\ +\ dest\_xmin\ +\ (dest\_ymin\ +\ ty)\ *\ tyinc;}
+\DoxyCodeLine{00297\ \ \ \ \ PIXEL\ *fp\ =\ source-\/>pbuf\ +\ source\_xmin\ +\ (source\_ymin\ +\ fy)\ *\ fyinc;}
+\DoxyCodeLine{00298\ \ \ \ \ ZPOINT\ *tz\ =\ dest-\/>zbuf\ +\ dest\_xmin\ +\ (dest\_ymin\ +\ ty)\ *\ dest-\/>xsize;}
+\DoxyCodeLine{00299\ \ \ \ \ ZPOINT\ *fz\ =\ source-\/>zbuf\ +\ source\_xmin\ +\ (source\_ymin\ +\ fy)\ *\ source-\/>xsize;}
+\DoxyCodeLine{00300\ \ \ \ \ \textcolor{keywordtype}{int}\ fxt\ =\ 0;}
+\DoxyCodeLine{00301\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ tx\ =\ 0;\ tx\ <\ dest\_xsize;\ ++tx)\ \{}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ fx\ =\ fxt\ /\ dest\_xsize;}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ fxt\ +=\ source\_xsize;}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \ \ \ \ tp[tx]\ =\ fp[fx];}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ tz[tx]\ =\ fz[fx];}
+\DoxyCodeLine{00307\ \ \ \ \ \}}
+\DoxyCodeLine{00308\ \ \ \}}
+\DoxyCodeLine{00309\ \}}
+\DoxyCodeLine{00310\ }
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00313\ \textcolor{comment}{\ *\ adr\ must\ be\ aligned\ on\ an\ 'int'}}
+\DoxyCodeLine{00314\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00315\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00316\ memset\_s(\textcolor{keywordtype}{void}\ *adr,\ \textcolor{keywordtype}{int}\ val,\ \textcolor{keywordtype}{int}\ count)\ \{}
+\DoxyCodeLine{00317\ \ \ \textcolor{keywordtype}{int}\ i,\ n,\ v;}
+\DoxyCodeLine{00318\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ *p;}
+\DoxyCodeLine{00319\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ *q;}
+\DoxyCodeLine{00320\ }
+\DoxyCodeLine{00321\ \ \ p\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ *)adr;}
+\DoxyCodeLine{00322\ \ \ v\ =\ val\ |\ (val\ <<\ 16);}
+\DoxyCodeLine{00323\ }
+\DoxyCodeLine{00324\ \ \ n\ =\ count\ >>\ 3;}
+\DoxyCodeLine{00325\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ n;\ i++)\ \{}
+\DoxyCodeLine{00326\ \ \ \ \ p[0]\ =\ v;}
+\DoxyCodeLine{00327\ \ \ \ \ p[1]\ =\ v;}
+\DoxyCodeLine{00328\ \ \ \ \ p[2]\ =\ v;}
+\DoxyCodeLine{00329\ \ \ \ \ p[3]\ =\ v;}
+\DoxyCodeLine{00330\ \ \ \ \ p\ +=\ 4;}
+\DoxyCodeLine{00331\ \ \ \}}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00333\ \ \ q\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ *)\ p;}
+\DoxyCodeLine{00334\ \ \ n\ =\ count\ \&\ 7;}
+\DoxyCodeLine{00335\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ n;\ i++)}
+\DoxyCodeLine{00336\ \ \ \ \ *q++\ =\ val;}
+\DoxyCodeLine{00337\ \}}
+\DoxyCodeLine{00338\ }
+\DoxyCodeLine{00339\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00340\ memset\_l(\textcolor{keywordtype}{void}\ *adr,\ \textcolor{keywordtype}{int}\ val,\ \textcolor{keywordtype}{int}\ count)\ \{}
+\DoxyCodeLine{00341\ \ \ \textcolor{keywordtype}{int}\ i,\ n,\ v;}
+\DoxyCodeLine{00342\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ *p;}
+\DoxyCodeLine{00343\ }
+\DoxyCodeLine{00344\ \ \ p\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ *)adr;}
+\DoxyCodeLine{00345\ \ \ v\ =\ val;}
+\DoxyCodeLine{00346\ \ \ n\ =\ count\ >>\ 2;}
+\DoxyCodeLine{00347\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ n;\ i++)\ \{}
+\DoxyCodeLine{00348\ \ \ \ \ p[0]\ =\ v;}
+\DoxyCodeLine{00349\ \ \ \ \ p[1]\ =\ v;}
+\DoxyCodeLine{00350\ \ \ \ \ p[2]\ =\ v;}
+\DoxyCodeLine{00351\ \ \ \ \ p[3]\ =\ v;}
+\DoxyCodeLine{00352\ \ \ \ \ p\ +=\ 4;}
+\DoxyCodeLine{00353\ \ \ \}}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00355\ \ \ n\ =\ count\ \&\ 3;}
+\DoxyCodeLine{00356\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ n;\ i++)}
+\DoxyCodeLine{00357\ \ \ \ \ *p++\ =\ val;}
+\DoxyCodeLine{00358\ \}}
+\DoxyCodeLine{00359\ }
+\DoxyCodeLine{00360\ \textcolor{comment}{/*\ count\ must\ be\ a\ multiple\ of\ 4\ and\ >=\ 4\ */}}
+\DoxyCodeLine{00361\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00362\ memset\_RGB24(\textcolor{keywordtype}{void}\ *adr,\textcolor{keywordtype}{int}\ r,\ \textcolor{keywordtype}{int}\ v,\ \textcolor{keywordtype}{int}\ b,\textcolor{keywordtype}{long}\ count)\ \{}
+\DoxyCodeLine{00363\ \ \ \textcolor{keywordtype}{long}\ i,\ n;}
+\DoxyCodeLine{00364\ \ \ \textcolor{keywordtype}{long}\ v1,v2,v3,*pt=(\textcolor{keywordtype}{long}\ *)(adr);}
+\DoxyCodeLine{00365\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *p,R=(\textcolor{keywordtype}{unsigned}\ char)r,V=(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})v,B=(\textcolor{keywordtype}{unsigned}\ char)b;}
+\DoxyCodeLine{00366\ }
+\DoxyCodeLine{00367\ \ \ p=(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)adr;}
+\DoxyCodeLine{00368\ \ \ *p++=R;}
+\DoxyCodeLine{00369\ \ \ *p++=V;}
+\DoxyCodeLine{00370\ \ \ *p++=B;}
+\DoxyCodeLine{00371\ \ \ *p++=R;}
+\DoxyCodeLine{00372\ \ \ *p++=V;}
+\DoxyCodeLine{00373\ \ \ *p++=B;}
+\DoxyCodeLine{00374\ \ \ *p++=R;}
+\DoxyCodeLine{00375\ \ \ *p++=V;}
+\DoxyCodeLine{00376\ \ \ *p++=B;}
+\DoxyCodeLine{00377\ \ \ *p++=R;}
+\DoxyCodeLine{00378\ \ \ *p++=V;}
+\DoxyCodeLine{00379\ \ \ *p++=B;}
+\DoxyCodeLine{00380\ \ \ v1=*pt++;}
+\DoxyCodeLine{00381\ \ \ v2=*pt++;}
+\DoxyCodeLine{00382\ \ \ v3=*pt++;}
+\DoxyCodeLine{00383\ \ \ n\ =\ count\ >>\ 2;}
+\DoxyCodeLine{00384\ \ \ \textcolor{keywordflow}{for}(i=1;i<n;i++)\ \{}
+\DoxyCodeLine{00385\ \ \ \ \ *pt++=v1;}
+\DoxyCodeLine{00386\ \ \ \ \ *pt++=v2;}
+\DoxyCodeLine{00387\ \ \ \ \ *pt++=v3;}
+\DoxyCodeLine{00388\ \ \ \}}
+\DoxyCodeLine{00389\ \}}
+\DoxyCodeLine{00390\ }
+\DoxyCodeLine{00391\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00392\ ZB\_clear(\mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *\ zb,\ \textcolor{keywordtype}{int}\ clear\_z,\ ZPOINT\ z,\ \textcolor{keywordtype}{int}\ clear\_color,\ PIXEL\ \mbox{\hyperlink{structcolor}{color}})\ \{}
+\DoxyCodeLine{00393\ \ \ \textcolor{keywordtype}{int}\ y;}
+\DoxyCodeLine{00394\ \ \ PIXEL\ *pp;}
+\DoxyCodeLine{00395\ }
+\DoxyCodeLine{00396\ \ \ \textcolor{keywordflow}{if}\ (clear\_z)\ \{}
+\DoxyCodeLine{00397\ \ \ \ \ memset(zb-\/>zbuf,\ 0,\ zb-\/>xsize\ *\ zb-\/>ysize\ *\ \textcolor{keyword}{sizeof}(ZPOINT));}
+\DoxyCodeLine{00398\ \ \ \}}
+\DoxyCodeLine{00399\ \ \ \textcolor{keywordflow}{if}\ (clear\_color)\ \{}
+\DoxyCodeLine{00400\ \ \ \ \ pp\ =\ zb-\/>pbuf;}
+\DoxyCodeLine{00401\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ zb-\/>ysize;\ y++)\ \{}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ memset\_l(pp,\ \mbox{\hyperlink{structcolor}{color}},\ zb-\/>xsize);}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ pp\ =\ (PIXEL\ *)\ ((\textcolor{keywordtype}{char}\ *)\ pp\ +\ zb-\/>linesize);}
+\DoxyCodeLine{00404\ \ \ \ \ \}}
+\DoxyCodeLine{00405\ \ \ \}}
+\DoxyCodeLine{00406\ \}}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00408\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00409\ ZB\_clear\_viewport(\mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *\ zb,\ \textcolor{keywordtype}{int}\ clear\_z,\ ZPOINT\ z,\ \textcolor{keywordtype}{int}\ clear\_color,\ PIXEL\ \mbox{\hyperlink{structcolor}{color}},}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xmin,\ \textcolor{keywordtype}{int}\ ymin,\ \textcolor{keywordtype}{int}\ xsize,\ \textcolor{keywordtype}{int}\ ysize)\ \{}
+\DoxyCodeLine{00411\ \ \ \textcolor{keywordtype}{int}\ y;}
+\DoxyCodeLine{00412\ \ \ PIXEL\ *pp;}
+\DoxyCodeLine{00413\ \ \ ZPOINT\ *zz;}
+\DoxyCodeLine{00414\ }
+\DoxyCodeLine{00415\ \ \ nassertv(xmin\ >=\ 0\ \&\&\ xmin\ <\ zb-\/>xsize\ \&\&}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \ \ \ \ \ ymin\ >=\ 0\ \&\&\ ymin\ <\ zb-\/>ysize\ \&\&}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ \ \ \ xmin\ +\ xsize\ >=\ 0\ \&\&\ xmin\ +\ xsize\ <=\ zb-\/>xsize\ \&\&}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \ \ \ ymin\ +\ ysize\ >=\ 0\ \&\&\ ymin\ +\ ysize\ <=\ zb-\/>ysize);}
+\DoxyCodeLine{00419\ }
+\DoxyCodeLine{00420\ \ \ \textcolor{keywordflow}{if}\ (clear\_z)\ \{}
+\DoxyCodeLine{00421\ \ \ \ \ zz\ =\ zb-\/>zbuf\ +\ xmin\ +\ ymin\ *\ zb-\/>xsize;}
+\DoxyCodeLine{00422\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ ysize;\ ++y)\ \{}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ memset(zz,\ 0,\ xsize\ *\ \textcolor{keyword}{sizeof}(ZPOINT));}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ zz\ +=\ zb-\/>xsize;}
+\DoxyCodeLine{00425\ \ \ \ \ \}}
+\DoxyCodeLine{00426\ \ \ \}}
+\DoxyCodeLine{00427\ \ \ \textcolor{keywordflow}{if}\ (clear\_color)\ \{}
+\DoxyCodeLine{00428\ \ \ \ \ pp\ =\ zb-\/>pbuf\ +\ xmin\ +\ ymin\ *\ (zb-\/>linesize\ /\ PSZB);}
+\DoxyCodeLine{00429\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ ysize;\ ++y)\ \{}
+\DoxyCodeLine{00430\ \ \ \ \ \ \ memset\_l(pp,\ \mbox{\hyperlink{structcolor}{color}},\ xsize);}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ pp\ +=\ zb-\/>xsize;}
+\DoxyCodeLine{00432\ \ \ \ \ \}}
+\DoxyCodeLine{00433\ \ \ \}}
+\DoxyCodeLine{00434\ \}}
+\DoxyCodeLine{00435\ }
+\DoxyCodeLine{00436\ \textcolor{preprocessor}{\#define\ ZB\_ST\_FRAC\_HIGH\ (1\ <<\ ZB\_POINT\_ST\_FRAC\_BITS)}}
+\DoxyCodeLine{00437\ \textcolor{preprocessor}{\#define\ ZB\_ST\_FRAC\_MASK\ (ZB\_ST\_FRAC\_HIGH\ -\/\ 1)}}
+\DoxyCodeLine{00438\ }
+\DoxyCodeLine{00439\ \textcolor{preprocessor}{\#define\ LINEAR\_FILTER\_BITSIZE(c1,\ c2,\ f,\ bitsize)\ \(\backslash\)}}
+\DoxyCodeLine{00440\ \textcolor{preprocessor}{\ \ ((((c2)\ *\ (f))\ >>\ bitsize)\ +\ (((c1)\ *\ ((1\ <<\ bitsize)\ -\/\ (f)))\ >>\ bitsize))}}
+\DoxyCodeLine{00441\ }
+\DoxyCodeLine{00442\ \textcolor{preprocessor}{\#define\ LINEAR\_FILTER(c1,\ c2,\ f)\ \(\backslash\)}}
+\DoxyCodeLine{00443\ \textcolor{preprocessor}{\ \ LINEAR\_FILTER\_BITSIZE(c1,\ c2,\ f,\ ZB\_POINT\_ST\_FRAC\_BITS)}}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \textcolor{preprocessor}{\#define\ BILINEAR\_FILTER(c1,\ c2,\ c3,\ c4,\ sf,\ tf)\ \(\backslash\)}}
+\DoxyCodeLine{00446\ \textcolor{preprocessor}{\ \ (LINEAR\_FILTER(LINEAR\_FILTER(c1,\ c2,\ sf),\ LINEAR\_FILTER(c3,\ c4,\ sf),\ tf))}}
+\DoxyCodeLine{00447\ }
+\DoxyCodeLine{00448\ \textcolor{comment}{//\ Grab\ the\ nearest\ texel\ from\ the\ base\ level.\ \ This\ is\ also}}
+\DoxyCodeLine{00449\ \textcolor{comment}{//\ implemented\ inline\ as\ ZB\_LOOKUP\_TEXTURE\_NEAREST.}}
+\DoxyCodeLine{00450\ PIXEL}
+\DoxyCodeLine{00451\ lookup\_texture\_nearest(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00452\ \ \ \textcolor{keywordflow}{return}\ ZB\_LOOKUP\_TEXTURE\_NEAREST(texture\_def,\ s,\ t);}
+\DoxyCodeLine{00453\ \}}
+\DoxyCodeLine{00454\ }
+\DoxyCodeLine{00455\ \textcolor{comment}{//\ Bilinear\ filter\ four\ texels\ in\ the\ base\ level.}}
+\DoxyCodeLine{00456\ PIXEL}
+\DoxyCodeLine{00457\ lookup\_texture\_bilinear(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00458\ \ \ PIXEL\ p1,\ p2,\ p3,\ p4;}
+\DoxyCodeLine{00459\ \ \ \textcolor{keywordtype}{int}\ sf,\ tf;}
+\DoxyCodeLine{00460\ \ \ \textcolor{keywordtype}{int}\ r,\ g,\ b,\ a;}
+\DoxyCodeLine{00461\ }
+\DoxyCodeLine{00462\ \ \ p1\ =\ ZB\_LOOKUP\_TEXTURE\_NEAREST(texture\_def,\ s\ -\/\ ZB\_ST\_FRAC\_HIGH,\ t\ -\/\ ZB\_ST\_FRAC\_HIGH);}
+\DoxyCodeLine{00463\ \ \ p2\ =\ ZB\_LOOKUP\_TEXTURE\_NEAREST(texture\_def,\ s,\ t\ -\/\ ZB\_ST\_FRAC\_HIGH);}
+\DoxyCodeLine{00464\ \ \ sf\ =\ s\ \&\ ZB\_ST\_FRAC\_MASK;}
+\DoxyCodeLine{00465\ }
+\DoxyCodeLine{00466\ \ \ p3\ =\ ZB\_LOOKUP\_TEXTURE\_NEAREST(texture\_def,\ s\ -\/\ ZB\_ST\_FRAC\_HIGH,\ t);}
+\DoxyCodeLine{00467\ \ \ p4\ =\ ZB\_LOOKUP\_TEXTURE\_NEAREST(texture\_def,\ s,\ t);}
+\DoxyCodeLine{00468\ \ \ tf\ =\ t\ \&\ ZB\_ST\_FRAC\_MASK;}
+\DoxyCodeLine{00469\ }
+\DoxyCodeLine{00470\ \ \ r\ =\ BILINEAR\_FILTER(PIXEL\_R(p1),\ PIXEL\_R(p2),\ PIXEL\_R(p3),\ PIXEL\_R(p4),\ sf,\ tf);}
+\DoxyCodeLine{00471\ \ \ g\ =\ BILINEAR\_FILTER(PIXEL\_G(p1),\ PIXEL\_G(p2),\ PIXEL\_G(p3),\ PIXEL\_G(p4),\ sf,\ tf);}
+\DoxyCodeLine{00472\ \ \ b\ =\ BILINEAR\_FILTER(PIXEL\_B(p1),\ PIXEL\_B(p2),\ PIXEL\_B(p3),\ PIXEL\_B(p4),\ sf,\ tf);}
+\DoxyCodeLine{00473\ \ \ a\ =\ BILINEAR\_FILTER(PIXEL\_A(p1),\ PIXEL\_A(p2),\ PIXEL\_A(p3),\ PIXEL\_A(p4),\ sf,\ tf);}
+\DoxyCodeLine{00474\ }
+\DoxyCodeLine{00475\ \ \ \textcolor{keywordflow}{return}\ RGBA\_TO\_PIXEL(r,\ g,\ b,\ a);}
+\DoxyCodeLine{00476\ \}}
+\DoxyCodeLine{00477\ }
+\DoxyCodeLine{00478\ \textcolor{comment}{//\ Grab\ the\ nearest\ texel\ from\ the\ nearest\ mipmap\ level.\ \ This\ is\ also}}
+\DoxyCodeLine{00479\ \textcolor{comment}{//\ implemented\ inline\ as\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST.}}
+\DoxyCodeLine{00480\ PIXEL}
+\DoxyCodeLine{00481\ lookup\_texture\_mipmap\_nearest(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00482\ \ \ \textcolor{keywordflow}{return}\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s,\ t,\ level);}
+\DoxyCodeLine{00483\ \}}
+\DoxyCodeLine{00484\ }
+\DoxyCodeLine{00485\ \textcolor{comment}{//\ Linear\ filter\ the\ two\ texels\ from\ the\ two\ nearest\ mipmap\ levels.}}
+\DoxyCodeLine{00486\ PIXEL}
+\DoxyCodeLine{00487\ lookup\_texture\_mipmap\_linear(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00488\ \ \ PIXEL\ p1,\ p2;}
+\DoxyCodeLine{00489\ \ \ \textcolor{keywordtype}{int}\ r,\ g,\ b,\ a;}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00491\ \ \ p1\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s,\ t,\ level);}
+\DoxyCodeLine{00492\ \ \ level\ =\ max((\textcolor{keywordtype}{int})level\ -\/\ 1,\ 0);}
+\DoxyCodeLine{00493\ \ \ p2\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s,\ t,\ level);}
+\DoxyCodeLine{00494\ }
+\DoxyCodeLine{00495\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ f\ =\ level\_dx\ >>\ (level\ -\/\ 1);}
+\DoxyCodeLine{00496\ \ \ r\ =\ LINEAR\_FILTER(PIXEL\_R(p1),\ PIXEL\_R(p2),\ f);}
+\DoxyCodeLine{00497\ \ \ g\ =\ LINEAR\_FILTER(PIXEL\_G(p1),\ PIXEL\_G(p2),\ f);}
+\DoxyCodeLine{00498\ \ \ b\ =\ LINEAR\_FILTER(PIXEL\_B(p1),\ PIXEL\_B(p2),\ f);}
+\DoxyCodeLine{00499\ \ \ a\ =\ LINEAR\_FILTER(PIXEL\_A(p1),\ PIXEL\_A(p2),\ f);}
+\DoxyCodeLine{00500\ }
+\DoxyCodeLine{00501\ \ \ \textcolor{keywordflow}{return}\ RGBA\_TO\_PIXEL(r,\ g,\ b,\ a);}
+\DoxyCodeLine{00502\ \}}
+\DoxyCodeLine{00503\ }
+\DoxyCodeLine{00504\ \textcolor{comment}{//\ Bilinear\ filter\ four\ texels\ in\ the\ nearest\ mipmap\ level.}}
+\DoxyCodeLine{00505\ PIXEL}
+\DoxyCodeLine{00506\ lookup\_texture\_mipmap\_bilinear(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00507\ \ \ PIXEL\ p1,\ p2,\ p3,\ p4;}
+\DoxyCodeLine{00508\ \ \ \textcolor{keywordtype}{int}\ sf,\ tf;}
+\DoxyCodeLine{00509\ \ \ \textcolor{keywordtype}{int}\ r,\ g,\ b,\ a;}
+\DoxyCodeLine{00510\ }
+\DoxyCodeLine{00511\ \ \ p1\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s\ -\/\ ZB\_ST\_FRAC\_HIGH,\ t\ -\/\ ZB\_ST\_FRAC\_HIGH,\ level);}
+\DoxyCodeLine{00512\ \ \ p2\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s,\ t\ -\/\ ZB\_ST\_FRAC\_HIGH,\ level);}
+\DoxyCodeLine{00513\ \ \ sf\ =\ (s\ >>\ level)\ \&\ ZB\_ST\_FRAC\_MASK;}
+\DoxyCodeLine{00514\ }
+\DoxyCodeLine{00515\ \ \ p3\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s\ -\/\ ZB\_ST\_FRAC\_HIGH,\ t,\ level);}
+\DoxyCodeLine{00516\ \ \ p4\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s,\ t,\ level);}
+\DoxyCodeLine{00517\ \ \ tf\ =\ (t\ >>\ level)\ \&\ ZB\_ST\_FRAC\_MASK;}
+\DoxyCodeLine{00518\ }
+\DoxyCodeLine{00519\ \ \ r\ =\ BILINEAR\_FILTER(PIXEL\_R(p1),\ PIXEL\_R(p2),\ PIXEL\_R(p3),\ PIXEL\_R(p4),\ sf,\ tf);}
+\DoxyCodeLine{00520\ \ \ g\ =\ BILINEAR\_FILTER(PIXEL\_G(p1),\ PIXEL\_G(p2),\ PIXEL\_G(p3),\ PIXEL\_G(p4),\ sf,\ tf);}
+\DoxyCodeLine{00521\ \ \ b\ =\ BILINEAR\_FILTER(PIXEL\_B(p1),\ PIXEL\_B(p2),\ PIXEL\_B(p3),\ PIXEL\_B(p4),\ sf,\ tf);}
+\DoxyCodeLine{00522\ \ \ a\ =\ BILINEAR\_FILTER(PIXEL\_A(p1),\ PIXEL\_A(p2),\ PIXEL\_A(p3),\ PIXEL\_A(p4),\ sf,\ tf);}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00524\ \ \ \textcolor{keywordflow}{return}\ RGBA\_TO\_PIXEL(r,\ g,\ b,\ a);}
+\DoxyCodeLine{00525\ \}}
+\DoxyCodeLine{00526\ }
+\DoxyCodeLine{00527\ \textcolor{comment}{//\ Bilinear\ filter\ four\ texels\ in\ each\ of\ the\ nearest\ two\ mipmap}}
+\DoxyCodeLine{00528\ \textcolor{comment}{//\ levels,\ then\ linear\ filter\ them\ together.}}
+\DoxyCodeLine{00529\ PIXEL}
+\DoxyCodeLine{00530\ lookup\_texture\_mipmap\_trilinear(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00531\ \ \ PIXEL\ p1a,\ p2a;}
+\DoxyCodeLine{00532\ }
+\DoxyCodeLine{00533\ \ \ \{}
+\DoxyCodeLine{00534\ \ \ \ \ PIXEL\ p1,\ p2,\ p3,\ p4;}
+\DoxyCodeLine{00535\ \ \ \ \ \textcolor{keywordtype}{int}\ sf,\ tf;}
+\DoxyCodeLine{00536\ \ \ \ \ \textcolor{keywordtype}{int}\ r,\ g,\ b,\ a;}
+\DoxyCodeLine{00537\ }
+\DoxyCodeLine{00538\ \ \ \ \ p1\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s\ -\/\ ZB\_ST\_FRAC\_HIGH,\ t\ -\/\ ZB\_ST\_FRAC\_HIGH,\ level);}
+\DoxyCodeLine{00539\ \ \ \ \ p2\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s,\ t\ -\/\ ZB\_ST\_FRAC\_HIGH,\ level);}
+\DoxyCodeLine{00540\ \ \ \ \ sf\ =\ (s\ >>\ level)\ \&\ ZB\_ST\_FRAC\_MASK;}
+\DoxyCodeLine{00541\ }
+\DoxyCodeLine{00542\ \ \ \ \ p3\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s\ -\/\ ZB\_ST\_FRAC\_HIGH,\ t,\ level);}
+\DoxyCodeLine{00543\ \ \ \ \ p4\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s,\ t,\ level);}
+\DoxyCodeLine{00544\ \ \ \ \ tf\ =\ (t\ >>\ level)\ \&\ ZB\_ST\_FRAC\_MASK;}
+\DoxyCodeLine{00545\ }
+\DoxyCodeLine{00546\ \ \ \ \ r\ =\ BILINEAR\_FILTER(PIXEL\_R(p1),\ PIXEL\_R(p2),\ PIXEL\_R(p3),\ PIXEL\_R(p4),\ sf,\ tf);}
+\DoxyCodeLine{00547\ \ \ \ \ g\ =\ BILINEAR\_FILTER(PIXEL\_G(p1),\ PIXEL\_G(p2),\ PIXEL\_G(p3),\ PIXEL\_G(p4),\ sf,\ tf);}
+\DoxyCodeLine{00548\ \ \ \ \ b\ =\ BILINEAR\_FILTER(PIXEL\_B(p1),\ PIXEL\_B(p2),\ PIXEL\_B(p3),\ PIXEL\_B(p4),\ sf,\ tf);}
+\DoxyCodeLine{00549\ \ \ \ \ a\ =\ BILINEAR\_FILTER(PIXEL\_A(p1),\ PIXEL\_A(p2),\ PIXEL\_A(p3),\ PIXEL\_A(p4),\ sf,\ tf);}
+\DoxyCodeLine{00550\ \ \ \ \ p1a\ =\ RGBA\_TO\_PIXEL(r,\ g,\ b,\ a);}
+\DoxyCodeLine{00551\ \ \ \}}
+\DoxyCodeLine{00552\ }
+\DoxyCodeLine{00553\ \ \ level\ =\ max((\textcolor{keywordtype}{int})level\ -\/\ 1,\ 0);}
+\DoxyCodeLine{00554\ }
+\DoxyCodeLine{00555\ \ \ \{}
+\DoxyCodeLine{00556\ \ \ \ \ PIXEL\ p1,\ p2,\ p3,\ p4;}
+\DoxyCodeLine{00557\ \ \ \ \ \textcolor{keywordtype}{int}\ sf,\ tf;}
+\DoxyCodeLine{00558\ \ \ \ \ \textcolor{keywordtype}{int}\ r,\ g,\ b,\ a;}
+\DoxyCodeLine{00559\ }
+\DoxyCodeLine{00560\ \ \ \ \ p1\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s\ -\/\ ZB\_ST\_FRAC\_HIGH,\ t\ -\/\ ZB\_ST\_FRAC\_HIGH,\ level);}
+\DoxyCodeLine{00561\ \ \ \ \ p2\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s,\ t\ -\/\ ZB\_ST\_FRAC\_HIGH,\ level);}
+\DoxyCodeLine{00562\ \ \ \ \ sf\ =\ (s\ >>\ level)\ \&\ ZB\_ST\_FRAC\_MASK;}
+\DoxyCodeLine{00563\ }
+\DoxyCodeLine{00564\ \ \ \ \ p3\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s\ -\/\ ZB\_ST\_FRAC\_HIGH,\ t,\ level);}
+\DoxyCodeLine{00565\ \ \ \ \ p4\ =\ ZB\_LOOKUP\_TEXTURE\_MIPMAP\_NEAREST(texture\_def,\ s,\ t,\ level);}
+\DoxyCodeLine{00566\ \ \ \ \ tf\ =\ (t\ >>\ level)\ \&\ ZB\_ST\_FRAC\_MASK;}
+\DoxyCodeLine{00567\ }
+\DoxyCodeLine{00568\ \ \ \ \ r\ =\ BILINEAR\_FILTER(PIXEL\_R(p1),\ PIXEL\_R(p2),\ PIXEL\_R(p3),\ PIXEL\_R(p4),\ sf,\ tf);}
+\DoxyCodeLine{00569\ \ \ \ \ g\ =\ BILINEAR\_FILTER(PIXEL\_G(p1),\ PIXEL\_G(p2),\ PIXEL\_G(p3),\ PIXEL\_G(p4),\ sf,\ tf);}
+\DoxyCodeLine{00570\ \ \ \ \ b\ =\ BILINEAR\_FILTER(PIXEL\_B(p1),\ PIXEL\_B(p2),\ PIXEL\_B(p3),\ PIXEL\_B(p4),\ sf,\ tf);}
+\DoxyCodeLine{00571\ \ \ \ \ a\ =\ BILINEAR\_FILTER(PIXEL\_A(p1),\ PIXEL\_A(p2),\ PIXEL\_A(p3),\ PIXEL\_A(p4),\ sf,\ tf);}
+\DoxyCodeLine{00572\ \ \ \ \ p2a\ =\ RGBA\_TO\_PIXEL(r,\ g,\ b,\ a);}
+\DoxyCodeLine{00573\ \ \ \}}
+\DoxyCodeLine{00574\ }
+\DoxyCodeLine{00575\ \ \ \textcolor{keywordtype}{int}\ r,\ g,\ b,\ a;}
+\DoxyCodeLine{00576\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ f\ =\ level\_dx\ >>\ (level\ -\/\ 1);}
+\DoxyCodeLine{00577\ \ \ r\ =\ LINEAR\_FILTER(PIXEL\_R(p1a),\ PIXEL\_R(p2a),\ f);}
+\DoxyCodeLine{00578\ \ \ g\ =\ LINEAR\_FILTER(PIXEL\_G(p1a),\ PIXEL\_G(p2a),\ f);}
+\DoxyCodeLine{00579\ \ \ b\ =\ LINEAR\_FILTER(PIXEL\_B(p1a),\ PIXEL\_B(p2a),\ f);}
+\DoxyCodeLine{00580\ \ \ a\ =\ LINEAR\_FILTER(PIXEL\_A(p1a),\ PIXEL\_A(p2a),\ f);}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ \textcolor{keywordflow}{return}\ RGBA\_TO\_PIXEL(r,\ g,\ b,\ a);}
+\DoxyCodeLine{00583\ \}}
+\DoxyCodeLine{00584\ }
+\DoxyCodeLine{00585\ }
+\DoxyCodeLine{00586\ \textcolor{comment}{//\ Apply\ the\ wrap\ mode\ to\ s\ and\ t\ coordinates\ by\ calling\ the\ generic}}
+\DoxyCodeLine{00587\ \textcolor{comment}{//\ wrap\ mode\ function.}}
+\DoxyCodeLine{00588\ PIXEL}
+\DoxyCodeLine{00589\ apply\_wrap\_general\_minfilter(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00590\ \ \ s\ =\ (*texture\_def-\/>tex\_wrap\_u\_func)(s,\ texture\_def-\/>s\_max);}
+\DoxyCodeLine{00591\ \ \ t\ =\ (*texture\_def-\/>tex\_wrap\_v\_func)(t,\ texture\_def-\/>t\_max);}
+\DoxyCodeLine{00592\ \ \ \textcolor{keywordflow}{return}\ (*texture\_def-\/>tex\_minfilter\_func\_impl)(texture\_def,\ s,\ t,\ level,\ level\_dx);}
+\DoxyCodeLine{00593\ \}}
+\DoxyCodeLine{00594\ }
+\DoxyCodeLine{00595\ PIXEL}
+\DoxyCodeLine{00596\ apply\_wrap\_general\_magfilter(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00597\ \ \ s\ =\ (*texture\_def-\/>tex\_wrap\_u\_func)(s,\ texture\_def-\/>s\_max);}
+\DoxyCodeLine{00598\ \ \ t\ =\ (*texture\_def-\/>tex\_wrap\_v\_func)(t,\ texture\_def-\/>t\_max);}
+\DoxyCodeLine{00599\ \ \ \textcolor{keywordflow}{return}\ (*texture\_def-\/>tex\_magfilter\_func\_impl)(texture\_def,\ s,\ t,\ level,\ level\_dx);}
+\DoxyCodeLine{00600\ \}}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00602\ \textcolor{comment}{//\ Outside\ the\ legal\ range\ of\ s\ and\ t,\ return\ just\ the\ texture's}}
+\DoxyCodeLine{00603\ \textcolor{comment}{//\ border\ color.}}
+\DoxyCodeLine{00604\ PIXEL}
+\DoxyCodeLine{00605\ apply\_wrap\_border\_color\_minfilter(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00606\ \ \ \textcolor{keywordflow}{if}\ (s\ <\ 0\ ||\ t\ <\ 0\ ||\ s\ >\ texture\_def-\/>s\_max\ ||\ t\ >\ texture\_def-\/>t\_max)\ \{}
+\DoxyCodeLine{00607\ \ \ \ \ \textcolor{keywordflow}{return}\ texture\_def-\/>border\_color;}
+\DoxyCodeLine{00608\ \ \ \}}
+\DoxyCodeLine{00609\ \ \ \textcolor{keywordflow}{return}\ (*texture\_def-\/>tex\_minfilter\_func\_impl)(texture\_def,\ s,\ t,\ level,\ level\_dx);}
+\DoxyCodeLine{00610\ \}}
+\DoxyCodeLine{00611\ }
+\DoxyCodeLine{00612\ PIXEL}
+\DoxyCodeLine{00613\ apply\_wrap\_border\_color\_magfilter(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00614\ \ \ \textcolor{keywordflow}{if}\ (s\ <\ 0\ ||\ t\ <\ 0\ ||\ s\ >\ texture\_def-\/>s\_max\ ||\ t\ >\ texture\_def-\/>t\_max)\ \{}
+\DoxyCodeLine{00615\ \ \ \ \ \textcolor{keywordflow}{return}\ texture\_def-\/>border\_color;}
+\DoxyCodeLine{00616\ \ \ \}}
+\DoxyCodeLine{00617\ \ \ \textcolor{keywordflow}{return}\ (*texture\_def-\/>tex\_magfilter\_func\_impl)(texture\_def,\ s,\ t,\ level,\ level\_dx);}
+\DoxyCodeLine{00618\ \}}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00620\ \textcolor{comment}{//\ Outside\ the\ legal\ range\ of\ s\ and\ t,\ clamp\ s\ and\ t\ to\ the\ edge.}}
+\DoxyCodeLine{00621\ \textcolor{comment}{//\ This\ is\ also\ duplicated\ by\ texcoord\_clamp(),\ but\ using\ these}}
+\DoxyCodeLine{00622\ \textcolor{comment}{//\ functions\ instead\ saves\ two\ additional\ function\ calls\ per\ pixel.}}
+\DoxyCodeLine{00623\ PIXEL}
+\DoxyCodeLine{00624\ apply\_wrap\_clamp\_minfilter(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00625\ \ \ s\ =\ min(max(s,\ 0),\ texture\_def-\/>s\_max);}
+\DoxyCodeLine{00626\ \ \ t\ =\ min(max(t,\ 0),\ texture\_def-\/>t\_max);}
+\DoxyCodeLine{00627\ \ \ \textcolor{keywordflow}{return}\ (*texture\_def-\/>tex\_minfilter\_func\_impl)(texture\_def,\ s,\ t,\ level,\ level\_dx);}
+\DoxyCodeLine{00628\ \}}
+\DoxyCodeLine{00629\ }
+\DoxyCodeLine{00630\ PIXEL}
+\DoxyCodeLine{00631\ apply\_wrap\_clamp\_magfilter(\mbox{\hyperlink{structZTextureDef}{ZTextureDef}}\ *texture\_def,\ \textcolor{keywordtype}{int}\ s,\ \textcolor{keywordtype}{int}\ t,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ level\_dx)\ \{}
+\DoxyCodeLine{00632\ \ \ s\ =\ min(max(s,\ 0),\ texture\_def-\/>s\_max);}
+\DoxyCodeLine{00633\ \ \ t\ =\ min(max(t,\ 0),\ texture\_def-\/>t\_max);}
+\DoxyCodeLine{00634\ \ \ \textcolor{keywordflow}{return}\ (*texture\_def-\/>tex\_magfilter\_func\_impl)(texture\_def,\ s,\ t,\ level,\ level\_dx);}
+\DoxyCodeLine{00635\ \}}
+\DoxyCodeLine{00636\ }
+\DoxyCodeLine{00637\ \textcolor{keywordtype}{int}}
+\DoxyCodeLine{00638\ texcoord\_clamp(\textcolor{keywordtype}{int}\ coord,\ \textcolor{keywordtype}{int}\ max\_coord)\ \{}
+\DoxyCodeLine{00639\ \ \ \textcolor{keywordflow}{return}\ min(max(coord,\ 0),\ max\_coord);}
+\DoxyCodeLine{00640\ \}}
+\DoxyCodeLine{00641\ }
+\DoxyCodeLine{00642\ \textcolor{keywordtype}{int}}
+\DoxyCodeLine{00643\ texcoord\_repeat(\textcolor{keywordtype}{int}\ coord,\ \textcolor{keywordtype}{int}\ max\_coord)\ \{}
+\DoxyCodeLine{00644\ \ \ \textcolor{keywordflow}{return}\ coord;}
+\DoxyCodeLine{00645\ \}}
+\DoxyCodeLine{00646\ }
+\DoxyCodeLine{00647\ \textcolor{keywordtype}{int}}
+\DoxyCodeLine{00648\ texcoord\_mirror(\textcolor{keywordtype}{int}\ coord,\ \textcolor{keywordtype}{int}\ max\_coord)\ \{}
+\DoxyCodeLine{00649\ \ \ \textcolor{keywordflow}{if}\ ((coord\ \&\ ((max\_coord\ <<\ 1)\ -\/\ 1))\ >\ max\_coord)\ \{}
+\DoxyCodeLine{00650\ \ \ \ \ coord\ =\ (max\_coord\ <<\ 1)\ -\/\ coord;}
+\DoxyCodeLine{00651\ \ \ \}}
+\DoxyCodeLine{00652\ \ \ \textcolor{keywordflow}{return}\ coord;}
+\DoxyCodeLine{00653\ \}}
+\DoxyCodeLine{00654\ }
+\DoxyCodeLine{00655\ \textcolor{keywordtype}{int}}
+\DoxyCodeLine{00656\ texcoord\_mirror\_once(\textcolor{keywordtype}{int}\ coord,\ \textcolor{keywordtype}{int}\ max\_coord)\ \{}
+\DoxyCodeLine{00657\ \ \ \textcolor{keywordflow}{if}\ (coord\ >\ max\_coord)\ \{}
+\DoxyCodeLine{00658\ \ \ \ \ coord\ =\ (max\_coord\ <<\ 1)\ -\/\ coord;}
+\DoxyCodeLine{00659\ \ \ \}}
+\DoxyCodeLine{00660\ \ \ \textcolor{keywordflow}{return}\ max(coord,\ 0);}
+\DoxyCodeLine{00661\ \}}
+
+\end{DoxyCode}

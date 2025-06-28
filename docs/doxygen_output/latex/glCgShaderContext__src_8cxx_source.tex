@@ -1,0 +1,1143 @@
+\doxysection{gl\+Cg\+Shader\+Context\+\_\+src.\+cxx}
+\hypertarget{glCgShaderContext__src_8cxx_source}{}\label{glCgShaderContext__src_8cxx_source}\index{panda/src/glstuff/glCgShaderContext\_src.cxx@{panda/src/glstuff/glCgShaderContext\_src.cxx}}
+\mbox{\hyperlink{glCgShaderContext__src_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#if\ defined(HAVE\_CG)\ \&\&\ !defined(OPENGLES)}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{cg_8h}{Cg/cg.h}}>}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{cgGL_8h}{Cg/cgGL.h}}>}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatGPUTimer_8h}{pStatGPUTimer.h}}"{}}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ CLP(CgShaderContext)::\_type\_handle;}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#define\ cg\_report\_errors()\ \{\ \(\backslash\)}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\ \ CGerror\ err\ =\ cgGetError();\ \(\backslash\)}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\ \ if\ (err\ !=\ CG\_NO\_ERROR)\ \{\ \(\backslash\)}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\ \ \ \ GLCAT.error()\ <<\ \_\_FILE\_\_\ "{},\ line\ "{}\ <<\ \_\_LINE\_\_\ <<\ "{}:\ "{}\ <<\ cgGetErrorString(err)\ <<\ "{}\(\backslash\)n"{};\ \(\backslash\)}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\ \ \}\ \}}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#define\ cg\_report\_errors()}}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00039\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00040\ CLP(CgShaderContext)(CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg,\ \mbox{\hyperlink{classShader}{Shader}}\ *s)\ :\ \mbox{\hyperlink{classShaderContext}{ShaderContext}}(s)\ \{}
+\DoxyCodeLine{00041\ \ \ \_glgsg\ =\ glgsg;}
+\DoxyCodeLine{00042\ \ \ \_cg\_program\ =\ 0;}
+\DoxyCodeLine{00043\ \ \ \_glsl\_program\ =\ 0;}
+\DoxyCodeLine{00044\ \ \ \_color\_attrib\_index\ =\ CA\_color;}
+\DoxyCodeLine{00045\ \ \ \_transform\_table\_param\ =\ 0;}
+\DoxyCodeLine{00046\ \ \ \_slider\_table\_param\ =\ 0;}
+\DoxyCodeLine{00047\ \ \ \_frame\_number\ =\ -\/1;}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \ \ nassertv(s-\/>get\_language()\ ==\ Shader::SL\_Cg);}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \ \ \textcolor{comment}{//\ Get\ a\ Cg\ context\ for\ this\ GSG.}}
+\DoxyCodeLine{00052\ \ \ CGcontext\ context\ =\ glgsg-\/>get\_cg\_context();}
+\DoxyCodeLine{00053\ \ \ \textcolor{keywordflow}{if}\ (context\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00054\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00055\ \ \ \}}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00057\ \ \ \textcolor{comment}{//\ Ask\ the\ shader\ to\ compile\ itself\ for\ us\ and\ to\ give\ us\ the\ resulting\ Cg}}
+\DoxyCodeLine{00058\ \ \ \textcolor{comment}{//\ program\ objects.}}
+\DoxyCodeLine{00059\ \ \ \textcolor{keywordflow}{if}\ (!s-\/>cg\_compile\_for(\_glgsg-\/>\_shader\_caps,\ context,}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_cg\_program,\ \_cg\_parameter\_map))\ \{}
+\DoxyCodeLine{00061\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00062\ \ \ \}}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00064\ \ \ \_transform\_table\_param\ =\ cgGetNamedParameter(\_cg\_program,\ \textcolor{stringliteral}{"{}tbl\_transforms"{}});}
+\DoxyCodeLine{00065\ \ \ \textcolor{keywordflow}{if}\ (\_transform\_table\_param)\ \{}
+\DoxyCodeLine{00066\ \ \ \ \ \_transform\_table\_size\ =\ cgGetArraySize(\_transform\_table\_param,\ 0);}
+\DoxyCodeLine{00067\ \ \ \}}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00069\ \ \ \_slider\_table\_param\ =\ cgGetNamedParameter(\_cg\_program,\ \textcolor{stringliteral}{"{}tbl\_sliders"{}});}
+\DoxyCodeLine{00070\ \ \ \textcolor{keywordflow}{if}\ (\_slider\_table\_param)\ \{}
+\DoxyCodeLine{00071\ \ \ \ \ \_slider\_table\_size\ =\ cgGetArraySize(\_slider\_table\_param,\ 0);}
+\DoxyCodeLine{00072\ \ \ \}}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00074\ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{00075\ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Loading\ Cg\ shader\ "{}}\ <<\ s-\/>get\_filename()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00077\ \ \ \}}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00079\ \ \ \textcolor{comment}{//\ Load\ the\ program.}}
+\DoxyCodeLine{00080\ \ \ \textcolor{keywordflow}{if}\ (\_cg\_program\ ==\ 0)\ \{}
+\DoxyCodeLine{00081\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *str\ =\ cgGetErrorString(cgGetError());}
+\DoxyCodeLine{00082\ \ \ \ \ GLCAT.error()}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ combine\ Cg\ program:\ "{}}\ <<\ s-\/>get\_filename()}
+\DoxyCodeLine{00084\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ str\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00085\ \ \ \ \ release\_resources();}
+\DoxyCodeLine{00086\ }
+\DoxyCodeLine{00087\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00088\ \ \ \ \ cgGLLoadProgram(\_cg\_program);}
+\DoxyCodeLine{00089\ \ \ \ \ CGerror\ error\ =\ cgGetError();}
+\DoxyCodeLine{00090\ \ \ \ \ \textcolor{keywordflow}{if}\ (error\ !=\ CG\_NO\_ERROR)\ \{}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *str\ =\ cgGetErrorString(error);}
+\DoxyCodeLine{00092\ \ \ \ \ \ \ GLCAT.error()}
+\DoxyCodeLine{00093\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ load\ program:\ "{}}\ <<\ s-\/>get\_filename()}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ str\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00095\ \ \ \ \ \ \ release\_resources();}
+\DoxyCodeLine{00096\ \ \ \ \ \}}
+\DoxyCodeLine{00097\ \ \ \}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \textcolor{keywordflow}{if}\ (\_cg\_program\ !=\ 0\ \&\&\ \_glgsg-\/>\_supports\_glsl)\ \{}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordflow}{if}\ (cgGetProgramProfile(\_cg\_program)\ ==\ CG\_PROFILE\_GLSLC)\ \{}
+\DoxyCodeLine{00101\ \ \ \ \ \ \ \_glsl\_program\ =\ cgGLGetProgramID(\_cg\_program);}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \textcolor{comment}{//\ Sometimes\ it\ fails\ to\ link,\ and\ Cg\ fails\ to\ propagate\ the\ error.}}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ GLint\ link\_status;}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \_glgsg-\/>\_glGetProgramiv(\_glsl\_program,\ GL\_LINK\_STATUS,\ \&link\_status);}
+\DoxyCodeLine{00106\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (link\_status\ !=\ GL\_TRUE)\ \{}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ \ \ release\_resources();}
+\DoxyCodeLine{00108\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00109\ \ \ \ \ \}}
+\DoxyCodeLine{00110\ \ \ \}}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \textcolor{keywordflow}{if}\ (\_cg\_program\ ==\ 0)\ \{}
+\DoxyCodeLine{00113\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00114\ \ \ \}}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ \textcolor{comment}{//\ We\ don't\ use\ cgGLSetParameterPointer\ to\ set\ the\ vertex\ attributes\ any}}
+\DoxyCodeLine{00117\ \ \ \textcolor{comment}{//\ longer,\ since\ it\ is\ buggy\ on\ non-\/NVIDIA\ hardware\ and\ doesn't\ allow}}
+\DoxyCodeLine{00118\ \ \ \textcolor{comment}{//\ explicit\ control\ over\ some\ parameters.\ \ Instead,\ we\ have\ to\ figure\ out}}
+\DoxyCodeLine{00119\ \ \ \textcolor{comment}{//\ ourselves\ how\ to\ map\ the\ input\ varyings\ to\ OpenGL\ vertex\ attributes.\ \ We}}
+\DoxyCodeLine{00120\ \ \ \textcolor{comment}{//\ use\ positive\ indices\ to\ indicate\ generic\ vertex\ attributes,\ and\ negative}}
+\DoxyCodeLine{00121\ \ \ \textcolor{comment}{//\ indices\ to\ indicate\ conventional\ vertex\ attributes\ (ie.}}
+\DoxyCodeLine{00122\ \ \ \textcolor{comment}{//\ glVertexPointer).}}
+\DoxyCodeLine{00123\ \ \ \textcolor{keywordtype}{size\_t}\ nvarying\ =\ \_shader-\/>\_var\_spec.size();}
+\DoxyCodeLine{00124\ \ \ \_attributes.resize(nvarying);}
+\DoxyCodeLine{00125\ \ \ \_used\_generic\_attribs.clear();}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00127\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ nvarying;\ ++i)\ \{}
+\DoxyCodeLine{00128\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structShader_1_1ShaderVarSpec}{Shader::ShaderVarSpec}}\ \&bind\ =\ \_shader-\/>\_var\_spec[i];}
+\DoxyCodeLine{00129\ \ \ \ \ CGparameter\ p\ =\ \_cg\_parameter\_map[i];}
+\DoxyCodeLine{00130\ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ ==\ 0)\ \{}
+\DoxyCodeLine{00131\ \ \ \ \ \ \ \_attributes[i]\ =\ CA\_unknown;}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00133\ \ \ \ \ \}}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00135\ \ \ \ \ GLint\ loc\ =\ CA\_unknown;}
+\DoxyCodeLine{00136\ \ \ \ \ CGresource\ res\ =\ cgGetParameterResource(p);}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ \ \ \textcolor{keywordflow}{if}\ (cgGetParameterBaseResource(p)\ ==\ CG\_ATTR0)\ \{}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ Cg\ toolkit\ claims\ that\ it\ is\ bound\ to\ a\ generic\ vertex\ attribute.}}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glgsg-\/>has\_fixed\_function\_pipeline()\ \&\&\ \_glsl\_program\ !=\ 0)\ \{}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ where\ the\ Cg\ glslv\ compiler\ lies,\ making\ the\ stupid}}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ assumption\ that\ we're\ using\ an\ NVIDIA\ card\ where\ generic\ attributes}}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ are\ aliased\ with\ conventional\ vertex\ attributes.\ \ Instead,\ it}}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ always\ uses\ conventional\ attributes\ in\ this\ case.\ \ Correct\ this.}}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ cgGetParameterResourceIndex(p);}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (index)\ \{}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 0:\ \ \textcolor{comment}{//\ gl\_Vertex}}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ \ \ loc\ =\ CA\_vertex;}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 2:\ \ \textcolor{comment}{//\ gl\_Normal}}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \ \ loc\ =\ CA\_normal;}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cgGetParameterColumns(p)\ ==\ 4)\ \{}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Don't\ declare\ vtx\_normal\ with\ 4\ coordinates;\ it\ results\ in\ it}}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ reading\ the\ w\ coordinate\ from\ random\ memory.}}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \ \ \ \ \ \ GLCAT.error()}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cg\ varying\ "{}}\ <<\ cgGetParameterName(p);}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cgGetParameterSemantic(p))\ \{}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GLCAT.error(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ :\ "{}}\ <<\ cgGetParameterSemantic(p);}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \ \ \ \ \ \ GLCAT.error(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ should\ be\ declared\ as\ float3,\ not\ float4!\(\backslash\)n"{}};}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 3:\ \ \textcolor{comment}{//\ gl\_Color}}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ \ \ loc\ =\ CA\_color;}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 4:\ \ \textcolor{comment}{//\ gl\_SecondaryColor}}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \ \ loc\ =\ CA\_secondary\_color;}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 1:\ \ \textcolor{comment}{//\ glWeightPointerARB?}}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 5:\ \ \textcolor{comment}{//\ gl\_FogCoord}}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 6:\ \ \textcolor{comment}{//\ PSIZE?}}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 7:\ \ \textcolor{comment}{//\ BLENDINDICES}}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ \ \ GLCAT.error()}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cg\ varying\ "{}}\ <<\ cgGetParameterName(p)\ <<\ \textcolor{stringliteral}{"{}\ is\ bound\ to\ "{}}}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}unrecognized\ attribute\ "{}}\ <<\ index\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ \ \ loc\ =\ CA\_unknown;}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ \ \ loc\ =\ CA\_texcoord\ +\ (index\ -\/\ 8);}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ loc\ =\ cgGetParameterResourceIndex(p);}
+\DoxyCodeLine{00184\ }
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (loc\ !=\ 0\ \&\&\ bind.\_id.\_name\ ==\ \textcolor{stringliteral}{"{}vtx\_position"{}})\ \{}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ really\ have\ to\ bind\ the\ vertex\ position\ to\ attribute\ 0,\ since}}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ OpenGL\ will\ hide\ the\ model\ if\ attribute\ 0\ is\ not\ enabled,\ and\ we}}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ can\ only\ ever\ be\ sure\ that\ vtx\_position\ is\ bound.}}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \ \ GLCAT.warning()}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}CG\ varying\ vtx\_position\ is\ bound\ to\ generic\ attribute\ "{}}\ <<\ loc}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ instead\ of\ 0.\ \ Use\ ATTR0\ semantic\ to\ prevent\ this.\(\backslash\)n"{}};}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00195\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (res\ ==\ CG\_GLSL\_ATTRIB\ ||\ \_glsl\_program\ !=\ 0)\ \{}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \textcolor{comment}{//\ With\ cg-\/glsl-\/version\ 130\ and\ higher,\ no\ conventional\ attributes\ are}}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \textcolor{comment}{//\ used,\ but\ it\ instead\ uses\ specially\ named\ variables.\ \ A\ bit\ of}}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \textcolor{comment}{//\ guesswork\ is\ involved\ here;\ Cg\ seems\ to\ mostly\ use\ the\ semantics\ as}}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \textcolor{comment}{//\ attribute\ names\ in\ GLSL,\ with\ a\ few\ exceptions.}}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *attribname\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (res)\ \{}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_POSITION0:}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ attribname\ =\ \textcolor{stringliteral}{"{}cg\_Vertex"{}};}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_NORMAL0:}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ attribname\ =\ \textcolor{stringliteral}{"{}NORMAL"{}};}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_COLOR0:}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_DIFFUSE0:}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ attribname\ =\ \textcolor{stringliteral}{"{}COLOR"{}};}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_COLOR1:}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_SPECULAR0:}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \ \ attribname\ =\ \textcolor{stringliteral}{"{}SPECULAR"{}};}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Everything\ else\ appears\ to\ be\ named\ after\ the\ semantic\ string.}}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \ \ attribname\ =\ cgGetParameterSemantic(p);}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ loc\ =\ \_glgsg-\/>\_glGetAttribLocation(\_glsl\_program,\ attribname);}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bind.\_id.\_name\ ==\ \textcolor{stringliteral}{"{}vtx\_color"{}})\ \{}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ \_color\_attrib\_index\ =\ loc;}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00225\ }
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (loc\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *resource\ =\ cgGetParameterResourceName(p);}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!resource)\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \ \ resource\ =\ \textcolor{stringliteral}{"{}unknown"{}};}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ find\ Cg\ varying\ "{}}\ <<\ cgGetParameterName(p);}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (attribname)\ \{}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ \ \ \ \ GLCAT.debug(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ :\ "{}}\ <<\ attribname;}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ \ \ GLCAT.debug(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ resource\ <<\ \textcolor{stringliteral}{"{})\ in\ the\ compiled\ GLSL\ program.\(\backslash\)n"{}};}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (loc\ !=\ 0\ \&\&\ bind.\_id.\_name\ ==\ \textcolor{stringliteral}{"{}vtx\_position"{}})\ \{}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ really\ have\ to\ bind\ the\ vertex\ position\ to\ attribute\ 0,\ since}}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ OpenGL\ will\ hide\ the\ model\ if\ attribute\ 0\ is\ not\ enabled,\ and\ we}}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ can\ only\ ever\ be\ sure\ that\ vtx\_position\ is\ bound.}}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ GLCAT.warning()}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}CG\ varying\ vtx\_position\ is\ bound\ to\ generic\ attribute\ "{}}\ <<\ loc}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}instead\ of\ 0.\ \ Use\ ATTR0\ semantic\ to\ prevent\ this.\(\backslash\)n"{}};}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00248\ }
+\DoxyCodeLine{00249\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cgGetParameterBaseResource(p)\ ==\ CG\_TEXCOORD0)\ \{}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ conventional\ texture\ coordinate\ set.}}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ loc\ =\ CA\_texcoord\ +\ cgGetParameterResourceIndex(p);}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_glgsg-\/>has\_fixed\_function\_pipeline())\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \textcolor{comment}{//\ Some\ other\ conventional\ vertex\ attribute.}}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (res)\ \{}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_POSITION0:}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ loc\ =\ CA\_vertex;}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_NORMAL0:}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \ \ loc\ =\ CA\_normal;}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_COLOR0:}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_DIFFUSE0:}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ loc\ =\ CA\_color;}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_COLOR1:}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CG\_SPECULAR0:}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ loc\ =\ CA\_secondary\_color;}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ GLCAT.error()}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cg\ varying\ "{}}\ <<\ cgGetParameterName(p);}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cgGetParameterSemantic(p))\ \{}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \ \ \ \ GLCAT.error(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ :\ "{}}\ <<\ cgGetParameterSemantic(p);}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \ \ GLCAT.error(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ has\ an\ unrecognized\ resource"{}};}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cgGetParameterResourceName(p))\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \ \ \ \ GLCAT.error(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ cgGetParameterResourceName(p)\ <<\ \textcolor{stringliteral}{"{})"{}};}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \ \ GLCAT.error(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \ \ loc\ =\ CA\_unknown;}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00283\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ GLCAT.error()}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cg\ varying\ "{}}\ <<\ cgGetParameterName(p);}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cgGetParameterSemantic(p))\ \{}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ GLCAT.error(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ :\ "{}}\ <<\ cgGetParameterSemantic(p);}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ GLCAT.error(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ is\ bound\ to\ a\ conventional\ vertex\ attribute,\ "{}}}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}but\ the\ compatibility\ profile\ is\ not\ enabled.\(\backslash\)n"{}};}
+\DoxyCodeLine{00291\ \ \ \ \ \}}
+\DoxyCodeLine{00292\ }
+\DoxyCodeLine{00293\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00294\ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cg\ varying\ "{}}\ <<\ cgGetParameterName(p);}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *semantic\ =\ cgGetParameterSemantic(p);}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (semantic)\ \{}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \ \ GLCAT.debug(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ :\ "{}}\ <<\ semantic;}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (loc\ ==\ CA\_unknown)\ \{}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \ \ GLCAT.debug(\textcolor{keyword}{false})}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ is\ not\ bound\ to\ a\ vertex\ attribute\(\backslash\)n"{}};}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (loc\ >=\ 0)\ \{}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \ \ GLCAT.debug(\textcolor{keyword}{false})}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ is\ bound\ to\ generic\ attribute\ "{}}\ <<\ loc\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00310\ }
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *resource\ =\ cgGetParameterResourceName(p);}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!resource)\ \{}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \ \ resource\ =\ \textcolor{stringliteral}{"{}unknown"{}};}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ GLCAT.debug(\textcolor{keyword}{false})}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ is\ bound\ to\ a\ conventional\ attribute\ ("{}}\ <<\ resource\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (loc\ ==\ CA\_unknown)\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Suggest\ fix\ to\ developer.}}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ GLCAT.debug()\ <<\ \textcolor{stringliteral}{"{}Try\ using\ a\ different\ semantic.\(\backslash\)n"{}};}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00323\ \ \ \ \ \}}
+\DoxyCodeLine{00324\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00325\ }
+\DoxyCodeLine{00326\ \ \ \ \ \_attributes[i]\ =\ loc;}
+\DoxyCodeLine{00327\ \ \ \ \ \textcolor{keywordflow}{if}\ (loc\ >=\ 0)\ \{}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \_used\_generic\_attribs.set\_bit(loc);}
+\DoxyCodeLine{00329\ \ \ \ \ \}}
+\DoxyCodeLine{00330\ \ \ \}}
+\DoxyCodeLine{00331\ }
+\DoxyCodeLine{00332\ \ \ \_mat\_part\_cache\ =\ \textcolor{keyword}{new}\ LVecBase4f[\_shader-\/>cp\_get\_mat\_cache\_size()];}
+\DoxyCodeLine{00333\ \ \ \_mat\_scratch\_space\ =\ \textcolor{keyword}{new}\ LVecBase4f[\_shader-\/>cp\_get\_mat\_scratch\_size()];}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00335\ \ \ \_glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{00336\ \}}
+\DoxyCodeLine{00337\ }
+\DoxyCodeLine{00341\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00342\ \string~CLP(CgShaderContext)()\ \{}
+\DoxyCodeLine{00343\ \ \ \textcolor{comment}{//\ Don't\ call\ release\_resources;\ we\ may\ not\ have\ an\ active\ context.}}
+\DoxyCodeLine{00344\ \ \ \textcolor{keyword}{delete}[]\ \_mat\_part\_cache;}
+\DoxyCodeLine{00345\ \ \ \textcolor{keyword}{delete}[]\ \_mat\_scratch\_space;}
+\DoxyCodeLine{00346\ \}}
+\DoxyCodeLine{00347\ }
+\DoxyCodeLine{00352\ \textcolor{keywordtype}{void}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00353\ release\_resources()\ \{}
+\DoxyCodeLine{00354\ \ \ \textcolor{keywordflow}{if}\ (\_cg\_program\ !=\ 0)\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ cgDestroyProgram(\_cg\_program);}
+\DoxyCodeLine{00356\ \ \ \ \ \_cg\_program\ =\ 0;}
+\DoxyCodeLine{00357\ \ \ \}}
+\DoxyCodeLine{00358\ \ \ \_cg\_parameter\_map.clear();}
+\DoxyCodeLine{00359\ \ \ \textcolor{keywordflow}{if}\ (\_glgsg)\ \{}
+\DoxyCodeLine{00360\ \ \ \ \ \_glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (glGetError()\ !=\ GL\_NO\_ERROR)\ \{}
+\DoxyCodeLine{00363\ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}GL\ error\ in\ ShaderContext\ destructor\(\backslash\)n"{}};}
+\DoxyCodeLine{00364\ \ \ \}}
+\DoxyCodeLine{00365\ }
+\DoxyCodeLine{00366\ \ \ \textcolor{keywordflow}{if}\ (!\_glgsg)\ \{}
+\DoxyCodeLine{00367\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00368\ \ \ \}}
+\DoxyCodeLine{00369\ \ \ \_glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{00370\ \}}
+\DoxyCodeLine{00371\ }
+\DoxyCodeLine{00378\ \textcolor{keywordtype}{bool}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00379\ valid()\ \{}
+\DoxyCodeLine{00380\ \ \ \textcolor{keywordflow}{if}\ (\_shader\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_shader-\/>get\_error\_flag())\ \{}
+\DoxyCodeLine{00381\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00382\ \ \ \}}
+\DoxyCodeLine{00383\ \ \ \textcolor{keywordflow}{return}\ (\_cg\_program\ !=\ 0);}
+\DoxyCodeLine{00384\ \}}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00390\ \textcolor{keywordtype}{void}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00391\ bind()\ \{}
+\DoxyCodeLine{00392\ \ \ \textcolor{keywordflow}{if}\ (\_cg\_program\ !=\ 0)\ \{}
+\DoxyCodeLine{00393\ \ \ \ \ \textcolor{comment}{//\ Bind\ the\ shaders.}}
+\DoxyCodeLine{00394\ \ \ \ \ cgGLEnableProgramProfiles(\_cg\_program);}
+\DoxyCodeLine{00395\ \ \ \ \ cgGLBindProgram(\_cg\_program);}
+\DoxyCodeLine{00396\ }
+\DoxyCodeLine{00397\ \ \ \ \ cg\_report\_errors();}
+\DoxyCodeLine{00398\ \ \ \ \ \_glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{00399\ \ \ \}}
+\DoxyCodeLine{00400\ \}}
+\DoxyCodeLine{00401\ }
+\DoxyCodeLine{00405\ \textcolor{keywordtype}{void}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00406\ unbind()\ \{}
+\DoxyCodeLine{00407\ \ \ \textcolor{keywordflow}{if}\ (\_cg\_program\ !=\ 0)\ \{}
+\DoxyCodeLine{00408\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_domains\ =\ cgGetNumProgramDomains(\_cg\_program);}
+\DoxyCodeLine{00409\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_domains;\ ++i)\ \{}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ CGprofile\ profile\ =\ cgGetProgramDomainProfile(\_cg\_program,\ i);}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ cgGLUnbindProgram(profile);}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ cgGLDisableProfile(profile);}
+\DoxyCodeLine{00413\ \ \ \ \ \}}
+\DoxyCodeLine{00414\ }
+\DoxyCodeLine{00415\ \ \ \ \ cg\_report\_errors();}
+\DoxyCodeLine{00416\ \ \ \ \ \_glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{00417\ \ \ \}}
+\DoxyCodeLine{00418\ \}}
+\DoxyCodeLine{00419\ }
+\DoxyCodeLine{00425\ \textcolor{keywordtype}{void}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00426\ set\_state\_and\_transform(const\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *target\_rs,}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *modelview\_transform,}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *camera\_transform,}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *projection\_transform)\ \{}
+\DoxyCodeLine{00430\ }
+\DoxyCodeLine{00431\ \ \ \textcolor{keywordflow}{if}\ (!valid())\ \{}
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00433\ \ \ \}}
+\DoxyCodeLine{00434\ }
+\DoxyCodeLine{00435\ \ \ \textcolor{comment}{//\ Find\ out\ which\ state\ properties\ have\ changed.}}
+\DoxyCodeLine{00436\ \ \ \textcolor{keywordtype}{int}\ altered\ =\ 0;}
+\DoxyCodeLine{00437\ }
+\DoxyCodeLine{00438\ \ \ \textcolor{keywordflow}{if}\ (\_modelview\_transform\ !=\ modelview\_transform)\ \{}
+\DoxyCodeLine{00439\ \ \ \ \ \_modelview\_transform\ =\ modelview\_transform;}
+\DoxyCodeLine{00440\ \ \ \ \ altered\ |=\ (Shader::SSD\_transform\ \&\ \mbox{\hyperlink{classShader}{\string~Shader}}::SSD\_view\_transform);}
+\DoxyCodeLine{00441\ \ \ \}}
+\DoxyCodeLine{00442\ \ \ \textcolor{keywordflow}{if}\ (\_camera\_transform\ !=\ camera\_transform)\ \{}
+\DoxyCodeLine{00443\ \ \ \ \ \_camera\_transform\ =\ camera\_transform;}
+\DoxyCodeLine{00444\ \ \ \ \ altered\ |=\ Shader::SSD\_transform;}
+\DoxyCodeLine{00445\ \ \ \}}
+\DoxyCodeLine{00446\ \ \ \textcolor{keywordflow}{if}\ (\_projection\_transform\ !=\ projection\_transform)\ \{}
+\DoxyCodeLine{00447\ \ \ \ \ \_projection\_transform\ =\ projection\_transform;}
+\DoxyCodeLine{00448\ \ \ \ \ altered\ |=\ Shader::SSD\_projection;}
+\DoxyCodeLine{00449\ \ \ \}}
+\DoxyCodeLine{00450\ }
+\DoxyCodeLine{00451\ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ state\_rs\ =\ \_state\_rs.lock();}
+\DoxyCodeLine{00452\ \ \ \textcolor{keywordflow}{if}\ (state\_rs\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00453\ \ \ \ \ \textcolor{comment}{//\ Reset\ all\ of\ the\ state.}}
+\DoxyCodeLine{00454\ \ \ \ \ altered\ |=\ Shader::SSD\_general;}
+\DoxyCodeLine{00455\ \ \ \ \ \_state\_rs\ =\ target\_rs;}
+\DoxyCodeLine{00456\ }
+\DoxyCodeLine{00457\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (state\_rs\ !=\ target\_rs)\ \{}
+\DoxyCodeLine{00458\ \ \ \ \ \textcolor{comment}{//\ The\ state\ has\ changed\ since\ last\ time.}}
+\DoxyCodeLine{00459\ \ \ \ \ \textcolor{keywordflow}{if}\ (state\_rs-\/>get\_attrib(ColorAttrib::get\_class\_slot())\ !=}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ \ \ target\_rs-\/>get\_attrib(ColorAttrib::get\_class\_slot()))\ \{}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ altered\ |=\ Shader::SSD\_color;}
+\DoxyCodeLine{00462\ \ \ \ \ \}}
+\DoxyCodeLine{00463\ \ \ \ \ \textcolor{keywordflow}{if}\ (state\_rs-\/>get\_attrib(ColorScaleAttrib::get\_class\_slot())\ !=}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \ \ target\_rs-\/>get\_attrib(ColorScaleAttrib::get\_class\_slot()))\ \{}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ altered\ |=\ Shader::SSD\_colorscale;}
+\DoxyCodeLine{00466\ \ \ \ \ \}}
+\DoxyCodeLine{00467\ \ \ \ \ \textcolor{keywordflow}{if}\ (state\_rs-\/>get\_attrib(MaterialAttrib::get\_class\_slot())\ !=}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ target\_rs-\/>get\_attrib(MaterialAttrib::get\_class\_slot()))\ \{}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ altered\ |=\ Shader::SSD\_material;}
+\DoxyCodeLine{00470\ \ \ \ \ \}}
+\DoxyCodeLine{00471\ \ \ \ \ \textcolor{keywordflow}{if}\ (state\_rs-\/>get\_attrib(ShaderAttrib::get\_class\_slot())\ !=}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \ \ target\_rs-\/>get\_attrib(ShaderAttrib::get\_class\_slot()))\ \{}
+\DoxyCodeLine{00473\ \ \ \ \ \ \ altered\ |=\ Shader::SSD\_shaderinputs;}
+\DoxyCodeLine{00474\ \ \ \ \ \}}
+\DoxyCodeLine{00475\ \ \ \ \ \textcolor{keywordflow}{if}\ (state\_rs-\/>get\_attrib(FogAttrib::get\_class\_slot())\ !=}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \ \ target\_rs-\/>get\_attrib(FogAttrib::get\_class\_slot()))\ \{}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ altered\ |=\ Shader::SSD\_fog;}
+\DoxyCodeLine{00478\ \ \ \ \ \}}
+\DoxyCodeLine{00479\ \ \ \ \ \textcolor{keywordflow}{if}\ (state\_rs-\/>get\_attrib(LightAttrib::get\_class\_slot())\ !=}
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \ \ target\_rs-\/>get\_attrib(LightAttrib::get\_class\_slot()))\ \{}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ altered\ |=\ Shader::SSD\_light;}
+\DoxyCodeLine{00482\ \ \ \ \ \}}
+\DoxyCodeLine{00483\ \ \ \ \ \textcolor{keywordflow}{if}\ (state\_rs-\/>get\_attrib(ClipPlaneAttrib::get\_class\_slot())\ !=}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \ \ target\_rs-\/>get\_attrib(ClipPlaneAttrib::get\_class\_slot()))\ \{}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ altered\ |=\ Shader::SSD\_clip\_planes;}
+\DoxyCodeLine{00486\ \ \ \ \ \}}
+\DoxyCodeLine{00487\ \ \ \ \ \textcolor{keywordflow}{if}\ (state\_rs-\/>get\_attrib(TexMatrixAttrib::get\_class\_slot())\ !=}
+\DoxyCodeLine{00488\ \ \ \ \ \ \ \ \ target\_rs-\/>get\_attrib(TexMatrixAttrib::get\_class\_slot()))\ \{}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ altered\ |=\ Shader::SSD\_tex\_matrix;}
+\DoxyCodeLine{00490\ \ \ \ \ \}}
+\DoxyCodeLine{00491\ \ \ \ \ \textcolor{keywordflow}{if}\ (state\_rs-\/>get\_attrib(TexGenAttrib::get\_class\_slot())\ !=}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \ \ target\_rs-\/>get\_attrib(TexGenAttrib::get\_class\_slot()))\ \{}
+\DoxyCodeLine{00493\ \ \ \ \ \ \ altered\ |=\ Shader::SSD\_tex\_gen;}
+\DoxyCodeLine{00494\ \ \ \ \ \}}
+\DoxyCodeLine{00495\ \ \ \ \ \textcolor{keywordflow}{if}\ (state\_rs-\/>get\_attrib(RenderModeAttrib::get\_class\_slot())\ !=}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \ \ target\_rs-\/>get\_attrib(RenderModeAttrib::get\_class\_slot()))\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ \ \ altered\ |=\ Shader::SSD\_render\_mode;}
+\DoxyCodeLine{00498\ \ \ \ \ \}}
+\DoxyCodeLine{00499\ \ \ \ \ \_state\_rs\ =\ target\_rs;}
+\DoxyCodeLine{00500\ \ \ \}}
+\DoxyCodeLine{00501\ }
+\DoxyCodeLine{00502\ \ \ \textcolor{comment}{//\ Is\ this\ the\ first\ time\ this\ shader\ is\ used\ this\ frame?}}
+\DoxyCodeLine{00503\ \ \ \textcolor{keywordtype}{int}\ frame\_number\ =\ ClockObject::get\_global\_clock()-\/>get\_frame\_count();}
+\DoxyCodeLine{00504\ \ \ \textcolor{keywordflow}{if}\ (frame\_number\ !=\ \_frame\_number)\ \{}
+\DoxyCodeLine{00505\ \ \ \ \ \ altered\ |=\ Shader::SSD\_frame;}
+\DoxyCodeLine{00506\ \ \ \ \ \_frame\_number\ =\ frame\_number;}
+\DoxyCodeLine{00507\ \ \ \}}
+\DoxyCodeLine{00508\ }
+\DoxyCodeLine{00509\ \ \ \textcolor{keywordflow}{if}\ (altered\ !=\ 0)\ \{}
+\DoxyCodeLine{00510\ \ \ \ \ issue\_parameters(altered);}
+\DoxyCodeLine{00511\ \ \ \}}
+\DoxyCodeLine{00512\ \}}
+\DoxyCodeLine{00513\ }
+\DoxyCodeLine{00524\ \textcolor{keywordtype}{void}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00525\ issue\_parameters(int\ altered)\ \{}
+\DoxyCodeLine{00526\ \ \ \mbox{\hyperlink{classPStatGPUTimer}{PStatGPUTimer}}\ timer(\_glgsg,\ \_glgsg-\/>\_draw\_set\_state\_shader\_parameters\_pcollector);}
+\DoxyCodeLine{00527\ }
+\DoxyCodeLine{00528\ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_spam())\ \{}
+\DoxyCodeLine{00529\ \ \ \ \ GLCAT.spam()}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Setting\ uniforms\ for\ "{}}\ <<\ \_shader-\/>get\_filename()}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ (altered\ 0x"{}}\ <<\ std::hex\ <<\ altered\ <<\ std::dec\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00532\ \ \ \}}
+\DoxyCodeLine{00533\ }
+\DoxyCodeLine{00534\ \ \ \textcolor{comment}{//\ We\ have\ no\ way\ to\ track\ modifications\ to\ PTAs,\ so\ we\ assume\ that\ they\ are}}
+\DoxyCodeLine{00535\ \ \ \textcolor{comment}{//\ modified\ every\ frame\ and\ when\ we\ switch\ ShaderAttribs.}}
+\DoxyCodeLine{00536\ \ \ \textcolor{keywordflow}{if}\ (altered\ \&\ (Shader::SSD\_shaderinputs\ |\ Shader::SSD\_frame))\ \{}
+\DoxyCodeLine{00537\ \ \ \ \ \textcolor{comment}{//\ Iterate\ through\ \_ptr\ parameters}}
+\DoxyCodeLine{00538\ \ \ \ \ \textcolor{comment}{/*for\ (int\ i\ =\ 0;\ i\ <\ (int)\_shader-\/>\_ptr\_spec.size();\ ++i)\ \{}}
+\DoxyCodeLine{00539\ \textcolor{comment}{\ \ \ \ \ \ Shader::ShaderPtrSpec\ \&spec\ =\ \_shader-\/>\_ptr\_spec[i];}}
+\DoxyCodeLine{00540\ \textcolor{comment}{}}
+\DoxyCodeLine{00541\ \textcolor{comment}{\ \ \ \ \ \ const\ Shader::ShaderPtrData\ *ptr\_data\ =\_glgsg-\/>fetch\_ptr\_parameter(spec);}}
+\DoxyCodeLine{00542\ \textcolor{comment}{\ \ \ \ \ \ if\ (ptr\_data\ ==\ nullptr)\{\ //the\ input\ is\ not\ contained\ in\ ShaderPtrData}}
+\DoxyCodeLine{00543\ \textcolor{comment}{\ \ \ \ \ \ \ \ release\_resources();}}
+\DoxyCodeLine{00544\ \textcolor{comment}{\ \ \ \ \ \ \ \ return;}}
+\DoxyCodeLine{00545\ \textcolor{comment}{\ \ \ \ \ \ \}}}
+\DoxyCodeLine{00546\ \textcolor{comment}{}}
+\DoxyCodeLine{00547\ \textcolor{comment}{\ \ \ \ \ \ //\ Check\ if\ the\ size\ of\ the\ shader\ input\ and\ ptr\_data\ match}}
+\DoxyCodeLine{00548\ \textcolor{comment}{\ \ \ \ \ \ size\_t\ input\_size\ =\ spec.\_dim[0]\ *\ spec.\_dim[1]\ *\ spec.\_dim[2];}}
+\DoxyCodeLine{00549\ \textcolor{comment}{}}
+\DoxyCodeLine{00550\ \textcolor{comment}{\ \ \ \ \ \ //\ dimension\ is\ negative\ only\ if\ the\ parameter\ had\ the\ (deprecated)k\_}}
+\DoxyCodeLine{00551\ \textcolor{comment}{\ \ \ \ \ \ //\ prefix.}}
+\DoxyCodeLine{00552\ \textcolor{comment}{\ \ \ \ \ \ if\ ((input\_size\ >\ ptr\_data-\/>\_size)\ \&\&\ (spec.\_dim[0]\ >\ 0))\ \{}}
+\DoxyCodeLine{00553\ \textcolor{comment}{\ \ \ \ \ \ \ \ GLCAT.error()\ <<\ spec.\_id.\_name\ <<\ "{}:\ incorrect\ number\ of\ elements,\ expected\ "{}}}
+\DoxyCodeLine{00554\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \ input\_size\ <<"{}\ got\ "{}\ <<\ \ ptr\_data-\/>\_size\ <<\ "{}\(\backslash\)n"{};}}
+\DoxyCodeLine{00555\ \textcolor{comment}{\ \ \ \ \ \ \ \ release\_resources();}}
+\DoxyCodeLine{00556\ \textcolor{comment}{\ \ \ \ \ \ \ \ return;}}
+\DoxyCodeLine{00557\ \textcolor{comment}{\ \ \ \ \ \ \}}}
+\DoxyCodeLine{00558\ \textcolor{comment}{\ \ \ \ \ \ CGparameter\ p\ =\ \_cg\_parameter\_map[spec.\_id.\_seqno];}}
+\DoxyCodeLine{00559\ \textcolor{comment}{}}
+\DoxyCodeLine{00560\ \textcolor{comment}{\ \ \ \ \ \ switch\ (ptr\_data-\/>\_type)\ \{}}
+\DoxyCodeLine{00561\ \textcolor{comment}{\ \ \ \ \ \ case\ Shader::SPT\_float:}}
+\DoxyCodeLine{00562\ \textcolor{comment}{\ \ \ \ \ \ \ \ switch\ (spec.\_info.\_class)\ \{}}
+\DoxyCodeLine{00563\ \textcolor{comment}{\ \ \ \ \ \ \ \ case\ Shader::SAC\_scalar:}}
+\DoxyCodeLine{00564\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ cgSetParameter1fv(p,\ (float*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00565\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00566\ \textcolor{comment}{}}
+\DoxyCodeLine{00567\ \textcolor{comment}{\ \ \ \ \ \ \ \ case\ Shader::SAC\_vector:}}
+\DoxyCodeLine{00568\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ switch\ (spec.\_info.\_type)\ \{}}
+\DoxyCodeLine{00569\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec1:}}
+\DoxyCodeLine{00570\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgSetParameter1fv(p,\ (float*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00571\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00572\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec2:}}
+\DoxyCodeLine{00573\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgSetParameter2fv(p,\ (float*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00574\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00575\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec3:}}
+\DoxyCodeLine{00576\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgSetParameter3fv(p,\ (float*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00577\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00578\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec4:}}
+\DoxyCodeLine{00579\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgSetParameter4fv(p,\ (float*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00580\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00581\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ default:}}
+\DoxyCodeLine{00582\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ nassertd(false)\ continue;}}
+\DoxyCodeLine{00583\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00584\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00585\ \textcolor{comment}{}}
+\DoxyCodeLine{00586\ \textcolor{comment}{\ \ \ \ \ \ \ \ case\ Shader::SAC\_matrix:}}
+\DoxyCodeLine{00587\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ cgGLSetMatrixParameterfc(p,\ (float*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00588\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00589\ \textcolor{comment}{}}
+\DoxyCodeLine{00590\ \textcolor{comment}{\ \ \ \ \ \ \ \ case\ Shader::SAC\_array:}}
+\DoxyCodeLine{00591\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ switch\ (spec.\_info.\_subclass)\ \{}}
+\DoxyCodeLine{00592\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAC\_scalar:}}
+\DoxyCodeLine{00593\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgGLSetParameterArray1f(p,\ 0,\ spec.\_dim[0],\ (float*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00594\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00595\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAC\_vector:}}
+\DoxyCodeLine{00596\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ switch\ (spec.\_dim[2])\ \{}}
+\DoxyCodeLine{00597\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ case\ 1:\ cgGLSetParameterArray1f(p,\ 0,\ spec.\_dim[0],\ (float*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00598\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ case\ 2:\ cgGLSetParameterArray2f(p,\ 0,\ spec.\_dim[0],\ (float*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00599\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ case\ 3:\ cgGLSetParameterArray3f(p,\ 0,\ spec.\_dim[0],\ (float*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00600\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ case\ 4:\ cgGLSetParameterArray4f(p,\ 0,\ spec.\_dim[0],\ (float*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00601\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ default:}}
+\DoxyCodeLine{00602\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ \ \ nassertd(spec.\_dim[2]\ >\ 0\ \&\&\ spec.\_dim[2]\ <=\ 4)\ continue;}}
+\DoxyCodeLine{00603\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00604\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00605\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAC\_matrix:}}
+\DoxyCodeLine{00606\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgGLSetMatrixParameterArrayfc(p,\ 0,\ spec.\_dim[0],\ (float*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00607\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00608\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ default:}}
+\DoxyCodeLine{00609\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ nassertd(false)\ continue;}}
+\DoxyCodeLine{00610\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00611\ \textcolor{comment}{\ \ \ \ \ \ \ \ default:}}
+\DoxyCodeLine{00612\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ nassertd(false)\ continue;}}
+\DoxyCodeLine{00613\ \textcolor{comment}{\ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00614\ \textcolor{comment}{}}
+\DoxyCodeLine{00615\ \textcolor{comment}{\ \ \ \ \ \ case\ Shader::SPT\_double:}}
+\DoxyCodeLine{00616\ \textcolor{comment}{\ \ \ \ \ \ \ \ switch\ (spec.\_info.\_class)\ \{}}
+\DoxyCodeLine{00617\ \textcolor{comment}{\ \ \ \ \ \ \ \ case\ Shader::SAC\_scalar:}}
+\DoxyCodeLine{00618\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ cgSetParameter1dv(p,\ (double*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00619\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00620\ \textcolor{comment}{}}
+\DoxyCodeLine{00621\ \textcolor{comment}{\ \ \ \ \ \ \ \ case\ Shader::SAC\_vector:}}
+\DoxyCodeLine{00622\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ switch\ (spec.\_info.\_type)\ \{}}
+\DoxyCodeLine{00623\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec1:}}
+\DoxyCodeLine{00624\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgSetParameter1dv(p,\ (double*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00625\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00626\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec2:}}
+\DoxyCodeLine{00627\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgSetParameter2dv(p,\ (double*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00628\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00629\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec3:}}
+\DoxyCodeLine{00630\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgSetParameter3dv(p,\ (double*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00631\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00632\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec4:}}
+\DoxyCodeLine{00633\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgSetParameter4dv(p,\ (double*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00634\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00635\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ default:}}
+\DoxyCodeLine{00636\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ nassertd(false)\ continue;}}
+\DoxyCodeLine{00637\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00638\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00639\ \textcolor{comment}{}}
+\DoxyCodeLine{00640\ \textcolor{comment}{\ \ \ \ \ \ \ \ case\ Shader::SAC\_matrix:}}
+\DoxyCodeLine{00641\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ cgGLSetMatrixParameterdc(p,\ (double*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00642\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00643\ \textcolor{comment}{}}
+\DoxyCodeLine{00644\ \textcolor{comment}{\ \ \ \ \ \ \ \ case\ Shader::SAC\_array:}}
+\DoxyCodeLine{00645\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ switch\ (spec.\_info.\_subclass)\ \{}}
+\DoxyCodeLine{00646\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAC\_scalar:}}
+\DoxyCodeLine{00647\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgGLSetParameterArray1d(p,\ 0,\ spec.\_dim[0],\ (double*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00648\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00649\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAC\_vector:}}
+\DoxyCodeLine{00650\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ switch\ (spec.\_dim[2])\ \{}}
+\DoxyCodeLine{00651\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ case\ 1:\ cgGLSetParameterArray1d(p,\ 0,\ spec.\_dim[0],\ (double*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00652\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ case\ 2:\ cgGLSetParameterArray2d(p,\ 0,\ spec.\_dim[0],\ (double*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00653\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ case\ 3:\ cgGLSetParameterArray3d(p,\ 0,\ spec.\_dim[0],\ (double*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00654\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ case\ 4:\ cgGLSetParameterArray4d(p,\ 0,\ spec.\_dim[0],\ (double*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00655\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ default:}}
+\DoxyCodeLine{00656\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ \ \ nassertd(spec.\_dim[2]\ >\ 0\ \&\&\ spec.\_dim[2]\ <=\ 4)\ continue;}}
+\DoxyCodeLine{00657\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00658\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00659\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAC\_matrix:}}
+\DoxyCodeLine{00660\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ cgGLSetMatrixParameterArraydc(p,\ 0,\ spec.\_dim[0],\ (double*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00661\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00662\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ default:}}
+\DoxyCodeLine{00663\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ nassertd(false)\ continue;}}
+\DoxyCodeLine{00664\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00665\ \textcolor{comment}{\ \ \ \ \ \ \ \ default:}}
+\DoxyCodeLine{00666\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ nassertd(false)\ continue;}}
+\DoxyCodeLine{00667\ \textcolor{comment}{\ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00668\ \textcolor{comment}{\ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00669\ \textcolor{comment}{}}
+\DoxyCodeLine{00670\ \textcolor{comment}{\ \ \ \ \ \ case\ Shader::SPT\_int:}}
+\DoxyCodeLine{00671\ \textcolor{comment}{\ \ \ \ \ \ case\ Shader::SPT\_uint:}}
+\DoxyCodeLine{00672\ \textcolor{comment}{\ \ \ \ \ \ \ \ switch\ (spec.\_info.\_class)\ \{}}
+\DoxyCodeLine{00673\ \textcolor{comment}{\ \ \ \ \ \ \ \ case\ Shader::SAC\_scalar:}}
+\DoxyCodeLine{00674\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ cgSetParameter1iv(p,\ (int*)ptr\_data-\/>\_ptr);}}
+\DoxyCodeLine{00675\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ continue;}}
+\DoxyCodeLine{00676\ \textcolor{comment}{\ \ \ \ \ \ \ \ case\ Shader::SAC\_vector:}}
+\DoxyCodeLine{00677\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ switch\ (spec.\_info.\_type)\ \{}}
+\DoxyCodeLine{00678\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec1:\ cgSetParameter1iv(p,\ (int*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00679\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec2:\ cgSetParameter2iv(p,\ (int*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00680\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec3:\ cgSetParameter3iv(p,\ (int*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00681\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ case\ Shader::SAT\_vec4:\ cgSetParameter4iv(p,\ (int*)ptr\_data-\/>\_ptr);\ continue;}}
+\DoxyCodeLine{00682\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ default:}}
+\DoxyCodeLine{00683\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ nassertd(false)\ continue;}}
+\DoxyCodeLine{00684\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00685\ \textcolor{comment}{\ \ \ \ \ \ \ \ default:}}
+\DoxyCodeLine{00686\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ nassertd(false)\ continue;}}
+\DoxyCodeLine{00687\ \textcolor{comment}{\ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00688\ \textcolor{comment}{\ \ \ \ \ \ default:}}
+\DoxyCodeLine{00689\ \textcolor{comment}{\ \ \ \ \ \ \ \ GLCAT.error()\ <<\ spec.\_id.\_name\ <<\ "{}:"{}\ <<\ "{}unrecognized\ parameter\ type\(\backslash\)n"{};}}
+\DoxyCodeLine{00690\ \textcolor{comment}{\ \ \ \ \ \ \ \ release\_resources();}}
+\DoxyCodeLine{00691\ \textcolor{comment}{\ \ \ \ \ \ \ \ return;}}
+\DoxyCodeLine{00692\ \textcolor{comment}{\ \ \ \ \ \ \}}}
+\DoxyCodeLine{00693\ \textcolor{comment}{\ \ \ \ \}*/}}
+\DoxyCodeLine{00694\ \ \ \}}
+\DoxyCodeLine{00695\ }
+\DoxyCodeLine{00696\ \ \ \textcolor{keywordflow}{if}\ (altered\ \&\ \_shader-\/>\_mat\_deps)\ \{}
+\DoxyCodeLine{00697\ \ \ \ \ \textcolor{keywordflow}{if}\ (altered\ \&\ \_shader-\/>\_mat\_cache\_deps)\ \{}
+\DoxyCodeLine{00698\ \ \ \ \ \ \ \_glgsg-\/>update\_shader\_matrix\_cache(\_shader,\ \_mat\_part\_cache,\ altered);}
+\DoxyCodeLine{00699\ \ \ \ \ \}}
+\DoxyCodeLine{00700\ }
+\DoxyCodeLine{00701\ \ \ \ \ LMatrix4f\ scratch;}
+\DoxyCodeLine{00702\ }
+\DoxyCodeLine{00703\ \ \ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{structShader_1_1ShaderMatSpec}{Shader::ShaderMatSpec}}\ \&spec\ :\ \_shader-\/>\_mat\_spec)\ \{}
+\DoxyCodeLine{00704\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((altered\ \&\ spec.\_dep)\ ==\ 0)\ \{}
+\DoxyCodeLine{00705\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00706\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00707\ }
+\DoxyCodeLine{00708\ \ \ \ \ \ \ \textcolor{keyword}{const}\ LVecBase4f\ *val\ =\ \_glgsg-\/>fetch\_specified\_value(spec,\ \_mat\_part\_cache,\ \_mat\_scratch\_space);}
+\DoxyCodeLine{00709\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!val)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00710\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{float}\ *data\ =\ val-\/>get\_data();}
+\DoxyCodeLine{00711\ \ \ \ \ \ \ data\ +=\ spec.\_offset;}
+\DoxyCodeLine{00712\ }
+\DoxyCodeLine{00713\ \ \ \ \ \ \ CGparameter\ p\ =\ \_cg\_parameter\_map[spec.\_id.\_seqno];}
+\DoxyCodeLine{00714\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (spec.\_numeric\_type\ ==\ Shader::SPT\_float)\ \{}
+\DoxyCodeLine{00715\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (spec.\_piece)\ \{}
+\DoxyCodeLine{00716\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_scalar:\ cgGLSetParameter1f(p,\ data[0]);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00717\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec2:\ cgGLSetParameter2fv(p,\ data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00718\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec3:\ cgGLSetParameter3fv(p,\ data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00719\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec4:\ cgGLSetParameter4fv(p,\ data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00720\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_scalar\_array:\ cgGLSetParameterArray1f(p,\ 0,\ spec.\_array\_count,\ data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00721\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec2\_array:\ cgGLSetParameterArray2f(p,\ 0,\ spec.\_array\_count,\ data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00722\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec3\_array:\ cgGLSetParameterArray3f(p,\ 0,\ spec.\_array\_count,\ data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00723\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec4\_array:\ cgGLSetParameterArray4f(p,\ 0,\ spec.\_array\_count,\ data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00724\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat3\_whole:}
+\DoxyCodeLine{00725\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_whole:\ cgGLSetMatrixParameterfc(p,\ data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00726\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat3\_array:}
+\DoxyCodeLine{00727\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_array:\ cgGLSetMatrixParameterArrayfc(p,\ 0,\ spec.\_array\_count,\ data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00728\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_transpose:\ cgGLSetMatrixParameterfr(p,\ data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00729\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_column:\ cgGLSetParameter4f(p,\ data[0],\ data[4],\ data[\ 8],\ data[12]);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00730\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_upper3x3:}
+\DoxyCodeLine{00731\ \ \ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00732\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix3f\ upper3(data[0],\ data[1],\ data[2],\ data[4],\ data[5],\ data[6],\ data[8],\ data[9],\ data[10]);}
+\DoxyCodeLine{00733\ \ \ \ \ \ \ \ \ \ \ \ \ cgGLSetMatrixParameterfc(p,\ upper3.get\_data());}
+\DoxyCodeLine{00734\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00735\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_transpose3x3:}
+\DoxyCodeLine{00737\ \ \ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00738\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix3f\ upper3(data[0],\ data[1],\ data[2],\ data[4],\ data[5],\ data[6],\ data[8],\ data[9],\ data[10]);}
+\DoxyCodeLine{00739\ \ \ \ \ \ \ \ \ \ \ \ \ cgGLSetMatrixParameterfr(p,\ upper3.get\_data());}
+\DoxyCodeLine{00740\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00741\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00742\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (spec.\_numeric\_type\ ==\ Shader::SPT\_double)\ \{}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ *datad\ =\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ *)data;}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (spec.\_piece)\ \{}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_scalar:\ cgGLSetParameter1d(p,\ datad[0]);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec2:\ cgGLSetParameter2dv(p,\ datad);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec3:\ cgGLSetParameter3dv(p,\ datad);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec4:\ cgGLSetParameter4dv(p,\ datad);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_scalar\_array:\ cgGLSetParameterArray1d(p,\ 0,\ spec.\_array\_count,\ datad);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec2\_array:\ cgGLSetParameterArray2d(p,\ 0,\ spec.\_array\_count,\ datad);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00753\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec3\_array:\ cgGLSetParameterArray3d(p,\ 0,\ spec.\_array\_count,\ datad);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00754\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec4\_array:\ cgGLSetParameterArray4d(p,\ 0,\ spec.\_array\_count,\ datad);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00755\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat3\_whole:}
+\DoxyCodeLine{00756\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_whole:\ cgGLSetMatrixParameterdc(p,\ datad);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00757\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat3\_array:}
+\DoxyCodeLine{00758\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_array:\ cgGLSetMatrixParameterArraydc(p,\ 0,\ spec.\_array\_count,\ datad);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00759\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_transpose:\ cgGLSetMatrixParameterdr(p,\ datad);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00760\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_column:\ cgGLSetParameter4d(p,\ datad[0],\ datad[4],\ datad[\ 8],\ datad[12]);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_upper3x3:}
+\DoxyCodeLine{00762\ \ \ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00763\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix3d\ upper3(datad[0],\ datad[1],\ datad[2],\ datad[4],\ datad[5],\ datad[6],\ datad[8],\ datad[9],\ datad[10]);}
+\DoxyCodeLine{00764\ \ \ \ \ \ \ \ \ \ \ \ \ cgGLSetMatrixParameterdc(p,\ upper3.get\_data());}
+\DoxyCodeLine{00765\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00766\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00767\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_mat4\_transpose3x3:}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00769\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix3d\ upper3(datad[0],\ datad[1],\ datad[2],\ datad[4],\ datad[5],\ datad[6],\ datad[8],\ datad[9],\ datad[10]);}
+\DoxyCodeLine{00770\ \ \ \ \ \ \ \ \ \ \ \ \ cgGLSetMatrixParameterdr(p,\ upper3.get\_data());}
+\DoxyCodeLine{00771\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00773\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (spec.\_numeric\_type\ ==\ Shader::SPT\_int\ ||\ spec.\_numeric\_type\ ==\ Shader::SPT\_uint)\ \{}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (spec.\_piece)\ \{}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_scalar\_array:}
+\DoxyCodeLine{00778\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_scalar:\ cgSetParameter1i(p,\ ((\textcolor{keywordtype}{int}\ *)data)[0]);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00779\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec2\_array:}
+\DoxyCodeLine{00780\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec2:\ cgSetParameter2iv(p,\ (\textcolor{keywordtype}{int}\ *)data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00781\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec3\_array:}
+\DoxyCodeLine{00782\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec3:\ cgSetParameter3iv(p,\ (\textcolor{keywordtype}{int}\ *)data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00783\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec4\_array:}
+\DoxyCodeLine{00784\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Shader::SMP\_vec4:\ cgSetParameter4iv(p,\ (\textcolor{keywordtype}{int}\ *)data);\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00785\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{default}:\ assert(\textcolor{keyword}{false});}
+\DoxyCodeLine{00786\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00787\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00788\ \ \ \ \ \}}
+\DoxyCodeLine{00789\ \ \ \}}
+\DoxyCodeLine{00790\ }
+\DoxyCodeLine{00791\ \ \ cg\_report\_errors();}
+\DoxyCodeLine{00792\ \ \ \_glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{00793\ \}}
+\DoxyCodeLine{00794\ }
+\DoxyCodeLine{00798\ \textcolor{keywordtype}{void}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00799\ update\_transform\_table(const\ \mbox{\hyperlink{classTransformTable}{TransformTable}}\ *table)\ \{}
+\DoxyCodeLine{00800\ \ \ LMatrix4f\ *matrices\ =\ (LMatrix4f\ *)alloca(\_transform\_table\_size\ *\ 64);}
+\DoxyCodeLine{00801\ }
+\DoxyCodeLine{00802\ \ \ \textcolor{keywordtype}{int}\ i\ =\ 0;}
+\DoxyCodeLine{00803\ \ \ \textcolor{keywordflow}{if}\ (table\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00804\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_transforms\ =\ std::min(\_transform\_table\_size,\ (\textcolor{keywordtype}{long})table-\/>get\_num\_transforms());}
+\DoxyCodeLine{00805\ \ \ \ \ \textcolor{keywordflow}{for}\ (;\ i\ <\ num\_transforms;\ ++i)\ \{}
+\DoxyCodeLine{00806\ \textcolor{preprocessor}{\#ifdef\ STDFLOAT\_DOUBLE}}
+\DoxyCodeLine{00807\ \ \ \ \ \ \ LMatrix4\ matrix;}
+\DoxyCodeLine{00808\ \ \ \ \ \ \ table-\/>get\_transform(i)-\/>get\_matrix(matrix);}
+\DoxyCodeLine{00809\ \ \ \ \ \ \ matrices[i]\ =\ LCAST(\textcolor{keywordtype}{float},\ matrix);}
+\DoxyCodeLine{00810\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00811\ \ \ \ \ \ \ table-\/>get\_transform(i)-\/>get\_matrix(matrices[i]);}
+\DoxyCodeLine{00812\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00813\ \ \ \ \ \}}
+\DoxyCodeLine{00814\ \ \ \}}
+\DoxyCodeLine{00815\ \ \ \textcolor{keywordflow}{for}\ (;\ i\ <\ \_transform\_table\_size;\ ++i)\ \{}
+\DoxyCodeLine{00816\ \ \ \ \ matrices[i]\ =\ LMatrix4f::ident\_mat();}
+\DoxyCodeLine{00817\ \ \ \}}
+\DoxyCodeLine{00818\ }
+\DoxyCodeLine{00819\ \ \ cgGLSetMatrixParameterArrayfc(\_transform\_table\_param,\ 0,}
+\DoxyCodeLine{00820\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_transform\_table\_size,\ (\textcolor{keywordtype}{float}\ *)matrices);}
+\DoxyCodeLine{00821\ \}}
+\DoxyCodeLine{00822\ }
+\DoxyCodeLine{00826\ \textcolor{keywordtype}{void}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00827\ update\_slider\_table(const\ \mbox{\hyperlink{classSliderTable}{SliderTable}}\ *table)\ \{}
+\DoxyCodeLine{00828\ \ \ \textcolor{keywordtype}{float}\ *sliders\ =\ (\textcolor{keywordtype}{float}\ *)alloca(\_slider\_table\_size\ *\ 4);}
+\DoxyCodeLine{00829\ \ \ memset(sliders,\ 0,\ \_slider\_table\_size\ *\ 4);}
+\DoxyCodeLine{00830\ }
+\DoxyCodeLine{00831\ \ \ \textcolor{keywordflow}{if}\ (table\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00832\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_sliders\ =\ std::min(\_slider\_table\_size,\ (\textcolor{keywordtype}{long})table-\/>get\_num\_sliders());}
+\DoxyCodeLine{00833\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_sliders;\ ++i)\ \{}
+\DoxyCodeLine{00834\ \ \ \ \ \ \ sliders[i]\ =\ table-\/>get\_slider(i)-\/>get\_slider();}
+\DoxyCodeLine{00835\ \ \ \ \ \}}
+\DoxyCodeLine{00836\ \ \ \}}
+\DoxyCodeLine{00837\ }
+\DoxyCodeLine{00838\ \ \ cgGLSetParameterArray4f(\_slider\_table\_param,\ 0,\ \_slider\_table\_size,\ sliders);}
+\DoxyCodeLine{00839\ \}}
+\DoxyCodeLine{00840\ }
+\DoxyCodeLine{00844\ \textcolor{keywordtype}{void}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00845\ disable\_shader\_vertex\_arrays()\ \{}
+\DoxyCodeLine{00846\ \ \ \textcolor{keywordflow}{if}\ (!valid())\ \{}
+\DoxyCodeLine{00847\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00848\ \ \ \}}
+\DoxyCodeLine{00849\ }
+\DoxyCodeLine{00850\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_shader-\/>\_var\_spec.size();\ ++i)\ \{}
+\DoxyCodeLine{00851\ \ \ \ \ GLint\ p\ =\ \_attributes[i];}
+\DoxyCodeLine{00852\ }
+\DoxyCodeLine{00853\ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ >=\ 0)\ \{}
+\DoxyCodeLine{00854\ \ \ \ \ \ \ \_glgsg-\/>disable\_vertex\_attrib\_array(p);}
+\DoxyCodeLine{00855\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00856\ \textcolor{preprocessor}{\#ifdef\ SUPPORT\_FIXED\_FUNCTION}}
+\DoxyCodeLine{00857\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (p)\ \{}
+\DoxyCodeLine{00858\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_unknown:}
+\DoxyCodeLine{00859\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00860\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_vertex:}
+\DoxyCodeLine{00861\ \ \ \ \ \ \ \ \ glDisableClientState(GL\_VERTEX\_ARRAY);}
+\DoxyCodeLine{00862\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00863\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_normal:}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ \ \ glDisableClientState(GL\_NORMAL\_ARRAY);}
+\DoxyCodeLine{00865\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00866\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_color:}
+\DoxyCodeLine{00867\ \ \ \ \ \ \ \ \ glDisableClientState(GL\_COLOR\_ARRAY);}
+\DoxyCodeLine{00868\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00869\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_secondary\_color:}
+\DoxyCodeLine{00870\ \ \ \ \ \ \ \ \ glDisableClientState(GL\_SECONDARY\_COLOR\_ARRAY);}
+\DoxyCodeLine{00871\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00872\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00873\ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glClientActiveTexture(GL\_TEXTURE0\ +\ (p\ -\/\ CA\_texcoord));}
+\DoxyCodeLine{00874\ \ \ \ \ \ \ \ \ glDisableClientState(GL\_TEXTURE\_COORD\_ARRAY);}
+\DoxyCodeLine{00875\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00876\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00877\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SUPPORT\_FIXED\_FUNCTION}}
+\DoxyCodeLine{00878\ \ \ \ \ \}}
+\DoxyCodeLine{00879\ \ \ \}}
+\DoxyCodeLine{00880\ }
+\DoxyCodeLine{00881\ \ \ cg\_report\_errors();}
+\DoxyCodeLine{00882\ \ \ \_glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{00883\ \}}
+\DoxyCodeLine{00884\ }
+\DoxyCodeLine{00892\ \textcolor{keywordtype}{bool}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{00893\ update\_shader\_vertex\_arrays(\mbox{\hyperlink{classShaderContext}{ShaderContext}}\ *prev,\ bool\ force)\ \{}
+\DoxyCodeLine{00894\ \ \ \textcolor{keywordflow}{if}\ (!valid())\ \{}
+\DoxyCodeLine{00895\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00896\ \ \ \}}
+\DoxyCodeLine{00897\ }
+\DoxyCodeLine{00898\ \ \ cg\_report\_errors();}
+\DoxyCodeLine{00899\ }
+\DoxyCodeLine{00900\ \textcolor{preprocessor}{\#ifdef\ SUPPORT\_IMMEDIATE\_MODE}}
+\DoxyCodeLine{00901\ \ \ \textcolor{keywordflow}{if}\ (\_glgsg-\/>\_use\_sender)\ \{}
+\DoxyCodeLine{00902\ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}immediate\ mode\ shaders\ not\ implemented\ yet\(\backslash\)n"{}};}
+\DoxyCodeLine{00903\ \ \ \}\ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00904\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ SUPPORT\_IMMEDIATE\_MODE}}
+\DoxyCodeLine{00905\ \ \ \{}
+\DoxyCodeLine{00906\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexArrayDataHandle}{GeomVertexArrayDataHandle}}\ *array\_reader;}
+\DoxyCodeLine{00907\ \ \ \ \ Geom::NumericType\ numeric\_type;}
+\DoxyCodeLine{00908\ \ \ \ \ \textcolor{keywordtype}{int}\ start,\ stride,\ num\_values;}
+\DoxyCodeLine{00909\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ nvarying\ =\ \_shader-\/>\_var\_spec.size();}
+\DoxyCodeLine{00910\ }
+\DoxyCodeLine{00911\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ nvarying;\ ++i)\ \{}
+\DoxyCodeLine{00912\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structShader_1_1ShaderVarSpec}{Shader::ShaderVarSpec}}\ \&bind\ =\ \_shader-\/>\_var\_spec[i];}
+\DoxyCodeLine{00913\ \ \ \ \ \ \ \mbox{\hyperlink{classInternalName}{InternalName}}\ *name\ =\ bind.\_name;}
+\DoxyCodeLine{00914\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ texslot\ =\ bind.\_append\_uv;}
+\DoxyCodeLine{00915\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (texslot\ >=\ 0\ \&\&\ texslot\ <\ \_glgsg-\/>\_state\_texture-\/>get\_num\_on\_stages())\ \{}
+\DoxyCodeLine{00916\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classTextureStage}{TextureStage}}\ *stage\ =\ \_glgsg-\/>\_state\_texture-\/>get\_on\_stage(texslot);}
+\DoxyCodeLine{00917\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classInternalName}{InternalName}}\ *texname\ =\ stage-\/>get\_texcoord\_name();}
+\DoxyCodeLine{00918\ }
+\DoxyCodeLine{00919\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (name\ ==\ InternalName::get\_texcoord())\ \{}
+\DoxyCodeLine{00920\ \ \ \ \ \ \ \ \ \ \ name\ =\ texname;}
+\DoxyCodeLine{00921\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (texname\ !=\ InternalName::get\_texcoord())\ \{}
+\DoxyCodeLine{00922\ \ \ \ \ \ \ \ \ \ \ name\ =\ name-\/>append(texname-\/>get\_basename());}
+\DoxyCodeLine{00923\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00924\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00925\ \ \ \ \ \ \ GLint\ p\ =\ \_attributes[i];}
+\DoxyCodeLine{00926\ }
+\DoxyCodeLine{00927\ \ \ \ \ \ \ \textcolor{comment}{//\ Don't\ apply\ vertex\ colors\ if\ they\ are\ disabled\ with\ a\ ColorAttrib.}}
+\DoxyCodeLine{00928\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_elements,\ element\_stride,\ divisor;}
+\DoxyCodeLine{00929\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ normalized;}
+\DoxyCodeLine{00930\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((p\ !=\ \_color\_attrib\_index\ ||\ \_glgsg-\/>\_vertex\_colors\_enabled)\ \&\&}
+\DoxyCodeLine{00931\ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_data\_reader-\/>get\_array\_info(name,\ array\_reader,}
+\DoxyCodeLine{00932\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ num\_values,\ numeric\_type,}
+\DoxyCodeLine{00933\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ normalized,\ start,\ stride,\ divisor,}
+\DoxyCodeLine{00934\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ num\_elements,\ element\_stride))\ \{}
+\DoxyCodeLine{00935\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *client\_pointer;}
+\DoxyCodeLine{00936\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_glgsg-\/>setup\_array\_data(client\_pointer,\ array\_reader,\ force))\ \{}
+\DoxyCodeLine{00937\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00938\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00939\ \ \ \ \ \ \ \ \ client\_pointer\ +=\ start;}
+\DoxyCodeLine{00940\ }
+\DoxyCodeLine{00941\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ don't\ use\ cgGLSetParameterPointer\ because\ it\ is\ very\ buggy\ and}}
+\DoxyCodeLine{00942\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ limited\ in\ the\ options\ we\ can\ set.}}
+\DoxyCodeLine{00943\ \ \ \ \ \ \ \ \ GLenum\ type\ =\ \_glgsg-\/>get\_numeric\_type(numeric\_type);}
+\DoxyCodeLine{00944\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ >=\ 0)\ \{}
+\DoxyCodeLine{00945\ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>enable\_vertex\_attrib\_array(p);}
+\DoxyCodeLine{00946\ }
+\DoxyCodeLine{00947\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (numeric\_type\ ==\ GeomEnums::NT\_packed\_dabc)\ \{}
+\DoxyCodeLine{00948\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ GL\_BGRA\ is\ a\ special\ accepted\ value\ available\ since\ OpenGL\ 3.2.}}
+\DoxyCodeLine{00949\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ It\ requires\ us\ to\ pass\ GL\_TRUE\ for\ normalized.}}
+\DoxyCodeLine{00950\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glVertexAttribPointer(p,\ GL\_BGRA,\ GL\_UNSIGNED\_BYTE,}
+\DoxyCodeLine{00951\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_TRUE,\ stride,\ client\_pointer);}
+\DoxyCodeLine{00952\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (bind.\_numeric\_type\ ==\ Shader::SPT\_float\ ||}
+\DoxyCodeLine{00953\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ numeric\_type\ ==\ GeomEnums::NT\_float32)\ \{}
+\DoxyCodeLine{00954\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glVertexAttribPointer(p,\ num\_values,\ type,}
+\DoxyCodeLine{00955\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ normalized,\ stride,\ client\_pointer);}
+\DoxyCodeLine{00956\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (bind.\_numeric\_type\ ==\ Shader::SPT\_double)\ \{}
+\DoxyCodeLine{00957\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glVertexAttribLPointer(p,\ num\_values,\ type,}
+\DoxyCodeLine{00958\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ stride,\ client\_pointer);}
+\DoxyCodeLine{00959\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00960\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glVertexAttribIPointer(p,\ num\_values,\ type,}
+\DoxyCodeLine{00961\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ stride,\ client\_pointer);}
+\DoxyCodeLine{00962\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00963\ }
+\DoxyCodeLine{00964\ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>set\_vertex\_attrib\_divisor(p,\ divisor);}
+\DoxyCodeLine{00965\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00966\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00967\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ a\ conventional\ vertex\ attribute.\ \ Ugh.}}
+\DoxyCodeLine{00968\ \textcolor{preprocessor}{\#ifdef\ SUPPORT\_FIXED\_FUNCTION}}
+\DoxyCodeLine{00969\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (p)\ \{}
+\DoxyCodeLine{00970\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_unknown:}
+\DoxyCodeLine{00971\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00972\ }
+\DoxyCodeLine{00973\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_vertex:}
+\DoxyCodeLine{00974\ \ \ \ \ \ \ \ \ \ \ \ \ glVertexPointer(num\_values,\ type,\ stride,\ client\_pointer);}
+\DoxyCodeLine{00975\ \ \ \ \ \ \ \ \ \ \ \ \ glEnableClientState(GL\_VERTEX\_ARRAY);}
+\DoxyCodeLine{00976\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00977\ }
+\DoxyCodeLine{00978\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_normal:}
+\DoxyCodeLine{00979\ \ \ \ \ \ \ \ \ \ \ \ \ glNormalPointer(type,\ stride,\ client\_pointer);}
+\DoxyCodeLine{00980\ \ \ \ \ \ \ \ \ \ \ \ \ glEnableClientState(GL\_NORMAL\_ARRAY);}
+\DoxyCodeLine{00981\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00982\ }
+\DoxyCodeLine{00983\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_color:}
+\DoxyCodeLine{00984\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (numeric\_type\ ==\ GeomEnums::NT\_packed\_dabc)\ \{}
+\DoxyCodeLine{00985\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ glColorPointer(GL\_BGRA,\ GL\_UNSIGNED\_BYTE,\ stride,\ client\_pointer);}
+\DoxyCodeLine{00986\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00987\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ glColorPointer(num\_values,\ type,\ stride,\ client\_pointer);}
+\DoxyCodeLine{00988\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00989\ \ \ \ \ \ \ \ \ \ \ \ \ glEnableClientState(GL\_COLOR\_ARRAY);}
+\DoxyCodeLine{00990\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00991\ }
+\DoxyCodeLine{00992\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_secondary\_color:}
+\DoxyCodeLine{00993\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glSecondaryColorPointer(num\_values,\ type,}
+\DoxyCodeLine{00994\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ stride,\ client\_pointer);}
+\DoxyCodeLine{00995\ \ \ \ \ \ \ \ \ \ \ \ \ glEnableClientState(GL\_SECONDARY\_COLOR\_ARRAY);}
+\DoxyCodeLine{00996\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00997\ }
+\DoxyCodeLine{00998\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00999\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glClientActiveTexture(GL\_TEXTURE0\ +\ (p\ -\/\ CA\_texcoord));}
+\DoxyCodeLine{01000\ \ \ \ \ \ \ \ \ \ \ \ \ glTexCoordPointer(num\_values,\ type,\ stride,\ client\_pointer);}
+\DoxyCodeLine{01001\ \ \ \ \ \ \ \ \ \ \ \ \ glEnableClientState(GL\_TEXTURE\_COORD\_ARRAY);}
+\DoxyCodeLine{01002\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01003\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01004\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SUPPORT\_FIXED\_FUNCTION}}
+\DoxyCodeLine{01005\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01006\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01007\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ There\ is\ no\ vertex\ column\ with\ this\ name;\ disable\ the\ attribute}}
+\DoxyCodeLine{01008\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ array.}}
+\DoxyCodeLine{01009\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glgsg-\/>has\_fixed\_function\_pipeline()\ \&\&\ p\ ==\ 0)\ \{}
+\DoxyCodeLine{01010\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ NOTE:\ if\ we\ disable\ attribute\ 0\ in\ compatibility\ profile,\ the}}
+\DoxyCodeLine{01011\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ object\ will\ disappear.\ \ In\ GLSL\ we\ fix\ this\ by\ forcing\ the\ vertex}}
+\DoxyCodeLine{01012\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ column\ to\ be\ at\ 0,\ but\ we\ don't\ have\ control\ over\ that\ with\ Cg.}}
+\DoxyCodeLine{01013\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ So,\ we\ work\ around\ this\ by\ just\ binding\ something\ silly\ to\ 0.}}
+\DoxyCodeLine{01014\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ breaks\ flat\ colors,\ but\ it's\ better\ than\ invisible\ objects?}}
+\DoxyCodeLine{01015\ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>enable\_vertex\_attrib\_array(0);}
+\DoxyCodeLine{01016\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bind.\_numeric\_type\ ==\ Shader::SPT\_float)\ \{}
+\DoxyCodeLine{01017\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glVertexAttribPointer(0,\ 4,\ GL\_FLOAT,\ GL\_FALSE,\ 0,\ 0);}
+\DoxyCodeLine{01018\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (bind.\_numeric\_type\ ==\ Shader::SPT\_double)\ \{}
+\DoxyCodeLine{01019\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glVertexAttribLPointer(0,\ 4,\ GL\_DOUBLE,\ 0,\ 0);}
+\DoxyCodeLine{01020\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01021\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glVertexAttribIPointer(0,\ 4,\ GL\_INT,\ 0,\ 0);}
+\DoxyCodeLine{01022\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01023\ }
+\DoxyCodeLine{01024\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (p\ >=\ 0)\ \{}
+\DoxyCodeLine{01025\ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>disable\_vertex\_attrib\_array(p);}
+\DoxyCodeLine{01026\ }
+\DoxyCodeLine{01027\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ ==\ \_color\_attrib\_index)\ \{}
+\DoxyCodeLine{01028\ \textcolor{preprocessor}{\#ifdef\ STDFLOAT\_DOUBLE}}
+\DoxyCodeLine{01029\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glVertexAttrib4dv(p,\ \_glgsg-\/>\_scene\_graph\_color.get\_data());}
+\DoxyCodeLine{01030\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{01031\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glVertexAttrib4fv(p,\ \_glgsg-\/>\_scene\_graph\_color.get\_data());}
+\DoxyCodeLine{01032\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01033\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01034\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01035\ \textcolor{preprocessor}{\#ifdef\ SUPPORT\_FIXED\_FUNCTION}}
+\DoxyCodeLine{01036\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (p)\ \{}
+\DoxyCodeLine{01037\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_unknown:}
+\DoxyCodeLine{01038\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01039\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_vertex:}
+\DoxyCodeLine{01040\ \ \ \ \ \ \ \ \ \ \ \ \ glDisableClientState(GL\_VERTEX\_ARRAY);}
+\DoxyCodeLine{01041\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01042\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_normal:}
+\DoxyCodeLine{01043\ \ \ \ \ \ \ \ \ \ \ \ \ glDisableClientState(GL\_NORMAL\_ARRAY);}
+\DoxyCodeLine{01044\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01045\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_color:}
+\DoxyCodeLine{01046\ \ \ \ \ \ \ \ \ \ \ \ \ glDisableClientState(GL\_COLOR\_ARRAY);}
+\DoxyCodeLine{01047\ \textcolor{preprocessor}{\#ifdef\ STDFLOAT\_DOUBLE}}
+\DoxyCodeLine{01048\ \ \ \ \ \ \ \ \ \ \ \ \ glColor4dv(\_glgsg-\/>\_scene\_graph\_color.get\_data());}
+\DoxyCodeLine{01049\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{01050\ \ \ \ \ \ \ \ \ \ \ \ \ glColor4fv(\_glgsg-\/>\_scene\_graph\_color.get\_data());}
+\DoxyCodeLine{01051\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01052\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01053\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CA\_secondary\_color:}
+\DoxyCodeLine{01054\ \ \ \ \ \ \ \ \ \ \ \ \ glDisableClientState(GL\_SECONDARY\_COLOR\_ARRAY);}
+\DoxyCodeLine{01055\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01056\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{01057\ \ \ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>\_glClientActiveTexture(GL\_TEXTURE0\ +\ (p\ -\/\ CA\_texcoord));}
+\DoxyCodeLine{01058\ \ \ \ \ \ \ \ \ \ \ \ \ glDisableClientState(GL\_TEXTURE\_COORD\_ARRAY);}
+\DoxyCodeLine{01059\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01060\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01061\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SUPPORT\_FIXED\_FUNCTION}}
+\DoxyCodeLine{01062\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01063\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01064\ \ \ \ \ \}}
+\DoxyCodeLine{01065\ }
+\DoxyCodeLine{01066\ \ \ \ \ \textcolor{comment}{//\ Disable\ enabled\ attribute\ arrays\ that\ we\ don't\ use.}}
+\DoxyCodeLine{01067\ \ \ \ \ \mbox{\hyperlink{classBitMask}{BitMask32}}\ disable\ =\ \_glgsg-\/>\_enabled\_vertex\_attrib\_arrays\ \&\ \string~\_used\_generic\_attribs;}
+\DoxyCodeLine{01068\ \ \ \ \ \textcolor{keywordflow}{if}\ (!disable.is\_zero())\ \{}
+\DoxyCodeLine{01069\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (GLuint\ p\ =\ (GLuint)disable.get\_lowest\_on\_bit();\ p\ <=\ (GLuint)disable.get\_highest\_on\_bit();\ ++p)\ \{}
+\DoxyCodeLine{01070\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (disable.get\_bit(p))\ \{}
+\DoxyCodeLine{01071\ \ \ \ \ \ \ \ \ \ \ \_glgsg-\/>disable\_vertex\_attrib\_array(p);}
+\DoxyCodeLine{01072\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01073\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01074\ \ \ \ \ \}}
+\DoxyCodeLine{01075\ \ \ \}}
+\DoxyCodeLine{01076\ }
+\DoxyCodeLine{01077\ \ \ \textcolor{keywordflow}{if}\ (\_transform\_table\_param)\ \{}
+\DoxyCodeLine{01078\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformTable}{TransformTable}}\ *table\ =\ \_glgsg-\/>\_data\_reader-\/>get\_transform\_table();}
+\DoxyCodeLine{01079\ \ \ \ \ update\_transform\_table(table);}
+\DoxyCodeLine{01080\ \ \ \}}
+\DoxyCodeLine{01081\ }
+\DoxyCodeLine{01082\ \ \ \textcolor{keywordflow}{if}\ (\_slider\_table\_param)\ \{}
+\DoxyCodeLine{01083\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classSliderTable}{SliderTable}}\ *table\ =\ \_glgsg-\/>\_data\_reader-\/>get\_slider\_table();}
+\DoxyCodeLine{01084\ \ \ \ \ update\_slider\_table(table);}
+\DoxyCodeLine{01085\ \ \ \}}
+\DoxyCodeLine{01086\ }
+\DoxyCodeLine{01087\ \ \ cg\_report\_errors();}
+\DoxyCodeLine{01088\ \ \ \_glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{01089\ }
+\DoxyCodeLine{01090\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01091\ \}}
+\DoxyCodeLine{01092\ }
+\DoxyCodeLine{01096\ \textcolor{keywordtype}{void}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{01097\ disable\_shader\_texture\_bindings()\ \{}
+\DoxyCodeLine{01098\ \ \ \textcolor{keywordflow}{if}\ (!valid())\ \{}
+\DoxyCodeLine{01099\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01100\ \ \ \}}
+\DoxyCodeLine{01101\ }
+\DoxyCodeLine{01102\ \ \ \textcolor{keywordflow}{if}\ (\_glgsg-\/>\_supports\_dsa)\ \{}
+\DoxyCodeLine{01103\ \ \ \ \ \textcolor{comment}{//\ The\ DSA\ extension\ has\ a\ single\ call\ for\ unbinding\ all\ targets\ for\ a}}
+\DoxyCodeLine{01104\ \ \ \ \ \textcolor{comment}{//\ given\ texture\ unit.}}
+\DoxyCodeLine{01105\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (int)\_shader-\/>\_tex\_spec.size();\ ++i)\ \{}
+\DoxyCodeLine{01106\ \ \ \ \ \ \ CGparameter\ p\ =\ \_cg\_parameter\_map[\_shader-\/>\_tex\_spec[i].\_id.\_seqno];}
+\DoxyCodeLine{01107\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ ==\ 0)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01108\ }
+\DoxyCodeLine{01109\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ texunit\ =\ cgGetParameterResourceIndex(p);}
+\DoxyCodeLine{01110\ \ \ \ \ \ \ \_glgsg-\/>\_glBindTextureUnit(texunit,\ 0);}
+\DoxyCodeLine{01111\ \ \ \ \ \}}
+\DoxyCodeLine{01112\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01113\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (int)\_shader-\/>\_tex\_spec.size();\ ++i)\ \{}
+\DoxyCodeLine{01114\ \ \ \ \ \ \ CGparameter\ p\ =\ \_cg\_parameter\_map[\_shader-\/>\_tex\_spec[i].\_id.\_seqno];}
+\DoxyCodeLine{01115\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ ==\ 0)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01116\ }
+\DoxyCodeLine{01117\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ texunit\ =\ cgGetParameterResourceIndex(p);}
+\DoxyCodeLine{01118\ \ \ \ \ \ \ \_glgsg-\/>set\_active\_texture\_stage(texunit);}
+\DoxyCodeLine{01119\ }
+\DoxyCodeLine{01120\ \ \ \ \ \ \ glBindTexture(GL\_TEXTURE\_1D,\ 0);}
+\DoxyCodeLine{01121\ \ \ \ \ \ \ glBindTexture(GL\_TEXTURE\_2D,\ 0);}
+\DoxyCodeLine{01122\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glgsg-\/>\_supports\_3d\_texture)\ \{}
+\DoxyCodeLine{01123\ \ \ \ \ \ \ \ \ glBindTexture(GL\_TEXTURE\_3D,\ 0);}
+\DoxyCodeLine{01124\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01125\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glgsg-\/>\_supports\_2d\_texture\_array)\ \{}
+\DoxyCodeLine{01126\ \ \ \ \ \ \ \ \ glBindTexture(GL\_TEXTURE\_2D\_ARRAY\_EXT,\ 0);}
+\DoxyCodeLine{01127\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01128\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glgsg-\/>\_supports\_cube\_map)\ \{}
+\DoxyCodeLine{01129\ \ \ \ \ \ \ \ \ glBindTexture(GL\_TEXTURE\_CUBE\_MAP,\ 0);}
+\DoxyCodeLine{01130\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01131\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ probably\ faster\ -\/\ but\ maybe\ not\ as\ safe?}}
+\DoxyCodeLine{01132\ \ \ \ \ \ \ \textcolor{comment}{//\ cgGLDisableTextureParameter(p);}}
+\DoxyCodeLine{01133\ \ \ \ \ \}}
+\DoxyCodeLine{01134\ \ \ \}}
+\DoxyCodeLine{01135\ }
+\DoxyCodeLine{01136\ \ \ cg\_report\_errors();}
+\DoxyCodeLine{01137\ \ \ \_glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{01138\ \}}
+\DoxyCodeLine{01139\ }
+\DoxyCodeLine{01147\ \textcolor{keywordtype}{void}\ CLP(CgShaderContext)::}
+\DoxyCodeLine{01148\ update\_shader\_texture\_bindings(\mbox{\hyperlink{classShaderContext}{ShaderContext}}\ *prev)\ \{}
+\DoxyCodeLine{01149\ \ \ \textcolor{comment}{//\ if\ (prev)\ \{\ prev-\/>disable\_shader\_texture\_bindings();\ \}}}
+\DoxyCodeLine{01150\ }
+\DoxyCodeLine{01151\ \ \ \textcolor{keywordflow}{if}\ (!valid())\ \{}
+\DoxyCodeLine{01152\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01153\ \ \ \}}
+\DoxyCodeLine{01154\ }
+\DoxyCodeLine{01155\ \ \ \textcolor{comment}{//\ We\ get\ the\ TextureAttrib\ directly\ from\ the\ \_target\_rs,\ not\ the\ filtered}}
+\DoxyCodeLine{01156\ \ \ \textcolor{comment}{//\ TextureAttrib\ in\ \_target\_texture.}}
+\DoxyCodeLine{01157\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextureAttrib}{TextureAttrib}}\ *texattrib;}
+\DoxyCodeLine{01158\ \ \ \_glgsg-\/>\_target\_rs-\/>get\_attrib\_def(texattrib);}
+\DoxyCodeLine{01159\ }
+\DoxyCodeLine{01160\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (int)\_shader-\/>\_tex\_spec.size();\ ++i)\ \{}
+\DoxyCodeLine{01161\ \ \ \ \ \mbox{\hyperlink{structShader_1_1ShaderTexSpec}{Shader::ShaderTexSpec}}\ \&spec\ =\ \_shader-\/>\_tex\_spec[i];}
+\DoxyCodeLine{01162\ }
+\DoxyCodeLine{01163\ \ \ \ \ CGparameter\ p\ =\ \_cg\_parameter\_map[spec.\_id.\_seqno];}
+\DoxyCodeLine{01164\ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ ==\ 0)\ \{}
+\DoxyCodeLine{01165\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01166\ \ \ \ \ \}}
+\DoxyCodeLine{01167\ \ \ \ \ \textcolor{keywordtype}{int}\ texunit\ =\ cgGetParameterResourceIndex(p);}
+\DoxyCodeLine{01168\ \ \ \ \ \textcolor{keywordtype}{int}\ view\ =\ \_glgsg-\/>get\_current\_tex\_view\_offset();}
+\DoxyCodeLine{01169\ \ \ \ \ \mbox{\hyperlink{classSamplerState}{SamplerState}}\ sampler;}
+\DoxyCodeLine{01170\ }
+\DoxyCodeLine{01171\ \ \ \ \ PT(\mbox{\hyperlink{classTexture}{Texture}})\ tex\ =\ \_glgsg-\/>fetch\_specified\_texture(spec,\ sampler,\ view);}
+\DoxyCodeLine{01172\ \ \ \ \ \textcolor{keywordflow}{if}\ (tex.is\_null())\ \{}
+\DoxyCodeLine{01173\ \ \ \ \ \ \ \textcolor{comment}{//\ Apply\ a\ white\ texture\ in\ order\ to\ make\ it\ easier\ to\ use\ a\ shader\ that}}
+\DoxyCodeLine{01174\ \ \ \ \ \ \ \textcolor{comment}{//\ takes\ a\ texture\ on\ a\ model\ that\ doesn't\ have\ a\ texture\ applied.}}
+\DoxyCodeLine{01175\ \ \ \ \ \ \ \_glgsg-\/>apply\_white\_texture(i);}
+\DoxyCodeLine{01176\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01177\ \ \ \ \ \}}
+\DoxyCodeLine{01178\ }
+\DoxyCodeLine{01179\ \ \ \ \ \textcolor{keywordflow}{if}\ (spec.\_suffix\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01180\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ suffix\ feature\ is\ inefficient.\ \ It\ is\ a\ temporary\ hack.}}
+\DoxyCodeLine{01181\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tex\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01182\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01183\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01184\ \ \ \ \ \ \ tex\ =\ tex-\/>load\_related(spec.\_suffix);}
+\DoxyCodeLine{01185\ \ \ \ \ \}}
+\DoxyCodeLine{01186\ \ \ \ \ \textcolor{keywordflow}{if}\ (tex\ ==\ \textcolor{keyword}{nullptr}\ ||\ tex-\/>get\_texture\_type()\ !=\ spec.\_desired\_type)\ \{}
+\DoxyCodeLine{01187\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01188\ \ \ \ \ \}}
+\DoxyCodeLine{01189\ }
+\DoxyCodeLine{01190\ \ \ \ \ \_glgsg-\/>set\_active\_texture\_stage(texunit);}
+\DoxyCodeLine{01191\ }
+\DoxyCodeLine{01192\ \ \ \ \ \mbox{\hyperlink{classTextureContext}{TextureContext}}\ *tc\ =\ tex-\/>prepare\_now(\_glgsg-\/>\_prepared\_objects,\ \_glgsg);}
+\DoxyCodeLine{01193\ \ \ \ \ \textcolor{keywordflow}{if}\ (tc\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01194\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01195\ \ \ \ \ \}}
+\DoxyCodeLine{01196\ }
+\DoxyCodeLine{01197\ \ \ \ \ GLenum\ target\ =\ \_glgsg-\/>get\_texture\_target(tex-\/>get\_texture\_type());}
+\DoxyCodeLine{01198\ \ \ \ \ \textcolor{keywordflow}{if}\ (target\ ==\ GL\_NONE)\ \{}
+\DoxyCodeLine{01199\ \ \ \ \ \ \ \textcolor{comment}{//\ Unsupported\ texture\ mode.}}
+\DoxyCodeLine{01200\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01201\ \ \ \ \ \}}
+\DoxyCodeLine{01202\ }
+\DoxyCodeLine{01203\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_glgsg-\/>update\_texture(tc,\ \textcolor{keyword}{false}))\ \{}
+\DoxyCodeLine{01204\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01205\ \ \ \ \ \}}
+\DoxyCodeLine{01206\ }
+\DoxyCodeLine{01207\ \ \ \ \ CLP(\mbox{\hyperlink{classTextureContext}{TextureContext}})\ *gtc\ =\ (CLP(\mbox{\hyperlink{classTextureContext}{TextureContext}})\ *)tc;}
+\DoxyCodeLine{01208\ \ \ \ \ \_glgsg-\/>apply\_texture(gtc,\ view);}
+\DoxyCodeLine{01209\ \ \ \ \ \_glgsg-\/>apply\_sampler(texunit,\ sampler,\ gtc,\ view);}
+\DoxyCodeLine{01210\ \ \ \}}
+\DoxyCodeLine{01211\ }
+\DoxyCodeLine{01212\ \ \ cg\_report\_errors();}
+\DoxyCodeLine{01213\ \ \ \_glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{01214\ \}}
+\DoxyCodeLine{01215\ }
+\DoxyCodeLine{01216\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ !OPENGLES}}
+
+\end{DoxyCode}

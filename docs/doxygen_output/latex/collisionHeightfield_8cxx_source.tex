@@ -1,0 +1,753 @@
+\doxysection{collision\+Heightfield.\+cxx}
+\hypertarget{collisionHeightfield_8cxx_source}{}\label{collisionHeightfield_8cxx_source}\index{panda/src/collide/collisionHeightfield.cxx@{panda/src/collide/collisionHeightfield.cxx}}
+\mbox{\hyperlink{collisionHeightfield_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionBox_8h}{collisionBox.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionRay_8h}{collisionRay.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionSphere_8h}{collisionSphere.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionHeightfield_8h}{collisionHeightfield.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionHandler_8h}{collisionHandler.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionEntry_8h}{collisionEntry.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cmath_8h}{cmath.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__collide_8h}{config\_collide.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{boundingBox_8h}{boundingBox.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagram_8h}{datagram.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagramIterator_8h}{datagramIterator.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamReader_8h}{bamReader.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamWriter_8h}{bamWriter.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geom_8h}{geom.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomTriangles_8h}{geomTriangles.h}}"{}}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexWriter_8h}{geomVertexWriter.h}}"{}}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ <queue>}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00034\ \textcolor{keyword}{using\ }std::max;}
+\DoxyCodeLine{00035\ \textcolor{keyword}{using\ }std::queue;}
+\DoxyCodeLine{00036\ \textcolor{keyword}{using\ }std::vector;}
+\DoxyCodeLine{00037\ \textcolor{keyword}{using\ }std::sort;}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ CollisionHeightfield::\_volume\_pcollector(}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ \textcolor{stringliteral}{"{}Collision\ Volumes:CollisionHeightfield"{}});}
+\DoxyCodeLine{00041\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ CollisionHeightfield::\_test\_pcollector(}
+\DoxyCodeLine{00042\ \ \ \ \ \ \ \textcolor{stringliteral}{"{}Collision\ Tests:CollisionHeightfield"{}});}
+\DoxyCodeLine{00043\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ CollisionHeightfield::\_type\_handle;}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00048\ CollisionHeightfield::}
+\DoxyCodeLine{00049\ CollisionHeightfield(\mbox{\hyperlink{classPNMImage}{PNMImage}}\ heightfield,}
+\DoxyCodeLine{00050\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ PN\_stdfloat\ max\_height,\ \textcolor{keywordtype}{int}\ num\_subdivisions)\ \{}
+\DoxyCodeLine{00051\ \ \ \_heightfield\ =\ heightfield;}
+\DoxyCodeLine{00052\ \ \ \_max\_height\ =\ max\_height;}
+\DoxyCodeLine{00053\ \ \ \_nodes\_count\ =\ 0;}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00055\ \ \ set\_num\_subdivisions(num\_subdivisions);}
+\DoxyCodeLine{00056\ \}}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00067\ \textcolor{keywordtype}{void}\ CollisionHeightfield::}
+\DoxyCodeLine{00068\ set\_num\_subdivisions(\textcolor{keywordtype}{int}\ num\_subdivisions)\ \{}
+\DoxyCodeLine{00069\ \ \ \textcolor{comment}{//\ The\ number\ of\ subdivisions\ should\ not\ be\ negative}}
+\DoxyCodeLine{00070\ \ \ nassertv(num\_subdivisions\ >=\ 0\ \&\&\ num\_subdivisions\ <=\ 10);}
+\DoxyCodeLine{00071\ \ \ \textcolor{comment}{//\ Determine\ the\ number\ of\ quadtree\ nodes\ needed}}
+\DoxyCodeLine{00072\ \ \ \textcolor{comment}{//\ for\ the\ corresponding\ number\ of\ subdivisions.}}
+\DoxyCodeLine{00073\ \ \ \textcolor{keywordtype}{int}\ nodes\_count\ =\ 0;}
+\DoxyCodeLine{00074\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <=\ num\_subdivisions;\ i++)\ \{}
+\DoxyCodeLine{00075\ \ \ \ \ nodes\_count\ +=\ 1\ <<\ (i\ *\ 2);}
+\DoxyCodeLine{00076\ \ \ \}}
+\DoxyCodeLine{00077\ \ \ \textcolor{keywordflow}{if}\ (nodes\_count\ ==\ \_nodes\_count)\ \{}
+\DoxyCodeLine{00078\ \ \ \ \ \textcolor{comment}{//\ No\ changes\ to\ quadtree\ to\ be\ done}}
+\DoxyCodeLine{00079\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00080\ \ \ \}}
+\DoxyCodeLine{00081\ \ \ \textcolor{comment}{//\ Calculate\ the\ index\ of\ the\ first\ quad\ tree\ leaf\ node}}
+\DoxyCodeLine{00082\ \ \ \textcolor{keywordtype}{int}\ leaf\_first\_index\ =\ nodes\_count\ -\/\ pow(4,\ num\_subdivisions);}
+\DoxyCodeLine{00083\ \ \ \textcolor{comment}{//\ Calculate\ the\ area\ of\ a\ leaf\ node\ in\ the\ quadtree}}
+\DoxyCodeLine{00084\ \ \ PN\_stdfloat\ heightfield\_area\ =\ \_heightfield.get\_x\_size()\ *}
+\DoxyCodeLine{00085\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_heightfield.get\_y\_size();}
+\DoxyCodeLine{00086\ \ \ nassertv(heightfield\_area\ >\ 0);}
+\DoxyCodeLine{00087\ \ \ PN\_stdfloat\ num\_leafs\ =\ nodes\_count\ -\/\ leaf\_first\_index;}
+\DoxyCodeLine{00088\ \ \ \textcolor{comment}{//\ If\ the\ area\ is\ too\ small\ (less\ than\ 1),\ then\ we}}
+\DoxyCodeLine{00089\ \ \ \textcolor{comment}{//\ retry\ by\ decrementing\ the\ number\ of\ subdivisions.}}
+\DoxyCodeLine{00090\ \ \ \textcolor{keywordflow}{if}\ (heightfield\_area\ /\ num\_leafs\ <\ 1)\ \{}
+\DoxyCodeLine{00091\ \ \ \ \ set\_num\_subdivisions(num\_subdivisions\ -\/\ 1);}
+\DoxyCodeLine{00092\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00093\ \ \ \}}
+\DoxyCodeLine{00094\ \ \ \textcolor{keywordflow}{if}\ (nodes\_count\ <\ \_nodes\_count)\ \{}
+\DoxyCodeLine{00095\ \ \ \ \ \textcolor{comment}{//\ If\ the\ user\ is\ decreasing\ the\ number\ of\ subdivisions,\ then}}
+\DoxyCodeLine{00096\ \ \ \ \ \textcolor{comment}{//\ we\ need\ only\ to\ update\ the\ index\ where\ the\ quadtree\ leaves\ start.}}
+\DoxyCodeLine{00097\ \ \ \ \ \_leaf\_first\_index\ =\ leaf\_first\_index;}
+\DoxyCodeLine{00098\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00099\ \ \ \ \ \textcolor{comment}{//\ Otherwise\ we\ need\ to\ build\ a\ new\ quadtree}}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_nodes\_count\ !=\ 0)\ \{}
+\DoxyCodeLine{00101\ \ \ \ \ \ \ \textcolor{comment}{//\ There\ is\ an\ existing\ quadtree,\ delete\ it\ first}}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ \textcolor{keyword}{delete}[]\ \_nodes;}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \_nodes\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00104\ \ \ \ \ \}}
+\DoxyCodeLine{00105\ \ \ \ \ QuadTreeNode\ *nodes\ =\ \textcolor{keyword}{new}\ QuadTreeNode[nodes\_count];}
+\DoxyCodeLine{00106\ \ \ \ \ \_nodes\ =\ nodes;}
+\DoxyCodeLine{00107\ \ \ \ \ \_nodes\_count\ =\ nodes\_count;}
+\DoxyCodeLine{00108\ \ \ \ \ \_leaf\_first\_index\ =\ leaf\_first\_index;}
+\DoxyCodeLine{00109\ \ \ \ \ fill\_quadtree\_areas();}
+\DoxyCodeLine{00110\ \ \ \ \ fill\_quadtree\_heights();}
+\DoxyCodeLine{00111\ \ \ \}}
+\DoxyCodeLine{00112\ \ \ \_num\_subdivisions\ =\ num\_subdivisions;}
+\DoxyCodeLine{00113\ \}}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00118\ \textcolor{keywordtype}{void}\ CollisionHeightfield::}
+\DoxyCodeLine{00119\ fill\_quadtree\_areas()\ \{}
+\DoxyCodeLine{00120\ \ \ nassertv(\_heightfield.get\_x\_size()\ >\ 0\ \&\&}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \ \ \ \ \ \_heightfield.get\_y\_size()\ >\ 0);}
+\DoxyCodeLine{00122\ }
+\DoxyCodeLine{00123\ \ \ \_nodes[0].area.min\ =\ \{0,\ 0\};}
+\DoxyCodeLine{00124\ \ \ \_nodes[0].area.max\ =\ \{(float)\_heightfield.get\_x\_size(),}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (float)\_heightfield.get\_y\_size()\};}
+\DoxyCodeLine{00126\ \ \ \_nodes[0].index\ =\ 0;}
+\DoxyCodeLine{00127\ \ \ QuadTreeNode\ parent;}
+\DoxyCodeLine{00128\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 1;\ i\ <\ \_nodes\_count;\ i\ +=\ 4)\ \{}
+\DoxyCodeLine{00129\ \ \ \ \ parent\ =\ \_nodes[(i-\/1)\ /\ 4];}
+\DoxyCodeLine{00130\ \ \ \ \ LVector2\ sub\_area\ =\ (parent.area.max\ -\/\ parent.area.min)\ /\ 2;}
+\DoxyCodeLine{00131\ \ \ \ \ \textcolor{comment}{//\ SE\ Quadrant}}
+\DoxyCodeLine{00132\ \ \ \ \ \_nodes[i].area.min\ =\ parent.area.min;}
+\DoxyCodeLine{00133\ \ \ \ \ \_nodes[i].area.max\ =\ parent.area.min\ +\ sub\_area;}
+\DoxyCodeLine{00134\ \ \ \ \ \_nodes[i].index\ =\ i;}
+\DoxyCodeLine{00135\ \ \ \ \ \textcolor{comment}{//\ SW\ Quadrant}}
+\DoxyCodeLine{00136\ \ \ \ \ \_nodes[i\ +\ 1].area.min\ =\ \{parent.area.min[0]\ +\ sub\_area[0],}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ parent.area.min[1]\};}
+\DoxyCodeLine{00138\ \ \ \ \ \_nodes[i\ +\ 1].area.max\ =\ \_nodes[i\ +\ 1].area.min\ +\ sub\_area;}
+\DoxyCodeLine{00139\ \ \ \ \ \_nodes[i\ +\ 1].index\ =\ i\ +\ 1;}
+\DoxyCodeLine{00140\ \ \ \ \ \textcolor{comment}{//\ NE\ Quadrant}}
+\DoxyCodeLine{00141\ \ \ \ \ \_nodes[i\ +\ 2].area.min\ =\ \{parent.area.min[0],}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ parent.area.min[1]\ +\ sub\_area[1]\};}
+\DoxyCodeLine{00143\ \ \ \ \ \_nodes[i\ +\ 2].area.max\ =\ \_nodes[i\ +\ 2].area.min\ +\ sub\_area;}
+\DoxyCodeLine{00144\ \ \ \ \ \_nodes[i\ +\ 2].index\ =\ i\ +\ 2;}
+\DoxyCodeLine{00145\ \ \ \ \ \textcolor{comment}{//\ NW\ Quadrant}}
+\DoxyCodeLine{00146\ \ \ \ \ \_nodes[i\ +\ 3].area.min\ =\ parent.area.min\ +\ sub\_area;}
+\DoxyCodeLine{00147\ \ \ \ \ \_nodes[i\ +\ 3].area.max\ =\ parent.area.max;}
+\DoxyCodeLine{00148\ \ \ \ \ \_nodes[i\ +\ 3].index\ =\ i\ +\ 3;}
+\DoxyCodeLine{00149\ \ \ \}}
+\DoxyCodeLine{00150\ \}}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00159\ \textcolor{keywordtype}{void}\ CollisionHeightfield::}
+\DoxyCodeLine{00160\ fill\_quadtree\_heights()\ \{}
+\DoxyCodeLine{00161\ \ \ QuadTreeNode\ node;}
+\DoxyCodeLine{00162\ \ \ QuadTreeNode\ child;}
+\DoxyCodeLine{00163\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ \_nodes\_count\ -\/\ 1;\ i\ >=\ 0;\ i-\/-\/)\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ node\ =\ \_nodes[i];}
+\DoxyCodeLine{00165\ \ \ \ \ PN\_stdfloat\ height\_min\ =\ INT\_MAX;}
+\DoxyCodeLine{00166\ \ \ \ \ PN\_stdfloat\ height\_max\ =\ INT\_MIN;}
+\DoxyCodeLine{00167\ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ >=\ \_leaf\_first\_index)\ \{}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ node.area.min[0];\ x\ <\ node.area.max[0];\ x++)\ \{}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ node.area.min[1];\ y\ <\ node.area.max[1];\ y++)\ \{}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ \ \ PN\_stdfloat\ value\ =\ \_heightfield.get\_gray(x,}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \ \ \ \ \ \ \_heightfield.get\_y\_size()\ -\/\ 1\ -\/\ y)\ *\ \_max\_height;}
+\DoxyCodeLine{00172\ }
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ \ \ height\_min\ =\ min(value,\ height\_min);}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \ \ height\_max\ =\ max(value,\ height\_max);}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00177\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ c\ =\ (i\ *\ 4)\ +\ 1,\ cmax\ =\ c\ +\ 4;\ c\ <\ cmax;\ c++)\ \{}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ child\ =\ \_nodes[c];}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ height\_min\ =\ min(child.height\_min,\ height\_min);}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ height\_max\ =\ max(child.height\_max,\ height\_max);}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00183\ \ \ \ \ \}}
+\DoxyCodeLine{00184\ \ \ \ \ \_nodes[i].height\_min\ =\ height\_min;}
+\DoxyCodeLine{00185\ \ \ \ \ \_nodes[i].height\_max\ =\ height\_max;}
+\DoxyCodeLine{00186\ \ \ \}}
+\DoxyCodeLine{00187\ \}}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00192\ PT(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}})\ CollisionHeightfield::}
+\DoxyCodeLine{00193\ test\_intersection\_from\_ray(\textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ \&entry)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00194\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionRay}{CollisionRay}}\ *ray;}
+\DoxyCodeLine{00195\ \ \ DCAST\_INTO\_R(ray,\ entry.get\_from(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00196\ \ \ \textcolor{keyword}{const}\ LMatrix4\ \&wrt\_mat\ =\ entry.get\_wrt\_mat();}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00198\ \ \ LPoint3\ from\_origin\ =\ ray-\/>get\_origin()\ *\ wrt\_mat;}
+\DoxyCodeLine{00199\ \ \ LPoint3\ from\_direction\ =\ ray-\/>get\_direction()\ *\ wrt\_mat;}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ IntersectionParams\ params;}
+\DoxyCodeLine{00202\ \ \ params.from\_origin\ =\ from\_origin;}
+\DoxyCodeLine{00203\ \ \ params.from\_direction\ =\ from\_direction;}
+\DoxyCodeLine{00204\ \ \ vector<QuadTreeIntersection>\ intersections;}
+\DoxyCodeLine{00205\ \ \ intersections\ =\ find\_intersections(line\_intersects\_box,\ params);}
+\DoxyCodeLine{00206\ }
+\DoxyCodeLine{00207\ \ \ \textcolor{keywordflow}{if}\ (intersections.empty())\ \{}
+\DoxyCodeLine{00208\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00209\ \ \ \}}
+\DoxyCodeLine{00210\ \ \ \textcolor{comment}{//\ Sort\ intersections\ by\ their\ t1\ values\ so\ we\ can\ return}}
+\DoxyCodeLine{00211\ \ \ \textcolor{comment}{//\ the\ first\ intersection\ found.}}
+\DoxyCodeLine{00212\ \ \ sort(intersections.begin(),\ intersections.end());}
+\DoxyCodeLine{00213\ }
+\DoxyCodeLine{00214\ \ \ \textcolor{keywordtype}{double}\ t1,\ t2;}
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ intersections.size();\ i++)\ \{}
+\DoxyCodeLine{00216\ \ \ \ \ t1\ =\ intersections[i].tmin;}
+\DoxyCodeLine{00217\ \ \ \ \ t2\ =\ intersections[i].tmax;}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00219\ \ \ \ \ \textcolor{keywordflow}{if}\ (t1\ <\ 0.0\ \&\&\ t2\ <\ 0.0)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00220\ \ \ \ \ t1\ =\ max(t1,\ 0.0);}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \ \ \ \ LPoint3\ p1\ =\ from\_origin\ +\ from\_direction\ *\ t1;}
+\DoxyCodeLine{00223\ \ \ \ \ LPoint3\ p2\ =\ from\_origin\ +\ from\_direction\ *\ t2;}
+\DoxyCodeLine{00224\ \ \ \ \ \textcolor{comment}{//\ We\ use\ Bresenhaum's\ Line\ Algorithm\ to\ directly\ get\ the\ heightfield}}
+\DoxyCodeLine{00225\ \ \ \ \ \textcolor{comment}{//\ coordinates\ that\ the\ line\ passes\ through.}}
+\DoxyCodeLine{00226\ \ \ \ \ \textcolor{keywordtype}{int}\ err\ =\ cabs(2\ *\ (p2[1]\ -\/\ p1[1]));}
+\DoxyCodeLine{00227\ \ \ \ \ \textcolor{keywordtype}{int}\ deltaerr\ =\ cabs(err\ -\/\ (p2[0]\ -\/\ p1[0]));}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00229\ \ \ \ \ \textcolor{keywordtype}{int}\ x\ =\ p1[0],\ y\ =\ p1[1];}
+\DoxyCodeLine{00230\ \ \ \ \ \textcolor{keywordtype}{bool}\ x\_increasing\ =\ x\ <\ p2[0];}
+\DoxyCodeLine{00231\ \ \ \ \ \textcolor{keywordtype}{bool}\ y\_increasing\ =\ y\ <\ p2[1];}
+\DoxyCodeLine{00232\ \ \ \ \ \textcolor{keywordflow}{while}\ ((x\_increasing\ \&\&\ x\ <=\ p2[0])\ ||\ (!x\_increasing\ \&\&\ x\ >=\ p2[0]))\ \{}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ intersected\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ Triangle\ int\_tri;}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ vector<Triangle>\ triangles\ =\ get\_triangles(x,\ y);}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ min\_t\ =\ DBL\_MAX;}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (Triangle\ tri\ :\ triangles)\ \{}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ t;}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (line\_intersects\_triangle(t,\ from\_origin,\ from\_direction,\ tri))\ \{}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (t\ <\ 0)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (t\ <\ min\_t)\ \{}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \ \ \ \ intersected\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ \ \ \ \ min\_t\ =\ t;}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ \ \ \ \ int\_tri\ =\ tri;}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ ray\ intersects\ this\ heightfield\ element,\ we\ can}}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \textcolor{comment}{//\ stop\ here\ and\ return\ the\ intersection.}}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (intersected)\ \{}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}})\ new\_entry\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}(entry);}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ new\_entry-\/>set\_surface\_point(from\_origin\ +\ from\_direction\ *\ min\_t);}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ LPlane\ p\ =\ LPlane(int\_tri.p1,\ int\_tri.p2,\ int\_tri.p3);}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ LVector3\ normal\ =\ p.get\_normal();}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (p.dist\_to\_plane(from\_origin)\ <\ 0.0f)\ normal\ *=\ -\/1;}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ new\_entry-\/>set\_surface\_normal(normal);}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ new\_entry;}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ go\ to\ the\ next\ heightfield\ element}}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ deltaerr\ +=\ err;}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (deltaerr\ >=\ 0)\ \{}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (y\_increasing)\ y++;}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ y-\/-\/;}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ deltaerr\ -\/=\ 2\ *\ (p2[0]\ -\/\ p1[0]);}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x\_increasing)\ x++;}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ x-\/-\/;}
+\DoxyCodeLine{00268\ \ \ \ \ \}}
+\DoxyCodeLine{00269\ \ \ \}}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00272\ \}}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00277\ PT(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}})\ CollisionHeightfield::}
+\DoxyCodeLine{00278\ test\_intersection\_from\_sphere(\textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ \&entry)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00279\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionSphere}{CollisionSphere}}\ *sphere;}
+\DoxyCodeLine{00280\ \ \ DCAST\_INTO\_R(sphere,\ entry.get\_from(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ wrt\_space\ =\ entry.get\_wrt\_space();}
+\DoxyCodeLine{00283\ \ \ \textcolor{keyword}{const}\ LMatrix4\ \&wrt\_mat\ =\ wrt\_space-\/>get\_mat();}
+\DoxyCodeLine{00284\ }
+\DoxyCodeLine{00285\ \ \ LPoint3\ center\ =\ sphere-\/>get\_center()\ *\ wrt\_mat;}
+\DoxyCodeLine{00286\ \ \ LVector3\ radius\_v\ =\ LVector3(sphere-\/>get\_radius(),\ 0.0f,\ 0.0f)\ *\ wrt\_mat;}
+\DoxyCodeLine{00287\ \ \ PN\_stdfloat\ radius\_2\ =\ radius\_v.length\_squared();}
+\DoxyCodeLine{00288\ \ \ PN\_stdfloat\ radius\ =\ csqrt(radius\_2);}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00290\ \ \ IntersectionParams\ params;}
+\DoxyCodeLine{00291\ \ \ params.center\ =\ center;}
+\DoxyCodeLine{00292\ \ \ params.radius\ =\ radius;}
+\DoxyCodeLine{00293\ }
+\DoxyCodeLine{00294\ \ \ vector<QuadTreeIntersection>\ intersections;}
+\DoxyCodeLine{00295\ \ \ intersections=\ find\_intersections(sphere\_intersects\_box,\ params);}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \ \ \textcolor{keywordflow}{if}\ (intersections.empty())\ \{}
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00299\ \ \ \}}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00301\ \ \ LPoint3\ point;}
+\DoxyCodeLine{00302\ \ \ LPoint3\ closest\_point;}
+\DoxyCodeLine{00303\ \ \ PN\_stdfloat\ dist;}
+\DoxyCodeLine{00304\ \ \ PN\_stdfloat\ dist\_min\ =\ FLT\_MAX;}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00306\ \ \ \textcolor{keywordtype}{bool}\ intersected\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00307\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ intersections.size();\ i++)\ \{}
+\DoxyCodeLine{00308\ \ \ \ \ QuadTreeNode\ node\ =\ \_nodes[intersections[i].node\_index];}
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{comment}{//\ Iterate\ through\ the\ circle's\ area\ and\ find\ triangle\ intersections,}}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{comment}{//\ find\ the\ one\ closest\ to\ the\ center\ of\ the\ sphere.}}
+\DoxyCodeLine{00311\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ dx\ =\ -\/radius;\ dx\ <=\ radius;\ dx++)\ \{}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ dy\ =\ -\/radius;\ dy\ <=\ radius;\ dy++)\ \{}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ x\ =\ dx\ +\ center[0];}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ y\ =\ dy\ +\ center[1];}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x\ <\ node.area.min[0]\ ||\ y\ <\ node.area.min[1]\ ||}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ \ \ \ \ x\ >\ node.area.max[0]\ ||\ y\ >\ node.area.max[1])\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ point\ not\ contained\ in\ rectangle}}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dx\ *\ dx\ +\ dy\ *\ dy\ >\ radius\_2)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00321\ }
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ vector<Triangle>\ triangles\ =\ get\_triangles(x,\ y);}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (Triangle\ tri\ :\ triangles)\ \{}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ \ \ point\ =\ \mbox{\hyperlink{classCollisionHeightfield_aeb7649ffb2c52ffacaa6ad7e9ecb8d6f}{closest\_point\_on\_triangle}}(center,\ tri);}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \ \ dist\ =\ (point\ -\/\ center).length\_squared();}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dist\ >\ radius\_2)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dist\ <\ dist\_min)\ \{}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \ \ \ \ \ \ intersected\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \ \ \ \ \ \ dist\_min\ =\ dist;}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ \ \ \ \ closest\_point\ =\ point;}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00334\ \ \ \ \ \}}
+\DoxyCodeLine{00335\ \ \ \}}
+\DoxyCodeLine{00336\ \ \ \textcolor{keywordflow}{if}\ (intersected)\ \{}
+\DoxyCodeLine{00337\ \ \ \ \ PT(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}})\ new\_entry\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}(entry);}
+\DoxyCodeLine{00338\ \ \ \ \ LVector3\ v(center\ -\/\ closest\_point);}
+\DoxyCodeLine{00339\ \ \ \ \ PN\_stdfloat\ v\_length\ =\ v.length();}
+\DoxyCodeLine{00340\ \ \ \ \ \textcolor{keywordflow}{if}\ (IS\_NEARLY\_ZERO(v\_length))\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ v.set(1,\ 0,\ 0);}
+\DoxyCodeLine{00342\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ v\ /=\ v\_length;}
+\DoxyCodeLine{00344\ \ \ \ \ \}}
+\DoxyCodeLine{00345\ \ \ \ \ new\_entry-\/>set\_surface\_point(closest\_point);}
+\DoxyCodeLine{00346\ \ \ \ \ new\_entry-\/>set\_surface\_normal(v);}
+\DoxyCodeLine{00347\ \ \ \ \ new\_entry-\/>set\_interior\_point(center\ -\/\ radius\ *\ v);}
+\DoxyCodeLine{00348\ \ \ \ \ \textcolor{keywordflow}{return}\ new\_entry;}
+\DoxyCodeLine{00349\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00350\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00351\ \ \ \}}
+\DoxyCodeLine{00352\ \}}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00357\ PT(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}})\ CollisionHeightfield::}
+\DoxyCodeLine{00358\ test\_intersection\_from\_box(\textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ \&entry)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00359\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionBox}{CollisionBox}}\ *box;}
+\DoxyCodeLine{00360\ \ \ DCAST\_INTO\_R(box,\ entry.get\_from(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ \textcolor{keyword}{const}\ LMatrix4\ \&wrt\_mat\ =\ entry.get\_wrt\_mat();}
+\DoxyCodeLine{00363\ \ \ LPoint3\ box\_min\ =\ box-\/>get\_min()\ *\ wrt\_mat;}
+\DoxyCodeLine{00364\ \ \ LPoint3\ box\_max\ =\ box-\/>get\_max()\ *\ wrt\_mat;}
+\DoxyCodeLine{00365\ }
+\DoxyCodeLine{00366\ \ \ IntersectionParams\ params;}
+\DoxyCodeLine{00367\ \ \ params.box\_min\ =\ box\_min;}
+\DoxyCodeLine{00368\ \ \ params.box\_max\ =\ box\_max;}
+\DoxyCodeLine{00369\ }
+\DoxyCodeLine{00370\ \ \ vector<QuadTreeIntersection>\ intersections;}
+\DoxyCodeLine{00371\ \ \ intersections\ =\ find\_intersections(box\_intersects\_box,\ params);}
+\DoxyCodeLine{00372\ }
+\DoxyCodeLine{00373\ \ \ \textcolor{keywordflow}{if}\ (intersections.empty())\ \{}
+\DoxyCodeLine{00374\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00375\ \ \ \}}
+\DoxyCodeLine{00376\ }
+\DoxyCodeLine{00377\ \ \ \textcolor{keywordtype}{bool}\ intersected\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00378\ \ \ Triangle\ intersected\_tri;}
+\DoxyCodeLine{00379\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ intersections.size();\ i++)\ \{}
+\DoxyCodeLine{00380\ \ \ \ \ QuadTreeNode\ node\ =\ \_nodes[intersections[i].node\_index];}
+\DoxyCodeLine{00381\ \ \ \ \ \textcolor{comment}{//\ Find\ the\ overlapping\ rectangle\ between\ the\ two\ boxes\ and}}
+\DoxyCodeLine{00382\ \ \ \ \ \textcolor{comment}{//\ test\ the\ heightfield\ elements\ in\ that\ area.}}
+\DoxyCodeLine{00383\ \ \ \ \ LVecBase2\ overlap\_min\ =\ LVecBase2(max(box\_min[0],\ node.area.min[0]),}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ max(box\_min[1],\ node.area.min[1]));}
+\DoxyCodeLine{00385\ \ \ \ \ LVecBase2\ overlap\_max\ =\ LVecBase2(min(box\_max[0],\ node.area.max[0]),}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ min(box\_max[1],\ node.area.max[1]));}
+\DoxyCodeLine{00387\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ overlap\_min[0];\ x\ <\ overlap\_max[0];\ x++)\ \{}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ overlap\_min[1];\ y\ <\ overlap\_max[1];\ y++)\ \{}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \ \ vector<Triangle>\ triangles\ =\ get\_triangles(x,\ y);}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (Triangle\ tri\ :\ triangles)\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (box\_intersects\_triangle(box\_min,\ box\_max,\ tri))\ \{}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ \ \ \ \ intersected\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \ \ \ \ intersected\_tri\ =\ tri;}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00397\ \ \ \ \ \}}
+\DoxyCodeLine{00398\ \ \ \}}
+\DoxyCodeLine{00399\ }
+\DoxyCodeLine{00400\ \ \ \textcolor{keywordflow}{if}\ (intersected)\ \{}
+\DoxyCodeLine{00401\ \ \ \ \ PT(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}})\ new\_entry\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}(entry);}
+\DoxyCodeLine{00402\ \ \ \ \ LPlane\ p\ =\ LPlane(intersected\_tri.p1,\ intersected\_tri.p2,\ intersected\_tri.p3);}
+\DoxyCodeLine{00403\ \ \ \ \ LVector3\ normal\ =\ p.get\_normal();}
+\DoxyCodeLine{00404\ \ \ \ \ \textcolor{keywordflow}{if}\ (p.dist\_to\_plane(box-\/>get\_center()\ *\ wrt\_mat)\ <\ 0.0f)\ \{}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ normal\ *=\ -\/1;}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ p.flip();}
+\DoxyCodeLine{00407\ \ \ \ \ \}}
+\DoxyCodeLine{00408\ \ \ \ \ new\_entry-\/>set\_surface\_normal(normal);}
+\DoxyCodeLine{00409\ \ \ \ \ PN\_stdfloat\ min\_dist\ =\ 0;}
+\DoxyCodeLine{00410\ \ \ \ \ LPoint3\ interior\_point;}
+\DoxyCodeLine{00411\ \ \ \ \ \textcolor{comment}{//\ Find\ the\ deepest\ vertex\ and\ set\ it\ as\ the\ interior\ point}}
+\DoxyCodeLine{00412\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ 8;\ i++)\ \{}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ LPoint3\ vertex\ =\ box-\/>get\_point(i)\ *\ wrt\_mat;}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ PN\_stdfloat\ dist\ =\ p.dist\_to\_plane(vertex);}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dist\ <=\ min\_dist)\ \{}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \ \ min\_dist\ =\ dist;}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ interior\_point\ =\ vertex;}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00419\ \ \ \ \ \}}
+\DoxyCodeLine{00420\ \ \ \ \ new\_entry-\/>set\_interior\_point(interior\_point);}
+\DoxyCodeLine{00421\ \ \ \ \ new\_entry-\/>set\_surface\_point(}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionHeightfield_aeb7649ffb2c52ffacaa6ad7e9ecb8d6f}{closest\_point\_on\_triangle}}(interior\_point,\ intersected\_tri));}
+\DoxyCodeLine{00423\ \ \ \ \ \textcolor{keywordflow}{return}\ new\_entry;}
+\DoxyCodeLine{00424\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00425\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00426\ \ \ \}}
+\DoxyCodeLine{00427\ \}}
+\DoxyCodeLine{00428\ }
+\DoxyCodeLine{00432\ \textcolor{keywordtype}{bool}\ CollisionHeightfield::}
+\DoxyCodeLine{00433\ line\_intersects\_box(\textcolor{keyword}{const}\ LPoint3\ \&box\_min,\ \textcolor{keyword}{const}\ LPoint3\ \&box\_max,}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ IntersectionParams\ \&params)\ \{}
+\DoxyCodeLine{00435\ \ \ LPoint3\ from\ =\ params.from\_origin;}
+\DoxyCodeLine{00436\ \ \ LPoint3\ delta\ =\ params.from\_direction;}
+\DoxyCodeLine{00437\ }
+\DoxyCodeLine{00438\ \ \ \textcolor{keywordtype}{double}\ tmin\ =\ -\/DBL\_MAX;}
+\DoxyCodeLine{00439\ \ \ \textcolor{keywordtype}{double}\ tmax\ =\ DBL\_MAX;}
+\DoxyCodeLine{00440\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ 3;\ ++i)\ \{}
+\DoxyCodeLine{00441\ \ \ \ \ PN\_stdfloat\ d\ =\ delta[i];}
+\DoxyCodeLine{00442\ \ \ \ \ \textcolor{keywordflow}{if}\ (!IS\_NEARLY\_ZERO(d))\ \{}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ tmin2\ =\ (box\_min[i]\ -\/\ from[i])\ /\ d;}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ tmax2\ =\ (box\_max[i]\ -\/\ from[i])\ /\ d;}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tmin2\ >\ tmax2)\ \{}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \ \ std::swap(tmin2,\ tmax2);}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ tmin\ =\ max(tmin,\ tmin2);}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ tmax\ =\ min(tmax,\ tmax2);}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tmin\ >\ tmax)\ \{}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00453\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (from[i]\ <\ box\_min[i]\ ||\ from[i]\ >\ box\_max[i])\ \{}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ line\ is\ parallel}}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00456\ \ \ \ \ \}}
+\DoxyCodeLine{00457\ \ \ \}}
+\DoxyCodeLine{00458\ \ \ params.t1\ =\ tmin;}
+\DoxyCodeLine{00459\ \ \ params.t2\ =\ tmax;}
+\DoxyCodeLine{00460\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00461\ \}}
+\DoxyCodeLine{00462\ }
+\DoxyCodeLine{00466\ \textcolor{keywordtype}{bool}\ CollisionHeightfield::}
+\DoxyCodeLine{00467\ line\_intersects\_triangle(\textcolor{keywordtype}{double}\ \&t,\ \textcolor{keyword}{const}\ LPoint3\ \&from,}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LPoint3\ \&delta,}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ Triangle\ \&triangle)\ \{}
+\DoxyCodeLine{00470\ \ \ \textcolor{comment}{//\ Implementation\ of\ Möller-\/Trumbore\ algorithm}}
+\DoxyCodeLine{00471\ \ \ PN\_stdfloat\ a,f,u,v;}
+\DoxyCodeLine{00472\ \ \ LVector3\ edge1,\ edge2,\ h,\ s,\ q;}
+\DoxyCodeLine{00473\ \ \ edge1\ =\ triangle.p2\ -\/\ triangle.p1;}
+\DoxyCodeLine{00474\ \ \ edge2\ =\ triangle.p3\ -\/\ triangle.p1;}
+\DoxyCodeLine{00475\ \ \ h\ =\ delta.cross(edge2);}
+\DoxyCodeLine{00476\ \ \ a\ =\ dot(edge1,\ h);}
+\DoxyCodeLine{00477\ \ \ \textcolor{keywordflow}{if}\ (IS\_NEARLY\_ZERO(a))\ \{}
+\DoxyCodeLine{00478\ \ \ \ \ \textcolor{comment}{//\ line\ parallel\ to\ triangle}}
+\DoxyCodeLine{00479\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00480\ \ \ \}}
+\DoxyCodeLine{00481\ \ \ f\ =\ 1.0\ /\ a;}
+\DoxyCodeLine{00482\ \ \ s\ =\ from\ -\/\ triangle.p1;}
+\DoxyCodeLine{00483\ \ \ u\ =\ f\ *\ dot(s,\ h);}
+\DoxyCodeLine{00484\ \ \ \textcolor{keywordflow}{if}\ (u\ <\ 0.0\ ||\ u\ >\ 1.0)\ \{}
+\DoxyCodeLine{00485\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00486\ \ \ \}}
+\DoxyCodeLine{00487\ \ \ q\ =\ s.cross(edge1);}
+\DoxyCodeLine{00488\ \ \ v\ =\ f\ *\ dot(delta,\ q);}
+\DoxyCodeLine{00489\ \ \ \textcolor{keywordflow}{if}\ (v\ <\ 0.0\ ||\ u\ +\ v\ >\ 1.0)\ \{}
+\DoxyCodeLine{00490\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00491\ \ \ \}}
+\DoxyCodeLine{00492\ \ \ t\ =\ f\ *\ dot(edge2,\ q);}
+\DoxyCodeLine{00493\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00494\ \}}
+\DoxyCodeLine{00495\ }
+\DoxyCodeLine{00499\ \textcolor{keywordtype}{bool}\ CollisionHeightfield::}
+\DoxyCodeLine{00500\ sphere\_intersects\_box(\textcolor{keyword}{const}\ LPoint3\ \&box\_min,\ \textcolor{keyword}{const}\ LPoint3\ \&box\_max,}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ IntersectionParams\ \&params)\ \{}
+\DoxyCodeLine{00502\ \ \ LPoint3\ center\ =\ params.center;}
+\DoxyCodeLine{00503\ \ \ \textcolor{keywordtype}{double}\ radius\ =\ params.radius;}
+\DoxyCodeLine{00504\ \ \ LPoint3\ p\ =\ center.fmin(box\_max).fmax(box\_min);}
+\DoxyCodeLine{00505\ \ \ \textcolor{keywordflow}{return}\ (center\ -\/\ p).length\_squared()\ <=\ radius\ *\ radius;}
+\DoxyCodeLine{00506\ \}}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00511\ \textcolor{keywordtype}{bool}\ CollisionHeightfield::}
+\DoxyCodeLine{00512\ box\_intersects\_triangle(\textcolor{keyword}{const}\ LPoint3\ \&box\_min,\ \textcolor{keyword}{const}\ LPoint3\ \&box\_max,}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ Triangle\ \&triangle)\ \{}
+\DoxyCodeLine{00514\ \ \ \textcolor{comment}{//\ Using\ the\ Seperating\ Axis\ Theorem,\ we\ have\ a\ maximum\ of\ 13\ SAT\ tests}}
+\DoxyCodeLine{00515\ \ \ \textcolor{comment}{//\ Refer\ to\ Christer\ Ericson's\ Collision\ Detection\ book\ for\ full\ explanation}}
+\DoxyCodeLine{00516\ \ \ LPoint3\ v0\ =\ triangle.p1,\ v1\ =\ triangle.p2,\ v2\ =\ triangle.p3;}
+\DoxyCodeLine{00517\ }
+\DoxyCodeLine{00518\ \ \ PN\_stdfloat\ p0,\ p1,\ p2,\ r;}
+\DoxyCodeLine{00519\ \ \ LVector3\ c\ =\ (box\_min\ +\ box\_max)\ *\ 0.5f;}
+\DoxyCodeLine{00520\ \ \ PN\_stdfloat\ e0\ =\ (box\_max[0]\ -\/\ box\_min[0])\ *\ 0.5f;}
+\DoxyCodeLine{00521\ \ \ PN\_stdfloat\ e1\ =\ (box\_max[1]\ -\/\ box\_min[1])\ *\ 0.5f;}
+\DoxyCodeLine{00522\ \ \ PN\_stdfloat\ e2\ =\ (box\_max[2]\ -\/\ box\_min[2])\ *\ 0.5f;}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00524\ \ \ v0\ =\ v0\ -\/\ c;}
+\DoxyCodeLine{00525\ \ \ v1\ =\ v1\ -\/\ c;}
+\DoxyCodeLine{00526\ \ \ v2\ =\ v2\ -\/\ c;}
+\DoxyCodeLine{00527\ }
+\DoxyCodeLine{00528\ \ \ LVector3\ f0\ =\ v1\ -\/\ v0,\ f1\ =\ v2\ -\/\ v1,\ f2\ =\ v0\ -\/\ v2;}
+\DoxyCodeLine{00529\ }
+\DoxyCodeLine{00530\ \ \ r\ =\ e1\ *\ cabs(f0[2])\ +\ e2\ *\ cabs(f0[1]);}
+\DoxyCodeLine{00531\ \ \ p0\ =\ \ v0[1]*(-\/v1[2]\ +\ v0[2])\ +\ v0[2]*(v1[1]\ -\/\ v0[1]);}
+\DoxyCodeLine{00532\ \ \ p2\ =\ \ v2[1]*(-\/v1[2]\ +\ v0[2])\ +\ v2[2]*(v1[1]\ -\/\ v0[1]);}
+\DoxyCodeLine{00533\ \ \ \textcolor{keywordflow}{if}\ (max(-\/1\ *\ max(p0,\ p2),\ min(p0,\ p2))\ >\ r)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00534\ }
+\DoxyCodeLine{00535\ \ \ r\ =\ e1\ *\ cabs(f1[2])\ +\ e2\ *\ cabs(f1[1]);}
+\DoxyCodeLine{00536\ \ \ p0\ =\ \ v0[1]*(-\/v2[2]\ +\ v1[2])\ +\ v0[2]*(v2[1]\ -\/\ v1[1]);}
+\DoxyCodeLine{00537\ \ \ p2\ =\ \ v2[1]*(-\/v2[2]\ +\ v1[2])\ +\ v2[2]*(v2[1]\ -\/\ v1[1]);}
+\DoxyCodeLine{00538\ \ \ \textcolor{keywordflow}{if}\ (max(-\/1\ *\ max(p0,\ p2),\ min(p0,\ p2))\ >\ r)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00539\ }
+\DoxyCodeLine{00540\ \ \ r\ =\ e1\ *\ cabs(f2[2])\ +\ e2\ *\ cabs(f2[1]);}
+\DoxyCodeLine{00541\ \ \ p0\ =\ \ v0[1]*(-\/v0[2]\ +\ v2[2])\ +\ v0[2]*(v0[1]\ -\/\ v2[1]);}
+\DoxyCodeLine{00542\ \ \ p1\ =\ \ v1[1]*(-\/v0[2]\ +\ v2[2])\ +\ v1[2]*(v0[1]\ -\/\ v2[1]);}
+\DoxyCodeLine{00543\ \ \ \textcolor{keywordflow}{if}\ (max(-\/1\ *\ max(p0,\ p1),\ min(p0,\ p1))\ >\ r)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00544\ }
+\DoxyCodeLine{00545\ \ \ r\ =\ e0\ *\ cabs(f0[2])\ +\ e2\ *\ cabs(f0[0]);}
+\DoxyCodeLine{00546\ \ \ p0\ =\ \ v0[0]*(v1[2]\ -\/\ v0[2])\ +\ v0[2]*(-\/v1[0]\ +\ v0[0]);}
+\DoxyCodeLine{00547\ \ \ p2\ =\ \ v2[0]*(v1[2]\ -\/\ v0[2])\ +\ v2[2]*(-\/v1[0]\ +\ v0[0]);}
+\DoxyCodeLine{00548\ \ \ \textcolor{keywordflow}{if}\ (max(-\/1\ *\ max(p0,\ p2),\ min(p0,\ p2))\ >\ r)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00550\ \ \ r\ =\ e0\ *\ cabs(f1[2])\ +\ e2\ *\ cabs(f1[0]);}
+\DoxyCodeLine{00551\ \ \ p0\ =\ \ v0[0]*(v2[2]\ -\/\ v1[2])\ +\ v0[2]*(-\/v2[0]\ +\ v1[0]);}
+\DoxyCodeLine{00552\ \ \ p2\ =\ \ v2[0]*(v2[2]\ -\/\ v1[2])\ +\ v2[2]*(-\/v2[0]\ +\ v1[0]);}
+\DoxyCodeLine{00553\ \ \ \textcolor{keywordflow}{if}\ (max(-\/1\ *\ max(p0,\ p2),\ min(p0,\ p2))\ >\ r)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00554\ }
+\DoxyCodeLine{00555\ \ \ r\ =\ e0\ *\ cabs(f2[2])\ +\ e2\ *\ cabs(f2[0]);}
+\DoxyCodeLine{00556\ \ \ p0\ =\ \ v0[0]*(v0[2]\ -\/\ v2[2])\ +\ v0[2]*(-\/v0[0]\ +\ v2[0]);}
+\DoxyCodeLine{00557\ \ \ p1\ =\ \ v1[0]*(v0[2]\ -\/\ v2[2])\ +\ v1[2]*(-\/v0[0]\ +\ v2[0]);}
+\DoxyCodeLine{00558\ \ \ \textcolor{keywordflow}{if}\ (max(-\/1\ *\ max(p0,\ p1),\ min(p0,\ p1))\ >\ r)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00559\ }
+\DoxyCodeLine{00560\ \ \ r\ =\ e0\ *\ cabs(f0[1])\ +\ e1\ *\ cabs(f0[0]);}
+\DoxyCodeLine{00561\ \ \ p0\ =\ \ v0[0]*(-\/v1[1]\ +\ v0[1])\ +\ v0[1]*(v1[0]\ -\/\ v0[0]);}
+\DoxyCodeLine{00562\ \ \ p2\ =\ \ v2[0]*(-\/v1[1]\ +\ v0[1])\ +\ v2[1]*(v1[0]\ -\/\ v0[0]);}
+\DoxyCodeLine{00563\ \ \ \textcolor{keywordflow}{if}\ (max(-\/1\ *\ max(p0,\ p2),\ min(p0,\ p2))\ >\ r)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00564\ }
+\DoxyCodeLine{00565\ \ \ r\ =\ e0\ *\ cabs(f1[1])\ +\ e1\ *\ cabs(f1[0]);}
+\DoxyCodeLine{00566\ \ \ p0\ =\ \ v0[0]*(-\/v2[1]\ +\ v1[1])\ +\ v0[1]*(v2[0]\ -\/\ v1[0]);}
+\DoxyCodeLine{00567\ \ \ p2\ =\ \ v2[0]*(-\/v2[1]\ +\ v1[1])\ +\ v2[1]*(v2[0]\ -\/\ v1[0]);}
+\DoxyCodeLine{00568\ \ \ \textcolor{keywordflow}{if}\ (max(-\/1\ *\ max(p0,\ p2),\ min(p0,\ p2))\ >\ r)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00569\ }
+\DoxyCodeLine{00570\ \ \ r\ =\ e0\ *\ cabs(f2[1])\ +\ e1\ *\ cabs(f2[0]);}
+\DoxyCodeLine{00571\ \ \ p0\ =\ \ v0[0]*(-\/v0[1]\ +\ v2[1])\ +\ v0[1]*(v0[0]\ -\/\ v2[0]);}
+\DoxyCodeLine{00572\ \ \ p1\ =\ \ v1[0]*(-\/v0[1]\ +\ v2[1])\ +\ v1[1]*(v0[0]\ -\/\ v2[0]);}
+\DoxyCodeLine{00573\ \ \ \textcolor{keywordflow}{if}\ (max(-\/1\ *\ max(p0,\ p1),\ min(p0,\ p1))\ >\ r)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00574\ }
+\DoxyCodeLine{00575\ \ \ \textcolor{keywordflow}{if}\ (max(max(v0[0],\ v1[0]),\ v2[0])\ <\ -\/e0\ ||}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ min(min(v0[0],\ v1[0]),\ v2[0])\ >\ e0)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00577\ \ \ \textcolor{keywordflow}{if}\ (max(max(v0[1],\ v1[1]),\ v2[1])\ <\ -\/e1\ ||}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ min(min(v0[1],\ v1[1]),\ v2[1])\ >\ e1)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00579\ \ \ \textcolor{keywordflow}{if}\ (max(max(v0[2],\ v1[2]),\ v2[2])\ <\ -\/e2\ ||}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ min(min(v0[2],\ v1[2]),\ v2[2])\ >\ e2)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ LVector3\ n\ =\ f0.cross(f1);}
+\DoxyCodeLine{00583\ \ \ PN\_stdfloat\ d\ =\ dot(n,\ triangle.p1);}
+\DoxyCodeLine{00584\ }
+\DoxyCodeLine{00585\ \ \ LPoint3\ e\ =\ box\_max\ -\/\ c;}
+\DoxyCodeLine{00586\ }
+\DoxyCodeLine{00587\ \ \ PN\_stdfloat\ r2\ =\ e[0]\ *\ cabs(n[0])\ +\ e[1]\ *\ cabs(n[1])\ +\ e[2]\ *\ cabs(n[2]);}
+\DoxyCodeLine{00588\ \ \ PN\_stdfloat\ s\ =\ dot(n,\ c)\ -\/\ d;}
+\DoxyCodeLine{00589\ \ \ \textcolor{keywordflow}{return}\ cabs(s)\ <=\ r2;}
+\DoxyCodeLine{00590\ \}}
+\DoxyCodeLine{00591\ }
+\DoxyCodeLine{00595\ \textcolor{keywordtype}{bool}\ CollisionHeightfield::}
+\DoxyCodeLine{00596\ box\_intersects\_box(\textcolor{keyword}{const}\ LPoint3\ \&box\_min,\ \textcolor{keyword}{const}\ LPoint3\ \&box\_max,}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ IntersectionParams\ \&params)\ \{}
+\DoxyCodeLine{00598\ }
+\DoxyCodeLine{00599\ \ \ \textcolor{keywordflow}{return}\ (box\_min[0]\ <=\ params.box\_max[0]\ \&\&\ box\_max[0]\ >=\ params.box\_min[0])\ \&\&}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ \ (box\_min[1]\ <=\ params.box\_max[1]\ \&\&\ box\_max[1]\ >=\ params.box\_min[1])\ \&\&}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ \ (box\_min[2]\ <=\ params.box\_max[2]\ \&\&\ box\_max[2]\ >=\ params.box\_min[2]);}
+\DoxyCodeLine{00602\ \}}
+\DoxyCodeLine{00603\ }
+\DoxyCodeLine{00607\ LPoint3\ \mbox{\hyperlink{classCollisionHeightfield_aeb7649ffb2c52ffacaa6ad7e9ecb8d6f}{CollisionHeightfield::}}}
+\DoxyCodeLine{00608\ \mbox{\hyperlink{classCollisionHeightfield_aeb7649ffb2c52ffacaa6ad7e9ecb8d6f}{closest\_point\_on\_triangle}}(\textcolor{keyword}{const}\ LPoint3\ \&p,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{structCollisionHeightfield_1_1Triangle}{Triangle}}\ \&triangle)\ \{}
+\DoxyCodeLine{00609\ \ \ LVector3\ ab\ =\ triangle.p2\ -\/\ triangle.p1;}
+\DoxyCodeLine{00610\ \ \ LVector3\ ac\ =\ triangle.p3\ -\/\ triangle.p1;}
+\DoxyCodeLine{00611\ \ \ LVector3\ ap\ =\ p\ -\/\ triangle.p1;}
+\DoxyCodeLine{00612\ \ \ PN\_stdfloat\ d1\ =\ dot(ab,\ ap);}
+\DoxyCodeLine{00613\ \ \ PN\_stdfloat\ d2\ =\ dot(ac,\ ap);}
+\DoxyCodeLine{00614\ \ \ \textcolor{keywordflow}{if}\ (d1\ <=\ 0.0f\ \&\&\ d2\ <=\ 0.0f)\ \textcolor{keywordflow}{return}\ triangle.p1;}
+\DoxyCodeLine{00615\ }
+\DoxyCodeLine{00616\ \ \ LVector3\ bp\ =\ p\ -\/\ triangle.p2;}
+\DoxyCodeLine{00617\ \ \ PN\_stdfloat\ d3\ =\ dot(ab,\ bp);}
+\DoxyCodeLine{00618\ \ \ PN\_stdfloat\ d4\ =\ dot(ac,\ bp);}
+\DoxyCodeLine{00619\ \ \ \textcolor{keywordflow}{if}\ (d3\ >=\ 0.0f\ \&\&\ d4\ <=\ d3)\ \textcolor{keywordflow}{return}\ triangle.p2;}
+\DoxyCodeLine{00620\ }
+\DoxyCodeLine{00621\ \ \ PN\_stdfloat\ vc\ =\ d1\ *\ d4\ -\/\ d3\ *\ d2;}
+\DoxyCodeLine{00622\ \ \ \textcolor{keywordflow}{if}\ (vc\ <=\ 0.0f\ \&\&\ d1\ >=\ 0.0f\ \&\&\ d3\ <=\ 0.0f)\ \{}
+\DoxyCodeLine{00623\ \ \ \ \ PN\_stdfloat\ v\ =\ d1\ /\ (d1\ -\/\ d3);}
+\DoxyCodeLine{00624\ \ \ \ \ \textcolor{keywordflow}{return}\ triangle.p1\ +\ v\ *\ ab;}
+\DoxyCodeLine{00625\ \ \ \}}
+\DoxyCodeLine{00626\ }
+\DoxyCodeLine{00627\ \ \ LVector3\ cp\ =\ p\ -\/\ triangle.p3;}
+\DoxyCodeLine{00628\ \ \ PN\_stdfloat\ d5\ =\ dot(ab,\ cp);}
+\DoxyCodeLine{00629\ \ \ PN\_stdfloat\ d6\ =\ dot(ac,\ cp);}
+\DoxyCodeLine{00630\ \ \ \textcolor{keywordflow}{if}\ (d6\ >=\ 0.0f\ \&\&\ d5\ <=\ d6)\ \textcolor{keywordflow}{return}\ triangle.p3;}
+\DoxyCodeLine{00631\ }
+\DoxyCodeLine{00632\ \ \ PN\_stdfloat\ vb\ =\ d5\ *\ d2\ -\/\ d1\ *\ d6;}
+\DoxyCodeLine{00633\ \ \ \textcolor{keywordflow}{if}\ (vb\ <=\ 0.0f\ \&\&\ d2\ >=\ 0.0f\ \&\&\ d6\ <=\ 0.0f)\ \{}
+\DoxyCodeLine{00634\ \ \ \ \ PN\_stdfloat\ w\ =\ d2\ /\ (d2\ -\/\ d6);}
+\DoxyCodeLine{00635\ \ \ \ \ \textcolor{keywordflow}{return}\ triangle.p1\ +\ w\ *\ ac;}
+\DoxyCodeLine{00636\ \ \ \}}
+\DoxyCodeLine{00637\ }
+\DoxyCodeLine{00638\ \ \ PN\_stdfloat\ va\ =\ d3\ *\ d6\ -\/\ d5\ *\ d4;}
+\DoxyCodeLine{00639\ \ \ \textcolor{keywordflow}{if}\ (va\ <=\ 0.0f\ \&\&\ (d4\ -\/\ d3)\ >=\ 0.0f\ \&\&\ (d5\ -\/\ d6)\ >=\ 0.0f)\ \{}
+\DoxyCodeLine{00640\ \ \ \ \ PN\_stdfloat\ w\ =\ (d4\ -\/\ d3)\ /\ ((d4\ -\/\ d3)\ +\ (d5\ -\/\ d6));}
+\DoxyCodeLine{00641\ \ \ \ \ \textcolor{keywordflow}{return}\ triangle.p2\ +\ w\ *\ (triangle.p3\ -\/\ triangle.p2);}
+\DoxyCodeLine{00642\ \ \ \}}
+\DoxyCodeLine{00643\ }
+\DoxyCodeLine{00644\ \ \ PN\_stdfloat\ denom\ =\ 1.0f\ /\ (va\ +\ vb\ +\ vc);}
+\DoxyCodeLine{00645\ \ \ PN\_stdfloat\ v\ =\ vb\ *\ denom;}
+\DoxyCodeLine{00646\ \ \ PN\_stdfloat\ w\ =\ vc\ *\ denom;}
+\DoxyCodeLine{00647\ \ \ \textcolor{keywordflow}{return}\ triangle.p1\ +\ ab\ *\ v\ +\ ac\ *\ w;}
+\DoxyCodeLine{00648\ \}}
+\DoxyCodeLine{00649\ }
+\DoxyCodeLine{00654\ vector<CollisionHeightfield::QuadTreeIntersection>\ CollisionHeightfield::}
+\DoxyCodeLine{00655\ find\_intersections(BoxIntersection\ intersects\_box,\ IntersectionParams\ params)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00656\ \ \ queue<QuadTreeNode>\ q;}
+\DoxyCodeLine{00657\ \ \ QuadTreeNode\ node\ =\ \_nodes[0];}
+\DoxyCodeLine{00658\ \ \ q.push(node);}
+\DoxyCodeLine{00659\ }
+\DoxyCodeLine{00660\ \ \ LPoint3\ box\_min,\ box\_max;}
+\DoxyCodeLine{00661\ \ \ vector<QuadTreeIntersection>\ intersections;}
+\DoxyCodeLine{00662\ }
+\DoxyCodeLine{00663\ \ \ \textcolor{keywordflow}{while}\ (!q.empty())\ \{}
+\DoxyCodeLine{00664\ \ \ \ \ node\ =\ q.front();}
+\DoxyCodeLine{00665\ \ \ \ \ q.pop();}
+\DoxyCodeLine{00666\ \ \ \ \ box\_min\ =\ \{node.area.min[0],\ node.area.min[1],\ node.height\_min\};}
+\DoxyCodeLine{00667\ \ \ \ \ box\_max\ =\ \{node.area.max[0],\ node.area.max[1],\ node.height\_max\};}
+\DoxyCodeLine{00668\ \ \ \ \ \textcolor{keywordflow}{if}\ (!intersects\_box(box\_min,\ box\_max,\ params))\ \{}
+\DoxyCodeLine{00669\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00670\ \ \ \ \ \}}
+\DoxyCodeLine{00671\ }
+\DoxyCodeLine{00672\ \ \ \ \ \textcolor{keywordflow}{if}\ (node.index\ >=\ \_leaf\_first\_index)\ \{}
+\DoxyCodeLine{00673\ \ \ \ \ \ \ QuadTreeIntersection\ intersection\ =\ \{node.index,\ params.t1,\ params.t2\};}
+\DoxyCodeLine{00674\ \ \ \ \ \ \ intersections.push\_back(intersection);}
+\DoxyCodeLine{00675\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00676\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ child\_first\_index\ =\ 4\ *\ node.index\ +\ 1;}
+\DoxyCodeLine{00677\ \ \ \ \ \ \ q.push(\_nodes[child\_first\_index]);}
+\DoxyCodeLine{00678\ \ \ \ \ \ \ q.push(\_nodes[child\_first\_index\ +\ 1]);}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ q.push(\_nodes[child\_first\_index\ +\ 2]);}
+\DoxyCodeLine{00680\ \ \ \ \ \ \ q.push(\_nodes[child\_first\_index\ +\ 3]);}
+\DoxyCodeLine{00681\ \ \ \ \ \}}
+\DoxyCodeLine{00682\ \ \ \}}
+\DoxyCodeLine{00683\ }
+\DoxyCodeLine{00684\ \ \ \textcolor{keywordflow}{return}\ intersections;}
+\DoxyCodeLine{00685\ \}}
+\DoxyCodeLine{00686\ }
+\DoxyCodeLine{00691\ vector<CollisionHeightfield::Triangle>\ CollisionHeightfield::}
+\DoxyCodeLine{00692\ get\_triangles(\textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00693\ \ \ \textcolor{keywordtype}{int}\ rows\ =\ \_heightfield.get\_x\_size();}
+\DoxyCodeLine{00694\ \ \ \textcolor{keywordtype}{int}\ cols\ =\ \_heightfield.get\_y\_size();}
+\DoxyCodeLine{00695\ \ \ vector<Triangle>\ triangles;}
+\DoxyCodeLine{00696\ \ \ \textcolor{keywordflow}{if}\ (x\ <\ 0\ ||\ y\ <\ 0\ ||\ x\ >=\ rows\ ||\ y\ >=\ cols)}
+\DoxyCodeLine{00697\ \ \ \ \ \textcolor{keywordflow}{return}\ triangles;}
+\DoxyCodeLine{00698\ }
+\DoxyCodeLine{00699\ \ \ Triangle\ t;}
+\DoxyCodeLine{00700\ \ \ \textcolor{keywordtype}{int}\ heightfield\_y\ =\ cols\ -\/\ 1\ -\/\ y;}
+\DoxyCodeLine{00701\ \ \ \textcolor{keywordtype}{bool}\ odd\ =\ (x\ +\ heightfield\_y)\ \&\ 1;}
+\DoxyCodeLine{00702\ \ \ t.p1\ =\ LPoint3(x,\ y,\ get\_height(x,\ heightfield\_y));}
+\DoxyCodeLine{00703\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ dx\ =\ -\/1;\ dx\ <=\ 1;\ dx\ +=\ 2)\ \{}
+\DoxyCodeLine{00704\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ dy\ =\ -\/1;\ dy\ <=\ 1;\ dy\ +=\ 2)\ \{}
+\DoxyCodeLine{00705\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ x2\ =\ x\ +\ dx;}
+\DoxyCodeLine{00706\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ y2\ =\ y\ -\/\ dy;}
+\DoxyCodeLine{00707\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ heightfield\_y2\ =\ heightfield\_y\ +\ dy;}
+\DoxyCodeLine{00708\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x2\ <\ 0\ ||\ heightfield\_y2\ <\ 0\ ||\ x2\ >=\ rows\ ||\ heightfield\_y2\ >=\ cols)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00709\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (odd)\ \{}
+\DoxyCodeLine{00710\ \ \ \ \ \ \ \ \ t.p2\ =\ LPoint3(x2,\ y,\ get\_height(x2,\ heightfield\_y));}
+\DoxyCodeLine{00711\ \ \ \ \ \ \ \ \ t.p3\ =\ LPoint3(x,\ y2,\ get\_height(x,\ heightfield\_y2));}
+\DoxyCodeLine{00712\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00713\ \ \ \ \ \ \ \ \ t.p2\ =\ LPoint3(x2,\ y2,\ get\_height(x2,\ heightfield\_y2));}
+\DoxyCodeLine{00714\ \ \ \ \ \ \ \ \ t.p3\ =\ LPoint3(x2,\ y,\ get\_height(x2,\ heightfield\_y));}
+\DoxyCodeLine{00715\ \ \ \ \ \ \ \ \ triangles.push\_back(t);}
+\DoxyCodeLine{00716\ \ \ \ \ \ \ \ \ t.p3\ =\ LPoint3(x,\ y2,\ get\_height(x,\ heightfield\_y2));}
+\DoxyCodeLine{00717\ \ \ \ \ \ \ \ \ triangles.push\_back(t);}
+\DoxyCodeLine{00718\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00719\ \ \ \ \ \}}
+\DoxyCodeLine{00720\ \ \ \}}
+\DoxyCodeLine{00721\ }
+\DoxyCodeLine{00722\ \ \ \textcolor{keywordflow}{return}\ triangles;}
+\DoxyCodeLine{00723\ \}}
+\DoxyCodeLine{00724\ }
+\DoxyCodeLine{00728\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classCollisionHeightfield_aca36e57f06a6a4a74f972a43db5f7336}{CollisionHeightfield::}}}
+\DoxyCodeLine{00729\ \mbox{\hyperlink{classCollisionHeightfield_aca36e57f06a6a4a74f972a43db5f7336}{fill\_viz\_geom}}()\ \{}
+\DoxyCodeLine{00730\ \ \ PT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ vdata\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}}
+\DoxyCodeLine{00731\ \ \ \ \ (\textcolor{stringliteral}{"{}collision"{}},\ GeomVertexFormat::get\_v3(),}
+\DoxyCodeLine{00732\ \ \ \ \ \ Geom::UH\_static);}
+\DoxyCodeLine{00733\ }
+\DoxyCodeLine{00734\ \ \ \mbox{\hyperlink{classGeomVertexWriter}{GeomVertexWriter}}\ vertex(vdata,\ InternalName::get\_vertex());}
+\DoxyCodeLine{00735\ }
+\DoxyCodeLine{00736\ \ \ PT(\mbox{\hyperlink{classGeomTriangles}{GeomTriangles}})\ tris\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomTriangles}{GeomTriangles}}(Geom::UH\_static);}
+\DoxyCodeLine{00737\ }
+\DoxyCodeLine{00738\ \ \ \textcolor{keywordtype}{int}\ cols\ =\ \_heightfield.get\_x\_size();}
+\DoxyCodeLine{00739\ \ \ \textcolor{keywordtype}{int}\ rows\ =\ \_heightfield.get\_y\_size();}
+\DoxyCodeLine{00740\ }
+\DoxyCodeLine{00741\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ rows;\ y++)\ \{}
+\DoxyCodeLine{00742\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ cols;\ x++)\ \{}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ \textcolor{comment}{//\ a\ point\ (x,\ y)\ in\ the\ heightfield\ image}}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ \textcolor{comment}{//\ maps\ to\ (x,\ y2,\ height\_at(x,\ y))\ in\ 3D\ space}}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ y2\ =\ rows\ -\/\ y\ -\/\ 1;}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ vertex.add\_data3(x,\ y2,\ get\_height(x,\ y));}
+\DoxyCodeLine{00747\ \ \ \ \ \}}
+\DoxyCodeLine{00748\ \ \ \}}
+\DoxyCodeLine{00749\ }
+\DoxyCodeLine{00750\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ rows\ -\/\ 1;\ i++)\ \{}
+\DoxyCodeLine{00751\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ j\ =\ 0;\ j\ <\ cols\ -\/\ 1;\ j++)\ \{}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ pos\ =\ i\ *\ cols\ +\ j;}
+\DoxyCodeLine{00753\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pos\ \&\ 1)\ \{\ \textcolor{comment}{//\ odd}}
+\DoxyCodeLine{00754\ \ \ \ \ \ \ \ \ tris-\/>add\_vertices(pos,\ pos\ +\ cols,\ pos\ +\ 1);}
+\DoxyCodeLine{00755\ \ \ \ \ \ \ \ \ tris-\/>add\_vertices(pos\ +\ 1,\ pos\ +\ cols,\ pos\ +\ cols\ +\ 1);}
+\DoxyCodeLine{00756\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00757\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{\ \textcolor{comment}{//\ even}}
+\DoxyCodeLine{00758\ \ \ \ \ \ \ \ \ tris-\/>add\_vertices(pos,\ pos\ +\ cols,\ pos\ +\ cols\ +\ 1);}
+\DoxyCodeLine{00759\ \ \ \ \ \ \ \ \ tris-\/>add\_vertices(pos,\ pos\ +\ cols\ +\ 1,\ pos\ +\ 1);}
+\DoxyCodeLine{00760\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00761\ \ \ \ \ \}}
+\DoxyCodeLine{00762\ \ \ \}}
+\DoxyCodeLine{00763\ }
+\DoxyCodeLine{00764\ \ \ PT(\mbox{\hyperlink{classGeom}{Geom}})\ geom\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeom}{Geom}}(vdata);}
+\DoxyCodeLine{00765\ \ \ geom-\/>add\_primitive(tris);}
+\DoxyCodeLine{00766\ }
+\DoxyCodeLine{00767\ \ \ \_viz\_geom-\/>add\_geom(geom,\ get\_solid\_viz\_state());}
+\DoxyCodeLine{00768\ \ \ \_bounds\_viz\_geom-\/>add\_geom(geom,\ get\_solid\_bounds\_viz\_state());}
+\DoxyCodeLine{00769\ \}}
+\DoxyCodeLine{00770\ }
+\DoxyCodeLine{00771\ \mbox{\hyperlink{classCollisionSolid}{CollisionSolid}}\ *CollisionHeightfield::}
+\DoxyCodeLine{00772\ make\_copy()\ \{}
+\DoxyCodeLine{00773\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classCollisionHeightfield}{CollisionHeightfield}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00774\ \}}
+\DoxyCodeLine{00775\ }
+\DoxyCodeLine{00776\ LPoint3\ CollisionHeightfield::}
+\DoxyCodeLine{00777\ get\_collision\_origin()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00778\ \ \ \textcolor{keywordflow}{return}\ LPoint3(0,\ 0,\ 0);}
+\DoxyCodeLine{00779\ \}}
+\DoxyCodeLine{00780\ }
+\DoxyCodeLine{00781\ PT(\mbox{\hyperlink{classBoundingVolume}{BoundingVolume}})\ CollisionHeightfield::}
+\DoxyCodeLine{00782\ compute\_internal\_bounds()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00783\ \ \ QuadTreeNode\ node\ =\ \_nodes[0];}
+\DoxyCodeLine{00784\ \ \ LPoint3\ box\_min\ =\ \{node.area.min[0],\ node.area.min[1],}
+\DoxyCodeLine{00785\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ node.height\_min\};}
+\DoxyCodeLine{00786\ \ \ LPoint3\ box\_max\ =\ \{node.area.max[0],\ node.area.max[1],}
+\DoxyCodeLine{00787\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ node.height\_max\};}
+\DoxyCodeLine{00788\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBoundingBox}{BoundingBox}}(box\_min,\ box\_max);}
+\DoxyCodeLine{00789\ \}}
+\DoxyCodeLine{00790\ }
+\DoxyCodeLine{00791\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \&CollisionHeightfield::}
+\DoxyCodeLine{00792\ get\_volume\_pcollector()\ \{}
+\DoxyCodeLine{00793\ \ \ \textcolor{keywordflow}{return}\ \_volume\_pcollector;}
+\DoxyCodeLine{00794\ \}}
+\DoxyCodeLine{00795\ }
+\DoxyCodeLine{00796\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \&\mbox{\hyperlink{classCollisionHeightfield_ace801c5ed52a780dbdbf13e2e4255fcc}{CollisionHeightfield::}}}
+\DoxyCodeLine{00797\ \mbox{\hyperlink{classCollisionHeightfield_ace801c5ed52a780dbdbf13e2e4255fcc}{get\_test\_pcollector}}()\ \{}
+\DoxyCodeLine{00798\ \ \ \textcolor{keywordflow}{return}\ \_test\_pcollector;}
+\DoxyCodeLine{00799\ \}}
+\DoxyCodeLine{00800\ }
+\DoxyCodeLine{00801\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *CollisionHeightfield::}
+\DoxyCodeLine{00802\ make\_from\_bam(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFactoryParams}{FactoryParams}}\ \&params)\ \{}
+\DoxyCodeLine{00803\ \ \ \mbox{\hyperlink{classCollisionHeightfield}{CollisionHeightfield}}\ *me\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classCollisionHeightfield}{CollisionHeightfield}};}
+\DoxyCodeLine{00804\ \ \ \mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ scan;}
+\DoxyCodeLine{00805\ \ \ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager;}
+\DoxyCodeLine{00806\ }
+\DoxyCodeLine{00807\ \ \ parse\_params(params,\ scan,\ manager);}
+\DoxyCodeLine{00808\ \ \ me-\/>\mbox{\hyperlink{classCollisionHeightfield_abe52984d130a5b7065d58b850cf4b208}{fillin}}(scan,\ manager);}
+\DoxyCodeLine{00809\ \ \ \textcolor{keywordflow}{return}\ me;}
+\DoxyCodeLine{00810\ \}}
+\DoxyCodeLine{00811\ }
+\DoxyCodeLine{00812\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classCollisionHeightfield_abe52984d130a5b7065d58b850cf4b208}{CollisionHeightfield::}}}
+\DoxyCodeLine{00813\ \mbox{\hyperlink{classCollisionHeightfield_abe52984d130a5b7065d58b850cf4b208}{fillin}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{00814\ \}}
+\DoxyCodeLine{00815\ }
+\DoxyCodeLine{00816\ \textcolor{keywordtype}{void}\ CollisionHeightfield::}
+\DoxyCodeLine{00817\ register\_with\_read\_factory()\ \{}
+\DoxyCodeLine{00818\ \ \ BamReader::get\_factory()-\/>register\_factory(get\_class\_type(),\ make\_from\_bam);}
+\DoxyCodeLine{00819\ \}}
+
+\end{DoxyCode}

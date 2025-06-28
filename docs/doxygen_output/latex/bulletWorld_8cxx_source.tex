@@ -1,0 +1,1155 @@
+\doxysection{bullet\+World.\+cxx}
+\hypertarget{bulletWorld_8cxx_source}{}\label{bulletWorld_8cxx_source}\index{panda/src/bullet/bulletWorld.cxx@{panda/src/bullet/bulletWorld.cxx}}
+\mbox{\hyperlink{bulletWorld_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bulletWorld_8h}{bulletWorld.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__bullet_8h}{config\_bullet.h}}"{}}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bulletFilterCallbackData_8h}{bulletFilterCallbackData.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bulletPersistentManifold_8h}{bulletPersistentManifold.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bulletShape_8h}{bulletShape.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bulletSoftBodyWorldInfo_8h}{bulletSoftBodyWorldInfo.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bulletTickCallbackData_8h}{bulletTickCallbackData.h}}"{}}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collideMask_8h}{collideMask.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightMutexHolder_8h}{lightMutexHolder.h}}"{}}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#define\ clamp(x,\ x\_min,\ x\_max)\ std::max(std::min(x,\ x\_max),\ x\_min)}}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{keyword}{using\ }std::endl;}
+\DoxyCodeLine{00030\ \textcolor{keyword}{using\ }std::istream;}
+\DoxyCodeLine{00031\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00032\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ BulletWorld::\_type\_handle;}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ BulletWorld::\_pstat\_physics(\textcolor{stringliteral}{"{}App:Bullet:DoPhysics"{}});}
+\DoxyCodeLine{00037\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ BulletWorld::\_pstat\_simulation(\textcolor{stringliteral}{"{}App:Bullet:DoPhysics:Simulation"{}});}
+\DoxyCodeLine{00038\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ BulletWorld::\_pstat\_p2b(\textcolor{stringliteral}{"{}App:Bullet:DoPhysics:SyncP2B"{}});}
+\DoxyCodeLine{00039\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ BulletWorld::\_pstat\_b2p(\textcolor{stringliteral}{"{}App:Bullet:DoPhysics:SyncB2P"{}});}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00041\ PT(\mbox{\hyperlink{classCallbackObject}{CallbackObject}})\ bullet\_contact\_added\_callback;}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00046\ BulletWorld::}
+\DoxyCodeLine{00047\ BulletWorld()\ \{}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \ \ \textcolor{comment}{//\ Init\ groups\ filter\ matrix}}
+\DoxyCodeLine{00050\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ 32;\ ++i)\ \{}
+\DoxyCodeLine{00051\ \ \ \ \ \_filter\_cb2.\_collide[i].clear();}
+\DoxyCodeLine{00052\ \ \ \ \ \_filter\_cb2.\_collide[i].set\_bit(i);}
+\DoxyCodeLine{00053\ \ \ \}}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00055\ \ \ \textcolor{comment}{//\ Broadphase}}
+\DoxyCodeLine{00056\ \ \ btScalar\ dx(bullet\_sap\_extents);}
+\DoxyCodeLine{00057\ \ \ \mbox{\hyperlink{structbtVector3}{btVector3}}\ extents(dx,\ dx,\ dx);}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00059\ \ \ \textcolor{keywordflow}{switch}\ (bullet\_broadphase\_algorithm)\ \{}
+\DoxyCodeLine{00060\ \ \ \ \ \textcolor{keywordflow}{case}\ BA\_sweep\_and\_prune:}
+\DoxyCodeLine{00061\ \ \ \ \ \ \ \_broadphase\ =\ \textcolor{keyword}{new}\ btAxisSweep3(extents,\ extents,\ 1024);}
+\DoxyCodeLine{00062\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00063\ \ \ \ \ \textcolor{keywordflow}{case}\ BA\_dynamic\_aabb\_tree:}
+\DoxyCodeLine{00064\ \ \ \ \ \ \ \_broadphase\ =\ \textcolor{keyword}{new}\ btDbvtBroadphase();}
+\DoxyCodeLine{00065\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00066\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00067\ \ \ \ \ \ \ bullet\_cat.error()\ <<\ \textcolor{stringliteral}{"{}no\ proper\ broadphase\ algorithm!"{}}\ <<\ endl;}
+\DoxyCodeLine{00068\ \ \ \}}
+\DoxyCodeLine{00069\ \ \ nassertv(\_broadphase);}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00071\ \ \ \textcolor{comment}{//\ Configuration}}
+\DoxyCodeLine{00072\ \ \ \_configuration\ =\ \textcolor{keyword}{new}\ btSoftBodyRigidBodyCollisionConfiguration();}
+\DoxyCodeLine{00073\ \ \ nassertv(\_configuration);}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ \textcolor{comment}{//\ Dispatcher}}
+\DoxyCodeLine{00076\ \ \ \_dispatcher\ =\ \textcolor{keyword}{new}\ btCollisionDispatcher(\_configuration);}
+\DoxyCodeLine{00077\ \ \ nassertv(\_dispatcher);}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00079\ \ \ \textcolor{comment}{//\ Solver}}
+\DoxyCodeLine{00080\ \ \ \_solver\ =\ \textcolor{keyword}{new}\ btSequentialImpulseConstraintSolver;}
+\DoxyCodeLine{00081\ \ \ nassertv(\_solver);}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00083\ \ \ \textcolor{comment}{//\ World}}
+\DoxyCodeLine{00084\ \ \ \_world\ =\ \textcolor{keyword}{new}\ btSoftRigidDynamicsWorld(\_dispatcher,\ \_broadphase,\ \_solver,\ \_configuration);}
+\DoxyCodeLine{00085\ \ \ nassertv(\_world);}
+\DoxyCodeLine{00086\ \ \ nassertv(\_world-\/>getPairCache());}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00088\ \ \ \_world-\/>setWorldUserInfo(\textcolor{keyword}{this});}
+\DoxyCodeLine{00089\ \ \ \_world-\/>setGravity(\mbox{\hyperlink{structbtVector3}{btVector3}}(0.0f,\ 0.0f,\ 0.0f));}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \ \ \textcolor{comment}{//\ Ghost-\/pair\ callback}}
+\DoxyCodeLine{00092\ \ \ \_world-\/>getPairCache()-\/>setInternalGhostPairCallback(\&\_ghost\_cb);}
+\DoxyCodeLine{00093\ }
+\DoxyCodeLine{00094\ \ \ \textcolor{comment}{//\ Filter\ callback}}
+\DoxyCodeLine{00095\ \ \ \_filter\_algorithm\ =\ bullet\_filter\_algorithm;}
+\DoxyCodeLine{00096\ \ \ \textcolor{keywordflow}{switch}\ (\_filter\_algorithm)\ \{}
+\DoxyCodeLine{00097\ \ \ \ \ \textcolor{keywordflow}{case}\ FA\_mask:}
+\DoxyCodeLine{00098\ \ \ \ \ \ \ \_filter\_cb\ =\ \&\_filter\_cb1;}
+\DoxyCodeLine{00099\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordflow}{case}\ FA\_groups\_mask:}
+\DoxyCodeLine{00101\ \ \ \ \ \ \ \_filter\_cb\ =\ \&\_filter\_cb2;}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00103\ \ \ \ \ \textcolor{keywordflow}{case}\ FA\_callback:}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ \_filter\_cb\ =\ \&\_filter\_cb3;}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ bullet\_cat.error()\ <<\ \textcolor{stringliteral}{"{}no\ proper\ filter\ algorithm!"{}}\ <<\ endl;}
+\DoxyCodeLine{00108\ \ \ \ \ \ \ \_filter\_cb\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00109\ \ \ \}}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ \_world-\/>getPairCache()-\/>setOverlapFilterCallback(\_filter\_cb);}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00113\ \ \ \textcolor{comment}{//\ Tick\ callback}}
+\DoxyCodeLine{00114\ \ \ \_tick\_callback\_obj\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ \textcolor{comment}{//\ SoftBodyWorldInfo}}
+\DoxyCodeLine{00117\ \ \ \_info.m\_dispatcher\ =\ \_dispatcher;}
+\DoxyCodeLine{00118\ \ \ \_info.m\_broadphase\ =\ \_broadphase;}
+\DoxyCodeLine{00119\ \ \ \_info.m\_gravity.setValue(0.0f,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{00120\ \ \ \_info.m\_sparsesdf.Initialize();}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00122\ \ \ \textcolor{comment}{//\ Register\ GIMPACT\ algorithm}}
+\DoxyCodeLine{00123\ \ \ btGImpactCollisionAlgorithm::registerAlgorithm(\_dispatcher);}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \textcolor{comment}{//\ Some\ prefered\ settings}}
+\DoxyCodeLine{00126\ \ \ \_world-\/>getDispatchInfo().m\_enableSPU\ =\ \textcolor{keyword}{true};\ \ \ \ \ \ \textcolor{comment}{//\ default:\ true}}
+\DoxyCodeLine{00127\ \ \ \_world-\/>getDispatchInfo().m\_useContinuous\ =\ \textcolor{keyword}{true};\ \ \textcolor{comment}{//\ default:\ true}}
+\DoxyCodeLine{00128\ \ \ \_world-\/>getSolverInfo().m\_splitImpulse\ =\ bullet\_split\_impulse;}
+\DoxyCodeLine{00129\ \ \ \_world-\/>getSolverInfo().m\_numIterations\ =\ bullet\_solver\_iterations;}
+\DoxyCodeLine{00130\ \}}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00135\ \mbox{\hyperlink{classLightMutex}{LightMutex}}\ \&BulletWorld::}
+\DoxyCodeLine{00136\ get\_global\_lock()\ \{}
+\DoxyCodeLine{00137\ \ \ }
+\DoxyCodeLine{00138\ \ \ \textcolor{keyword}{static}\ \mbox{\hyperlink{classLightMutex}{LightMutex}}\ lock;}
+\DoxyCodeLine{00139\ \ \ }
+\DoxyCodeLine{00140\ \ \ \textcolor{keywordflow}{return}\ lock;}
+\DoxyCodeLine{00141\ \}}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00146\ \mbox{\hyperlink{classBulletSoftBodyWorldInfo}{BulletSoftBodyWorldInfo}}\ BulletWorld::}
+\DoxyCodeLine{00147\ get\_world\_info()\ \{}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classBulletSoftBodyWorldInfo}{BulletSoftBodyWorldInfo}}(\_info);}
+\DoxyCodeLine{00150\ \}}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00155\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00156\ set\_debug\_node(\mbox{\hyperlink{classBulletDebugNode}{BulletDebugNode}}\ *node)\ \{}
+\DoxyCodeLine{00157\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00159\ \ \ nassertv(node);}
+\DoxyCodeLine{00160\ \ \ \textcolor{keywordflow}{if}\ (node\ !=\ \_debug)\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_debug\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ \_debug-\/>\_debug\_stale\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ \_debug-\/>\_debug\_world\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00164\ \ \ \ \ \}}
+\DoxyCodeLine{00165\ }
+\DoxyCodeLine{00166\ \ \ \ \ \_debug\ =\ node;}
+\DoxyCodeLine{00167\ \ \ \ \ \_world-\/>setDebugDrawer(\&(\_debug-\/>\_drawer));}
+\DoxyCodeLine{00168\ \ \ \}}
+\DoxyCodeLine{00169\ \}}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00174\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00175\ clear\_debug\_node()\ \{}
+\DoxyCodeLine{00176\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00177\ }
+\DoxyCodeLine{00178\ \ \ \textcolor{keywordflow}{if}\ (\_debug\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00179\ \ \ \ \ \_debug-\/>\_debug\_stale\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00180\ \ \ \ \ \_debug-\/>\_debug\_world\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00181\ \ \ \ \ \_world-\/>setDebugDrawer(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00182\ \ \ \ \ \_debug\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00183\ \ \ \}}
+\DoxyCodeLine{00184\ \}}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00189\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00190\ set\_gravity(\textcolor{keyword}{const}\ LVector3\ \&gravity)\ \{}
+\DoxyCodeLine{00191\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00193\ \ \ \_world-\/>setGravity(LVecBase3\_to\_btVector3(gravity));}
+\DoxyCodeLine{00194\ \ \ \_info.m\_gravity.setValue(gravity.get\_x(),\ gravity.get\_y(),\ gravity.get\_z());}
+\DoxyCodeLine{00195\ \}}
+\DoxyCodeLine{00196\ }
+\DoxyCodeLine{00200\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00201\ set\_gravity(PN\_stdfloat\ gx,\ PN\_stdfloat\ gy,\ PN\_stdfloat\ gz)\ \{}
+\DoxyCodeLine{00202\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00204\ \ \ \_world-\/>setGravity(\mbox{\hyperlink{structbtVector3}{btVector3}}((btScalar)gx,\ (btScalar)gy,\ (btScalar)gz));}
+\DoxyCodeLine{00205\ \ \ \_info.m\_gravity.setValue((btScalar)gx,\ (btScalar)gy,\ (btScalar)gz);}
+\DoxyCodeLine{00206\ \}}
+\DoxyCodeLine{00207\ }
+\DoxyCodeLine{00211\ \textcolor{keyword}{const}\ LVector3\ BulletWorld::}
+\DoxyCodeLine{00212\ get\_gravity()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00213\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordflow}{return}\ btVector3\_to\_LVector3(\_world-\/>getGravity());}
+\DoxyCodeLine{00216\ \}}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00221\ \textcolor{keywordtype}{int}\ BulletWorld::}
+\DoxyCodeLine{00222\ do\_physics(PN\_stdfloat\ dt,\ \textcolor{keywordtype}{int}\ max\_substeps,\ PN\_stdfloat\ stepsize)\ \{}
+\DoxyCodeLine{00223\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00225\ \ \ bullet\_contact\_added\_callback\ =\ \_contact\_added\_callback\_obj;}
+\DoxyCodeLine{00226\ }
+\DoxyCodeLine{00227\ \ \ \_pstat\_physics.start();}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00229\ \ \ \textcolor{keywordtype}{int}\ num\_substeps\ =\ clamp(\textcolor{keywordtype}{int}(dt\ /\ stepsize),\ 1,\ max\_substeps);}
+\DoxyCodeLine{00230\ }
+\DoxyCodeLine{00231\ \ \ \textcolor{comment}{//\ Synchronize\ Panda\ to\ Bullet}}
+\DoxyCodeLine{00232\ \ \ \_pstat\_p2b.start();}
+\DoxyCodeLine{00233\ \ \ do\_sync\_p2b(dt,\ num\_substeps);}
+\DoxyCodeLine{00234\ \ \ \_pstat\_p2b.stop();}
+\DoxyCodeLine{00235\ }
+\DoxyCodeLine{00236\ \ \ \textcolor{comment}{//\ Simulation}}
+\DoxyCodeLine{00237\ \ \ \_pstat\_simulation.start();}
+\DoxyCodeLine{00238\ \ \ \textcolor{keywordtype}{int}\ n\ =\ \_world-\/>stepSimulation((btScalar)dt,\ max\_substeps,\ (btScalar)stepsize);}
+\DoxyCodeLine{00239\ \ \ \_pstat\_simulation.stop();}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ \textcolor{comment}{//\ Synchronize\ Bullet\ to\ Panda}}
+\DoxyCodeLine{00242\ \ \ \_pstat\_b2p.start();}
+\DoxyCodeLine{00243\ \ \ do\_sync\_b2p();}
+\DoxyCodeLine{00244\ \ \ \_info.m\_sparsesdf.GarbageCollect(bullet\_gc\_lifetime);}
+\DoxyCodeLine{00245\ \ \ \_pstat\_b2p.stop();}
+\DoxyCodeLine{00246\ }
+\DoxyCodeLine{00247\ \ \ \textcolor{comment}{//\ Render\ debug}}
+\DoxyCodeLine{00248\ \ \ \textcolor{keywordflow}{if}\ (\_debug)\ \{}
+\DoxyCodeLine{00249\ \ \ \ \ \_debug-\/>do\_sync\_b2p(\_world);}
+\DoxyCodeLine{00250\ \ \ \}}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \ \ \_pstat\_physics.stop();}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \ \ bullet\_contact\_added\_callback.clear();}
+\DoxyCodeLine{00255\ }
+\DoxyCodeLine{00256\ \ \ \textcolor{keywordflow}{return}\ n;}
+\DoxyCodeLine{00257\ \}}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00262\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00263\ do\_sync\_p2b(PN\_stdfloat\ dt,\ \textcolor{keywordtype}{int}\ num\_substeps)\ \{}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00265\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}}\ *body\ :\ \_bodies)\ \{}
+\DoxyCodeLine{00266\ \ \ \ \ body-\/>do\_sync\_p2b();}
+\DoxyCodeLine{00267\ \ \ \}}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}}\ *softbody\ :\ \_softbodies)\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ softbody-\/>do\_sync\_p2b();}
+\DoxyCodeLine{00271\ \ \ \}}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00273\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}}\ *ghost\ :\ \_ghosts)\ \{}
+\DoxyCodeLine{00274\ \ \ \ \ ghost-\/>do\_sync\_p2b();}
+\DoxyCodeLine{00275\ \ \ \}}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00277\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}}\ *character\ :\ \_characters)\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ character-\/>do\_sync\_p2b(dt,\ num\_substeps);}
+\DoxyCodeLine{00279\ \ \ \}}
+\DoxyCodeLine{00280\ \}}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00285\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00286\ do\_sync\_b2p()\ \{}
+\DoxyCodeLine{00287\ }
+\DoxyCodeLine{00288\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}}\ *body\ :\ \_bodies)\ \{}
+\DoxyCodeLine{00289\ \ \ \ \ body-\/>do\_sync\_b2p();}
+\DoxyCodeLine{00290\ \ \ \}}
+\DoxyCodeLine{00291\ }
+\DoxyCodeLine{00292\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}}\ *softbody\ :\ \_softbodies)\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ softbody-\/>do\_sync\_b2p();}
+\DoxyCodeLine{00294\ \ \ \}}
+\DoxyCodeLine{00295\ }
+\DoxyCodeLine{00296\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}}\ *ghost\ :\ \_ghosts)\ \{}
+\DoxyCodeLine{00297\ \ \ \ \ ghost-\/>do\_sync\_b2p();}
+\DoxyCodeLine{00298\ \ \ \}}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00300\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}}\ *character\ :\ \_characters)\ \{}
+\DoxyCodeLine{00301\ \ \ \ \ character-\/>do\_sync\_b2p();}
+\DoxyCodeLine{00302\ \ \ \}}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00304\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBulletVehicle}{BulletVehicle}}\ *vehicle\ :\ \_vehicles)\ \{}
+\DoxyCodeLine{00305\ \ \ \ \ vehicle-\/>do\_sync\_b2p();}
+\DoxyCodeLine{00306\ \ \ \}}
+\DoxyCodeLine{00307\ \}}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00312\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00313\ attach(\mbox{\hyperlink{classTypedObject}{TypedObject}}\ *\textcolor{keywordtype}{object})\ \{}
+\DoxyCodeLine{00314\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \ \ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletGhostNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ do\_attach\_ghost(DCAST(\mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00318\ \ \ \}}
+\DoxyCodeLine{00319\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletRigidBodyNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ do\_attach\_rigid\_body(DCAST(\mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00321\ \ \ \}}
+\DoxyCodeLine{00322\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletSoftBodyNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{00323\ \ \ \ \ do\_attach\_soft\_body(DCAST(\mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00324\ \ \ \}}
+\DoxyCodeLine{00325\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletBaseCharacterControllerNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{00326\ \ \ \ \ do\_attach\_character(DCAST(\mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00327\ \ \ \}}
+\DoxyCodeLine{00328\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletVehicle::get\_class\_type()))\ \{}
+\DoxyCodeLine{00329\ \ \ \ \ do\_attach\_vehicle(DCAST(\mbox{\hyperlink{classBulletVehicle}{BulletVehicle}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00330\ \ \ \}}
+\DoxyCodeLine{00331\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletConstraint::get\_class\_type()))\ \{}
+\DoxyCodeLine{00332\ \ \ \ \ do\_attach\_constraint(DCAST(\mbox{\hyperlink{classBulletConstraint}{BulletConstraint}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00333\ \ \ \}}
+\DoxyCodeLine{00334\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00335\ \ \ \ \ bullet\_cat-\/>error()\ <<\ \textcolor{stringliteral}{"{}not\ a\ bullet\ world\ object!"{}}\ <<\ endl;}
+\DoxyCodeLine{00336\ \ \ \}}
+\DoxyCodeLine{00337\ \}}
+\DoxyCodeLine{00338\ }
+\DoxyCodeLine{00342\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00343\ remove(\mbox{\hyperlink{classTypedObject}{TypedObject}}\ *\textcolor{keywordtype}{object})\ \{}
+\DoxyCodeLine{00344\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00345\ }
+\DoxyCodeLine{00346\ \ \ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletGhostNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{00347\ \ \ \ \ do\_remove\_ghost(DCAST(\mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00348\ \ \ \}}
+\DoxyCodeLine{00349\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletRigidBodyNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{00350\ \ \ \ \ do\_remove\_rigid\_body(DCAST(\mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00351\ \ \ \}}
+\DoxyCodeLine{00352\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletSoftBodyNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{00353\ \ \ \ \ do\_remove\_soft\_body(DCAST(\mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00354\ \ \ \}}
+\DoxyCodeLine{00355\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletBaseCharacterControllerNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ do\_remove\_character(DCAST(\mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00357\ \ \ \}}
+\DoxyCodeLine{00358\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletVehicle::get\_class\_type()))\ \{}
+\DoxyCodeLine{00359\ \ \ \ \ do\_remove\_vehicle(DCAST(\mbox{\hyperlink{classBulletVehicle}{BulletVehicle}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00360\ \ \ \}}
+\DoxyCodeLine{00361\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (object-\/>is\_of\_type(BulletConstraint::get\_class\_type()))\ \{}
+\DoxyCodeLine{00362\ \ \ \ \ do\_remove\_constraint(DCAST(\mbox{\hyperlink{classBulletConstraint}{BulletConstraint}},\ \textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00363\ \ \ \}}
+\DoxyCodeLine{00364\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00365\ \ \ \ \ bullet\_cat-\/>error()\ <<\ \textcolor{stringliteral}{"{}not\ a\ bullet\ world\ object!"{}}\ <<\ endl;}
+\DoxyCodeLine{00366\ \ \ \}}
+\DoxyCodeLine{00367\ \}}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00372\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00373\ attach\_rigid\_body(\mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}}\ *node)\ \{}
+\DoxyCodeLine{00374\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00376\ \ \ do\_attach\_rigid\_body(node);}
+\DoxyCodeLine{00377\ \}}
+\DoxyCodeLine{00378\ }
+\DoxyCodeLine{00382\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00383\ remove\_rigid\_body(\mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}}\ *node)\ \{}
+\DoxyCodeLine{00384\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00386\ \ \ do\_remove\_rigid\_body(node);}
+\DoxyCodeLine{00387\ \}}
+\DoxyCodeLine{00388\ }
+\DoxyCodeLine{00392\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00393\ attach\_soft\_body(\mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}}\ *node)\ \{}
+\DoxyCodeLine{00394\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00395\ }
+\DoxyCodeLine{00396\ \ \ do\_attach\_soft\_body(node);}
+\DoxyCodeLine{00397\ \}}
+\DoxyCodeLine{00398\ }
+\DoxyCodeLine{00402\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00403\ remove\_soft\_body(\mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}}\ *node)\ \{}
+\DoxyCodeLine{00404\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00405\ }
+\DoxyCodeLine{00406\ \ \ do\_remove\_soft\_body(node);}
+\DoxyCodeLine{00407\ \}}
+\DoxyCodeLine{00408\ }
+\DoxyCodeLine{00412\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00413\ attach\_ghost(\mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}}\ *node)\ \{}
+\DoxyCodeLine{00414\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00415\ }
+\DoxyCodeLine{00416\ \ \ do\_attach\_ghost(node);}
+\DoxyCodeLine{00417\ \}}
+\DoxyCodeLine{00418\ }
+\DoxyCodeLine{00422\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00423\ remove\_ghost(\mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}}\ *node)\ \{}
+\DoxyCodeLine{00424\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ do\_remove\_ghost(node);}
+\DoxyCodeLine{00427\ \}}
+\DoxyCodeLine{00428\ }
+\DoxyCodeLine{00432\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00433\ attach\_character(\mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}}\ *node)\ \{}
+\DoxyCodeLine{00434\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00435\ }
+\DoxyCodeLine{00436\ \ \ do\_attach\_character(node);}
+\DoxyCodeLine{00437\ \}}
+\DoxyCodeLine{00438\ }
+\DoxyCodeLine{00442\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00443\ remove\_character(\mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}}\ *node)\ \{}
+\DoxyCodeLine{00444\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00445\ }
+\DoxyCodeLine{00446\ \ \ do\_remove\_character(node);}
+\DoxyCodeLine{00447\ \}}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00452\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00453\ attach\_vehicle(\mbox{\hyperlink{classBulletVehicle}{BulletVehicle}}\ *vehicle)\ \{}
+\DoxyCodeLine{00454\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00456\ \ \ do\_attach\_vehicle(vehicle);}
+\DoxyCodeLine{00457\ \}}
+\DoxyCodeLine{00458\ }
+\DoxyCodeLine{00462\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00463\ remove\_vehicle(\mbox{\hyperlink{classBulletVehicle}{BulletVehicle}}\ *vehicle)\ \{}
+\DoxyCodeLine{00464\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00465\ }
+\DoxyCodeLine{00466\ \ \ do\_remove\_vehicle(vehicle);}
+\DoxyCodeLine{00467\ \}}
+\DoxyCodeLine{00468\ }
+\DoxyCodeLine{00473\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00474\ attach\_constraint(\mbox{\hyperlink{classBulletConstraint}{BulletConstraint}}\ *constraint,\ \textcolor{keywordtype}{bool}\ linked\_collision)\ \{}
+\DoxyCodeLine{00475\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00476\ }
+\DoxyCodeLine{00477\ \ \ do\_attach\_constraint(constraint,\ linked\_collision);}
+\DoxyCodeLine{00478\ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00483\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00484\ remove\_constraint(\mbox{\hyperlink{classBulletConstraint}{BulletConstraint}}\ *constraint)\ \{}
+\DoxyCodeLine{00485\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00487\ \ \ do\_remove\_constraint(constraint);}
+\DoxyCodeLine{00488\ \}}
+\DoxyCodeLine{00489\ }
+\DoxyCodeLine{00493\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00494\ do\_attach\_rigid\_body(\mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}}\ *node)\ \{}
+\DoxyCodeLine{00495\ }
+\DoxyCodeLine{00496\ \ \ nassertv(node);}
+\DoxyCodeLine{00497\ }
+\DoxyCodeLine{00498\ \ \ \mbox{\hyperlink{classbtRigidBody}{btRigidBody}}\ *ptr\ =\ btRigidBody::upcast(node-\/>get\_object());}
+\DoxyCodeLine{00499\ }
+\DoxyCodeLine{00500\ \ \ BulletRigidBodies::iterator\ found;}
+\DoxyCodeLine{00501\ \ \ PT(\mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}})\ ptnode\ =\ node;}
+\DoxyCodeLine{00502\ \ \ found\ =\ find(\_bodies.begin(),\ \_bodies.end(),\ ptnode);}
+\DoxyCodeLine{00503\ }
+\DoxyCodeLine{00504\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_bodies.end())\ \{}
+\DoxyCodeLine{00505\ \ \ \ \ \_bodies.push\_back(node);}
+\DoxyCodeLine{00506\ \ \ \ \ \_world-\/>addRigidBody(ptr);}
+\DoxyCodeLine{00507\ \ \ \}}
+\DoxyCodeLine{00508\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00509\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}rigid\ body\ already\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00510\ \ \ \}}
+\DoxyCodeLine{00511\ \}}
+\DoxyCodeLine{00512\ }
+\DoxyCodeLine{00516\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00517\ do\_remove\_rigid\_body(\mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}}\ *node)\ \{}
+\DoxyCodeLine{00518\ }
+\DoxyCodeLine{00519\ \ \ nassertv(node);}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ \ \ \mbox{\hyperlink{classbtRigidBody}{btRigidBody}}\ *ptr\ =\ btRigidBody::upcast(node-\/>get\_object());}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00523\ \ \ BulletRigidBodies::iterator\ found;}
+\DoxyCodeLine{00524\ \ \ PT(\mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}})\ ptnode\ =\ node;}
+\DoxyCodeLine{00525\ \ \ found\ =\ find(\_bodies.begin(),\ \_bodies.end(),\ ptnode);}
+\DoxyCodeLine{00526\ }
+\DoxyCodeLine{00527\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_bodies.end())\ \{}
+\DoxyCodeLine{00528\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}rigid\ body\ not\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00529\ \ \ \}}
+\DoxyCodeLine{00530\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00531\ \ \ \ \ \_bodies.erase(found);}
+\DoxyCodeLine{00532\ \ \ \ \ \_world-\/>removeRigidBody(ptr);}
+\DoxyCodeLine{00533\ \ \ \}}
+\DoxyCodeLine{00534\ \}}
+\DoxyCodeLine{00535\ }
+\DoxyCodeLine{00539\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00540\ do\_attach\_soft\_body(\mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}}\ *node)\ \{}
+\DoxyCodeLine{00541\ }
+\DoxyCodeLine{00542\ \ \ nassertv(node);}
+\DoxyCodeLine{00543\ }
+\DoxyCodeLine{00544\ \ \ \mbox{\hyperlink{classbtSoftBody}{btSoftBody}}\ *ptr\ =\ btSoftBody::upcast(node-\/>get\_object());}
+\DoxyCodeLine{00545\ }
+\DoxyCodeLine{00546\ \ \ \textcolor{comment}{//\ TODO:\ groupfilter\ settings\ (see\ ghost\ objects\ too)}}
+\DoxyCodeLine{00547\ \ \ \textcolor{keywordtype}{short}\ group\ =\ btBroadphaseProxy::DefaultFilter;}
+\DoxyCodeLine{00548\ \ \ \textcolor{keywordtype}{short}\ mask\ =\ btBroadphaseProxy::AllFilter;}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00550\ \ \ BulletSoftBodies::iterator\ found;}
+\DoxyCodeLine{00551\ \ \ PT(\mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}})\ ptnode\ =\ node;}
+\DoxyCodeLine{00552\ \ \ found\ =\ find(\_softbodies.begin(),\ \_softbodies.end(),\ ptnode);}
+\DoxyCodeLine{00553\ }
+\DoxyCodeLine{00554\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_softbodies.end())\ \{}
+\DoxyCodeLine{00555\ \ \ \ \ \_softbodies.push\_back(node);}
+\DoxyCodeLine{00556\ \ \ \ \ \_world-\/>addSoftBody(ptr,\ group,\ mask);}
+\DoxyCodeLine{00557\ \ \ \}}
+\DoxyCodeLine{00558\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00559\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}soft\ body\ already\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00560\ \ \ \}}
+\DoxyCodeLine{00561\ \}}
+\DoxyCodeLine{00562\ }
+\DoxyCodeLine{00566\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00567\ do\_remove\_soft\_body(\mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}}\ *node)\ \{}
+\DoxyCodeLine{00568\ }
+\DoxyCodeLine{00569\ \ \ nassertv(node);}
+\DoxyCodeLine{00570\ }
+\DoxyCodeLine{00571\ \ \ \mbox{\hyperlink{classbtSoftBody}{btSoftBody}}\ *ptr\ =\ btSoftBody::upcast(node-\/>get\_object());}
+\DoxyCodeLine{00572\ }
+\DoxyCodeLine{00573\ \ \ BulletSoftBodies::iterator\ found;}
+\DoxyCodeLine{00574\ \ \ PT(\mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}})\ ptnode\ =\ node;}
+\DoxyCodeLine{00575\ \ \ found\ =\ find(\_softbodies.begin(),\ \_softbodies.end(),\ ptnode);}
+\DoxyCodeLine{00576\ }
+\DoxyCodeLine{00577\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_softbodies.end())\ \{}
+\DoxyCodeLine{00578\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}soft\ body\ not\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00579\ \ \ \}}
+\DoxyCodeLine{00580\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00581\ \ \ \ \ \_softbodies.erase(found);}
+\DoxyCodeLine{00582\ \ \ \ \ \_world-\/>removeSoftBody(ptr);}
+\DoxyCodeLine{00583\ \ \ \}}
+\DoxyCodeLine{00584\ \}}
+\DoxyCodeLine{00585\ }
+\DoxyCodeLine{00589\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00590\ do\_attach\_ghost(\mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}}\ *node)\ \{}
+\DoxyCodeLine{00591\ }
+\DoxyCodeLine{00592\ \ \ nassertv(node);}
+\DoxyCodeLine{00593\ }
+\DoxyCodeLine{00594\ \ \ \textcolor{comment}{//\ TODO\ groupfilter\ settings...}}
+\DoxyCodeLine{00595\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00596\ \textcolor{comment}{enum\ CollisionFilterGroups\ \{}}
+\DoxyCodeLine{00597\ \textcolor{comment}{\ \ DefaultFilter\ =\ 1,}}
+\DoxyCodeLine{00598\ \textcolor{comment}{\ \ StaticFilter\ =\ 2,}}
+\DoxyCodeLine{00599\ \textcolor{comment}{\ \ KinematicFilter\ =\ 4,}}
+\DoxyCodeLine{00600\ \textcolor{comment}{\ \ DebrisFilter\ =\ 8,}}
+\DoxyCodeLine{00601\ \textcolor{comment}{\ \ SensorTrigger\ =\ 16,}}
+\DoxyCodeLine{00602\ \textcolor{comment}{\ \ CharacterFilter\ =\ 32,}}
+\DoxyCodeLine{00603\ \textcolor{comment}{\ \ AllFilter\ =\ -\/1}}
+\DoxyCodeLine{00604\ \textcolor{comment}{\}}}
+\DoxyCodeLine{00605\ \textcolor{comment}{*/}}
+\DoxyCodeLine{00606\ }
+\DoxyCodeLine{00607\ \ \ \textcolor{keywordtype}{short}\ group\ =\ btBroadphaseProxy::SensorTrigger;}
+\DoxyCodeLine{00608\ \ \ \textcolor{keywordtype}{short}\ mask\ =\ btBroadphaseProxy::AllFilter}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \ \ \ \ \ \ \&\ \string~btBroadphaseProxy::StaticFilter}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \ \ \ \ \ \ \&\ \string~btBroadphaseProxy::SensorTrigger;}
+\DoxyCodeLine{00611\ }
+\DoxyCodeLine{00612\ \ \ btGhostObject\ *ptr\ =\ btGhostObject::upcast(node-\/>get\_object());}
+\DoxyCodeLine{00613\ }
+\DoxyCodeLine{00614\ \ \ BulletGhosts::iterator\ found;}
+\DoxyCodeLine{00615\ \ \ PT(\mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}})\ ptnode\ =\ node;}
+\DoxyCodeLine{00616\ \ \ found\ =\ find(\_ghosts.begin(),\ \_ghosts.end(),\ ptnode);}
+\DoxyCodeLine{00617\ }
+\DoxyCodeLine{00618\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_ghosts.end())\ \{}
+\DoxyCodeLine{00619\ \ \ \ \ \_ghosts.push\_back(node);}
+\DoxyCodeLine{00620\ \ \ \ \ \_world-\/>addCollisionObject(ptr,\ group,\ mask);}
+\DoxyCodeLine{00621\ \ \ \}}
+\DoxyCodeLine{00622\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00623\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}ghost\ already\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00624\ \ \ \}}
+\DoxyCodeLine{00625\ \}}
+\DoxyCodeLine{00626\ }
+\DoxyCodeLine{00630\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00631\ do\_remove\_ghost(\mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}}\ *node)\ \{}
+\DoxyCodeLine{00632\ }
+\DoxyCodeLine{00633\ \ \ nassertv(node);}
+\DoxyCodeLine{00634\ }
+\DoxyCodeLine{00635\ \ \ btGhostObject\ *ptr\ =\ btGhostObject::upcast(node-\/>get\_object());}
+\DoxyCodeLine{00636\ }
+\DoxyCodeLine{00637\ \ \ BulletGhosts::iterator\ found;}
+\DoxyCodeLine{00638\ \ \ PT(\mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}})\ ptnode\ =\ node;}
+\DoxyCodeLine{00639\ \ \ found\ =\ find(\_ghosts.begin(),\ \_ghosts.end(),\ ptnode);}
+\DoxyCodeLine{00640\ }
+\DoxyCodeLine{00641\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_ghosts.end())\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}ghost\ not\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00643\ \ \ \}}
+\DoxyCodeLine{00644\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00645\ \ \ \ \ \_ghosts.erase(found);}
+\DoxyCodeLine{00646\ \ \ \ \ \_world-\/>removeCollisionObject(ptr);}
+\DoxyCodeLine{00647\ \ \ \}}
+\DoxyCodeLine{00648\ \}}
+\DoxyCodeLine{00649\ }
+\DoxyCodeLine{00653\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00654\ do\_attach\_character(\mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}}\ *node)\ \{}
+\DoxyCodeLine{00655\ }
+\DoxyCodeLine{00656\ \ \ nassertv(node);}
+\DoxyCodeLine{00657\ }
+\DoxyCodeLine{00658\ \ \ BulletCharacterControllers::iterator\ found;}
+\DoxyCodeLine{00659\ \ \ PT(\mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}})\ ptnode\ =\ node;}
+\DoxyCodeLine{00660\ \ \ found\ =\ find(\_characters.begin(),\ \_characters.end(),\ ptnode);}
+\DoxyCodeLine{00661\ }
+\DoxyCodeLine{00662\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_characters.end())\ \{}
+\DoxyCodeLine{00663\ \ \ \ \ \_characters.push\_back(node);}
+\DoxyCodeLine{00664\ }
+\DoxyCodeLine{00665\ \ \ \ \ \_world-\/>addCollisionObject(node-\/>get\_ghost(),}
+\DoxyCodeLine{00666\ \ \ \ \ \ \ btBroadphaseProxy::CharacterFilter,}
+\DoxyCodeLine{00667\ \ \ \ \ \ \ btBroadphaseProxy::StaticFilter|btBroadphaseProxy::DefaultFilter);}
+\DoxyCodeLine{00668\ }
+\DoxyCodeLine{00669\ \ \ \ \ \_world-\/>addCharacter(node-\/>get\_character());}
+\DoxyCodeLine{00670\ \ \ \}}
+\DoxyCodeLine{00671\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00672\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}character\ already\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00673\ \ \ \}}
+\DoxyCodeLine{00674\ \}}
+\DoxyCodeLine{00675\ }
+\DoxyCodeLine{00679\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00680\ do\_remove\_character(\mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}}\ *node)\ \{}
+\DoxyCodeLine{00681\ }
+\DoxyCodeLine{00682\ \ \ nassertv(node);}
+\DoxyCodeLine{00683\ }
+\DoxyCodeLine{00684\ \ \ BulletCharacterControllers::iterator\ found;}
+\DoxyCodeLine{00685\ \ \ PT(\mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}})\ ptnode\ =\ node;}
+\DoxyCodeLine{00686\ \ \ found\ =\ find(\_characters.begin(),\ \_characters.end(),\ ptnode);}
+\DoxyCodeLine{00687\ }
+\DoxyCodeLine{00688\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_characters.end())\ \{}
+\DoxyCodeLine{00689\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}character\ not\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00690\ \ \ \}}
+\DoxyCodeLine{00691\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00692\ \ \ \ \ \_characters.erase(found);}
+\DoxyCodeLine{00693\ \ \ \ \ \_world-\/>removeCollisionObject(node-\/>get\_ghost());}
+\DoxyCodeLine{00694\ \ \ \ \ \_world-\/>removeCharacter(node-\/>get\_character());}
+\DoxyCodeLine{00695\ \ \ \}}
+\DoxyCodeLine{00696\ \}}
+\DoxyCodeLine{00697\ }
+\DoxyCodeLine{00701\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00702\ do\_attach\_vehicle(\mbox{\hyperlink{classBulletVehicle}{BulletVehicle}}\ *vehicle)\ \{}
+\DoxyCodeLine{00703\ }
+\DoxyCodeLine{00704\ \ \ nassertv(vehicle);}
+\DoxyCodeLine{00705\ }
+\DoxyCodeLine{00706\ \ \ BulletVehicles::iterator\ found;}
+\DoxyCodeLine{00707\ \ \ PT(\mbox{\hyperlink{classBulletVehicle}{BulletVehicle}})\ ptvehicle\ =\ vehicle;}
+\DoxyCodeLine{00708\ \ \ found\ =\ find(\_vehicles.begin(),\ \_vehicles.end(),\ ptvehicle);}
+\DoxyCodeLine{00709\ }
+\DoxyCodeLine{00710\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_vehicles.end())\ \{}
+\DoxyCodeLine{00711\ \ \ \ \ \_vehicles.push\_back(vehicle);}
+\DoxyCodeLine{00712\ \ \ \ \ \_world-\/>addVehicle(vehicle-\/>get\_vehicle());}
+\DoxyCodeLine{00713\ \ \ \}}
+\DoxyCodeLine{00714\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00715\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}vehicle\ already\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00716\ \ \ \}}
+\DoxyCodeLine{00717\ \}}
+\DoxyCodeLine{00718\ }
+\DoxyCodeLine{00722\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00723\ do\_remove\_vehicle(\mbox{\hyperlink{classBulletVehicle}{BulletVehicle}}\ *vehicle)\ \{}
+\DoxyCodeLine{00724\ }
+\DoxyCodeLine{00725\ \ \ nassertv(vehicle);}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00727\ \ \ do\_remove\_rigid\_body(vehicle-\/>\mbox{\hyperlink{classBulletVehicle_a9163d9d35ff93b2a4fc63bf7456b6f05}{do\_get\_chassis}}());}
+\DoxyCodeLine{00728\ }
+\DoxyCodeLine{00729\ \ \ BulletVehicles::iterator\ found;}
+\DoxyCodeLine{00730\ \ \ PT(\mbox{\hyperlink{classBulletVehicle}{BulletVehicle}})\ ptvehicle\ =\ vehicle;}
+\DoxyCodeLine{00731\ \ \ found\ =\ find(\_vehicles.begin(),\ \_vehicles.end(),\ ptvehicle);}
+\DoxyCodeLine{00732\ }
+\DoxyCodeLine{00733\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_vehicles.end())\ \{}
+\DoxyCodeLine{00734\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}vehicle\ not\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00735\ \ \ \}}
+\DoxyCodeLine{00736\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00737\ \ \ \ \ \_vehicles.erase(found);}
+\DoxyCodeLine{00738\ \ \ \ \ \_world-\/>removeVehicle(vehicle-\/>get\_vehicle());}
+\DoxyCodeLine{00739\ \ \ \}}
+\DoxyCodeLine{00740\ \}}
+\DoxyCodeLine{00741\ }
+\DoxyCodeLine{00747\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00748\ do\_attach\_constraint(\mbox{\hyperlink{classBulletConstraint}{BulletConstraint}}\ *constraint,\ \textcolor{keywordtype}{bool}\ linked\_collision)\ \{}
+\DoxyCodeLine{00749\ }
+\DoxyCodeLine{00750\ \ \ nassertv(constraint);}
+\DoxyCodeLine{00751\ }
+\DoxyCodeLine{00752\ \ \ BulletConstraints::iterator\ found;}
+\DoxyCodeLine{00753\ \ \ PT(\mbox{\hyperlink{classBulletConstraint}{BulletConstraint}})\ ptconstraint\ =\ constraint;}
+\DoxyCodeLine{00754\ \ \ found\ =\ find(\_constraints.begin(),\ \_constraints.end(),\ ptconstraint);}
+\DoxyCodeLine{00755\ }
+\DoxyCodeLine{00756\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_constraints.end())\ \{}
+\DoxyCodeLine{00757\ \ \ \ \ \_constraints.push\_back(constraint);}
+\DoxyCodeLine{00758\ \ \ \ \ \_world-\/>addConstraint(constraint-\/>ptr(),\ linked\_collision);}
+\DoxyCodeLine{00759\ \ \ \}}
+\DoxyCodeLine{00760\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00761\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}constraint\ already\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00762\ \ \ \}}
+\DoxyCodeLine{00763\ \}}
+\DoxyCodeLine{00764\ }
+\DoxyCodeLine{00768\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{00769\ do\_remove\_constraint(\mbox{\hyperlink{classBulletConstraint}{BulletConstraint}}\ *constraint)\ \{}
+\DoxyCodeLine{00770\ }
+\DoxyCodeLine{00771\ \ \ nassertv(constraint);}
+\DoxyCodeLine{00772\ }
+\DoxyCodeLine{00773\ \ \ BulletConstraints::iterator\ found;}
+\DoxyCodeLine{00774\ \ \ PT(\mbox{\hyperlink{classBulletConstraint}{BulletConstraint}})\ ptconstraint\ =\ constraint;}
+\DoxyCodeLine{00775\ \ \ found\ =\ find(\_constraints.begin(),\ \_constraints.end(),\ ptconstraint);}
+\DoxyCodeLine{00776\ }
+\DoxyCodeLine{00777\ \ \ \textcolor{keywordflow}{if}\ (found\ ==\ \_constraints.end())\ \{}
+\DoxyCodeLine{00778\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}constraint\ not\ attached"{}}\ <<\ endl;}
+\DoxyCodeLine{00779\ \ \ \}}
+\DoxyCodeLine{00780\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00781\ \ \ \ \ \_constraints.erase(found);}
+\DoxyCodeLine{00782\ \ \ \ \ \_world-\/>removeConstraint(constraint-\/>ptr());}
+\DoxyCodeLine{00783\ \ \ \}}
+\DoxyCodeLine{00784\ \}}
+\DoxyCodeLine{00785\ }
+\DoxyCodeLine{00789\ \textcolor{keywordtype}{int}\ BulletWorld::}
+\DoxyCodeLine{00790\ get\_num\_rigid\_bodies()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00791\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00792\ }
+\DoxyCodeLine{00793\ \ \ \textcolor{keywordflow}{return}\ \_bodies.size();}
+\DoxyCodeLine{00794\ \}}
+\DoxyCodeLine{00795\ }
+\DoxyCodeLine{00799\ \mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}}\ *BulletWorld::}
+\DoxyCodeLine{00800\ get\_rigid\_body(\textcolor{keywordtype}{int}\ idx)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00801\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00802\ }
+\DoxyCodeLine{00803\ \ \ nassertr(idx\ >=\ 0\ \&\&\ idx\ <\ (\textcolor{keywordtype}{int})\_bodies.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00804\ \ \ \textcolor{keywordflow}{return}\ \_bodies[idx];}
+\DoxyCodeLine{00805\ \}}
+\DoxyCodeLine{00806\ }
+\DoxyCodeLine{00810\ \textcolor{keywordtype}{int}\ BulletWorld::}
+\DoxyCodeLine{00811\ get\_num\_soft\_bodies()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00812\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00813\ }
+\DoxyCodeLine{00814\ \ \ \textcolor{keywordflow}{return}\ \_softbodies.size();}
+\DoxyCodeLine{00815\ \}}
+\DoxyCodeLine{00816\ }
+\DoxyCodeLine{00820\ \mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}}\ *BulletWorld::}
+\DoxyCodeLine{00821\ get\_soft\_body(\textcolor{keywordtype}{int}\ idx)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00822\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00823\ }
+\DoxyCodeLine{00824\ \ \ nassertr(idx\ >=\ 0\ \&\&\ idx\ <\ (\textcolor{keywordtype}{int})\_softbodies.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00825\ \ \ \textcolor{keywordflow}{return}\ \_softbodies[idx];}
+\DoxyCodeLine{00826\ \}}
+\DoxyCodeLine{00827\ }
+\DoxyCodeLine{00831\ \textcolor{keywordtype}{int}\ BulletWorld::}
+\DoxyCodeLine{00832\ get\_num\_ghosts()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00833\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00834\ }
+\DoxyCodeLine{00835\ \ \ \textcolor{keywordflow}{return}\ \_ghosts.size();}
+\DoxyCodeLine{00836\ \}}
+\DoxyCodeLine{00837\ }
+\DoxyCodeLine{00841\ \mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}}\ *BulletWorld::}
+\DoxyCodeLine{00842\ get\_ghost(\textcolor{keywordtype}{int}\ idx)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00843\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00844\ }
+\DoxyCodeLine{00845\ \ \ nassertr(idx\ >=\ 0\ \&\&\ idx\ <\ (\textcolor{keywordtype}{int})\_ghosts.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00846\ \ \ \textcolor{keywordflow}{return}\ \_ghosts[idx];}
+\DoxyCodeLine{00847\ \}}
+\DoxyCodeLine{00848\ }
+\DoxyCodeLine{00852\ \textcolor{keywordtype}{int}\ BulletWorld::}
+\DoxyCodeLine{00853\ get\_num\_characters()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00854\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00855\ }
+\DoxyCodeLine{00856\ \ \ \textcolor{keywordflow}{return}\ \_characters.size();}
+\DoxyCodeLine{00857\ \}}
+\DoxyCodeLine{00858\ }
+\DoxyCodeLine{00862\ \mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}}\ *BulletWorld::}
+\DoxyCodeLine{00863\ get\_character(\textcolor{keywordtype}{int}\ idx)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00864\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00865\ }
+\DoxyCodeLine{00866\ \ \ nassertr(idx\ >=\ 0\ \&\&\ idx\ <\ (\textcolor{keywordtype}{int})\_characters.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00867\ \ \ \textcolor{keywordflow}{return}\ \_characters[idx];}
+\DoxyCodeLine{00868\ \}}
+\DoxyCodeLine{00869\ }
+\DoxyCodeLine{00873\ \textcolor{keywordtype}{int}\ BulletWorld::}
+\DoxyCodeLine{00874\ get\_num\_vehicles()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00875\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00876\ }
+\DoxyCodeLine{00877\ \ \ \textcolor{keywordflow}{return}\ \_vehicles.size();}
+\DoxyCodeLine{00878\ \}}
+\DoxyCodeLine{00879\ }
+\DoxyCodeLine{00883\ \mbox{\hyperlink{classBulletVehicle}{BulletVehicle}}\ *BulletWorld::}
+\DoxyCodeLine{00884\ get\_vehicle(\textcolor{keywordtype}{int}\ idx)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00885\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00886\ }
+\DoxyCodeLine{00887\ \ \ nassertr(idx\ >=\ 0\ \&\&\ idx\ <\ (\textcolor{keywordtype}{int})\_vehicles.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00888\ \ \ \textcolor{keywordflow}{return}\ \_vehicles[idx];}
+\DoxyCodeLine{00889\ \}}
+\DoxyCodeLine{00890\ }
+\DoxyCodeLine{00894\ \textcolor{keywordtype}{int}\ BulletWorld::}
+\DoxyCodeLine{00895\ get\_num\_constraints()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00896\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00897\ }
+\DoxyCodeLine{00898\ \ \ \textcolor{keywordflow}{return}\ \_constraints.size();}
+\DoxyCodeLine{00899\ \}}
+\DoxyCodeLine{00900\ }
+\DoxyCodeLine{00904\ \mbox{\hyperlink{classBulletConstraint}{BulletConstraint}}\ *BulletWorld::}
+\DoxyCodeLine{00905\ get\_constraint(\textcolor{keywordtype}{int}\ idx)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00906\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00907\ }
+\DoxyCodeLine{00908\ \ \ nassertr(idx\ >=\ 0\ \&\&\ idx\ <\ (\textcolor{keywordtype}{int})\_constraints.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00909\ \ \ \textcolor{keywordflow}{return}\ \_constraints[idx];}
+\DoxyCodeLine{00910\ \}}
+\DoxyCodeLine{00911\ }
+\DoxyCodeLine{00915\ \textcolor{keywordtype}{int}\ BulletWorld::}
+\DoxyCodeLine{00916\ get\_num\_manifolds()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00917\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00918\ }
+\DoxyCodeLine{00919\ \ \ \textcolor{keywordflow}{return}\ \_world-\/>getDispatcher()-\/>getNumManifolds();}
+\DoxyCodeLine{00920\ \}}
+\DoxyCodeLine{00921\ }
+\DoxyCodeLine{00925\ \mbox{\hyperlink{structBulletClosestHitRayResult}{BulletClosestHitRayResult}}\ BulletWorld::}
+\DoxyCodeLine{00926\ ray\_test\_closest(\textcolor{keyword}{const}\ LPoint3\ \&from\_pos,\ \textcolor{keyword}{const}\ LPoint3\ \&to\_pos,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classBitMask}{CollideMask}}\ \&mask)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00927\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00928\ }
+\DoxyCodeLine{00929\ \ \ nassertr(!from\_pos.is\_nan(),\ BulletClosestHitRayResult::empty());}
+\DoxyCodeLine{00930\ \ \ nassertr(!to\_pos.is\_nan(),\ BulletClosestHitRayResult::empty());}
+\DoxyCodeLine{00931\ }
+\DoxyCodeLine{00932\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structbtVector3}{btVector3}}\ from\ =\ LVecBase3\_to\_btVector3(from\_pos);}
+\DoxyCodeLine{00933\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structbtVector3}{btVector3}}\ to\ =\ LVecBase3\_to\_btVector3(to\_pos);}
+\DoxyCodeLine{00934\ }
+\DoxyCodeLine{00935\ \ \ \mbox{\hyperlink{structBulletClosestHitRayResult}{BulletClosestHitRayResult}}\ cb(from,\ to,\ mask);}
+\DoxyCodeLine{00936\ \ \ \_world-\/>rayTest(from,\ to,\ cb);}
+\DoxyCodeLine{00937\ \ \ \textcolor{keywordflow}{return}\ cb;}
+\DoxyCodeLine{00938\ \}}
+\DoxyCodeLine{00939\ }
+\DoxyCodeLine{00943\ \mbox{\hyperlink{structBulletAllHitsRayResult}{BulletAllHitsRayResult}}\ BulletWorld::}
+\DoxyCodeLine{00944\ ray\_test\_all(\textcolor{keyword}{const}\ LPoint3\ \&from\_pos,\ \textcolor{keyword}{const}\ LPoint3\ \&to\_pos,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classBitMask}{CollideMask}}\ \&mask)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00945\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00946\ }
+\DoxyCodeLine{00947\ \ \ nassertr(!from\_pos.is\_nan(),\ BulletAllHitsRayResult::empty());}
+\DoxyCodeLine{00948\ \ \ nassertr(!to\_pos.is\_nan(),\ BulletAllHitsRayResult::empty());}
+\DoxyCodeLine{00949\ }
+\DoxyCodeLine{00950\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structbtVector3}{btVector3}}\ from\ =\ LVecBase3\_to\_btVector3(from\_pos);}
+\DoxyCodeLine{00951\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structbtVector3}{btVector3}}\ to\ =\ LVecBase3\_to\_btVector3(to\_pos);}
+\DoxyCodeLine{00952\ }
+\DoxyCodeLine{00953\ \ \ \mbox{\hyperlink{structBulletAllHitsRayResult}{BulletAllHitsRayResult}}\ cb(from,\ to,\ mask);}
+\DoxyCodeLine{00954\ \ \ \_world-\/>rayTest(from,\ to,\ cb);}
+\DoxyCodeLine{00955\ \ \ \textcolor{keywordflow}{return}\ cb;}
+\DoxyCodeLine{00956\ \}}
+\DoxyCodeLine{00957\ }
+\DoxyCodeLine{00963\ \mbox{\hyperlink{structBulletClosestHitSweepResult}{BulletClosestHitSweepResult}}\ BulletWorld::}
+\DoxyCodeLine{00964\ sweep\_test\_closest(\mbox{\hyperlink{classBulletShape}{BulletShape}}\ *shape,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ \&from\_ts,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ \&to\_ts,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classBitMask}{CollideMask}}\ \&mask,\ PN\_stdfloat\ penetration)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00965\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00966\ }
+\DoxyCodeLine{00967\ \ \ nassertr(shape,\ BulletClosestHitSweepResult::empty());}
+\DoxyCodeLine{00968\ }
+\DoxyCodeLine{00969\ \ \ \textcolor{keyword}{const}\ btConvexShape\ *convex\ =\ (\textcolor{keyword}{const}\ btConvexShape\ *)\ shape-\/>ptr();}
+\DoxyCodeLine{00970\ \ \ nassertr(convex-\/>isConvex(),\ BulletClosestHitSweepResult::empty());}
+\DoxyCodeLine{00971\ \ \ }
+\DoxyCodeLine{00972\ \ \ nassertr(!from\_ts.is\_invalid(),\ BulletClosestHitSweepResult::empty());}
+\DoxyCodeLine{00973\ \ \ nassertr(!to\_ts.is\_invalid(),\ BulletClosestHitSweepResult::empty());}
+\DoxyCodeLine{00974\ }
+\DoxyCodeLine{00975\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structbtVector3}{btVector3}}\ from\_pos\ =\ LVecBase3\_to\_btVector3(from\_ts.get\_pos());}
+\DoxyCodeLine{00976\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structbtVector3}{btVector3}}\ to\_pos\ =\ LVecBase3\_to\_btVector3(to\_ts.get\_pos());}
+\DoxyCodeLine{00977\ \ \ \textcolor{keyword}{const}\ btTransform\ from\_trans\ =\ LMatrix4\_to\_btTrans(from\_ts.get\_mat());}
+\DoxyCodeLine{00978\ \ \ \textcolor{keyword}{const}\ btTransform\ to\_trans\ =\ LMatrix4\_to\_btTrans(to\_ts.get\_mat());}
+\DoxyCodeLine{00979\ }
+\DoxyCodeLine{00980\ \ \ \mbox{\hyperlink{structBulletClosestHitSweepResult}{BulletClosestHitSweepResult}}\ cb(from\_pos,\ to\_pos,\ mask);}
+\DoxyCodeLine{00981\ \ \ \_world-\/>convexSweepTest(convex,\ from\_trans,\ to\_trans,\ cb,\ penetration);}
+\DoxyCodeLine{00982\ \ \ \textcolor{keywordflow}{return}\ cb;}
+\DoxyCodeLine{00983\ \}}
+\DoxyCodeLine{00984\ }
+\DoxyCodeLine{00989\ \textcolor{keywordtype}{bool}\ BulletWorld::}
+\DoxyCodeLine{00990\ filter\_test(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node0,\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node1)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00991\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{00992\ }
+\DoxyCodeLine{00993\ \ \ nassertr(node0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00994\ \ \ nassertr(node1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00995\ \ \ nassertr(\_filter\_cb,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00996\ }
+\DoxyCodeLine{00997\ \ \ btCollisionObject\ *obj0\ =\ get\_collision\_object(node0);}
+\DoxyCodeLine{00998\ \ \ btCollisionObject\ *obj1\ =\ get\_collision\_object(node1);}
+\DoxyCodeLine{00999\ }
+\DoxyCodeLine{01000\ \ \ nassertr(obj0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01001\ \ \ nassertr(obj1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01002\ }
+\DoxyCodeLine{01003\ \ \ btBroadphaseProxy\ *proxy0\ =\ obj0-\/>getBroadphaseHandle();}
+\DoxyCodeLine{01004\ \ \ btBroadphaseProxy\ *proxy1\ =\ obj1-\/>getBroadphaseHandle();}
+\DoxyCodeLine{01005\ }
+\DoxyCodeLine{01006\ \ \ nassertr(proxy0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01007\ \ \ nassertr(proxy1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01008\ }
+\DoxyCodeLine{01009\ \ \ \textcolor{keywordflow}{return}\ \_filter\_cb-\/>needBroadphaseCollision(proxy0,\ proxy1);}
+\DoxyCodeLine{01010\ \}}
+\DoxyCodeLine{01011\ }
+\DoxyCodeLine{01021\ \mbox{\hyperlink{structBulletContactResult}{BulletContactResult}}\ BulletWorld::}
+\DoxyCodeLine{01022\ contact\_test(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node,\ \textcolor{keywordtype}{bool}\ use\_filter)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01023\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01024\ }
+\DoxyCodeLine{01025\ \ \ btCollisionObject\ *obj\ =\ get\_collision\_object(node);}
+\DoxyCodeLine{01026\ }
+\DoxyCodeLine{01027\ \ \ \mbox{\hyperlink{structBulletContactResult}{BulletContactResult}}\ cb;}
+\DoxyCodeLine{01028\ }
+\DoxyCodeLine{01029\ \ \ \textcolor{keywordflow}{if}\ (obj)\ \{}
+\DoxyCodeLine{01030\ \textcolor{preprocessor}{\#if\ BT\_BULLET\_VERSION\ >=\ 281}}
+\DoxyCodeLine{01031\ \ \ \ \ \textcolor{keywordflow}{if}\ (use\_filter)\ \{}
+\DoxyCodeLine{01032\ \ \ \ \ \ \ cb.use\_filter(\_filter\_cb,\ obj-\/>getBroadphaseHandle());}
+\DoxyCodeLine{01033\ \ \ \ \ \}}
+\DoxyCodeLine{01034\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01035\ }
+\DoxyCodeLine{01036\ \ \ \ \ \_world-\/>contactTest(obj,\ cb);}
+\DoxyCodeLine{01037\ \ \ \}}
+\DoxyCodeLine{01038\ }
+\DoxyCodeLine{01039\ \ \ \textcolor{keywordflow}{return}\ cb;}
+\DoxyCodeLine{01040\ \}}
+\DoxyCodeLine{01041\ }
+\DoxyCodeLine{01047\ \mbox{\hyperlink{structBulletContactResult}{BulletContactResult}}\ BulletWorld::}
+\DoxyCodeLine{01048\ contact\_test\_pair(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node0,\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node1)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01049\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01050\ }
+\DoxyCodeLine{01051\ \ \ btCollisionObject\ *obj0\ =\ get\_collision\_object(node0);}
+\DoxyCodeLine{01052\ \ \ btCollisionObject\ *obj1\ =\ get\_collision\_object(node1);}
+\DoxyCodeLine{01053\ }
+\DoxyCodeLine{01054\ \ \ \mbox{\hyperlink{structBulletContactResult}{BulletContactResult}}\ cb;}
+\DoxyCodeLine{01055\ }
+\DoxyCodeLine{01056\ \ \ \textcolor{keywordflow}{if}\ (obj0\ \&\&\ obj1)\ \{}
+\DoxyCodeLine{01057\ }
+\DoxyCodeLine{01058\ \ \ \ \ \_world-\/>contactPairTest(obj0,\ obj1,\ cb);}
+\DoxyCodeLine{01059\ \ \ \}}
+\DoxyCodeLine{01060\ }
+\DoxyCodeLine{01061\ \ \ \textcolor{keywordflow}{return}\ cb;}
+\DoxyCodeLine{01062\ \}}
+\DoxyCodeLine{01063\ }
+\DoxyCodeLine{01067\ \mbox{\hyperlink{classBulletPersistentManifold}{BulletPersistentManifold}}\ BulletWorld::}
+\DoxyCodeLine{01068\ get\_manifold(\textcolor{keywordtype}{int}\ idx)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01069\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01070\ }
+\DoxyCodeLine{01071\ \ \ nassertr(idx\ <\ \_dispatcher-\/>getNumManifolds(),\ \mbox{\hyperlink{classBulletPersistentManifold}{BulletPersistentManifold}}(\textcolor{keyword}{nullptr}));}
+\DoxyCodeLine{01072\ }
+\DoxyCodeLine{01073\ \ \ btPersistentManifold\ *ptr\ =\ \_dispatcher-\/>getManifoldByIndexInternal(idx);}
+\DoxyCodeLine{01074\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classBulletPersistentManifold}{BulletPersistentManifold}}(ptr);}
+\DoxyCodeLine{01075\ \}}
+\DoxyCodeLine{01076\ }
+\DoxyCodeLine{01080\ btCollisionObject\ *BulletWorld::}
+\DoxyCodeLine{01081\ get\_collision\_object(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node)\ \{}
+\DoxyCodeLine{01082\ }
+\DoxyCodeLine{01083\ \ \ \textcolor{keywordflow}{if}\ (node-\/>is\_of\_type(BulletRigidBodyNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{01084\ \ \ \ \ \textcolor{keywordflow}{return}\ ((\mbox{\hyperlink{classBulletRigidBodyNode}{BulletRigidBodyNode}}\ *)node)-\/>get\_object();}
+\DoxyCodeLine{01085\ \ \ \}}
+\DoxyCodeLine{01086\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (node-\/>is\_of\_type(BulletGhostNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{01087\ \ \ \ \ \textcolor{keywordflow}{return}\ ((\mbox{\hyperlink{classBulletGhostNode}{BulletGhostNode}}\ *)node)-\/>get\_object();}
+\DoxyCodeLine{01088\ \ \ \}}
+\DoxyCodeLine{01089\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (node-\/>is\_of\_type(BulletBaseCharacterControllerNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{01090\ \ \ \ \ \textcolor{keywordflow}{return}\ ((\mbox{\hyperlink{classBulletBaseCharacterControllerNode}{BulletBaseCharacterControllerNode}}\ *)node)-\/>get\_ghost();}
+\DoxyCodeLine{01091\ \ \ \}}
+\DoxyCodeLine{01092\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (node-\/>is\_of\_type(BulletSoftBodyNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{01093\ \ \ \ \ \textcolor{keywordflow}{return}\ ((\mbox{\hyperlink{classBulletSoftBodyNode}{BulletSoftBodyNode}}\ *)node)-\/>get\_object();}
+\DoxyCodeLine{01094\ \ \ \}}
+\DoxyCodeLine{01095\ }
+\DoxyCodeLine{01096\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01097\ \}}
+\DoxyCodeLine{01098\ }
+\DoxyCodeLine{01102\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{01103\ set\_group\_collision\_flag(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ group1,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ group2,\ \textcolor{keywordtype}{bool}\ enable)\ \{}
+\DoxyCodeLine{01104\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01105\ }
+\DoxyCodeLine{01106\ \ \ \textcolor{keywordflow}{if}\ (\_filter\_algorithm\ !=\ FA\_groups\_mask)\ \{}
+\DoxyCodeLine{01107\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}filter\ algorithm\ is\ not\ 'groups-\/mask'"{}}\ <<\ endl;}
+\DoxyCodeLine{01108\ \ \ \}}
+\DoxyCodeLine{01109\ }
+\DoxyCodeLine{01110\ \ \ \_filter\_cb2.\_collide[group1].set\_bit\_to(group2,\ enable);}
+\DoxyCodeLine{01111\ \ \ \_filter\_cb2.\_collide[group2].set\_bit\_to(group1,\ enable);}
+\DoxyCodeLine{01112\ \}}
+\DoxyCodeLine{01113\ }
+\DoxyCodeLine{01117\ \textcolor{keywordtype}{bool}\ BulletWorld::}
+\DoxyCodeLine{01118\ get\_group\_collision\_flag(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ group1,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ group2)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01119\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01120\ }
+\DoxyCodeLine{01121\ \ \ \textcolor{keywordflow}{return}\ \_filter\_cb2.\_collide[group1].get\_bit(group2);}
+\DoxyCodeLine{01122\ \}}
+\DoxyCodeLine{01123\ }
+\DoxyCodeLine{01127\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{01128\ set\_force\_update\_all\_aabbs(\textcolor{keywordtype}{bool}\ force)\ \{}
+\DoxyCodeLine{01129\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01130\ \ \ \_world-\/>setForceUpdateAllAabbs(force);}
+\DoxyCodeLine{01131\ \}}
+\DoxyCodeLine{01132\ }
+\DoxyCodeLine{01136\ \textcolor{keywordtype}{bool}\ BulletWorld::}
+\DoxyCodeLine{01137\ get\_force\_update\_all\_aabbs()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01138\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01139\ \ \ \textcolor{keywordflow}{return}\ \_world-\/>getForceUpdateAllAabbs();}
+\DoxyCodeLine{01140\ \}}
+\DoxyCodeLine{01141\ }
+\DoxyCodeLine{01145\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{01146\ set\_contact\_added\_callback(\mbox{\hyperlink{classCallbackObject}{CallbackObject}}\ *obj)\ \{}
+\DoxyCodeLine{01147\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01148\ }
+\DoxyCodeLine{01149\ \ \ \_world-\/>getSolverInfo().m\_solverMode\ |=\ SOLVER\_DISABLE\_VELOCITY\_DEPENDENT\_FRICTION\_DIRECTION;}
+\DoxyCodeLine{01150\ \ \ \_world-\/>getSolverInfo().m\_solverMode\ |=\ SOLVER\_USE\_2\_FRICTION\_DIRECTIONS;}
+\DoxyCodeLine{01151\ \ \ \_world-\/>getSolverInfo().m\_solverMode\ |=\ SOLVER\_ENABLE\_FRICTION\_DIRECTION\_CACHING;}
+\DoxyCodeLine{01152\ }
+\DoxyCodeLine{01153\ \ \ \_contact\_added\_callback\_obj\ =\ obj;}
+\DoxyCodeLine{01154\ \}}
+\DoxyCodeLine{01155\ }
+\DoxyCodeLine{01159\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{01160\ clear\_contact\_added\_callback()\ \{}
+\DoxyCodeLine{01161\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01162\ }
+\DoxyCodeLine{01163\ \ \ \_world-\/>getSolverInfo().m\_solverMode\ \&=\ \string~SOLVER\_DISABLE\_VELOCITY\_DEPENDENT\_FRICTION\_DIRECTION;}
+\DoxyCodeLine{01164\ \ \ \_world-\/>getSolverInfo().m\_solverMode\ \&=\ \string~SOLVER\_USE\_2\_FRICTION\_DIRECTIONS;}
+\DoxyCodeLine{01165\ \ \ \_world-\/>getSolverInfo().m\_solverMode\ \&=\ \string~SOLVER\_ENABLE\_FRICTION\_DIRECTION\_CACHING;}
+\DoxyCodeLine{01166\ }
+\DoxyCodeLine{01167\ \ \ \_contact\_added\_callback\_obj\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01168\ \}}
+\DoxyCodeLine{01169\ }
+\DoxyCodeLine{01173\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{01174\ set\_tick\_callback(\mbox{\hyperlink{classCallbackObject}{CallbackObject}}\ *obj,\ \textcolor{keywordtype}{bool}\ is\_pretick)\ \{}
+\DoxyCodeLine{01175\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01176\ }
+\DoxyCodeLine{01177\ \ \ nassertv(obj\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01178\ \ \ \_tick\_callback\_obj\ =\ obj;}
+\DoxyCodeLine{01179\ \ \ \_world-\/>setInternalTickCallback(\&BulletWorld::tick\_callback,\ \textcolor{keyword}{this},\ is\_pretick);}
+\DoxyCodeLine{01180\ \}}
+\DoxyCodeLine{01181\ }
+\DoxyCodeLine{01185\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{01186\ clear\_tick\_callback()\ \{}
+\DoxyCodeLine{01187\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01188\ }
+\DoxyCodeLine{01189\ \ \ \_tick\_callback\_obj\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01190\ \ \ \_world-\/>setInternalTickCallback(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01191\ \}}
+\DoxyCodeLine{01192\ }
+\DoxyCodeLine{01196\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{01197\ tick\_callback(btDynamicsWorld\ *world,\ btScalar\ timestep)\ \{}
+\DoxyCodeLine{01198\ }
+\DoxyCodeLine{01199\ \ \ nassertv(world-\/>getWorldUserInfo());}
+\DoxyCodeLine{01200\ }
+\DoxyCodeLine{01201\ \ \ \mbox{\hyperlink{classBulletWorld}{BulletWorld}}\ *w\ =\ \textcolor{keyword}{static\_cast<}\mbox{\hyperlink{classBulletWorld}{BulletWorld}}\ *\textcolor{keyword}{>}(world-\/>getWorldUserInfo());}
+\DoxyCodeLine{01202\ \ \ \mbox{\hyperlink{classCallbackObject}{CallbackObject}}\ *obj\ =\ w-\/>\_tick\_callback\_obj;}
+\DoxyCodeLine{01203\ \ \ \textcolor{keywordflow}{if}\ (obj)\ \{}
+\DoxyCodeLine{01204\ \ \ \ \ \mbox{\hyperlink{classBulletTickCallbackData}{BulletTickCallbackData}}\ cbdata(timestep);}
+\DoxyCodeLine{01205\ \ \ \ \ \textcolor{comment}{//\ Release\ the\ global\ lock\ that\ we\ are\ holding\ during\ the\ tick\ callback}}
+\DoxyCodeLine{01206\ \ \ \ \ \textcolor{comment}{//\ and\ allow\ interactions\ with\ bullet\ world\ in\ the\ user\ callback}}
+\DoxyCodeLine{01207\ \ \ \ \ get\_global\_lock().release();}
+\DoxyCodeLine{01208\ \ \ \ \ obj-\/>do\_callback(\&cbdata);}
+\DoxyCodeLine{01209\ \ \ \ \ \textcolor{comment}{//\ Acquire\ the\ global\ lock\ again\ and\ protect\ the\ execution}}
+\DoxyCodeLine{01210\ \ \ \ \ get\_global\_lock().acquire();}
+\DoxyCodeLine{01211\ \ \ \}}
+\DoxyCodeLine{01212\ \}}
+\DoxyCodeLine{01213\ }
+\DoxyCodeLine{01217\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{01218\ set\_filter\_callback(\mbox{\hyperlink{classCallbackObject}{CallbackObject}}\ *obj)\ \{}
+\DoxyCodeLine{01219\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01220\ }
+\DoxyCodeLine{01221\ \ \ nassertv(obj\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01222\ }
+\DoxyCodeLine{01223\ \ \ \textcolor{keywordflow}{if}\ (\_filter\_algorithm\ !=\ FA\_callback)\ \{}
+\DoxyCodeLine{01224\ \ \ \ \ bullet\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}filter\ algorithm\ is\ not\ 'callback'"{}}\ <<\ endl;}
+\DoxyCodeLine{01225\ \ \ \}}
+\DoxyCodeLine{01226\ }
+\DoxyCodeLine{01227\ \ \ \_filter\_cb3.\_filter\_callback\_obj\ =\ obj;}
+\DoxyCodeLine{01228\ \}}
+\DoxyCodeLine{01229\ }
+\DoxyCodeLine{01233\ \textcolor{keywordtype}{void}\ BulletWorld::}
+\DoxyCodeLine{01234\ clear\_filter\_callback()\ \{}
+\DoxyCodeLine{01235\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(get\_global\_lock());}
+\DoxyCodeLine{01236\ }
+\DoxyCodeLine{01237\ \ \ \_filter\_cb3.\_filter\_callback\_obj\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01238\ \}}
+\DoxyCodeLine{01239\ }
+\DoxyCodeLine{01243\ \textcolor{keywordtype}{bool}\ BulletWorld::btFilterCallback1::}
+\DoxyCodeLine{01244\ needBroadphaseCollision(btBroadphaseProxy*\ proxy0,\ btBroadphaseProxy*\ proxy1)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01245\ }
+\DoxyCodeLine{01246\ \ \ btCollisionObject\ *obj0\ =\ (btCollisionObject\ *)\ proxy0-\/>m\_clientObject;}
+\DoxyCodeLine{01247\ \ \ btCollisionObject\ *obj1\ =\ (btCollisionObject\ *)\ proxy1-\/>m\_clientObject;}
+\DoxyCodeLine{01248\ }
+\DoxyCodeLine{01249\ \ \ nassertr(obj0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01250\ \ \ nassertr(obj1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01251\ }
+\DoxyCodeLine{01252\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node0\ =\ (\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *)\ obj0-\/>getUserPointer();}
+\DoxyCodeLine{01253\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node1\ =\ (\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *)\ obj1-\/>getUserPointer();}
+\DoxyCodeLine{01254\ }
+\DoxyCodeLine{01255\ \ \ nassertr(node0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01256\ \ \ nassertr(node1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01257\ }
+\DoxyCodeLine{01258\ \ \ \mbox{\hyperlink{classBitMask}{CollideMask}}\ mask0\ =\ node0-\/>get\_into\_collide\_mask();}
+\DoxyCodeLine{01259\ \ \ \mbox{\hyperlink{classBitMask}{CollideMask}}\ mask1\ =\ node1-\/>get\_into\_collide\_mask();}
+\DoxyCodeLine{01260\ }
+\DoxyCodeLine{01261\ \ \ \textcolor{keywordflow}{return}\ (mask0\ \&\ mask1)\ !=\ 0;}
+\DoxyCodeLine{01262\ \}}
+\DoxyCodeLine{01263\ }
+\DoxyCodeLine{01267\ \textcolor{keywordtype}{bool}\ BulletWorld::btFilterCallback2::}
+\DoxyCodeLine{01268\ needBroadphaseCollision(btBroadphaseProxy*\ proxy0,\ btBroadphaseProxy*\ proxy1)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01269\ }
+\DoxyCodeLine{01270\ \ \ btCollisionObject\ *obj0\ =\ (btCollisionObject\ *)\ proxy0-\/>m\_clientObject;}
+\DoxyCodeLine{01271\ \ \ btCollisionObject\ *obj1\ =\ (btCollisionObject\ *)\ proxy1-\/>m\_clientObject;}
+\DoxyCodeLine{01272\ }
+\DoxyCodeLine{01273\ \ \ nassertr(obj0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01274\ \ \ nassertr(obj1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01275\ }
+\DoxyCodeLine{01276\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node0\ =\ (\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *)\ obj0-\/>getUserPointer();}
+\DoxyCodeLine{01277\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node1\ =\ (\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *)\ obj1-\/>getUserPointer();}
+\DoxyCodeLine{01278\ }
+\DoxyCodeLine{01279\ \ \ nassertr(node0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01280\ \ \ nassertr(node1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01281\ }
+\DoxyCodeLine{01282\ \ \ \mbox{\hyperlink{classBitMask}{CollideMask}}\ mask0\ =\ node0-\/>get\_into\_collide\_mask();}
+\DoxyCodeLine{01283\ \ \ \mbox{\hyperlink{classBitMask}{CollideMask}}\ mask1\ =\ node1-\/>get\_into\_collide\_mask();}
+\DoxyCodeLine{01284\ }
+\DoxyCodeLine{01285\ \textcolor{comment}{//\ cout\ <<\ mask0\ <<\ "{}\ \ \ "{}\ <<\ mask1\ <<\ endl;}}
+\DoxyCodeLine{01286\ }
+\DoxyCodeLine{01287\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ 32;\ ++i)\ \{}
+\DoxyCodeLine{01288\ \ \ \ \ \textcolor{keywordflow}{if}\ (mask0.get\_bit(i))\ \{}
+\DoxyCodeLine{01289\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_collide[i]\ \&\ mask1)\ !=\ 0)}
+\DoxyCodeLine{01290\ \textcolor{comment}{//\ cout\ <<\ "{}collide:\ i="{}\ <<\ i\ <<\ "{}\ \_collide[i]"{}\ <<\ \_collide[i]\ <<\ endl;}}
+\DoxyCodeLine{01291\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01292\ \ \ \ \ \}}
+\DoxyCodeLine{01293\ \ \ \}}
+\DoxyCodeLine{01294\ }
+\DoxyCodeLine{01295\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01296\ \}}
+\DoxyCodeLine{01297\ }
+\DoxyCodeLine{01301\ \textcolor{keywordtype}{bool}\ BulletWorld::btFilterCallback3::}
+\DoxyCodeLine{01302\ needBroadphaseCollision(btBroadphaseProxy*\ proxy0,\ btBroadphaseProxy*\ proxy1)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01303\ }
+\DoxyCodeLine{01304\ \ \ nassertr(\_filter\_callback\_obj,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01305\ }
+\DoxyCodeLine{01306\ \ \ btCollisionObject\ *obj0\ =\ (btCollisionObject\ *)\ proxy0-\/>m\_clientObject;}
+\DoxyCodeLine{01307\ \ \ btCollisionObject\ *obj1\ =\ (btCollisionObject\ *)\ proxy1-\/>m\_clientObject;}
+\DoxyCodeLine{01308\ }
+\DoxyCodeLine{01309\ \ \ nassertr(obj0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01310\ \ \ nassertr(obj1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01311\ }
+\DoxyCodeLine{01312\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node0\ =\ (\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *)\ obj0-\/>getUserPointer();}
+\DoxyCodeLine{01313\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node1\ =\ (\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *)\ obj1-\/>getUserPointer();}
+\DoxyCodeLine{01314\ }
+\DoxyCodeLine{01315\ \ \ nassertr(node0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01316\ \ \ nassertr(node1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01317\ }
+\DoxyCodeLine{01318\ \ \ \mbox{\hyperlink{classBulletFilterCallbackData}{BulletFilterCallbackData}}\ cbdata(node0,\ node1);}
+\DoxyCodeLine{01319\ \ \ \_filter\_callback\_obj-\/>do\_callback(\&cbdata);}
+\DoxyCodeLine{01320\ \ \ \textcolor{keywordflow}{return}\ cbdata.get\_collide();}
+\DoxyCodeLine{01321\ \}}
+\DoxyCodeLine{01322\ }
+\DoxyCodeLine{01326\ ostream\ \&}
+\DoxyCodeLine{01327\ operator\ <<\ (ostream\ \&out,\ BulletWorld::BroadphaseAlgorithm\ algorithm)\ \{}
+\DoxyCodeLine{01328\ }
+\DoxyCodeLine{01329\ \ \ \textcolor{keywordflow}{switch}\ (algorithm)\ \{}
+\DoxyCodeLine{01330\ \ \ \textcolor{keywordflow}{case}\ BulletWorld::BA\_sweep\_and\_prune:}
+\DoxyCodeLine{01331\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}sap"{}};}
+\DoxyCodeLine{01332\ }
+\DoxyCodeLine{01333\ \ \ \textcolor{keywordflow}{case}\ BulletWorld::BA\_dynamic\_aabb\_tree:}
+\DoxyCodeLine{01334\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}aabb"{}};}
+\DoxyCodeLine{01335\ \ \ \};}
+\DoxyCodeLine{01336\ }
+\DoxyCodeLine{01337\ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}**invalid\ BulletWorld::BroadphaseAlgorithm("{}}\ <<\ (int)algorithm\ <<\ \textcolor{stringliteral}{"{})**"{}};}
+\DoxyCodeLine{01338\ \}}
+\DoxyCodeLine{01339\ }
+\DoxyCodeLine{01343\ istream\ \&}
+\DoxyCodeLine{01344\ operator\ >>\ (istream\ \&in,\ BulletWorld::BroadphaseAlgorithm\ \&algorithm)\ \{}
+\DoxyCodeLine{01345\ \ \ \textcolor{keywordtype}{string}\ word;}
+\DoxyCodeLine{01346\ \ \ in\ >>\ word;}
+\DoxyCodeLine{01347\ }
+\DoxyCodeLine{01348\ \ \ \textcolor{keywordflow}{if}\ (word\ ==\ \textcolor{stringliteral}{"{}sap"{}})\ \{}
+\DoxyCodeLine{01349\ \ \ \ \ algorithm\ =\ BulletWorld::BA\_sweep\_and\_prune;}
+\DoxyCodeLine{01350\ \ \ \}}
+\DoxyCodeLine{01351\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (word\ ==\ \textcolor{stringliteral}{"{}aabb"{}})\ \{}
+\DoxyCodeLine{01352\ \ \ \ \ algorithm\ =\ BulletWorld::BA\_dynamic\_aabb\_tree;}
+\DoxyCodeLine{01353\ \ \ \}}
+\DoxyCodeLine{01354\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01355\ \ \ \ \ bullet\_cat.error()}
+\DoxyCodeLine{01356\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ BulletWorld::BroadphaseAlgorithm:\ "{}}\ <<\ word\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01357\ \ \ \ \ algorithm\ =\ BulletWorld::BA\_dynamic\_aabb\_tree;}
+\DoxyCodeLine{01358\ \ \ \}}
+\DoxyCodeLine{01359\ }
+\DoxyCodeLine{01360\ \ \ \textcolor{keywordflow}{return}\ in;}
+\DoxyCodeLine{01361\ \}}
+\DoxyCodeLine{01362\ }
+\DoxyCodeLine{01366\ ostream\ \&}
+\DoxyCodeLine{01367\ operator\ <<\ (ostream\ \&out,\ BulletWorld::FilterAlgorithm\ algorithm)\ \{}
+\DoxyCodeLine{01368\ }
+\DoxyCodeLine{01369\ \ \ \textcolor{keywordflow}{switch}\ (algorithm)\ \{}
+\DoxyCodeLine{01370\ \ \ \textcolor{keywordflow}{case}\ BulletWorld::FA\_mask:}
+\DoxyCodeLine{01371\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}mask"{}};}
+\DoxyCodeLine{01372\ \ \ \textcolor{keywordflow}{case}\ BulletWorld::FA\_groups\_mask:}
+\DoxyCodeLine{01373\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}groups-\/mask"{}};}
+\DoxyCodeLine{01374\ \ \ \textcolor{keywordflow}{case}\ BulletWorld::FA\_callback:}
+\DoxyCodeLine{01375\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}callback"{}};}
+\DoxyCodeLine{01376\ \ \ \};}
+\DoxyCodeLine{01377\ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}**invalid\ BulletWorld::FilterAlgorithm("{}}\ <<\ (int)algorithm\ <<\ \textcolor{stringliteral}{"{})**"{}};}
+\DoxyCodeLine{01378\ \}}
+\DoxyCodeLine{01379\ }
+\DoxyCodeLine{01383\ istream\ \&}
+\DoxyCodeLine{01384\ operator\ >>\ (istream\ \&in,\ BulletWorld::FilterAlgorithm\ \&algorithm)\ \{}
+\DoxyCodeLine{01385\ \ \ \textcolor{keywordtype}{string}\ word;}
+\DoxyCodeLine{01386\ \ \ in\ >>\ word;}
+\DoxyCodeLine{01387\ }
+\DoxyCodeLine{01388\ \ \ \textcolor{keywordflow}{if}\ (word\ ==\ \textcolor{stringliteral}{"{}mask"{}})\ \{}
+\DoxyCodeLine{01389\ \ \ \ \ algorithm\ =\ BulletWorld::FA\_mask;}
+\DoxyCodeLine{01390\ \ \ \}}
+\DoxyCodeLine{01391\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (word\ ==\ \textcolor{stringliteral}{"{}groups-\/mask"{}})\ \{}
+\DoxyCodeLine{01392\ \ \ \ \ algorithm\ =\ BulletWorld::FA\_groups\_mask;}
+\DoxyCodeLine{01393\ \ \ \}}
+\DoxyCodeLine{01394\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (word\ ==\ \textcolor{stringliteral}{"{}callback"{}})\ \{}
+\DoxyCodeLine{01395\ \ \ \ \ algorithm\ =\ BulletWorld::FA\_callback;}
+\DoxyCodeLine{01396\ \ \ \}}
+\DoxyCodeLine{01397\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01398\ \ \ \ \ bullet\_cat.error()}
+\DoxyCodeLine{01399\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ BulletWorld::FilterAlgorithm:\ "{}}\ <<\ word\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01400\ \ \ \ \ algorithm\ =\ BulletWorld::FA\_mask;}
+\DoxyCodeLine{01401\ \ \ \}}
+\DoxyCodeLine{01402\ \ \ \textcolor{keywordflow}{return}\ in;}
+\DoxyCodeLine{01403\ \}}
+
+\end{DoxyCode}

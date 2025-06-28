@@ -1,0 +1,333 @@
+\doxysection{vertex\+Data\+Save\+File.\+cxx}
+\hypertarget{vertexDataSaveFile_8cxx_source}{}\label{vertexDataSaveFile_8cxx_source}\index{panda/src/gobj/vertexDataSaveFile.cxx@{panda/src/gobj/vertexDataSaveFile.cxx}}
+\mbox{\hyperlink{vertexDataSaveFile_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{vertexDataSaveFile_8h}{vertexDataSaveFile.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{mutexHolder_8h}{mutexHolder.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{clockObject_8h}{clockObject.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__gobj_8h}{config\_gobj.h}}"{}}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#ifndef\ \_WIN32}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ <sys/types.h>}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ <sys/stat.h>}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ <fcntl.h>}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ <errno.h>}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#if\ defined(\_\_ANDROID\_\_)\ \&\&\ !defined(PHAVE\_LOCKF)}}
+\DoxyCodeLine{00027\ \textcolor{comment}{//\ Needed\ for\ flock.}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ <sys/file.h>}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \textcolor{keyword}{using\ }std::dec;}
+\DoxyCodeLine{00032\ \textcolor{keyword}{using\ }std::hex;}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00037\ VertexDataSaveFile::}
+\DoxyCodeLine{00038\ VertexDataSaveFile(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&directory,\ \textcolor{keyword}{const}\ std::string\ \&prefix,}
+\DoxyCodeLine{00039\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ max\_size)\ :}
+\DoxyCodeLine{00040\ \ \ \mbox{\hyperlink{classSimpleAllocator}{SimpleAllocator}}(max\_size,\ \_lock)}
+\DoxyCodeLine{00041\ \{}
+\DoxyCodeLine{00042\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ dir;}
+\DoxyCodeLine{00043\ \ \ \textcolor{keywordflow}{if}\ (directory.empty())\ \{}
+\DoxyCodeLine{00044\ \ \ \ \ dir\ =\ \mbox{\hyperlink{classFilename_a8c57e1b0ca701650369a9551093e5929}{Filename::get\_temp\_directory}}();}
+\DoxyCodeLine{00045\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00046\ \ \ \ \ dir\ =\ directory;}
+\DoxyCodeLine{00047\ \ \ \}}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00050\ \ \ \_total\_file\_size\ =\ 0;}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \ \ \textcolor{comment}{//\ Try\ to\ open\ and\ lock\ a\ writable\ temporary\ filename.}}
+\DoxyCodeLine{00053\ \ \ \textcolor{keywordtype}{int}\ index\ =\ 0;}
+\DoxyCodeLine{00054\ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00055\ \ \ \ \ ++index;}
+\DoxyCodeLine{00056\ \ \ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ strm;}
+\DoxyCodeLine{00057\ \ \ \ \ strm\ <<\ prefix\ <<\ \textcolor{stringliteral}{"{}\_"{}}\ <<\ index\ <<\ \textcolor{stringliteral}{"{}.dat"{}};}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00059\ \ \ \ \ std::string\ basename\ =\ strm.str();}
+\DoxyCodeLine{00060\ \ \ \ \ \_filename\ =\ \mbox{\hyperlink{classFilename}{Filename}}(dir,\ basename);}
+\DoxyCodeLine{00061\ \ \ \ \ std::string\ os\_specific\ =\ \_filename.to\_os\_specific();}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00063\ \ \ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00064\ \ \ \ \ \ \ gobj\_cat.debug()}
+\DoxyCodeLine{00065\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Creating\ vertex\ data\ save\ file\ "{}}\ <<\ os\_specific\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00066\ \ \ \ \ \}}
+\DoxyCodeLine{00067\ }
+\DoxyCodeLine{00068\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00069\ \ \ \ \ \textcolor{comment}{//\ Windows\ case.}}
+\DoxyCodeLine{00070\ \ \ \ \ DWORD\ flags\ =\ FILE\_ATTRIBUTE\_TEMPORARY\ |\ FILE\_FLAG\_DELETE\_ON\_CLOSE\ |\ FILE\_FLAG\_RANDOM\_ACCESS;}
+\DoxyCodeLine{00071\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00072\ \ \ \ \ \textcolor{comment}{//\ In\ SIMPLE\_THREADS\ mode,\ we\ use\ "{}overlapped"{}\ IO.}}
+\DoxyCodeLine{00073\ \ \ \ \ flags\ |=\ FILE\_FLAG\_OVERLAPPED\ |\ FILE\_FLAG\_NO\_BUFFERING;}
+\DoxyCodeLine{00074\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00075\ \ \ \ \ \_handle\ =\ CreateFile(os\_specific.c\_str(),\ GENERIC\_READ\ |\ GENERIC\_WRITE,}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 0,\ \textcolor{keyword}{nullptr},\ CREATE\_ALWAYS,\ flags,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00077\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_handle\ !=\ INVALID\_HANDLE\_VALUE)\ \{}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ file\ was\ successfully\ opened\ and\ locked.}}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00080\ }
+\DoxyCodeLine{00081\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \textcolor{comment}{//\ Couldn't\ open\ the\ file.\ \ Either\ the\ directory\ was\ bad,\ or\ the\ file}}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \textcolor{comment}{//\ was\ already\ locked\ by\ another.}}
+\DoxyCodeLine{00084\ \ \ \ \ \ \ DWORD\ err\ =\ GetLastError();}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00086\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (err\ !=\ ERROR\_SHARING\_VIOLATION)\ \{}
+\DoxyCodeLine{00087\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ File\ couldn't\ be\ opened;\ permission\ problem\ or\ bogus\ directory.}}
+\DoxyCodeLine{00088\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!dir.empty())\ \{}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Try\ the\ current\ directory,\ once.}}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ \ \ \ \ dir\ =\ \mbox{\hyperlink{classFilename}{Filename}}();}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00092\ \ \ \ \ \ \ \ \ \ \ gobj\_cat.error()}
+\DoxyCodeLine{00093\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ open\ vertex\ data\ save\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00095\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00096\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00098\ \ \ \ \ \ \ \textcolor{comment}{//\ Couldn't\ lock\ the\ file.\ \ Try\ the\ next\ one.}}
+\DoxyCodeLine{00099\ \ \ \ \ \}}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00102\ \ \ \ \ \textcolor{comment}{//\ Posix\ case.}}
+\DoxyCodeLine{00103\ \ \ \ \ \textcolor{keywordtype}{int}\ flags\ =\ O\_RDWR\ |\ O\_CREAT;}
+\DoxyCodeLine{00104\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00105\ \ \ \ \ \textcolor{comment}{//\ In\ SIMPLE\_THREADS\ mode,\ we\ use\ non-\/blocking\ IO.}}
+\DoxyCodeLine{00106\ \ \ \ \ flags\ |=\ O\_NONBLOCK;}
+\DoxyCodeLine{00107\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \ \ \ \ \_fd\ =\ ::open(os\_specific.c\_str(),\ flags,\ 0666);}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{keywordflow}{while}\ (\_fd\ ==\ -\/1\ \&\&\ errno\ ==\ EAGAIN)\ \{}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \_fd\ =\ ::open(os\_specific.c\_str(),\ flags,\ 0666);}
+\DoxyCodeLine{00113\ \ \ \ \ \}}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fd\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \textcolor{comment}{//\ Couldn't\ open\ the\ file:\ permissions\ problem\ or\ bad\ directory.}}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_filename.exists())\ \{}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ It\ must\ be\ a\ bad\ directory.}}
+\DoxyCodeLine{00119\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!dir.empty())\ \{}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Try\ the\ current\ directory,\ once.}}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \ \ \ \ dir\ =\ \mbox{\hyperlink{classFilename}{Filename}}();}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \ \ \ \ gobj\_cat.error()}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ open\ vertex\ data\ save\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it's\ a\ permissions\ problem,\ it\ might\ be\ a\ user-\/level\ permissions}}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \textcolor{comment}{//\ issue.\ \ Continue\ to\ the\ next.}}
+\DoxyCodeLine{00131\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00132\ \ \ \ \ \}}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{comment}{//\ Now\ try\ to\ lock\ the\ file,\ so\ we\ can\ be\ sure\ that\ no\ other\ process\ is}}
+\DoxyCodeLine{00135\ \ \ \ \ \textcolor{comment}{//\ simultaneously\ writing\ to\ the\ same\ save\ file.}}
+\DoxyCodeLine{00136\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_LOCKF}}
+\DoxyCodeLine{00137\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ lockf(\_fd,\ F\_TLOCK,\ 0);}
+\DoxyCodeLine{00138\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00139\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ flock(\_fd,\ LOCK\_EX\ |\ LOCK\_NB);}
+\DoxyCodeLine{00140\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00141\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ ==\ 0)\ \{}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \textcolor{comment}{//\ We've\ got\ the\ file.\ \ Truncate\ it\ first,\ for\ good\ measure,\ in\ case}}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \textcolor{comment}{//\ there's\ an\ old\ version\ of\ the\ file\ we\ picked\ up.}}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ftruncate(\_fd,\ 0)\ <\ 0)\ \{}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ gobj\_cat.warning()}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ truncate\ vertex\ data\ save\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \textcolor{comment}{//\ On\ Unix,\ it's\ safe\ to\ unlink\ (delete)\ the\ temporary\ file\ after\ it's}}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \textcolor{comment}{//\ been\ opened.\ \ The\ file\ remains\ open,\ but\ disappears\ from\ the}}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \textcolor{comment}{//\ directory.\ \ This\ is\ kind\ of\ like\ DELETE\_ON\_CLOSE,\ to\ ensure\ the}}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \textcolor{comment}{//\ temporary\ file\ won't\ accidentally\ get\ left\ behind,\ except\ it's\ a}}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \textcolor{comment}{//\ little\ more\ proactive.}}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ unlink(os\_specific.c\_str());}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \_filename\ =\ \mbox{\hyperlink{classFilename}{Filename}}();}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00157\ \ \ \ \ \}}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00159\ \ \ \ \ \textcolor{comment}{//\ Try\ the\ next\ file.}}
+\DoxyCodeLine{00160\ \ \ \ \ close(\_fd);}
+\DoxyCodeLine{00161\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00162\ \ \ \}}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00164\ \ \ \_is\_valid\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00165\ \}}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00170\ VertexDataSaveFile::}
+\DoxyCodeLine{00171\ \string~VertexDataSaveFile()\ \{}
+\DoxyCodeLine{00172\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00173\ \ \ \textcolor{keywordflow}{if}\ (\_handle\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00174\ \ \ \ \ CloseHandle(\_handle);}
+\DoxyCodeLine{00175\ \ \ \}}
+\DoxyCodeLine{00176\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00177\ \ \ \textcolor{keywordflow}{if}\ (\_fd\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00178\ \ \ \ \ close(\_fd);}
+\DoxyCodeLine{00179\ \ \ \}}
+\DoxyCodeLine{00180\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00181\ }
+\DoxyCodeLine{00182\ \ \ \textcolor{comment}{//\ No\ need\ to\ remove\ the\ file,\ since\ in\ both\ above\ cases\ we\ have\ already}}
+\DoxyCodeLine{00183\ \ \ \textcolor{comment}{//\ removed\ it.\ \ And\ removing\ it\ now,\ after\ we\ have\ closed\ and\ unlocked\ it,}}
+\DoxyCodeLine{00184\ \ \ \textcolor{comment}{//\ might\ accidentally\ remove\ someone\ else's\ copy.}}
+\DoxyCodeLine{00185\ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00186\ \textcolor{comment}{\ \ if\ (!\_filename.empty())\ \{}}
+\DoxyCodeLine{00187\ \textcolor{comment}{\ \ \ \ \_filename.unlink();}}
+\DoxyCodeLine{00188\ \textcolor{comment}{\ \ \}}}
+\DoxyCodeLine{00189\ \textcolor{comment}{\ \ */}}
+\DoxyCodeLine{00190\ \}}
+\DoxyCodeLine{00191\ }
+\DoxyCodeLine{00197\ PT(\mbox{\hyperlink{classVertexDataSaveBlock}{VertexDataSaveBlock}})\ VertexDataSaveFile::}
+\DoxyCodeLine{00198\ write\_data(\textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *data,\ \textcolor{keywordtype}{size\_t}\ size,\ \textcolor{keywordtype}{bool}\ compressed)\ \{}
+\DoxyCodeLine{00199\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ \textcolor{keywordflow}{if}\ (!\_is\_valid)\ \{}
+\DoxyCodeLine{00202\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00203\ \ \ \}}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00205\ \ \ PT(\mbox{\hyperlink{classVertexDataSaveBlock}{VertexDataSaveBlock}})\ block\ =\ (\mbox{\hyperlink{classVertexDataSaveBlock}{VertexDataSaveBlock}}\ *)\mbox{\hyperlink{classSimpleAllocator_aad6b920240dfc5b87cd5315df390245b}{SimpleAllocator::do\_alloc}}(size);}
+\DoxyCodeLine{00206\ \ \ \textcolor{keywordflow}{if}\ (block\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00207\ \ \ \ \ \_total\_file\_size\ =\ std::max(\_total\_file\_size,\ block-\/>get\_start()\ +\ size);}
+\DoxyCodeLine{00208\ \ \ \ \ block-\/>set\_compressed(compressed);}
+\DoxyCodeLine{00209\ }
+\DoxyCodeLine{00210\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00211\ \ \ \ \ OVERLAPPED\ overlapped;}
+\DoxyCodeLine{00212\ \ \ \ \ memset(\&overlapped,\ 0,\ \textcolor{keyword}{sizeof}(overlapped));}
+\DoxyCodeLine{00213\ \ \ \ \ overlapped.Offset\ =\ block-\/>get\_start();}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \ \ DWORD\ bytes\_written\ =\ 0;}
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{keywordtype}{double}\ start\_time\ =\ ClockObject::get\_global\_clock()-\/>get\_real\_time();}
+\DoxyCodeLine{00217\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_passes\ =\ 0;}
+\DoxyCodeLine{00218\ \ \ \ \ BOOL\ success\ =\ WriteFile(\_handle,\ data,\ size,\ \&bytes\_written,\ \&overlapped);}
+\DoxyCodeLine{00219\ \ \ \ \ \textcolor{keywordflow}{while}\ (!success)\ \{}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ DWORD\ error\ =\ GetLastError();}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (error\ ==\ ERROR\_IO\_INCOMPLETE\ ||\ error\ ==\ ERROR\_IO\_PENDING)\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Wait\ for\ more\ later.}}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ ++num\_passes;}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ gobj\_cat.error()}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ writing\ "{}}\ <<\ size}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes\ to\ save\ file,\ windows\ error\ code\ 0x"{}}\ <<\ hex}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \ \ <<\ error\ <<\ dec\ <<\ \textcolor{stringliteral}{"{}.\ \ Disk\ full?\(\backslash\)n"{}};}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ success\ =\ GetOverlappedResult(\_handle,\ \&overlapped,\ \&bytes\_written,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00233\ \ \ \ \ \}}
+\DoxyCodeLine{00234\ \ \ \ \ nassertr(bytes\_written\ ==\ size,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00235\ \ \ \ \ \textcolor{keywordtype}{double}\ finish\_time\ =\ ClockObject::get\_global\_clock()-\/>get\_real\_time();}
+\DoxyCodeLine{00236\ \ \ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ gobj\_cat.debug()}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Wrote\ "{}}\ <<\ size\ <<\ \textcolor{stringliteral}{"{}\ bytes\ in\ "{}}\ <<\ *Thread::get\_current\_thread()\ <<\ \textcolor{stringliteral}{"{}\ over\ "{}}\ <<\ floor((finish\_time\ -\/\ start\_time)\ *\ 1000.0)\ <<\ \textcolor{stringliteral}{"{}\ ms\ and\ "{}}\ <<\ num\_passes\ <<\ \textcolor{stringliteral}{"{}\ passes.\(\backslash\)n"{}};}
+\DoxyCodeLine{00239\ \ \ \ \ \}}
+\DoxyCodeLine{00240\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00241\ \ \ \ \ \textcolor{comment}{//\ Posix\ case.}}
+\DoxyCodeLine{00242\ \ \ \ \ \textcolor{keywordflow}{if}\ (lseek(\_fd,\ block-\/>get\_start(),\ SEEK\_SET)\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ gobj\_cat.error()}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ seeking\ to\ position\ "{}}\ <<\ block-\/>get\_start()\ <<\ \textcolor{stringliteral}{"{}\ in\ save\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00246\ \ \ \ \ \}}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{keywordflow}{while}\ (size\ >\ 0)\ \{}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ ssize\_t\ result\ =\ ::write(\_fd,\ data,\ size);}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (errno\ ==\ EAGAIN)\ \{}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \ \ gobj\_cat.error()}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ writing\ "{}}\ <<\ size\ <<\ \textcolor{stringliteral}{"{}\ bytes\ to\ save\ file.\ \ Disk\ full?\(\backslash\)n"{}};}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00260\ }
+\DoxyCodeLine{00261\ \ \ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ data\ +=\ result;}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ size\ -\/=\ result;}
+\DoxyCodeLine{00264\ \ \ \ \ \}}
+\DoxyCodeLine{00265\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00266\ \ \ \}}
+\DoxyCodeLine{00267\ }
+\DoxyCodeLine{00268\ \ \ \textcolor{keywordflow}{return}\ block;}
+\DoxyCodeLine{00269\ \}}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00275\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classVertexDataSaveFile_a1efa7fb96b9a3b3a8070db3ae92ab3df}{VertexDataSaveFile::}}}
+\DoxyCodeLine{00276\ \mbox{\hyperlink{classVertexDataSaveFile_a1efa7fb96b9a3b3a8070db3ae92ab3df}{read\_data}}(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *data,\ \textcolor{keywordtype}{size\_t}\ size,\ \mbox{\hyperlink{classVertexDataSaveBlock}{VertexDataSaveBlock}}\ *block)\ \{}
+\DoxyCodeLine{00277\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00278\ }
+\DoxyCodeLine{00279\ \ \ \textcolor{keywordflow}{if}\ (!\_is\_valid)\ \{}
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00281\ \ \ \}}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00283\ \ \ nassertr(size\ ==\ block-\/>get\_size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00284\ }
+\DoxyCodeLine{00285\ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00286\ \textcolor{comment}{\ \ static\ ConfigVariableBool\ allow\_mainthread\_read("{}allow-\/mainthread-\/read"{},\ 1);}}
+\DoxyCodeLine{00287\ \textcolor{comment}{\ \ if\ (!allow\_mainthread\_read)\ \{}}
+\DoxyCodeLine{00288\ \textcolor{comment}{\ \ \ \ nassertr(Thread::get\_current\_thread()\ !=\ Thread::get\_main\_thread(),\ false);}}
+\DoxyCodeLine{00289\ \textcolor{comment}{\ \ \}}}
+\DoxyCodeLine{00290\ \textcolor{comment}{\ \ */}}
+\DoxyCodeLine{00291\ }
+\DoxyCodeLine{00292\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00293\ \ \ OVERLAPPED\ overlapped;}
+\DoxyCodeLine{00294\ \ \ memset(\&overlapped,\ 0,\ \textcolor{keyword}{sizeof}(overlapped));}
+\DoxyCodeLine{00295\ \ \ overlapped.Offset\ =\ block-\/>get\_start();}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \ \ DWORD\ bytes\_read\ =\ 0;}
+\DoxyCodeLine{00298\ \ \ \textcolor{keywordtype}{double}\ start\_time\ =\ ClockObject::get\_global\_clock()-\/>get\_real\_time();}
+\DoxyCodeLine{00299\ \ \ \textcolor{keywordtype}{int}\ num\_passes\ =\ 0;}
+\DoxyCodeLine{00300\ \ \ BOOL\ success\ =\ ReadFile(\_handle,\ data,\ size,\ \&bytes\_read,\ \&overlapped);}
+\DoxyCodeLine{00301\ \ \ \textcolor{keywordflow}{while}\ (!success)\ \{}
+\DoxyCodeLine{00302\ \ \ \ \ DWORD\ error\ =\ GetLastError();}
+\DoxyCodeLine{00303\ \ \ \ \ \textcolor{keywordflow}{if}\ (error\ ==\ ERROR\_IO\_INCOMPLETE\ ||\ error\ ==\ ERROR\_IO\_PENDING)\ \{}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \textcolor{comment}{//\ Wait\ for\ more\ later.}}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ ++num\_passes;}
+\DoxyCodeLine{00307\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ gobj\_cat.error()}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ reading\ "{}}\ <<\ size}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes\ from\ save\ file,\ windows\ error\ code\ 0x"{}}\ <<\ hex}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ <<\ error\ <<\ dec\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00313\ \ \ \ \ \}}
+\DoxyCodeLine{00314\ \ \ \ \ success\ =\ GetOverlappedResult(\_handle,\ \&overlapped,\ \&bytes\_read,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00315\ \ \ \}}
+\DoxyCodeLine{00316\ \ \ nassertr(bytes\_read\ ==\ size,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00317\ \ \ \textcolor{keywordtype}{double}\ finish\_time\ =\ ClockObject::get\_global\_clock()-\/>get\_real\_time();}
+\DoxyCodeLine{00318\ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00319\ \ \ \ \ gobj\_cat.debug()}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Read\ "{}}\ <<\ size\ <<\ \textcolor{stringliteral}{"{}\ bytes\ in\ "{}}\ <<\ *Thread::get\_current\_thread()\ <<\ \textcolor{stringliteral}{"{}\ over\ "{}}\ <<\ floor((finish\_time\ -\/\ start\_time)\ *\ 1000.0)\ <<\ \textcolor{stringliteral}{"{}\ ms\ and\ "{}}\ <<\ num\_passes\ <<\ \textcolor{stringliteral}{"{}\ passes.\(\backslash\)n"{}};}
+\DoxyCodeLine{00321\ \ \ \}}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00323\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00324\ \ \ \textcolor{comment}{//\ Posix\ case.}}
+\DoxyCodeLine{00325\ \ \ \textcolor{keywordflow}{if}\ (lseek(\_fd,\ block-\/>get\_start(),\ SEEK\_SET)\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00326\ \ \ \ \ gobj\_cat.error()}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ seeking\ to\ position\ "{}}\ <<\ block-\/>get\_start()\ <<\ \textcolor{stringliteral}{"{}\ in\ save\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00329\ \ \ \}}
+\DoxyCodeLine{00330\ \ \ \textcolor{keywordflow}{while}\ (size\ >\ 0)\ \{}
+\DoxyCodeLine{00331\ \ \ \ \ ssize\_t\ result\ =\ read(\_fd,\ data,\ size);}
+\DoxyCodeLine{00332\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (errno\ ==\ EAGAIN)\ \{}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ gobj\_cat.error()}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ reading\ "{}}\ <<\ size\ <<\ \textcolor{stringliteral}{"{}\ bytes\ from\ save\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00340\ \ \ \ \ \}}
+\DoxyCodeLine{00341\ }
+\DoxyCodeLine{00342\ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00343\ \ \ \ \ data\ +=\ result;}
+\DoxyCodeLine{00344\ \ \ \ \ size\ -\/=\ result;}
+\DoxyCodeLine{00345\ \ \ \}}
+\DoxyCodeLine{00346\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00347\ }
+\DoxyCodeLine{00348\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00349\ \}}
+\DoxyCodeLine{00350\ }
+\DoxyCodeLine{00355\ \mbox{\hyperlink{classSimpleAllocatorBlock}{SimpleAllocatorBlock}}\ *\mbox{\hyperlink{classVertexDataSaveFile_ae2dfb7dcbf735107e56b042cc72a1b1a}{VertexDataSaveFile::}}}
+\DoxyCodeLine{00356\ \mbox{\hyperlink{classVertexDataSaveFile_ae2dfb7dcbf735107e56b042cc72a1b1a}{make\_block}}(\textcolor{keywordtype}{size\_t}\ start,\ \textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00357\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classVertexDataSaveBlock}{VertexDataSaveBlock}}(\textcolor{keyword}{this},\ start,\ size);}
+\DoxyCodeLine{00358\ \}}
+
+\end{DoxyCode}

@@ -1,0 +1,525 @@
+\doxysection{win\+Input\+Device\+Manager.\+cxx}
+\hypertarget{winInputDeviceManager_8cxx_source}{}\label{winInputDeviceManager_8cxx_source}\index{panda/src/device/winInputDeviceManager.cxx@{panda/src/device/winInputDeviceManager.cxx}}
+\mbox{\hyperlink{winInputDeviceManager_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{winInputDeviceManager_8h}{winInputDeviceManager.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{winRawInputDevice_8h}{winRawInputDevice.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{throw__event_8h}{throw\_event.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{phidsdi_8h}{phidsdi.h}}"{}}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#if\ defined(\_WIN32)\ \&\&\ !defined(CPPPARSER)}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#ifdef\ HAVE\_THREADS}}
+\DoxyCodeLine{00025\ \textcolor{keyword}{class\ }InputThread\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{classThread}{Thread}}\ \{}
+\DoxyCodeLine{00026\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00027\ \ \ InputThread(WinInputDeviceManager\ *manager)\ :}
+\DoxyCodeLine{00028\ \ \ \ \ \mbox{\hyperlink{classThread}{Thread}}(\textcolor{stringliteral}{"{}input"{}},\ \textcolor{stringliteral}{"{}input"{}}),\ \_manager(manager)\ \{\}}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00031\ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ thread\_main();}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \ \ WinInputDeviceManager\ *\_manager;}
+\DoxyCodeLine{00034\ \};}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00042\ WinInputDeviceManager::}
+\DoxyCodeLine{00043\ WinInputDeviceManager()\ :}
+\DoxyCodeLine{00044\ \ \ \_xinput\_device0(0),}
+\DoxyCodeLine{00045\ \ \ \_xinput\_device1(1),}
+\DoxyCodeLine{00046\ \ \ \_xinput\_device2(2),}
+\DoxyCodeLine{00047\ \ \ \_xinput\_device3(3),}
+\DoxyCodeLine{00048\ \ \ \_message\_hwnd(nullptr)\ \{}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \ \ \textcolor{comment}{//\ XInput\ provides\ four\ device\ slots,\ so\ we\ simply\ create\ four\ XInputDevice}}
+\DoxyCodeLine{00051\ \ \ \textcolor{comment}{//\ objects\ that\ are\ bound\ to\ the\ lifetime\ of\ the\ input\ manager.}}
+\DoxyCodeLine{00052\ \ \ \_xinput\_device0.local\_object();}
+\DoxyCodeLine{00053\ \ \ \_xinput\_device1.local\_object();}
+\DoxyCodeLine{00054\ \ \ \_xinput\_device2.local\_object();}
+\DoxyCodeLine{00055\ \ \ \_xinput\_device3.local\_object();}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00057\ \ \ \textcolor{comment}{//\ This\ function\ is\ not\ available\ in\ the\ 7.1A\ SDK,\ so\ we\ use\ a\ wrapper.}}
+\DoxyCodeLine{00058\ \ \ HMODULE\ \textcolor{keyword}{module}\ =\ LoadLibraryA("{}cfgmgr32.dll"{});}
+\DoxyCodeLine{00059\ \ \ \textcolor{keywordflow}{if}\ (module)\ \{}
+\DoxyCodeLine{00060\ \ \ \ \ \_CM\_Get\_DevNode\_PropertyW\ =\ (pCM\_Get\_DevNode\_Property)GetProcAddress(module,\ \textcolor{stringliteral}{"{}CM\_Get\_DevNode\_PropertyW"{}});}
+\DoxyCodeLine{00061\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00062\ \ \ \ \ \_CM\_Get\_DevNode\_PropertyW\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00063\ \ \ \}}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ \ \ \textcolor{comment}{//\ If\ we\ have\ threading\ enabled,\ start\ a\ thread\ with\ a\ message-\/only\ window}}
+\DoxyCodeLine{00066\ \ \ \textcolor{comment}{//\ loop\ to\ listen\ for\ input\ events.\ \ We\ can't\ actually\ just\ let\ this\ be}}
+\DoxyCodeLine{00067\ \ \ \textcolor{comment}{//\ handled\ by\ the\ main\ window\ loop,\ because\ the\ main\ window\ might\ actually}}
+\DoxyCodeLine{00068\ \ \ \textcolor{comment}{//\ have\ been\ created\ in\ a\ different\ thread.}}
+\DoxyCodeLine{00069\ \textcolor{preprocessor}{\#ifdef\ HAVE\_THREADS}}
+\DoxyCodeLine{00070\ \ \ \textcolor{keywordflow}{if}\ (Thread::is\_threading\_supported())\ \{}
+\DoxyCodeLine{00071\ \ \ \ \ PT(\mbox{\hyperlink{classThread}{Thread}})\ thread\ =\ \textcolor{keyword}{new}\ InputThread(\textcolor{keyword}{this});}
+\DoxyCodeLine{00072\ \ \ \ \ thread-\/>start(TP\_normal,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00073\ \ \ \}\ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00074\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00075\ \ \ \{}
+\DoxyCodeLine{00076\ \ \ \ \ setup\_message\_loop();}
+\DoxyCodeLine{00077\ \ \ \}}
+\DoxyCodeLine{00078\ \}}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00083\ WinInputDeviceManager::}
+\DoxyCodeLine{00084\ \string~WinInputDeviceManager()\ \{}
+\DoxyCodeLine{00085\ \ \ \textcolor{keywordflow}{if}\ (\_message\_hwnd\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00086\ \textcolor{preprocessor}{\#ifdef\ HAVE\_THREADS}}
+\DoxyCodeLine{00087\ \ \ \ \ \textcolor{keywordflow}{if}\ (Thread::is\_threading\_supported())\ \{}
+\DoxyCodeLine{00088\ \ \ \ \ \ \ HWND\ hwnd\ =\ \_message\_hwnd;}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hwnd)\ \{}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ \ \ SendMessage(hwnd,\ WM\_QUIT,\ 0,\ 0);}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00092\ \ \ \ \ \}\ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00093\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00094\ \ \ \ \ \{}
+\DoxyCodeLine{00095\ \ \ \ \ \ \ destroy\_message\_loop();}
+\DoxyCodeLine{00096\ \ \ \ \ \}}
+\DoxyCodeLine{00097\ \ \ \}}
+\DoxyCodeLine{00098\ \}}
+\DoxyCodeLine{00099\ }
+\DoxyCodeLine{00103\ \textcolor{keywordtype}{void}\ WinInputDeviceManager::}
+\DoxyCodeLine{00104\ device\_destroyed(WinRawInputDevice\ *device)\ \{}
+\DoxyCodeLine{00105\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00106\ \ \ \textcolor{comment}{//\ It\ shouldn't\ be\ in\ here,\ but\ let's\ check\ to\ be\ sure.}}
+\DoxyCodeLine{00107\ \ \ \textcolor{keywordflow}{if}\ (device-\/>\_handle\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00108\ \ \ \ \ \_raw\_devices.erase(device-\/>\_handle);}
+\DoxyCodeLine{00109\ \ \ \}}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ \_raw\_devices\_by\_path.erase(device-\/>\_path);}
+\DoxyCodeLine{00112\ \}}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00117\ \textcolor{keywordtype}{void}\ WinInputDeviceManager::}
+\DoxyCodeLine{00118\ on\_input(HRAWINPUT\ handle)\ \{}
+\DoxyCodeLine{00119\ \ \ UINT\ size;}
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{if}\ (GetRawInputData(handle,\ RID\_INPUT,\ \textcolor{keyword}{nullptr},\ \&size,\ \textcolor{keyword}{sizeof}(RAWINPUTHEADER))\ <\ 0)\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00122\ \ \ \}}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \ \ PRAWINPUT\ data\ =\ (PRAWINPUT)alloca(size);}
+\DoxyCodeLine{00125\ \ \ \textcolor{keywordflow}{if}\ (GetRawInputData(handle,\ RID\_INPUT,\ data,\ \&size,\ \textcolor{keyword}{sizeof}(RAWINPUTHEADER))\ <=\ 0)\ \{}
+\DoxyCodeLine{00126\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00127\ \ \ \}}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00129\ \ \ \textcolor{comment}{//\ Look\ up\ the\ device\ in\ the\ map.}}
+\DoxyCodeLine{00130\ \ \ PT(WinRawInputDevice)\ device;}
+\DoxyCodeLine{00131\ \ \ \{}
+\DoxyCodeLine{00132\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{keyword}{auto}\ it\ =\ \_raw\_devices.find(data-\/>header.hDevice);}
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{keywordflow}{if}\ (it\ !=\ \_raw\_devices.end())\ \{}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ device\ =\ it-\/>second;}
+\DoxyCodeLine{00136\ \ \ \ \ \}}
+\DoxyCodeLine{00137\ \ \ \}}
+\DoxyCodeLine{00138\ \ \ \textcolor{keywordflow}{if}\ (device\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00139\ \ \ \ \ device-\/>on\_input(data);}
+\DoxyCodeLine{00140\ \ \ \}}
+\DoxyCodeLine{00141\ \}}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00146\ \textcolor{keywordtype}{void}\ WinInputDeviceManager::}
+\DoxyCodeLine{00147\ on\_input\_device\_arrival(HANDLE\ handle)\ \{}
+\DoxyCodeLine{00148\ \ \ \textcolor{comment}{//\ Get\ the\ device\ path.}}
+\DoxyCodeLine{00149\ \ \ UINT\ size;}
+\DoxyCodeLine{00150\ \ \ \textcolor{keywordflow}{if}\ (GetRawInputDeviceInfoA(handle,\ RIDI\_DEVICENAME,\ \textcolor{keyword}{nullptr},\ \&size)\ !=\ 0)\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00152\ \ \ \}}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00154\ \ \ \textcolor{keywordtype}{char}\ *path\ =\ (\textcolor{keywordtype}{char}\ *)alloca(size);}
+\DoxyCodeLine{00155\ \ \ \textcolor{keywordflow}{if}\ (path\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ GetRawInputDeviceInfoA(handle,\ RIDI\_DEVICENAME,\ (\textcolor{keywordtype}{void}\ *)path,\ \&size)\ <\ 0)\ \{}
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00158\ \ \ \}}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}GIDC\_ARRIVAL:\ "{}}\ <<\ path\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00163\ \ \ \}}
+\DoxyCodeLine{00164\ }
+\DoxyCodeLine{00165\ \ \ \textcolor{comment}{//\ Get\ the\ device\ info.}}
+\DoxyCodeLine{00166\ \ \ RID\_DEVICE\_INFO\ info;}
+\DoxyCodeLine{00167\ \ \ info.cbSize\ =\ \textcolor{keyword}{sizeof}(RID\_DEVICE\_INFO);}
+\DoxyCodeLine{00168\ \ \ size\ =\ \textcolor{keyword}{sizeof}(RID\_DEVICE\_INFO);}
+\DoxyCodeLine{00169\ \ \ \textcolor{keywordflow}{if}\ (GetRawInputDeviceInfoA(handle,\ RIDI\_DEVICEINFO,\ \&info,\ \&size)\ <=\ 0)\ \{}
+\DoxyCodeLine{00170\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00171\ \ \ \}}
+\DoxyCodeLine{00172\ }
+\DoxyCodeLine{00173\ \ \ \textcolor{comment}{//\ Strip\ the\ \(\backslash\)\(\backslash\)?\(\backslash\)\ prefix\ from\ the\ path.}}
+\DoxyCodeLine{00174\ \ \ \textcolor{keywordflow}{while}\ (path[0]\ ==\ \textcolor{charliteral}{'\(\backslash\)\(\backslash\)'}\ ||\ path[0]\ ==\ \textcolor{charliteral}{'?'}\ ||\ path[0]\ ==\ \textcolor{charliteral}{'.'})\ \{}
+\DoxyCodeLine{00175\ \ \ \ \ ++path;}
+\DoxyCodeLine{00176\ \ \ \}}
+\DoxyCodeLine{00177\ }
+\DoxyCodeLine{00178\ \ \ \textcolor{comment}{//\ Now,\ replace\ \#\ with\ \(\backslash\)\(\backslash\)\ in\ the\ path,\ but\ only\ up\ to\ three\ components.}}
+\DoxyCodeLine{00179\ \ \ \textcolor{keywordtype}{char}\ *p\ =\ path;}
+\DoxyCodeLine{00180\ \ \ \textcolor{keywordtype}{int}\ i\ =\ 0;}
+\DoxyCodeLine{00181\ \ \ \textcolor{keywordflow}{while}\ (*p\ !=\ \textcolor{charliteral}{'\(\backslash\)0'})\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ \textcolor{keywordflow}{if}\ (*p\ ==\ \textcolor{charliteral}{'\#'})\ \{}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i++\ <\ 2)\ \{}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \ \ *p\ =\ \textcolor{charliteral}{'\(\backslash\)\(\backslash\)'};}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ *p\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00189\ \ \ \ \ \}}
+\DoxyCodeLine{00190\ \ \ \ \ ++p;}
+\DoxyCodeLine{00191\ \ \ \}}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00193\ \ \ \textcolor{comment}{//\ Find\ the\ device\ node,\ which\ will\ be\ something\ like\ "{}HID\(\backslash\)VID\_0123..."{}}}
+\DoxyCodeLine{00194\ \ \ \textcolor{comment}{//\ Then\ we\ walk\ the\ device\ tree\ upward\ to\ get\ the\ USB\ node,\ which\ which\ will}}
+\DoxyCodeLine{00195\ \ \ \textcolor{comment}{//\ be\ something\ like\ a\ "{}USB\(\backslash\)VID..."{}\ node,\ from\ which\ we\ can\ fetch\ the\ real}}
+\DoxyCodeLine{00196\ \ \ \textcolor{comment}{//\ USB\ device\ information\ (such\ as\ the\ product\ name).}}
+\DoxyCodeLine{00197\ \ \ std::string\ name,\ manufacturer;}
+\DoxyCodeLine{00198\ \ \ DEVINST\ inst;}
+\DoxyCodeLine{00199\ \ \ CONFIGRET\ ret\ =\ CM\_Locate\_DevNodeA(\&inst,\ (DEVINSTID\_A)path,\ CM\_LOCATE\_DEVNODE\_PHANTOM);}
+\DoxyCodeLine{00200\ \ \ \textcolor{keywordflow}{if}\ (ret\ ==\ CR\_SUCCESS)\ \{}
+\DoxyCodeLine{00201\ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[4096];}
+\DoxyCodeLine{00202\ \ \ \ \ ULONG\ buflen\ =\ 4096;}
+\DoxyCodeLine{00203\ \ \ \ \ \textcolor{keywordflow}{if}\ (CM\_Get\_DevNode\_Registry\_Property(inst,\ CM\_DRP\_DEVICEDESC,\ 0,\ buffer,\ \&buflen,\ 0)\ ==\ CR\_SUCCESS)\ \{}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ name.assign(buffer);}
+\DoxyCodeLine{00205\ \ \ \ \ \}}
+\DoxyCodeLine{00206\ \ \ \ \ buflen\ =\ 4096;}
+\DoxyCodeLine{00207\ \ \ \ \ \textcolor{keywordflow}{if}\ (CM\_Get\_DevNode\_Registry\_Property(inst,\ CM\_DRP\_MFG,\ 0,\ buffer,\ \&buflen,\ 0)\ ==\ CR\_SUCCESS)\ \{}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (strcmp(buffer,\ \textcolor{stringliteral}{"{}(Standard\ system\ devices)"{}})\ !=\ 0)\ \{}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ manufacturer.assign(buffer);}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00211\ \ \ \ \ \}}
+\DoxyCodeLine{00212\ }
+\DoxyCodeLine{00213\ \ \ \ \ \textcolor{comment}{//\ Now\ walk\ the\ device\ tree\ upwards\ so\ fetch\ the\ bus-\/reported\ name\ of\ the}}
+\DoxyCodeLine{00214\ \ \ \ \ \textcolor{comment}{//\ parent\ USB\ device,\ which\ we\ prefer\ over\ the\ regular\ device\ description}}
+\DoxyCodeLine{00215\ \ \ \ \ \textcolor{comment}{//\ that\ is\ probably\ boring\ like\ "{}HID-\/compliant\ game\ controller"{}.}}
+\DoxyCodeLine{00216\ \ \ \ \ DEVINST\ cur\ =\ inst;}
+\DoxyCodeLine{00217\ \ \ \ \ DEVINST\ parent;}
+\DoxyCodeLine{00218\ \ \ \ \ \textcolor{keywordflow}{while}\ (CM\_Get\_Parent(\&parent,\ cur,\ 0)\ ==\ CR\_SUCCESS)\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ buflen\ =\ 4096;}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ std::string\ dev\_class;}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (CM\_Get\_DevNode\_Registry\_Property(parent,\ CM\_DRP\_CLASS,\ 0,\ buffer,\ \&buflen,\ 0)\ ==\ CR\_SUCCESS)\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (strcmp(buffer,\ \textcolor{stringliteral}{"{}USB"{}})\ ==\ 0)\ \{}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ some\ generic\ USB\ device,\ like\ a\ hub.\ \ We've\ gone\ too\ far.}}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ dev\_class.assign(buffer);}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ cur\ =\ parent;}
+\DoxyCodeLine{00229\ }
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \textcolor{comment}{//\ While\ we're\ at\ it,\ maybe\ this\ one\ defines\ a\ manufacturer?}}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ buflen\ =\ 4096;}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (manufacturer.empty()\ \&\&}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ \ \ CM\_Get\_DevNode\_Registry\_Property(cur,\ CM\_DRP\_MFG,\ 0,\ buffer,\ \&buflen,\ 0)\ ==\ CR\_SUCCESS)\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (strcmp(buffer,\ \textcolor{stringliteral}{"{}(Standard\ system\ devices)"{}})\ !=\ 0)\ \{}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ \ \ manufacturer.assign(buffer);}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00238\ }
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it's\ a\ generic\ HID\ device,\ take\ the\ name\ from\ the\ USB\ bus.}}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \textcolor{comment}{//\ See\ devpkey.h\ for\ the\ available\ property\ keys.}}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ DEVPROPKEY\ bus\_reported\_device\_desc\ =\ \{}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \{0x540b947e,\ 0x8b40,\ 0x45bc,\ \{0xa8,\ 0xa2,\ 0x6a,\ 0x0b,\ 0x89,\ 0x4c,\ 0xbd,\ 0xa2\}\},}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ 4,}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \};}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ DEVPROPTYPE\ type;}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ buflen\ =\ 4096;}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dev\_class\ ==\ \textcolor{stringliteral}{"{}HIDClass"{}}\ \&\&\ \_CM\_Get\_DevNode\_PropertyW\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \ \ \ \ \_CM\_Get\_DevNode\_PropertyW(cur,\ \&bus\_reported\_device\_desc,\ \&type,\ (PBYTE)buffer,\ \&buflen,\ 0)\ ==\ CR\_SUCCESS\ \&\&}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \ \ \ \ type\ ==\ DEVPROP\_TYPE\_STRING)\ \{}
+\DoxyCodeLine{00250\ }
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Some\ devices\ insert\ quite\ some\ trailing\ space\ here.}}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{wchar\_t}\ *wbuffer\ =\ (\textcolor{keywordtype}{wchar\_t}\ *)buffer;}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ wlen\ =\ wcsnlen\_s(wbuffer,\ \textcolor{keyword}{sizeof}(buffer)\ /\ \textcolor{keyword}{sizeof}(\textcolor{keywordtype}{wchar\_t}));}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (wlen\ >\ 0\ \&\&\ iswspace(wbuffer[wlen\ -\/\ 1]))\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \ \ wbuffer[-\/-\/wlen]\ =\ 0;}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classTextEncoder}{TextEncoder}}\ encoder;}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ name.assign(encoder.encode\_wtext(std::wstring(wbuffer,\ wlen)));}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ buflen\ =\ 4096;}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (CM\_Get\_DevNode\_Registry\_Property(cur,\ CM\_DRP\_DEVICEDESC,\ 0,\ buffer,\ \&buflen,\ 0)\ ==\ CR\_SUCCESS)\ \{}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We'll\ pass\ if\ it\ has\ this\ awfully\ boring\ name.\ \ Is\ there\ a}}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ language-\/independent\ way\ to\ check\ this?}}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (strcmp(buffer,\ \textcolor{stringliteral}{"{}USB\ Input\ Device"{}})\ !=\ 0)\ \{}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ \ \ \ \ name.assign(buffer);}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00270\ \ \ \ \ \}}
+\DoxyCodeLine{00271\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ \textcolor{comment}{//\ No\ big\ deal,\ we\ just\ won't\ be\ able\ to\ get\ the\ name.}}
+\DoxyCodeLine{00273\ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ locate\ device\ node\ "{}}\ <<\ path\ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ ret\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00275\ \ \ \}}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00277\ \ \ \textcolor{comment}{//\ Is\ this\ an\ XInput\ device?\ \ If\ so,\ handle\ it\ via\ XInput,\ which\ allows\ us}}
+\DoxyCodeLine{00278\ \ \ \textcolor{comment}{//\ to\ handle\ independent\ left/right\ triggers\ as\ well\ as\ vibration\ output.}}
+\DoxyCodeLine{00279\ \ \ \textcolor{keywordflow}{if}\ (info.dwType\ ==\ RIM\_TYPEHID\ \&\&\ strstr(path,\ \textcolor{stringliteral}{"{}\&IG\_"{}})\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ XInputDevice::init\_xinput())\ \{}
+\DoxyCodeLine{00281\ \ \ \ \ \textcolor{comment}{//\ This\ is\ a\ device\ we\ should\ handle\ via\ the\ XInput\ API.\ \ Check\ which\ of}}
+\DoxyCodeLine{00282\ \ \ \ \ \textcolor{comment}{//\ the\ four\ players\ was\ the\ lucky\ one.}}
+\DoxyCodeLine{00283\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_xinput\_device0.check\_arrival(info,\ inst,\ name,\ manufacturer))\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ add\_device(\&\_xinput\_device0);}
+\DoxyCodeLine{00285\ \ \ \ \ \}}
+\DoxyCodeLine{00286\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_xinput\_device1.check\_arrival(info,\ inst,\ name,\ manufacturer))\ \{}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ add\_device(\&\_xinput\_device1);}
+\DoxyCodeLine{00288\ \ \ \ \ \}}
+\DoxyCodeLine{00289\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_xinput\_device2.check\_arrival(info,\ inst,\ name,\ manufacturer))\ \{}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ add\_device(\&\_xinput\_device2);}
+\DoxyCodeLine{00291\ \ \ \ \ \}}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_xinput\_device3.check\_arrival(info,\ inst,\ name,\ manufacturer))\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ add\_device(\&\_xinput\_device3);}
+\DoxyCodeLine{00294\ \ \ \ \ \}}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00296\ \ \ \}}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00300\ \ \ \textcolor{comment}{//\ Do\ we\ have\ a\ device\ by\ this\ path\ already?\ \ This\ can\ happen\ if\ the}}
+\DoxyCodeLine{00301\ \ \ \textcolor{comment}{//\ user\ keeps\ around\ a\ pointer\ to\ a\ disconnected\ device\ in\ the\ hope\ that}}
+\DoxyCodeLine{00302\ \ \ \textcolor{comment}{//\ it\ will\ reconnect\ later.}}
+\DoxyCodeLine{00303\ \ \ PT(WinRawInputDevice)\ device;}
+\DoxyCodeLine{00304\ \ \ \textcolor{keyword}{auto}\ it\ =\ \_raw\_devices\_by\_path.find(path);}
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordflow}{if}\ (it\ !=\ \_raw\_devices\_by\_path.end())\ \{}
+\DoxyCodeLine{00306\ \ \ \ \ device\ =\ it-\/>second;}
+\DoxyCodeLine{00307\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00308\ \ \ \ \ device\ =\ \textcolor{keyword}{new}\ WinRawInputDevice(\textcolor{keyword}{this},\ path);}
+\DoxyCodeLine{00309\ \ \ \ \ \_raw\_devices\_by\_path[path]\ =\ device;}
+\DoxyCodeLine{00310\ \ \ \}}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \textcolor{keywordflow}{if}\ (device-\/>on\_arrival(handle,\ info,\ move(name)))\ \{}
+\DoxyCodeLine{00313\ \ \ \ \ \_raw\_devices[handle]\ =\ device;}
+\DoxyCodeLine{00314\ \ \ \ \ \_connected\_devices.add\_device(device);}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \ \ \ \ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Discovered\ input\ device\ "{}}\ <<\ *device\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00319\ \ \ \ \ \}}
+\DoxyCodeLine{00320\ \ \ \ \ throw\_event(\textcolor{stringliteral}{"{}connect-\/device"{}},\ device.p());}
+\DoxyCodeLine{00321\ \ \ \}}
+\DoxyCodeLine{00322\ \}}
+\DoxyCodeLine{00323\ }
+\DoxyCodeLine{00327\ \textcolor{keywordtype}{void}\ WinInputDeviceManager::}
+\DoxyCodeLine{00328\ on\_input\_device\_removal(HANDLE\ handle)\ \{}
+\DoxyCodeLine{00329\ \ \ \textcolor{comment}{//\ The\ handle\ will\ probably\ no\ longer\ be\ valid\ after\ this,\ so\ find\ the}}
+\DoxyCodeLine{00330\ \ \ \textcolor{comment}{//\ device\ and\ remove\ it\ from\ \_raw\_devices.\ \ However,\ we\ keep\ it\ in}}
+\DoxyCodeLine{00331\ \ \ \textcolor{comment}{//\ \_raw\_devices\_by\_path\ in\ case\ there's\ still\ a\ pointer\ around\ to\ it.}}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00333\ \ \ \textcolor{comment}{//\ We\ keep\ the\ pointer\ outside\ the\ lock\ because\ the\ input\ device}}
+\DoxyCodeLine{00334\ \ \ \textcolor{comment}{//\ destructor\ calls\ back\ to\ InputDeviceManager.}}
+\DoxyCodeLine{00335\ \ \ PT(WinRawInputDevice)\ device;}
+\DoxyCodeLine{00336\ \ \ \{}
+\DoxyCodeLine{00337\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00338\ \ \ \ \ \textcolor{keyword}{auto}\ it\ =\ \_raw\_devices.find(handle);}
+\DoxyCodeLine{00339\ \ \ \ \ \textcolor{keywordflow}{if}\ (it\ !=\ \_raw\_devices.end())\ \{}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ device\ =\ std::move(it-\/>second);}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \_raw\_devices.erase(it);}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ device-\/>on\_removal();}
+\DoxyCodeLine{00343\ }
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_connected\_devices.remove\_device(device))\ \{}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ throw\_event(\textcolor{stringliteral}{"{}disconnect-\/device"{}},\ device.p());}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Removed\ input\ device\ "{}}\ <<\ *device\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00351\ \ \ \ \ \}}
+\DoxyCodeLine{00352\ \ \ \}}
+\DoxyCodeLine{00353\ \}}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00359\ \textcolor{keywordtype}{void}\ WinInputDeviceManager::}
+\DoxyCodeLine{00360\ update()\ \{}
+\DoxyCodeLine{00361\ \}}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00367\ HWND\ WinInputDeviceManager::}
+\DoxyCodeLine{00368\ setup\_message\_loop()\ \{}
+\DoxyCodeLine{00369\ \ \ \_message\_hwnd\ =\ 0;}
+\DoxyCodeLine{00370\ }
+\DoxyCodeLine{00371\ \ \ \textcolor{comment}{//\ Now\ create\ a\ message-\/only\ window\ for\ the\ raw\ input.}}
+\DoxyCodeLine{00372\ \ \ WNDCLASSEX\ wc\ =\ \{\};}
+\DoxyCodeLine{00373\ \ \ wc.cbSize\ =\ \textcolor{keyword}{sizeof}(WNDCLASSEX);}
+\DoxyCodeLine{00374\ \ \ wc.lpfnWndProc\ =\ window\_proc;}
+\DoxyCodeLine{00375\ \ \ wc.hInstance\ =\ GetModuleHandle(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00376\ \ \ wc.lpszClassName\ =\ \textcolor{stringliteral}{"{}InputDeviceManager"{}};}
+\DoxyCodeLine{00377\ \ \ \textcolor{keywordflow}{if}\ (!RegisterClassEx(\&wc))\ \{}
+\DoxyCodeLine{00378\ \ \ \ \ device\_cat.warning()}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ register\ message-\/only\ window\ class\ for\ input\ device\ detection.\(\backslash\)n"{}};}
+\DoxyCodeLine{00380\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00381\ \ \ \ \ \_message\_hwnd\ =\ CreateWindowEx(0,\ wc.lpszClassName,\ \textcolor{stringliteral}{"{}InputDeviceManager"{}},\ 0,\ 0,\ 0,\ 0,\ 0,\ HWND\_MESSAGE,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00382\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_message\_hwnd)\ \{}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ device\_cat.warning()}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ create\ message-\/only\ window\ for\ input\ device\ detection.\(\backslash\)n"{}};}
+\DoxyCodeLine{00385\ \ \ \ \ \}}
+\DoxyCodeLine{00386\ \ \ \}}
+\DoxyCodeLine{00387\ }
+\DoxyCodeLine{00388\ \ \ \textcolor{comment}{//\ Now\ listen\ for\ raw\ input\ devices\ using\ the\ created\ message\ loop.}}
+\DoxyCodeLine{00389\ \ \ RAWINPUTDEVICE\ rid[4];}
+\DoxyCodeLine{00390\ \ \ rid[0].usUsagePage\ =\ 1;}
+\DoxyCodeLine{00391\ \ \ rid[0].usUsage\ =\ 4;\ \textcolor{comment}{//\ Joysticks}}
+\DoxyCodeLine{00392\ \ \ rid[0].dwFlags\ =\ RIDEV\_DEVNOTIFY\ |\ RIDEV\_INPUTSINK;}
+\DoxyCodeLine{00393\ \ \ rid[0].hwndTarget\ =\ \_message\_hwnd;}
+\DoxyCodeLine{00394\ \ \ rid[1].usUsagePage\ =\ 1;}
+\DoxyCodeLine{00395\ \ \ rid[1].usUsage\ =\ 5;\ \textcolor{comment}{//\ Gamepads}}
+\DoxyCodeLine{00396\ \ \ rid[1].dwFlags\ =\ RIDEV\_DEVNOTIFY\ |\ RIDEV\_INPUTSINK;}
+\DoxyCodeLine{00397\ \ \ rid[1].hwndTarget\ =\ \_message\_hwnd;}
+\DoxyCodeLine{00398\ \ \ rid[2].usUsagePage\ =\ 1;}
+\DoxyCodeLine{00399\ \ \ rid[2].usUsage\ =\ 8;\ \textcolor{comment}{//\ Multi-\/axis\ controllers\ (including\ 3D\ mice)}}
+\DoxyCodeLine{00400\ \ \ rid[2].dwFlags\ =\ RIDEV\_DEVNOTIFY\ |\ RIDEV\_INPUTSINK;}
+\DoxyCodeLine{00401\ \ \ rid[2].hwndTarget\ =\ \_message\_hwnd;}
+\DoxyCodeLine{00402\ \ \ rid[3].usUsagePage\ =\ HID\_USAGE\_PAGE\_DIGITIZER;}
+\DoxyCodeLine{00403\ \ \ rid[3].usUsage\ =\ 1;\ \textcolor{comment}{//\ Digitizers}}
+\DoxyCodeLine{00404\ \ \ rid[3].dwFlags\ =\ RIDEV\_DEVNOTIFY\ |\ RIDEV\_INPUTSINK;}
+\DoxyCodeLine{00405\ \ \ rid[3].hwndTarget\ =\ \_message\_hwnd;}
+\DoxyCodeLine{00406\ \ \ \textcolor{keywordflow}{if}\ (!RegisterRawInputDevices(rid,\ 4,\ \textcolor{keyword}{sizeof}(RAWINPUTDEVICE)))\ \{}
+\DoxyCodeLine{00407\ \ \ \ \ device\_cat.warning()}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ register\ raw\ input\ devices.\(\backslash\)n"{}};}
+\DoxyCodeLine{00409\ \ \ \}}
+\DoxyCodeLine{00410\ }
+\DoxyCodeLine{00411\ \ \ \textcolor{comment}{//\ Do\ we\ have\ any\ XInput\ devices\ plugged\ in\ now?}}
+\DoxyCodeLine{00412\ \ \ \textcolor{keywordtype}{int}\ num\_xinput\ =\ 0;}
+\DoxyCodeLine{00413\ \ \ HANDLE\ xinput\_handle;}
+\DoxyCodeLine{00414\ \ \ RAWINPUTDEVICELIST\ devices[64];}
+\DoxyCodeLine{00415\ \ \ UINT\ num\_devices\ =\ 64;}
+\DoxyCodeLine{00416\ \ \ num\_devices\ =\ GetRawInputDeviceList(devices,\ \&num\_devices,\ \textcolor{keyword}{sizeof}(RAWINPUTDEVICELIST));}
+\DoxyCodeLine{00417\ \ \ \textcolor{keywordflow}{if}\ (num\_devices\ ==\ (UINT)-\/1)\ \{}
+\DoxyCodeLine{00418\ \ \ \ \ num\_devices\ =\ 0;}
+\DoxyCodeLine{00419\ \ \ \}}
+\DoxyCodeLine{00420\ \ \ \textcolor{keywordflow}{for}\ (UINT\ i\ =\ 0;\ i\ <\ num\_devices;\ ++i)\ \{}
+\DoxyCodeLine{00421\ \ \ \ \ \textcolor{keywordflow}{if}\ (devices[i].dwType\ !=\ RIM\_TYPEHID)\ \{}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00423\ \ \ \ \ \}}
+\DoxyCodeLine{00424\ \ \ \ \ HANDLE\ handle\ =\ devices[i].hDevice;}
+\DoxyCodeLine{00425\ \ \ \ \ UINT\ size;}
+\DoxyCodeLine{00426\ \ \ \ \ \textcolor{keywordflow}{if}\ (GetRawInputDeviceInfoA(handle,\ RIDI\_DEVICENAME,\ \textcolor{keyword}{nullptr},\ \&size)\ !=\ 0)\ \{}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00428\ \ \ \ \ \}}
+\DoxyCodeLine{00429\ }
+\DoxyCodeLine{00430\ \ \ \ \ \textcolor{keywordtype}{char}\ *path\ =\ (\textcolor{keywordtype}{char}\ *)alloca(size);}
+\DoxyCodeLine{00431\ \ \ \ \ \textcolor{keywordflow}{if}\ (path\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ \ \ GetRawInputDeviceInfoA(handle,\ RIDI\_DEVICENAME,\ (\textcolor{keywordtype}{void}\ *)path,\ \&size)\ <\ 0)\ \{}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00434\ \ \ \ \ \}}
+\DoxyCodeLine{00435\ }
+\DoxyCodeLine{00436\ \ \ \ \ \textcolor{keywordflow}{if}\ (strstr(path,\ \textcolor{stringliteral}{"{}\&IG\_"{}})\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ xinput\_handle\ =\ handle;}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ ++num\_xinput;}
+\DoxyCodeLine{00439\ \ \ \ \ \}}
+\DoxyCodeLine{00440\ \ \ \}}
+\DoxyCodeLine{00441\ \ \ \textcolor{keywordflow}{if}\ (num\_xinput\ ==\ 1)\ \{}
+\DoxyCodeLine{00442\ \ \ \ \ \textcolor{comment}{//\ There's\ only\ one\ XInput\ device,\ so\ we\ know\ which\ one\ it\ is.}}
+\DoxyCodeLine{00443\ \ \ \ \ on\_input\_device\_arrival(xinput\_handle);}
+\DoxyCodeLine{00444\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (num\_xinput\ >\ 0)\ \{}
+\DoxyCodeLine{00445\ \ \ \ \ \textcolor{comment}{//\ Just\ poll\ all\ the\ XInput\ devices.}}
+\DoxyCodeLine{00446\ \ \ \ \ \_xinput\_device0.detect(\textcolor{keyword}{this});}
+\DoxyCodeLine{00447\ \ \ \ \ \_xinput\_device1.detect(\textcolor{keyword}{this});}
+\DoxyCodeLine{00448\ \ \ \ \ \_xinput\_device2.detect(\textcolor{keyword}{this});}
+\DoxyCodeLine{00449\ \ \ \ \ \_xinput\_device3.detect(\textcolor{keyword}{this});}
+\DoxyCodeLine{00450\ \ \ \}}
+\DoxyCodeLine{00451\ }
+\DoxyCodeLine{00452\ \ \ \textcolor{keywordflow}{return}\ \_message\_hwnd;}
+\DoxyCodeLine{00453\ \}}
+\DoxyCodeLine{00454\ }
+\DoxyCodeLine{00459\ \textcolor{keywordtype}{void}\ WinInputDeviceManager::}
+\DoxyCodeLine{00460\ destroy\_message\_loop()\ \{}
+\DoxyCodeLine{00461\ \ \ HWND\ hwnd\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00462\ \ \ \{}
+\DoxyCodeLine{00463\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00464\ \ \ \ \ std::swap(\_message\_hwnd,\ hwnd);}
+\DoxyCodeLine{00465\ \ \ \}}
+\DoxyCodeLine{00466\ }
+\DoxyCodeLine{00467\ \ \ \textcolor{keywordflow}{if}\ (hwnd)\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ DestroyWindow(hwnd);}
+\DoxyCodeLine{00469\ \ \ \}}
+\DoxyCodeLine{00470\ \}}
+\DoxyCodeLine{00471\ }
+\DoxyCodeLine{00475\ \textcolor{keywordtype}{void}\ WinInputDeviceManager::}
+\DoxyCodeLine{00476\ stop\_thread()\ \{}
+\DoxyCodeLine{00477\ \textcolor{preprocessor}{\#ifdef\ HAVE\_THREADS}}
+\DoxyCodeLine{00478\ \ \ WinInputDeviceManager\ *mgr\ =\ (WinInputDeviceManager\ *)\_global\_ptr;}
+\DoxyCodeLine{00479\ \ \ \textcolor{keywordflow}{if}\ (mgr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00480\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(mgr-\/>\_lock);}
+\DoxyCodeLine{00481\ \ \ \ \ HWND\ hwnd\ =\ mgr-\/>\_message\_hwnd;}
+\DoxyCodeLine{00482\ \ \ \ \ \textcolor{keywordflow}{if}\ (hwnd)\ \{}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ PostMessage(hwnd,\ WM\_QUIT,\ 0,\ 0);}
+\DoxyCodeLine{00484\ \ \ \ \ \}}
+\DoxyCodeLine{00485\ \ \ \}}
+\DoxyCodeLine{00486\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00487\ \}}
+\DoxyCodeLine{00488\ }
+\DoxyCodeLine{00492\ LRESULT\ WINAPI\ WinInputDeviceManager::}
+\DoxyCodeLine{00493\ window\_proc(HWND\ hwnd,\ UINT\ msg,\ WPARAM\ wparam,\ LPARAM\ lparam)\ \{}
+\DoxyCodeLine{00494\ \ \ WinInputDeviceManager\ *mgr;}
+\DoxyCodeLine{00495\ \ \ \textcolor{keywordflow}{switch}\ (msg)\ \{}
+\DoxyCodeLine{00496\ \ \ \textcolor{keywordflow}{case}\ WM\_INPUT:}
+\DoxyCodeLine{00497\ \ \ \ \ mgr\ =\ (WinInputDeviceManager\ *)InputDeviceManager::get\_global\_ptr();}
+\DoxyCodeLine{00498\ \ \ \ \ \textcolor{keywordflow}{if}\ (mgr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ mgr-\/>on\_input((HRAWINPUT)lparam);}
+\DoxyCodeLine{00500\ \ \ \ \ \}}
+\DoxyCodeLine{00501\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00502\ }
+\DoxyCodeLine{00503\ \ \ \textcolor{keywordflow}{case}\ WM\_INPUT\_DEVICE\_CHANGE:}
+\DoxyCodeLine{00504\ \ \ \ \ \textcolor{keywordflow}{switch}\ (LOWORD(wparam))\ \{}
+\DoxyCodeLine{00505\ \ \ \ \ \textcolor{keywordflow}{case}\ GIDC\_ARRIVAL:}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ mgr\ =\ (WinInputDeviceManager\ *)InputDeviceManager::get\_global\_ptr();}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (mgr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ \ \ mgr-\/>on\_input\_device\_arrival((HANDLE)lparam);}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00510\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00511\ }
+\DoxyCodeLine{00512\ \ \ \ \ \textcolor{keywordflow}{case}\ GIDC\_REMOVAL:}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ mgr\ =\ (WinInputDeviceManager\ *)InputDeviceManager::get\_global\_ptr();}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (mgr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \ \ mgr-\/>on\_input\_device\_removal((HANDLE)lparam);}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00518\ \ \ \ \ \}}
+\DoxyCodeLine{00519\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00522\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00523\ \ \ \}}
+\DoxyCodeLine{00524\ \ \ \textcolor{keywordflow}{return}\ DefWindowProc(hwnd,\ msg,\ wparam,\ lparam);}
+\DoxyCodeLine{00525\ \}}
+\DoxyCodeLine{00526\ }
+\DoxyCodeLine{00527\ \textcolor{preprocessor}{\#ifdef\ HAVE\_THREADS}}
+\DoxyCodeLine{00531\ \textcolor{keywordtype}{void}\ InputThread::}
+\DoxyCodeLine{00532\ thread\_main()\ \{}
+\DoxyCodeLine{00533\ \ \ WinInputDeviceManager\ *manager\ =\ \_manager;}
+\DoxyCodeLine{00534\ \ \ HWND\ hwnd\ =\ manager-\/>setup\_message\_loop();}
+\DoxyCodeLine{00535\ \ \ \textcolor{keywordflow}{if}\ (!hwnd)\ \{}
+\DoxyCodeLine{00536\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00537\ \ \ \}}
+\DoxyCodeLine{00538\ }
+\DoxyCodeLine{00539\ \ \ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00540\ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Started\ input\ device\ listener\ thread.\(\backslash\)n"{}};}
+\DoxyCodeLine{00542\ \ \ \}}
+\DoxyCodeLine{00543\ }
+\DoxyCodeLine{00544\ \ \ MSG\ msg;}
+\DoxyCodeLine{00545\ \textcolor{preprocessor}{\#ifdef\ SIMPLE\_THREADS}}
+\DoxyCodeLine{00546\ \ \ \textcolor{comment}{//\ In\ the\ simple\ threading\ case,\ we\ can't\ block\ the\ thread\ waiting\ for\ a}}
+\DoxyCodeLine{00547\ \ \ \textcolor{comment}{//\ message;\ we\ yield\ control\ back\ if\ there\ are\ no\ more\ messages.}}
+\DoxyCodeLine{00548\ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00549\ \ \ \ \ \textcolor{keywordflow}{if}\ (PeekMessage(\&msg,\ \textcolor{keyword}{nullptr},\ 0,\ 0,\ PM\_REMOVE))\ \{}
+\DoxyCodeLine{00550\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (msg.message\ ==\ WM\_QUIT)\ \{}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00553\ \ \ \ \ \ \ TranslateMessage(\&msg);}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ DispatchMessage(\&msg);}
+\DoxyCodeLine{00555\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00557\ \ \ \ \ \}}
+\DoxyCodeLine{00558\ \ \ \}}
+\DoxyCodeLine{00559\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00560\ \ \ \textcolor{keywordflow}{while}\ (GetMessage(\&msg,\ \textcolor{keyword}{nullptr},\ 0,\ 0)\ >\ 0)\ \{}
+\DoxyCodeLine{00561\ \ \ \ \ TranslateMessage(\&msg);}
+\DoxyCodeLine{00562\ \ \ \ \ DispatchMessage(\&msg);}
+\DoxyCodeLine{00563\ \ \ \}}
+\DoxyCodeLine{00564\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00565\ }
+\DoxyCodeLine{00566\ \ \ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00567\ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Stopping\ input\ device\ listener\ thread.\(\backslash\)n"{}};}
+\DoxyCodeLine{00569\ \ \ \}}
+\DoxyCodeLine{00570\ }
+\DoxyCodeLine{00571\ \ \ manager-\/>destroy\_message\_loop();}
+\DoxyCodeLine{00572\ \}}
+\DoxyCodeLine{00573\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_THREADS}}
+\DoxyCodeLine{00574\ }
+\DoxyCodeLine{00575\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

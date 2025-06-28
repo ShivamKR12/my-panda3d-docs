@@ -1,0 +1,828 @@
+\doxysection{vertex\+Data\+Page.\+cxx}
+\hypertarget{vertexDataPage_8cxx_source}{}\label{vertexDataPage_8cxx_source}\index{panda/src/gobj/vertexDataPage.cxx@{panda/src/gobj/vertexDataPage.cxx}}
+\mbox{\hyperlink{vertexDataPage_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{vertexDataPage_8h}{vertexDataPage.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableInt_8h}{configVariableInt.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{vertexDataSaveFile_8h}{vertexDataSaveFile.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{vertexDataBook_8h}{vertexDataBook.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{vertexDataBlock_8h}{vertexDataBlock.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimer_8h}{pStatTimer.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{memoryHook_8h}{memoryHook.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__gobj_8h}{config\_gobj.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#ifdef\ HAVE\_ZLIB}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{zlib_8h}{zlib.h}}>}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ max\_resident\_vertex\_data}
+\DoxyCodeLine{00029\ (\textcolor{stringliteral}{"{}max-\/resident-\/vertex-\/data"{}},\ -\/1,}
+\DoxyCodeLine{00030\ \ PRC\_DESC(\textcolor{stringliteral}{"{}Specifies\ the\ maximum\ number\ of\ bytes\ of\ all\ vertex\ data\ "{}}}
+\DoxyCodeLine{00031\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}that\ is\ allowed\ to\ remain\ resident\ in\ system\ RAM\ at\ one\ time.\ "{}}}
+\DoxyCodeLine{00032\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}If\ more\ than\ this\ number\ of\ bytes\ of\ vertices\ are\ created,\ "{}}}
+\DoxyCodeLine{00033\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}the\ least-\/recently-\/used\ ones\ will\ be\ temporarily\ compressed\ in\ "{}}}
+\DoxyCodeLine{00034\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}system\ RAM\ until\ they\ are\ needed.\ \ Set\ it\ to\ -\/1\ for\ no\ limit."{}}));}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ max\_compressed\_vertex\_data}
+\DoxyCodeLine{00037\ (\textcolor{stringliteral}{"{}max-\/compressed-\/vertex-\/data"{}},\ 0,}
+\DoxyCodeLine{00038\ \ PRC\_DESC(\textcolor{stringliteral}{"{}Specifies\ the\ maximum\ number\ of\ bytes\ of\ all\ vertex\ data\ "{}}}
+\DoxyCodeLine{00039\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}that\ is\ allowed\ to\ remain\ compressed\ in\ system\ RAM\ at\ one\ time.\ "{}}}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}If\ more\ than\ this\ number\ of\ bytes\ of\ vertices\ are\ created,\ "{}}}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}the\ least-\/recently-\/used\ ones\ will\ be\ temporarily\ flushed\ to\ "{}}}
+\DoxyCodeLine{00042\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}disk\ until\ they\ are\ needed.\ \ Set\ it\ to\ -\/1\ for\ no\ limit."{}}));}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00044\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ vertex\_data\_compression\_level}
+\DoxyCodeLine{00045\ (\textcolor{stringliteral}{"{}vertex-\/data-\/compression-\/level"{}},\ 1,}
+\DoxyCodeLine{00046\ \ PRC\_DESC(\textcolor{stringliteral}{"{}Specifies\ the\ zlib\ compression\ level\ to\ use\ when\ compressing\ "{}}}
+\DoxyCodeLine{00047\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}vertex\ data.\ \ The\ number\ should\ be\ in\ the\ range\ 1\ to\ 9,\ where\ "{}}}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}larger\ values\ are\ slower\ but\ give\ better\ compression."{}}));}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ max\_disk\_vertex\_data}
+\DoxyCodeLine{00051\ (\textcolor{stringliteral}{"{}max-\/disk-\/vertex-\/data"{}},\ -\/1,}
+\DoxyCodeLine{00052\ \ PRC\_DESC(\textcolor{stringliteral}{"{}Specifies\ the\ maximum\ number\ of\ bytes\ of\ vertex\ data\ "{}}}
+\DoxyCodeLine{00053\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}that\ is\ allowed\ to\ be\ written\ to\ disk.\ \ Set\ it\ to\ -\/1\ for\ no\ "{}}}
+\DoxyCodeLine{00054\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}limit."{}}));}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ PT(VertexDataPage::PageThreadManager)\ VertexDataPage::\_thread\_mgr;}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00058\ \textcolor{comment}{//\ This\ is\ a\ reference\ to\ an\ allocated\ Mutex,\ instead\ of\ just\ a\ static\ Mutex,}}
+\DoxyCodeLine{00059\ \textcolor{comment}{//\ to\ protect\ against\ ordering\ issues\ when\ the\ application\ shuts\ down.}}
+\DoxyCodeLine{00060\ \mbox{\hyperlink{classMutex}{Mutex}}\ \&VertexDataPage::\_tlock\ =\ *(\textcolor{keyword}{new}\ \mbox{\hyperlink{classMutex}{Mutex}}(\textcolor{stringliteral}{"{}VertexDataPage::\_tlock"{}}));}
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00062\ \mbox{\hyperlink{classSimpleLru}{SimpleLru}}\ VertexDataPage::\_resident\_lru(\textcolor{stringliteral}{"{}resident"{}},\ max\_resident\_vertex\_data);}
+\DoxyCodeLine{00063\ \mbox{\hyperlink{classSimpleLru}{SimpleLru}}\ VertexDataPage::\_compressed\_lru(\textcolor{stringliteral}{"{}compressed"{}},\ max\_compressed\_vertex\_data);}
+\DoxyCodeLine{00064\ \mbox{\hyperlink{classSimpleLru}{SimpleLru}}\ VertexDataPage::\_disk\_lru(\textcolor{stringliteral}{"{}disk"{}},\ 0);}
+\DoxyCodeLine{00065\ \mbox{\hyperlink{classSimpleLru}{SimpleLru}}\ VertexDataPage::\_pending\_lru(\textcolor{stringliteral}{"{}pending"{}},\ 0);}
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00067\ \mbox{\hyperlink{classSimpleLru}{SimpleLru}}\ *VertexDataPage::\_global\_lru[RC\_end\_of\_list]\ =\ \{}
+\DoxyCodeLine{00068\ \ \ \&VertexDataPage::\_resident\_lru,}
+\DoxyCodeLine{00069\ \ \ \&VertexDataPage::\_compressed\_lru,}
+\DoxyCodeLine{00070\ \ \ \&VertexDataPage::\_disk\_lru,}
+\DoxyCodeLine{00071\ \};}
+\DoxyCodeLine{00072\ }
+\DoxyCodeLine{00073\ \mbox{\hyperlink{classVertexDataSaveFile}{VertexDataSaveFile}}\ *VertexDataPage::\_save\_file;}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \textcolor{comment}{//\ This\ mutex\ is\ (mostly)\ unused.\ \ We\ just\ need\ a\ Mutex\ to\ pass\ to\ the\ Book}}
+\DoxyCodeLine{00076\ \textcolor{comment}{//\ Constructor,\ below.}}
+\DoxyCodeLine{00077\ \mbox{\hyperlink{classMutex}{Mutex}}\ VertexDataPage::\_unused\_mutex;}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00079\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ VertexDataPage::\_vdata\_compress\_pcollector(\textcolor{stringliteral}{"{}*:Vertex\ Data:Compress"{}});}
+\DoxyCodeLine{00080\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ VertexDataPage::\_vdata\_decompress\_pcollector(\textcolor{stringliteral}{"{}*:Vertex\ Data:Decompress"{}});}
+\DoxyCodeLine{00081\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ VertexDataPage::\_vdata\_save\_pcollector(\textcolor{stringliteral}{"{}*:Vertex\ Data:Save"{}});}
+\DoxyCodeLine{00082\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ VertexDataPage::\_vdata\_restore\_pcollector(\textcolor{stringliteral}{"{}*:Vertex\ Data:Restore"{}});}
+\DoxyCodeLine{00083\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ VertexDataPage::\_thread\_wait\_pcollector(\textcolor{stringliteral}{"{}Wait:Idle"{}});}
+\DoxyCodeLine{00084\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ VertexDataPage::\_alloc\_pages\_pcollector(\textcolor{stringliteral}{"{}System\ memory:MMap:Vertex\ data"{}});}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00086\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ VertexDataPage::\_type\_handle;}
+\DoxyCodeLine{00087\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ VertexDataPage::DeflatePage::\_type\_handle;}
+\DoxyCodeLine{00088\ }
+\DoxyCodeLine{00089\ \textcolor{preprocessor}{\#if\ defined(HAVE\_ZLIB)\ \&\&\ !defined(USE\_MEMORY\_NOWRAPPERS)}}
+\DoxyCodeLine{00090\ \textcolor{comment}{//\ Define\ functions\ that\ hook\ zlib\ into\ panda's\ memory\ allocation\ system.}}
+\DoxyCodeLine{00091\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ *}
+\DoxyCodeLine{00092\ do\_zlib\_alloc(voidpf\ opaque,\ uInt\ items,\ uInt\ size)\ \{}
+\DoxyCodeLine{00093\ \ \ \textcolor{keywordflow}{return}\ PANDA\_MALLOC\_ARRAY(items\ *\ size);}
+\DoxyCodeLine{00094\ \}}
+\DoxyCodeLine{00095\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00096\ do\_zlib\_free(voidpf\ opaque,\ voidpf\ address)\ \{}
+\DoxyCodeLine{00097\ \ \ PANDA\_FREE\_ARRAY(address);}
+\DoxyCodeLine{00098\ \}}
+\DoxyCodeLine{00099\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_ZLIB\ \&\&\ !USE\_MEMORY\_NOWRAPPERS}}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00106\ VertexDataPage::}
+\DoxyCodeLine{00107\ VertexDataPage(\textcolor{keywordtype}{size\_t}\ book\_size)\ :}
+\DoxyCodeLine{00108\ \ \ \mbox{\hyperlink{classSimpleAllocator}{SimpleAllocator}}(book\_size,\ \_unused\_mutex),}
+\DoxyCodeLine{00109\ \ \ \mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}(book\_size),}
+\DoxyCodeLine{00110\ \ \ \_book\_size(book\_size),}
+\DoxyCodeLine{00111\ \ \ \_block\_size(0),}
+\DoxyCodeLine{00112\ \ \ \_book(nullptr)}
+\DoxyCodeLine{00113\ \{}
+\DoxyCodeLine{00114\ \ \ \_page\_data\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00115\ \ \ \_size\ =\ 0;}
+\DoxyCodeLine{00116\ \ \ \_uncompressed\_size\ =\ 0;}
+\DoxyCodeLine{00117\ \ \ \_ram\_class\ =\ RC\_resident;}
+\DoxyCodeLine{00118\ \ \ \_pending\_ram\_class\ =\ RC\_resident;}
+\DoxyCodeLine{00119\ \}}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00124\ VertexDataPage::}
+\DoxyCodeLine{00125\ VertexDataPage(\mbox{\hyperlink{classVertexDataBook}{VertexDataBook}}\ *book,\ \textcolor{keywordtype}{size\_t}\ page\_size,\ \textcolor{keywordtype}{size\_t}\ block\_size)\ :}
+\DoxyCodeLine{00126\ \ \ \mbox{\hyperlink{classSimpleAllocator}{SimpleAllocator}}(page\_size,\ book-\/>\_lock),}
+\DoxyCodeLine{00127\ \ \ \mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}(page\_size),}
+\DoxyCodeLine{00128\ \ \ \_book\_size(page\_size),}
+\DoxyCodeLine{00129\ \ \ \_block\_size(block\_size),}
+\DoxyCodeLine{00130\ \ \ \_book(book)}
+\DoxyCodeLine{00131\ \{}
+\DoxyCodeLine{00132\ \ \ \_allocated\_size\ =\ round\_up(page\_size);}
+\DoxyCodeLine{00133\ \ \ \_page\_data\ =\ alloc\_page\_data(\_allocated\_size);}
+\DoxyCodeLine{00134\ \ \ \_size\ =\ page\_size;}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00136\ \ \ \_uncompressed\_size\ =\ \_size;}
+\DoxyCodeLine{00137\ \ \ \_pending\_ram\_class\ =\ RC\_resident;}
+\DoxyCodeLine{00138\ \ \ set\_ram\_class(RC\_resident);}
+\DoxyCodeLine{00139\ \}}
+\DoxyCodeLine{00140\ }
+\DoxyCodeLine{00144\ VertexDataPage::}
+\DoxyCodeLine{00145\ \string~VertexDataPage()\ \{}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00147\ \ \ \textcolor{comment}{//\ Since\ the\ only\ way\ to\ delete\ a\ page\ is\ via\ the\ changed\_contiguous()}}
+\DoxyCodeLine{00148\ \ \ \textcolor{comment}{//\ method,\ the\ lock\ will\ already\ be\ held.\ \ MutexHolder\ holder(\_lock);}}
+\DoxyCodeLine{00149\ }
+\DoxyCodeLine{00150\ \ \ \{}
+\DoxyCodeLine{00151\ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder2(\_tlock);}
+\DoxyCodeLine{00152\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_pending\_ram\_class\ !=\ \_ram\_class)\ \{}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ nassertv(\_thread\_mgr\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \_thread\_mgr-\/>remove\_page(\textcolor{keyword}{this});}
+\DoxyCodeLine{00155\ \ \ \ \ \}}
+\DoxyCodeLine{00156\ \ \ \}}
+\DoxyCodeLine{00157\ }
+\DoxyCodeLine{00158\ \ \ \textcolor{keywordflow}{if}\ (\_page\_data\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00159\ \ \ \ \ free\_page\_data(\_page\_data,\ \_allocated\_size);}
+\DoxyCodeLine{00160\ \ \ \ \ \_size\ =\ 0;}
+\DoxyCodeLine{00161\ \ \ \}}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00163\ \ \ nassertv(\_book\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00164\ \}}
+\DoxyCodeLine{00165\ }
+\DoxyCodeLine{00170\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00171\ stop\_threads()\ \{}
+\DoxyCodeLine{00172\ \ \ PT(PageThreadManager)\ thread\_mgr;}
+\DoxyCodeLine{00173\ \ \ \{}
+\DoxyCodeLine{00174\ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_tlock);}
+\DoxyCodeLine{00175\ \ \ \ \ thread\_mgr\ =\ \_thread\_mgr;}
+\DoxyCodeLine{00176\ \ \ \ \ \_thread\_mgr.clear();}
+\DoxyCodeLine{00177\ \ \ \}}
+\DoxyCodeLine{00178\ }
+\DoxyCodeLine{00179\ \ \ \textcolor{keywordflow}{if}\ (thread\_mgr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00180\ \ \ \ \ gobj\_cat.info()}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Stopping\ vertex\ paging\ threads.\(\backslash\)n"{}};}
+\DoxyCodeLine{00182\ \ \ \ \ thread\_mgr-\/>stop\_threads();}
+\DoxyCodeLine{00183\ \ \ \}}
+\DoxyCodeLine{00184\ \}}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00189\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00190\ flush\_threads()\ \{}
+\DoxyCodeLine{00191\ \ \ \textcolor{keywordtype}{int}\ num\_threads\ =\ vertex\_data\_page\_threads;}
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordflow}{if}\ (num\_threads\ ==\ 0)\ \{}
+\DoxyCodeLine{00193\ \ \ \ \ stop\_threads();}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00195\ \ \ \}}
+\DoxyCodeLine{00196\ }
+\DoxyCodeLine{00197\ \ \ PT(PageThreadManager)\ thread\_mgr;}
+\DoxyCodeLine{00198\ \ \ \{}
+\DoxyCodeLine{00199\ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_tlock);}
+\DoxyCodeLine{00200\ \ \ \ \ thread\_mgr\ =\ \_thread\_mgr;}
+\DoxyCodeLine{00201\ \ \ \}}
+\DoxyCodeLine{00202\ }
+\DoxyCodeLine{00203\ \ \ \textcolor{keywordflow}{if}\ (thread\_mgr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00204\ \ \ \ \ thread\_mgr-\/>stop\_threads();}
+\DoxyCodeLine{00205\ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_tlock);}
+\DoxyCodeLine{00206\ \ \ \ \ thread\_mgr-\/>start\_threads(num\_threads);}
+\DoxyCodeLine{00207\ \ \ \}}
+\DoxyCodeLine{00208\ \}}
+\DoxyCodeLine{00209\ }
+\DoxyCodeLine{00213\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00214\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00215\ \ \ SimpleAllocator::output(out);}
+\DoxyCodeLine{00216\ \}}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00221\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00222\ write(std::ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00223\ \ \ SimpleAllocator::write(out);}
+\DoxyCodeLine{00224\ \}}
+\DoxyCodeLine{00225\ }
+\DoxyCodeLine{00230\ \mbox{\hyperlink{classSimpleAllocatorBlock}{SimpleAllocatorBlock}}\ *\mbox{\hyperlink{classVertexDataPage_a7f0d3769173ff447836bb6a8b65053c9}{VertexDataPage::}}}
+\DoxyCodeLine{00231\ \mbox{\hyperlink{classVertexDataPage_a7f0d3769173ff447836bb6a8b65053c9}{make\_block}}(\textcolor{keywordtype}{size\_t}\ start,\ \textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00232\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classVertexDataBlock}{VertexDataBlock}}(\textcolor{keyword}{this},\ start,\ size);}
+\DoxyCodeLine{00233\ \}}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00240\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classVertexDataPage_a4e3fee485f7597a139283d1249212f7b}{VertexDataPage::}}}
+\DoxyCodeLine{00241\ \mbox{\hyperlink{classVertexDataPage_a4e3fee485f7597a139283d1249212f7b}{changed\_contiguous}}()\ \{}
+\DoxyCodeLine{00242\ \ \ \textcolor{keywordflow}{if}\ (do\_is\_empty())\ \{}
+\DoxyCodeLine{00243\ \ \ \ \ \textcolor{comment}{//\ If\ the\ page\ is\ now\ empty,\ delete\ it.}}
+\DoxyCodeLine{00244\ \ \ \ \ VertexDataBook::Pages::iterator\ pi\ =\ \_book-\/>\_pages.find(\textcolor{keyword}{this});}
+\DoxyCodeLine{00245\ \ \ \ \ nassertv(pi\ !=\ \_book-\/>\_pages.end());}
+\DoxyCodeLine{00246\ \ \ \ \ \_book-\/>\_pages.erase(pi);}
+\DoxyCodeLine{00247\ \ \ \ \ \_book\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{keyword}{delete}\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00249\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00250\ \ \ \}}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \ \ adjust\_book\_size();}
+\DoxyCodeLine{00253\ \}}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00265\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classVertexDataPage_a8c403b60c64cc96fa011c7e22bcbcb1a}{VertexDataPage::}}}
+\DoxyCodeLine{00266\ \mbox{\hyperlink{classVertexDataPage_a8c403b60c64cc96fa011c7e22bcbcb1a}{evict\_lru}}()\ \{}
+\DoxyCodeLine{00267\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ \textcolor{keywordflow}{switch}\ (\_ram\_class)\ \{}
+\DoxyCodeLine{00270\ \ \ \textcolor{keywordflow}{case}\ RC\_resident:}
+\DoxyCodeLine{00271\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_compressed\_lru.get\_max\_size()\ ==\ 0)\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ request\_ram\_class(RC\_disk);}
+\DoxyCodeLine{00273\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ request\_ram\_class(RC\_compressed);}
+\DoxyCodeLine{00275\ \ \ \ \ \}}
+\DoxyCodeLine{00276\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \textcolor{keywordflow}{case}\ RC\_compressed:}
+\DoxyCodeLine{00279\ \ \ \ \ request\_ram\_class(RC\_disk);}
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \ \ \textcolor{keywordflow}{case}\ RC\_disk:}
+\DoxyCodeLine{00283\ \ \ \textcolor{keywordflow}{case}\ RC\_end\_of\_list:}
+\DoxyCodeLine{00284\ \ \ \ \ gobj\_cat.warning()}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Internal\ error:\ attempt\ to\ evict\ array\ data\ "{}}\ <<\ \textcolor{keyword}{this}}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ in\ inappropriate\ state\ "{}}\ <<\ \_ram\_class\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00287\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00288\ \ \ \}}
+\DoxyCodeLine{00289\ \}}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00300\ \mbox{\hyperlink{classVertexDataBlock}{VertexDataBlock}}\ *VertexDataPage::}
+\DoxyCodeLine{00301\ do\_alloc(\textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00302\ \ \ \mbox{\hyperlink{classVertexDataBlock}{VertexDataBlock}}\ *block\ =\ (\mbox{\hyperlink{classVertexDataBlock}{VertexDataBlock}}\ *)\mbox{\hyperlink{classSimpleAllocator_aad6b920240dfc5b87cd5315df390245b}{SimpleAllocator::do\_alloc}}(size);}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00304\ \ \ \textcolor{keywordflow}{if}\ (block\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ \_ram\_class\ !=\ RC\_disk)\ \{}
+\DoxyCodeLine{00305\ \ \ \ \ \textcolor{comment}{//\ When\ we\ allocate\ a\ new\ block\ within\ a\ resident\ page,\ we\ have\ to\ clear}}
+\DoxyCodeLine{00306\ \ \ \ \ \textcolor{comment}{//\ the\ disk\ cache\ (since\ we\ have\ just\ invalidated\ it).}}
+\DoxyCodeLine{00307\ \ \ \ \ \_saved\_block.clear();}
+\DoxyCodeLine{00308\ \ \ \}}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ \textcolor{keywordflow}{return}\ block;}
+\DoxyCodeLine{00311\ \}}
+\DoxyCodeLine{00312\ }
+\DoxyCodeLine{00320\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00321\ make\_resident\_now()\ \{}
+\DoxyCodeLine{00322\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_tlock);}
+\DoxyCodeLine{00323\ \ \ \textcolor{keywordflow}{if}\ (\_pending\_ram\_class\ !=\ \_ram\_class)\ \{}
+\DoxyCodeLine{00324\ \ \ \ \ nassertv(\_thread\_mgr\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00325\ \ \ \ \ \_thread\_mgr-\/>remove\_page(\textcolor{keyword}{this});}
+\DoxyCodeLine{00326\ \ \ \}}
+\DoxyCodeLine{00327\ }
+\DoxyCodeLine{00328\ \ \ make\_resident();}
+\DoxyCodeLine{00329\ \ \ \_pending\_ram\_class\ =\ RC\_resident;}
+\DoxyCodeLine{00330\ \}}
+\DoxyCodeLine{00331\ }
+\DoxyCodeLine{00339\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00340\ make\_resident()\ \{}
+\DoxyCodeLine{00341\ \ \ \textcolor{keywordflow}{if}\ (\_ram\_class\ ==\ RC\_resident)\ \{}
+\DoxyCodeLine{00342\ \ \ \ \ mark\_used\_lru();}
+\DoxyCodeLine{00343\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00344\ \ \ \}}
+\DoxyCodeLine{00345\ }
+\DoxyCodeLine{00346\ \ \ \textcolor{keywordflow}{if}\ (\_ram\_class\ ==\ RC\_disk)\ \{}
+\DoxyCodeLine{00347\ \ \ \ \ do\_restore\_from\_disk();}
+\DoxyCodeLine{00348\ \ \ \}}
+\DoxyCodeLine{00349\ }
+\DoxyCodeLine{00350\ \ \ \textcolor{keywordflow}{if}\ (\_ram\_class\ ==\ RC\_compressed)\ \{}
+\DoxyCodeLine{00351\ \textcolor{preprocessor}{\#ifdef\ HAVE\_ZLIB}}
+\DoxyCodeLine{00352\ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_vdata\_decompress\_pcollector);}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ gobj\_cat.debug()}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Expanding\ page\ from\ "{}}\ <<\ \_size}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}\ <<\ \_uncompressed\_size\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00358\ \ \ \ \ \}}
+\DoxyCodeLine{00359\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ new\_allocated\_size\ =\ round\_up(\_uncompressed\_size);}
+\DoxyCodeLine{00360\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *new\_data\ =\ alloc\_page\_data(new\_allocated\_size);}
+\DoxyCodeLine{00361\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *end\_data\ =\ new\_data\ +\ new\_allocated\_size;}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00363\ \ \ \ \ z\_stream\ z\_source;}
+\DoxyCodeLine{00364\ \textcolor{preprocessor}{\#ifdef\ USE\_MEMORY\_NOWRAPPERS}}
+\DoxyCodeLine{00365\ \ \ \ \ z\_source.zalloc\ =\ Z\_NULL;}
+\DoxyCodeLine{00366\ \ \ \ \ z\_source.zfree\ =\ Z\_NULL;}
+\DoxyCodeLine{00367\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00368\ \ \ \ \ z\_source.zalloc\ =\ (alloc\_func)\&do\_zlib\_alloc;}
+\DoxyCodeLine{00369\ \ \ \ \ z\_source.zfree\ =\ (free\_func)\&do\_zlib\_free;}
+\DoxyCodeLine{00370\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00371\ }
+\DoxyCodeLine{00372\ \ \ \ \ z\_source.opaque\ =\ Z\_NULL;}
+\DoxyCodeLine{00373\ \ \ \ \ z\_source.msg\ =\ (\textcolor{keywordtype}{char}\ *)\ \textcolor{stringliteral}{"{}no\ error\ message"{}};}
+\DoxyCodeLine{00374\ }
+\DoxyCodeLine{00375\ \ \ \ \ z\_source.next\_in\ =\ (Bytef\ *)(\textcolor{keywordtype}{char}\ *)\_page\_data;}
+\DoxyCodeLine{00376\ \ \ \ \ z\_source.avail\_in\ =\ \_size;}
+\DoxyCodeLine{00377\ \ \ \ \ z\_source.next\_out\ =\ (Bytef\ *)new\_data;}
+\DoxyCodeLine{00378\ \ \ \ \ z\_source.avail\_out\ =\ new\_allocated\_size;}
+\DoxyCodeLine{00379\ }
+\DoxyCodeLine{00380\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ inflateInit(\&z\_source);}
+\DoxyCodeLine{00381\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}zlib\ error"{}});}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00384\ \ \ \ \ \}}
+\DoxyCodeLine{00385\ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00386\ }
+\DoxyCodeLine{00387\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ output\_size\ =\ 0;}
+\DoxyCodeLine{00388\ }
+\DoxyCodeLine{00389\ \ \ \ \ \textcolor{keywordtype}{int}\ flush\ =\ 0;}
+\DoxyCodeLine{00390\ \ \ \ \ result\ =\ 0;}
+\DoxyCodeLine{00391\ \ \ \ \ \textcolor{keywordflow}{while}\ (result\ !=\ Z\_STREAM\_END)\ \{}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *start\_out\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)z\_source.next\_out;}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ nassertv(start\_out\ <\ end\_data);}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ z\_source.avail\_out\ =\ std::min((\textcolor{keywordtype}{size\_t})(end\_data\ -\/\ start\_out),\ (\textcolor{keywordtype}{size\_t})inflate\_page\_size);}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ nassertv(z\_source.avail\_out\ !=\ 0);}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ result\ =\ inflate(\&z\_source,\ flush);}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0\ \&\&\ result\ !=\ Z\_BUF\_ERROR)\ \{}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}zlib\ error"{}});}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ bytes\_produced\ =\ (size\_t)((\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)z\_source.next\_out\ -\/\ start\_out);}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ output\_size\ +=\ bytes\_produced;}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bytes\_produced\ ==\ 0)\ \{}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ ever\ produce\ no\ bytes,\ then\ start\ flushing\ the\ output.}}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ flush\ =\ Z\_FINISH;}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00408\ \ \ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00409\ \ \ \ \ \}}
+\DoxyCodeLine{00410\ \ \ \ \ nassertv(z\_source.avail\_in\ ==\ 0);}
+\DoxyCodeLine{00411\ \ \ \ \ nassertv(output\_size\ ==\ \_uncompressed\_size);}
+\DoxyCodeLine{00412\ }
+\DoxyCodeLine{00413\ \ \ \ \ result\ =\ inflateEnd(\&z\_source);}
+\DoxyCodeLine{00414\ \ \ \ \ nassertv(result\ ==\ Z\_OK);}
+\DoxyCodeLine{00415\ }
+\DoxyCodeLine{00416\ \ \ \ \ free\_page\_data(\_page\_data,\ \_allocated\_size);}
+\DoxyCodeLine{00417\ \ \ \ \ \_page\_data\ =\ new\_data;}
+\DoxyCodeLine{00418\ \ \ \ \ \_size\ =\ \_uncompressed\_size;}
+\DoxyCodeLine{00419\ \ \ \ \ \_allocated\_size\ =\ new\_allocated\_size;}
+\DoxyCodeLine{00420\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00422\ \ \ \ \ set\_lru\_size(\_size);}
+\DoxyCodeLine{00423\ \ \ \ \ set\_ram\_class(RC\_resident);}
+\DoxyCodeLine{00424\ \ \ \}}
+\DoxyCodeLine{00425\ \}}
+\DoxyCodeLine{00426\ }
+\DoxyCodeLine{00433\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00434\ make\_compressed()\ \{}
+\DoxyCodeLine{00435\ \ \ \textcolor{keywordflow}{if}\ (\_ram\_class\ ==\ RC\_compressed)\ \{}
+\DoxyCodeLine{00436\ \ \ \ \ \textcolor{comment}{//\ If\ we're\ already\ compressed,\ just\ mark\ the\ page\ recently\ used.}}
+\DoxyCodeLine{00437\ \ \ \ \ mark\_used\_lru();}
+\DoxyCodeLine{00438\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00439\ \ \ \}}
+\DoxyCodeLine{00440\ }
+\DoxyCodeLine{00441\ \ \ \textcolor{keywordflow}{if}\ (\_ram\_class\ ==\ RC\_disk)\ \{}
+\DoxyCodeLine{00442\ \ \ \ \ do\_restore\_from\_disk();}
+\DoxyCodeLine{00443\ \ \ \}}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \ \ \textcolor{keywordflow}{if}\ (\_ram\_class\ ==\ RC\_resident)\ \{}
+\DoxyCodeLine{00446\ \ \ \ \ nassertv(\_size\ ==\ \_uncompressed\_size);}
+\DoxyCodeLine{00447\ }
+\DoxyCodeLine{00448\ \textcolor{preprocessor}{\#ifdef\ HAVE\_ZLIB}}
+\DoxyCodeLine{00449\ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_vdata\_compress\_pcollector);}
+\DoxyCodeLine{00450\ }
+\DoxyCodeLine{00451\ \ \ \ \ DeflatePage\ *page\ =\ \textcolor{keyword}{new}\ DeflatePage;}
+\DoxyCodeLine{00452\ \ \ \ \ DeflatePage\ *head\ =\ page;}
+\DoxyCodeLine{00453\ }
+\DoxyCodeLine{00454\ \ \ \ \ z\_stream\ z\_dest;}
+\DoxyCodeLine{00455\ \textcolor{preprocessor}{\#ifdef\ USE\_MEMORY\_NOWRAPPERS}}
+\DoxyCodeLine{00456\ \ \ \ \ z\_dest.zalloc\ =\ Z\_NULL;}
+\DoxyCodeLine{00457\ \ \ \ \ z\_dest.zfree\ =\ Z\_NULL;}
+\DoxyCodeLine{00458\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00459\ \ \ \ \ z\_dest.zalloc\ =\ (alloc\_func)\&do\_zlib\_alloc;}
+\DoxyCodeLine{00460\ \ \ \ \ z\_dest.zfree\ =\ (free\_func)\&do\_zlib\_free;}
+\DoxyCodeLine{00461\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00462\ }
+\DoxyCodeLine{00463\ \ \ \ \ z\_dest.opaque\ =\ Z\_NULL;}
+\DoxyCodeLine{00464\ \ \ \ \ z\_dest.msg\ =\ (\textcolor{keywordtype}{char}\ *)\ \textcolor{stringliteral}{"{}no\ error\ message"{}};}
+\DoxyCodeLine{00465\ }
+\DoxyCodeLine{00466\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ deflateInit(\&z\_dest,\ vertex\_data\_compression\_level);}
+\DoxyCodeLine{00467\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}zlib\ error"{}});}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00470\ \ \ \ \ \}}
+\DoxyCodeLine{00471\ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00472\ }
+\DoxyCodeLine{00473\ \ \ \ \ z\_dest.next\_in\ =\ (Bytef\ *)(\textcolor{keywordtype}{char}\ *)\_page\_data;}
+\DoxyCodeLine{00474\ \ \ \ \ z\_dest.avail\_in\ =\ \_uncompressed\_size;}
+\DoxyCodeLine{00475\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ output\_size\ =\ 0;}
+\DoxyCodeLine{00476\ }
+\DoxyCodeLine{00477\ \ \ \ \ \textcolor{comment}{//\ Compress\ the\ data\ into\ one\ or\ more\ individual\ pages.\ \ We\ have\ to}}
+\DoxyCodeLine{00478\ \ \ \ \ \textcolor{comment}{//\ compress\ it\ page-\/at-\/a-\/time,\ since\ we're\ not\ really\ sure\ how\ big\ the}}
+\DoxyCodeLine{00479\ \ \ \ \ \textcolor{comment}{//\ result\ will\ be\ (so\ we\ can't\ easily\ pre-\/allocate\ a\ buffer).}}
+\DoxyCodeLine{00480\ \ \ \ \ \textcolor{keywordtype}{int}\ flush\ =\ 0;}
+\DoxyCodeLine{00481\ \ \ \ \ result\ =\ 0;}
+\DoxyCodeLine{00482\ \ \ \ \ \textcolor{keywordflow}{while}\ (result\ !=\ Z\_STREAM\_END)\ \{}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *start\_out\ =\ (page-\/>\_buffer\ +\ page-\/>\_used\_size);}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ z\_dest.next\_out\ =\ (Bytef\ *)start\_out;}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ z\_dest.avail\_out\ =\ (size\_t)deflate\_page\_size\ -\/\ page-\/>\_used\_size;}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (z\_dest.avail\_out\ ==\ 0)\ \{}
+\DoxyCodeLine{00487\ \ \ \ \ \ \ \ \ DeflatePage\ *new\_page\ =\ \textcolor{keyword}{new}\ DeflatePage;}
+\DoxyCodeLine{00488\ \ \ \ \ \ \ \ \ page-\/>\_next\ =\ new\_page;}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ \ \ page\ =\ new\_page;}
+\DoxyCodeLine{00490\ \ \ \ \ \ \ \ \ start\_out\ =\ page-\/>\_buffer;}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \ \ z\_dest.next\_out\ =\ (Bytef\ *)start\_out;}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \ \ z\_dest.avail\_out\ =\ deflate\_page\_size;}
+\DoxyCodeLine{00493\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00494\ }
+\DoxyCodeLine{00495\ \ \ \ \ \ \ result\ =\ deflate(\&z\_dest,\ flush);}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0\ \&\&\ result\ !=\ Z\_BUF\_ERROR)\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}zlib\ error"{}});}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ bytes\_produced\ =\ (size\_t)((\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)z\_dest.next\_out\ -\/\ start\_out);}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ page-\/>\_used\_size\ +=\ bytes\_produced;}
+\DoxyCodeLine{00502\ \ \ \ \ \ \ nassertv(page-\/>\_used\_size\ <=\ deflate\_page\_size);}
+\DoxyCodeLine{00503\ \ \ \ \ \ \ output\_size\ +=\ bytes\_produced;}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bytes\_produced\ ==\ 0)\ \{}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ ever\ produce\ no\ bytes,\ then\ start\ flushing\ the\ output.}}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ \ \ flush\ =\ Z\_FINISH;}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00508\ }
+\DoxyCodeLine{00509\ \ \ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00510\ \ \ \ \ \}}
+\DoxyCodeLine{00511\ \ \ \ \ nassertv(z\_dest.avail\_in\ ==\ 0);}
+\DoxyCodeLine{00512\ }
+\DoxyCodeLine{00513\ \ \ \ \ result\ =\ deflateEnd(\&z\_dest);}
+\DoxyCodeLine{00514\ \ \ \ \ nassertv(result\ ==\ Z\_OK);}
+\DoxyCodeLine{00515\ }
+\DoxyCodeLine{00516\ \ \ \ \ \textcolor{comment}{//\ Now\ we\ know\ how\ big\ the\ result\ will\ be.\ \ Allocate\ a\ buffer,\ and\ copy}}
+\DoxyCodeLine{00517\ \ \ \ \ \textcolor{comment}{//\ the\ data\ from\ the\ various\ pages.}}
+\DoxyCodeLine{00518\ }
+\DoxyCodeLine{00519\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ new\_allocated\_size\ =\ round\_up(output\_size);}
+\DoxyCodeLine{00520\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *new\_data\ =\ alloc\_page\_data(new\_allocated\_size);}
+\DoxyCodeLine{00521\ }
+\DoxyCodeLine{00522\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ copied\_size\ =\ 0;}
+\DoxyCodeLine{00523\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *p\ =\ new\_data;}
+\DoxyCodeLine{00524\ \ \ \ \ page\ =\ head;}
+\DoxyCodeLine{00525\ \ \ \ \ \textcolor{keywordflow}{while}\ (page\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ memcpy(p,\ page-\/>\_buffer,\ page-\/>\_used\_size);}
+\DoxyCodeLine{00527\ \ \ \ \ \ \ copied\_size\ +=\ page-\/>\_used\_size;}
+\DoxyCodeLine{00528\ \ \ \ \ \ \ p\ +=\ page-\/>\_used\_size;}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ DeflatePage\ *next\ =\ page-\/>\_next;}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ page;}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ page\ =\ next;}
+\DoxyCodeLine{00532\ \ \ \ \ \}}
+\DoxyCodeLine{00533\ \ \ \ \ nassertv(copied\_size\ ==\ output\_size);}
+\DoxyCodeLine{00534\ }
+\DoxyCodeLine{00535\ \ \ \ \ \textcolor{comment}{//\ Now\ free\ the\ original,\ uncompressed\ data,\ and\ put\ this\ new\ compressed}}
+\DoxyCodeLine{00536\ \ \ \ \ \textcolor{comment}{//\ buffer\ in\ its\ place.}}
+\DoxyCodeLine{00537\ \ \ \ \ free\_page\_data(\_page\_data,\ \_allocated\_size);}
+\DoxyCodeLine{00538\ \ \ \ \ \_page\_data\ =\ new\_data;}
+\DoxyCodeLine{00539\ \ \ \ \ \_size\ =\ output\_size;}
+\DoxyCodeLine{00540\ \ \ \ \ \_allocated\_size\ =\ new\_allocated\_size;}
+\DoxyCodeLine{00541\ }
+\DoxyCodeLine{00542\ \ \ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ gobj\_cat.debug()}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Compressed\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\ from\ "{}}\ <<\ \_uncompressed\_size}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}\ <<\ \_size\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00546\ \ \ \ \ \}}
+\DoxyCodeLine{00547\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00548\ \ \ \ \ set\_lru\_size(\_size);}
+\DoxyCodeLine{00549\ \ \ \ \ set\_ram\_class(RC\_compressed);}
+\DoxyCodeLine{00550\ \ \ \}}
+\DoxyCodeLine{00551\ \}}
+\DoxyCodeLine{00552\ }
+\DoxyCodeLine{00558\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00559\ make\_disk()\ \{}
+\DoxyCodeLine{00560\ \ \ \textcolor{keywordflow}{if}\ (\_ram\_class\ ==\ RC\_disk)\ \{}
+\DoxyCodeLine{00561\ \ \ \ \ \textcolor{comment}{//\ If\ we're\ already\ on\ disk,\ just\ mark\ the\ page\ recently\ used.}}
+\DoxyCodeLine{00562\ \ \ \ \ mark\_used\_lru();}
+\DoxyCodeLine{00563\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00564\ \ \ \}}
+\DoxyCodeLine{00565\ }
+\DoxyCodeLine{00566\ \ \ \textcolor{keywordflow}{if}\ (\_ram\_class\ ==\ RC\_resident\ ||\ \_ram\_class\ ==\ RC\_compressed)\ \{}
+\DoxyCodeLine{00567\ \ \ \ \ \textcolor{keywordflow}{if}\ (!do\_save\_to\_disk())\ \{}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \textcolor{comment}{//\ Can't\ save\ it\ to\ disk\ for\ some\ reason.}}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ gobj\_cat.warning()}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ save\ page\ "{}}\ <<\ \textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\ to\ disk.\(\backslash\)n"{}};}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ mark\_used\_lru();}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00573\ \ \ \ \ \}}
+\DoxyCodeLine{00574\ }
+\DoxyCodeLine{00575\ \ \ \ \ free\_page\_data(\_page\_data,\ \_allocated\_size);}
+\DoxyCodeLine{00576\ \ \ \ \ \_page\_data\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00577\ \ \ \ \ \_size\ =\ 0;}
+\DoxyCodeLine{00578\ }
+\DoxyCodeLine{00579\ \ \ \ \ set\_ram\_class(RC\_disk);}
+\DoxyCodeLine{00580\ \ \ \}}
+\DoxyCodeLine{00581\ \}}
+\DoxyCodeLine{00582\ }
+\DoxyCodeLine{00591\ \textcolor{keywordtype}{bool}\ VertexDataPage::}
+\DoxyCodeLine{00592\ do\_save\_to\_disk()\ \{}
+\DoxyCodeLine{00593\ \ \ \textcolor{keywordflow}{if}\ (\_ram\_class\ ==\ RC\_resident\ ||\ \_ram\_class\ ==\ RC\_compressed)\ \{}
+\DoxyCodeLine{00594\ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_vdata\_save\_pcollector);}
+\DoxyCodeLine{00595\ }
+\DoxyCodeLine{00596\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_saved\_block\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \ \ gobj\_cat.debug()}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Storing\ page,\ "{}}\ <<\ \_size\ <<\ \textcolor{stringliteral}{"{}\ bytes,\ to\ disk\(\backslash\)n"{}};}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ compressed\ =\ (\_ram\_class\ ==\ RC\_compressed);}
+\DoxyCodeLine{00603\ }
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \_saved\_block\ =\ get\_save\_file()-\/>write\_data(\_page\_data,\ \_allocated\_size,\ compressed);}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_saved\_block\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Can't\ write\ it\ to\ disk.\ \ Too\ bad.}}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00609\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ gobj\_cat.debug()}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Page\ already\ stored:\ "{}}\ <<\ \_size\ <<\ \textcolor{stringliteral}{"{}\ bytes\(\backslash\)n"{}};}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00614\ \ \ \ \ \}}
+\DoxyCodeLine{00615\ \ \ \}}
+\DoxyCodeLine{00616\ }
+\DoxyCodeLine{00617\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00618\ \}}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00626\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00627\ do\_restore\_from\_disk()\ \{}
+\DoxyCodeLine{00628\ \ \ \textcolor{keywordflow}{if}\ (\_ram\_class\ ==\ RC\_disk)\ \{}
+\DoxyCodeLine{00629\ \ \ \ \ nassertv(\_saved\_block\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00630\ \ \ \ \ nassertv(\_page\_data\ ==\ \textcolor{keyword}{nullptr}\ \&\&\ \_size\ ==\ 0);}
+\DoxyCodeLine{00631\ }
+\DoxyCodeLine{00632\ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_vdata\_restore\_pcollector);}
+\DoxyCodeLine{00633\ }
+\DoxyCodeLine{00634\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ \_saved\_block-\/>get\_size();}
+\DoxyCodeLine{00635\ \ \ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00636\ \ \ \ \ \ \ gobj\_cat.debug()}
+\DoxyCodeLine{00637\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Restoring\ page,\ "{}}\ <<\ buffer\_size\ <<\ \textcolor{stringliteral}{"{}\ bytes,\ from\ disk\(\backslash\)n"{}};}
+\DoxyCodeLine{00638\ \ \ \ \ \}}
+\DoxyCodeLine{00639\ }
+\DoxyCodeLine{00640\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ new\_allocated\_size\ =\ round\_up(buffer\_size);}
+\DoxyCodeLine{00641\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *new\_data\ =\ alloc\_page\_data(new\_allocated\_size);}
+\DoxyCodeLine{00642\ \ \ \ \ \textcolor{keywordflow}{if}\ (!get\_save\_file()-\/>read\_data(new\_data,\ new\_allocated\_size,\ \_saved\_block))\ \{}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}read\ error"{}});}
+\DoxyCodeLine{00644\ \ \ \ \ \}}
+\DoxyCodeLine{00645\ }
+\DoxyCodeLine{00646\ \ \ \ \ nassertv(\_page\_data\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00647\ \ \ \ \ \_page\_data\ =\ new\_data;}
+\DoxyCodeLine{00648\ \ \ \ \ \_size\ =\ buffer\_size;}
+\DoxyCodeLine{00649\ \ \ \ \ \_allocated\_size\ =\ new\_allocated\_size;}
+\DoxyCodeLine{00650\ }
+\DoxyCodeLine{00651\ \ \ \ \ set\_lru\_size(\_size);}
+\DoxyCodeLine{00652\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_saved\_block-\/>get\_compressed())\ \{}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ set\_ram\_class(RC\_compressed);}
+\DoxyCodeLine{00654\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ set\_ram\_class(RC\_resident);}
+\DoxyCodeLine{00656\ \ \ \ \ \}}
+\DoxyCodeLine{00657\ \ \ \}}
+\DoxyCodeLine{00658\ \}}
+\DoxyCodeLine{00659\ }
+\DoxyCodeLine{00664\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00665\ adjust\_book\_size()\ \{}
+\DoxyCodeLine{00666\ \ \ \textcolor{keywordtype}{size\_t}\ new\_size\ =\ \_contiguous;}
+\DoxyCodeLine{00667\ \ \ \textcolor{keywordflow}{if}\ (\_ram\_class\ !=\ RC\_resident)\ \{}
+\DoxyCodeLine{00668\ \ \ \ \ \textcolor{comment}{//\ Let's\ not\ attempt\ to\ allocate\ new\ buffers\ from\ non-\/resident\ pages.}}
+\DoxyCodeLine{00669\ \ \ \ \ new\_size\ =\ 0;}
+\DoxyCodeLine{00670\ \ \ \}}
+\DoxyCodeLine{00671\ }
+\DoxyCodeLine{00672\ \ \ \textcolor{keywordflow}{if}\ (\_book\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ new\_size\ !=\ \_book\_size)\ \{}
+\DoxyCodeLine{00673\ \ \ \ \ VertexDataBook::Pages::iterator\ pi\ =\ \_book-\/>\_pages.find(\textcolor{keyword}{this});}
+\DoxyCodeLine{00674\ \ \ \ \ nassertv(pi\ !=\ \_book-\/>\_pages.end());}
+\DoxyCodeLine{00675\ \ \ \ \ \_book-\/>\_pages.erase(pi);}
+\DoxyCodeLine{00676\ }
+\DoxyCodeLine{00677\ \ \ \ \ \_book\_size\ =\ new\_size;}
+\DoxyCodeLine{00678\ \ \ \ \ \textcolor{keywordtype}{bool}\ inserted\ =\ \_book-\/>\_pages.insert(\textcolor{keyword}{this}).second;}
+\DoxyCodeLine{00679\ \ \ \ \ nassertv(inserted);}
+\DoxyCodeLine{00680\ \ \ \}}
+\DoxyCodeLine{00681\ \}}
+\DoxyCodeLine{00682\ }
+\DoxyCodeLine{00690\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00691\ request\_ram\_class(RamClass\ ram\_class)\ \{}
+\DoxyCodeLine{00692\ \ \ \textcolor{keywordtype}{int}\ num\_threads\ =\ vertex\_data\_page\_threads;}
+\DoxyCodeLine{00693\ \ \ \textcolor{keywordflow}{if}\ (num\_threads\ ==\ 0\ ||\ !Thread::is\_threading\_supported())\ \{}
+\DoxyCodeLine{00694\ \ \ \ \ \textcolor{comment}{//\ No\ threads.\ \ Do\ it\ immediately.}}
+\DoxyCodeLine{00695\ \ \ \ \ \textcolor{keywordflow}{switch}\ (ram\_class)\ \{}
+\DoxyCodeLine{00696\ \ \ \ \ \textcolor{keywordflow}{case}\ RC\_resident:}
+\DoxyCodeLine{00697\ \ \ \ \ \ \ make\_resident();}
+\DoxyCodeLine{00698\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00699\ }
+\DoxyCodeLine{00700\ \ \ \ \ \textcolor{keywordflow}{case}\ RC\_compressed:}
+\DoxyCodeLine{00701\ \ \ \ \ \ \ make\_compressed();}
+\DoxyCodeLine{00702\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00703\ }
+\DoxyCodeLine{00704\ \ \ \ \ \textcolor{keywordflow}{case}\ RC\_disk:}
+\DoxyCodeLine{00705\ \ \ \ \ \ \ make\_disk();}
+\DoxyCodeLine{00706\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00707\ }
+\DoxyCodeLine{00708\ \ \ \ \ \textcolor{keywordflow}{case}\ RC\_end\_of\_list:}
+\DoxyCodeLine{00709\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00710\ \ \ \ \ \}}
+\DoxyCodeLine{00711\ \ \ \ \ \_pending\_ram\_class\ =\ ram\_class;}
+\DoxyCodeLine{00712\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00713\ \ \ \}}
+\DoxyCodeLine{00714\ }
+\DoxyCodeLine{00715\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_tlock);}
+\DoxyCodeLine{00716\ \ \ \textcolor{keywordflow}{if}\ (\_thread\_mgr\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00717\ \ \ \ \ \textcolor{comment}{//\ Create\ the\ thread\ manager.}}
+\DoxyCodeLine{00718\ \ \ \ \ gobj\_cat.info()}
+\DoxyCodeLine{00719\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Spawning\ "{}}\ <<\ num\_threads\ <<\ \textcolor{stringliteral}{"{}\ vertex\ paging\ threads.\(\backslash\)n"{}};}
+\DoxyCodeLine{00720\ \ \ \ \ \_thread\_mgr\ =\ \textcolor{keyword}{new}\ PageThreadManager(num\_threads);}
+\DoxyCodeLine{00721\ \ \ \}}
+\DoxyCodeLine{00722\ }
+\DoxyCodeLine{00723\ \ \ \_thread\_mgr-\/>add\_page(\textcolor{keyword}{this},\ ram\_class);}
+\DoxyCodeLine{00724\ \}}
+\DoxyCodeLine{00725\ }
+\DoxyCodeLine{00730\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00731\ make\_save\_file()\ \{}
+\DoxyCodeLine{00732\ \ \ \textcolor{keywordtype}{size\_t}\ max\_size\ =\ (size\_t)max\_disk\_vertex\_data;}
+\DoxyCodeLine{00733\ }
+\DoxyCodeLine{00734\ \ \ \_save\_file\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classVertexDataSaveFile}{VertexDataSaveFile}}(vertex\_save\_file\_directory,}
+\DoxyCodeLine{00735\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ vertex\_save\_file\_prefix,\ max\_size);}
+\DoxyCodeLine{00736\ \}}
+\DoxyCodeLine{00737\ }
+\DoxyCodeLine{00742\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *VertexDataPage::}
+\DoxyCodeLine{00743\ alloc\_page\_data(\textcolor{keywordtype}{size\_t}\ page\_size)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00744\ \ \ \_alloc\_pages\_pcollector.add\_level\_now(page\_size);}
+\DoxyCodeLine{00745\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)memory\_hook-\/>\mbox{\hyperlink{classMemoryHook_a1bf6209c089890e81f127b4f1f429cb8}{mmap\_alloc}}(page\_size,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00746\ \}}
+\DoxyCodeLine{00747\ }
+\DoxyCodeLine{00751\ \textcolor{keywordtype}{void}\ VertexDataPage::}
+\DoxyCodeLine{00752\ free\_page\_data(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *page\_data,\ \textcolor{keywordtype}{size\_t}\ page\_size)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00753\ \ \ \_alloc\_pages\_pcollector.sub\_level\_now(page\_size);}
+\DoxyCodeLine{00754\ \ \ memory\_hook-\/>\mbox{\hyperlink{classMemoryHook_a1db3083e6f6274e9e94b4171f36f7163}{mmap\_free}}(page\_data,\ page\_size);}
+\DoxyCodeLine{00755\ \}}
+\DoxyCodeLine{00756\ }
+\DoxyCodeLine{00760\ VertexDataPage::PageThreadManager::}
+\DoxyCodeLine{00761\ PageThreadManager(\textcolor{keywordtype}{int}\ num\_threads)\ :}
+\DoxyCodeLine{00762\ \ \ \_shutdown(false),}
+\DoxyCodeLine{00763\ \ \ \_pending\_cvar(\_tlock)}
+\DoxyCodeLine{00764\ \{}
+\DoxyCodeLine{00765\ \ \ start\_threads(num\_threads);}
+\DoxyCodeLine{00766\ \}}
+\DoxyCodeLine{00767\ }
+\DoxyCodeLine{00775\ \textcolor{keywordtype}{void}\ VertexDataPage::PageThreadManager::}
+\DoxyCodeLine{00776\ add\_page(\mbox{\hyperlink{classVertexDataPage}{VertexDataPage}}\ *page,\ RamClass\ ram\_class)\ \{}
+\DoxyCodeLine{00777\ \ \ nassertv(!\_shutdown);}
+\DoxyCodeLine{00778\ }
+\DoxyCodeLine{00779\ \ \ \textcolor{keywordflow}{if}\ (page-\/>\_pending\_ram\_class\ ==\ ram\_class)\ \{}
+\DoxyCodeLine{00780\ \ \ \ \ \textcolor{comment}{//\ It's\ already\ queued.}}
+\DoxyCodeLine{00781\ \ \ \ \ nassertv(page-\/>get\_lru()\ ==\ \&\_pending\_lru);}
+\DoxyCodeLine{00782\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00783\ \ \ \}}
+\DoxyCodeLine{00784\ }
+\DoxyCodeLine{00785\ \ \ \textcolor{keywordflow}{if}\ (page-\/>\_pending\_ram\_class\ !=\ page-\/>\_ram\_class)\ \{}
+\DoxyCodeLine{00786\ \ \ \ \ \textcolor{comment}{//\ It's\ already\ queued,\ but\ for\ a\ different\ ram\ class.\ \ Dequeue\ it\ so\ we}}
+\DoxyCodeLine{00787\ \ \ \ \ \textcolor{comment}{//\ can\ requeue\ it.}}
+\DoxyCodeLine{00788\ \ \ \ \ remove\_page(page);}
+\DoxyCodeLine{00789\ \ \ \}}
+\DoxyCodeLine{00790\ }
+\DoxyCodeLine{00791\ \ \ \textcolor{keywordflow}{if}\ (page-\/>\_pending\_ram\_class\ !=\ ram\_class)\ \{}
+\DoxyCodeLine{00792\ \ \ \ \ \textcolor{comment}{//\ First,\ move\ the\ page\ to\ the\ "{}pending"{}\ LRU.\ \ When\ it\ eventually\ gets\ its}}
+\DoxyCodeLine{00793\ \ \ \ \ \textcolor{comment}{//\ requested\ ram\ class\ set,\ it\ will\ be\ requeued\ on\ the\ appropriate\ live}}
+\DoxyCodeLine{00794\ \ \ \ \ \textcolor{comment}{//\ LRU.}}
+\DoxyCodeLine{00795\ \ \ \ \ page-\/>mark\_used\_lru(\&\_pending\_lru);}
+\DoxyCodeLine{00796\ }
+\DoxyCodeLine{00797\ \ \ \ \ page-\/>\_pending\_ram\_class\ =\ ram\_class;}
+\DoxyCodeLine{00798\ \ \ \ \ \textcolor{keywordflow}{if}\ (ram\_class\ ==\ RC\_resident)\ \{}
+\DoxyCodeLine{00799\ \ \ \ \ \ \ \_pending\_reads.push\_back(page);}
+\DoxyCodeLine{00800\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00801\ \ \ \ \ \ \ \_pending\_writes.push\_back(page);}
+\DoxyCodeLine{00802\ \ \ \ \ \}}
+\DoxyCodeLine{00803\ \ \ \ \ \_pending\_cvar.notify();}
+\DoxyCodeLine{00804\ \ \ \}}
+\DoxyCodeLine{00805\ \}}
+\DoxyCodeLine{00806\ }
+\DoxyCodeLine{00813\ \textcolor{keywordtype}{void}\ VertexDataPage::PageThreadManager::}
+\DoxyCodeLine{00814\ remove\_page(\mbox{\hyperlink{classVertexDataPage}{VertexDataPage}}\ *page)\ \{}
+\DoxyCodeLine{00815\ \ \ nassertv(page\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00816\ }
+\DoxyCodeLine{00817\ \ \ PageThreads::iterator\ ti;}
+\DoxyCodeLine{00818\ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ \_threads.begin();\ ti\ !=\ \_threads.end();\ ++ti)\ \{}
+\DoxyCodeLine{00819\ \ \ \ \ PageThread\ *thread\ =\ (*ti);}
+\DoxyCodeLine{00820\ \ \ \ \ \textcolor{keywordflow}{if}\ (page\ ==\ thread-\/>\_working\_page)\ \{}
+\DoxyCodeLine{00821\ \ \ \ \ \ \ \textcolor{comment}{//\ Oops,\ this\ thread\ is\ currently\ working\ on\ this\ one.\ \ We'll\ have\ to}}
+\DoxyCodeLine{00822\ \ \ \ \ \ \ \textcolor{comment}{//\ wait\ for\ the\ thread\ to\ finish.}}
+\DoxyCodeLine{00823\ \ \ \ \ \ \ page-\/>\_lock.release();}
+\DoxyCodeLine{00824\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (page\ ==\ thread-\/>\_working\_page)\ \{}
+\DoxyCodeLine{00825\ \ \ \ \ \ \ \ \ thread-\/>\_working\_cvar.wait();}
+\DoxyCodeLine{00826\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00827\ \ \ \ \ \ \ page-\/>\_lock.acquire();}
+\DoxyCodeLine{00828\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00829\ \ \ \ \ \}}
+\DoxyCodeLine{00830\ \ \ \}}
+\DoxyCodeLine{00831\ }
+\DoxyCodeLine{00832\ \ \ \textcolor{keywordflow}{if}\ (page-\/>\_pending\_ram\_class\ ==\ RC\_resident)\ \{}
+\DoxyCodeLine{00833\ \ \ \ \ PendingPages::iterator\ pi\ =}
+\DoxyCodeLine{00834\ \ \ \ \ \ \ find(\_pending\_reads.begin(),\ \_pending\_reads.end(),\ page);}
+\DoxyCodeLine{00835\ \ \ \ \ nassertv(pi\ !=\ \_pending\_reads.end());}
+\DoxyCodeLine{00836\ \ \ \ \ \_pending\_reads.erase(pi);}
+\DoxyCodeLine{00837\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00838\ \ \ \ \ PendingPages::iterator\ pi\ =}
+\DoxyCodeLine{00839\ \ \ \ \ \ \ find(\_pending\_writes.begin(),\ \_pending\_writes.end(),\ page);}
+\DoxyCodeLine{00840\ \ \ \ \ nassertv(pi\ !=\ \_pending\_writes.end());}
+\DoxyCodeLine{00841\ \ \ \ \ \_pending\_writes.erase(pi);}
+\DoxyCodeLine{00842\ \ \ \}}
+\DoxyCodeLine{00843\ }
+\DoxyCodeLine{00844\ \ \ page-\/>\_pending\_ram\_class\ =\ page-\/>\_ram\_class;}
+\DoxyCodeLine{00845\ }
+\DoxyCodeLine{00846\ \ \ \textcolor{comment}{//\ Put\ the\ page\ back\ on\ its\ proper\ LRU.}}
+\DoxyCodeLine{00847\ \ \ page-\/>mark\_used\_lru(\_global\_lru[page-\/>\_ram\_class]);}
+\DoxyCodeLine{00848\ \}}
+\DoxyCodeLine{00849\ }
+\DoxyCodeLine{00854\ \textcolor{keywordtype}{int}\ VertexDataPage::PageThreadManager::}
+\DoxyCodeLine{00855\ get\_num\_threads()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00856\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{int})\_threads.size();}
+\DoxyCodeLine{00857\ \}}
+\DoxyCodeLine{00858\ }
+\DoxyCodeLine{00863\ \textcolor{keywordtype}{int}\ VertexDataPage::PageThreadManager::}
+\DoxyCodeLine{00864\ get\_num\_pending\_reads()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00865\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{int})\_pending\_reads.size();}
+\DoxyCodeLine{00866\ \}}
+\DoxyCodeLine{00867\ }
+\DoxyCodeLine{00872\ \textcolor{keywordtype}{int}\ VertexDataPage::PageThreadManager::}
+\DoxyCodeLine{00873\ get\_num\_pending\_writes()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00874\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{int})\_pending\_writes.size();}
+\DoxyCodeLine{00875\ \}}
+\DoxyCodeLine{00876\ }
+\DoxyCodeLine{00881\ \textcolor{keywordtype}{void}\ VertexDataPage::PageThreadManager::}
+\DoxyCodeLine{00882\ start\_threads(\textcolor{keywordtype}{int}\ num\_threads)\ \{}
+\DoxyCodeLine{00883\ \ \ \_shutdown\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00884\ }
+\DoxyCodeLine{00885\ \ \ \_threads.reserve(num\_threads);}
+\DoxyCodeLine{00886\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_threads;\ ++i)\ \{}
+\DoxyCodeLine{00887\ \ \ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ name\_strm;}
+\DoxyCodeLine{00888\ \ \ \ \ name\_strm\ <<\ \textcolor{stringliteral}{"{}VertexDataPage"{}}\ <<\ \_threads.size();}
+\DoxyCodeLine{00889\ \ \ \ \ PT(PageThread)\ thread\ =\ \textcolor{keyword}{new}\ PageThread(\textcolor{keyword}{this},\ name\_strm.str());}
+\DoxyCodeLine{00890\ \ \ \ \ thread-\/>start(TP\_low,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00891\ \ \ \ \ \_threads.push\_back(thread);}
+\DoxyCodeLine{00892\ \ \ \}}
+\DoxyCodeLine{00893\ \}}
+\DoxyCodeLine{00894\ }
+\DoxyCodeLine{00899\ \textcolor{keywordtype}{void}\ VertexDataPage::PageThreadManager::}
+\DoxyCodeLine{00900\ stop\_threads()\ \{}
+\DoxyCodeLine{00901\ \ \ PageThreads\ threads;}
+\DoxyCodeLine{00902\ \ \ \{}
+\DoxyCodeLine{00903\ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_tlock);}
+\DoxyCodeLine{00904\ \ \ \ \ \_shutdown\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00905\ \ \ \ \ \_pending\_cvar.notify\_all();}
+\DoxyCodeLine{00906\ \ \ \ \ threads.swap(\_threads);}
+\DoxyCodeLine{00907\ \ \ \}}
+\DoxyCodeLine{00908\ }
+\DoxyCodeLine{00909\ \ \ PageThreads::iterator\ ti;}
+\DoxyCodeLine{00910\ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ threads.begin();\ ti\ !=\ threads.end();\ ++ti)\ \{}
+\DoxyCodeLine{00911\ \ \ \ \ PageThread\ *thread\ =\ (*ti);}
+\DoxyCodeLine{00912\ \ \ \ \ thread-\/>join();}
+\DoxyCodeLine{00913\ \ \ \}}
+\DoxyCodeLine{00914\ }
+\DoxyCodeLine{00915\ \ \ nassertv(\_pending\_reads.empty()\ \&\&\ \_pending\_writes.empty());}
+\DoxyCodeLine{00916\ \}}
+\DoxyCodeLine{00917\ }
+\DoxyCodeLine{00921\ VertexDataPage::PageThread::}
+\DoxyCodeLine{00922\ PageThread(PageThreadManager\ *manager,\ \textcolor{keyword}{const}\ std::string\ \&name)\ :}
+\DoxyCodeLine{00923\ \ \ \mbox{\hyperlink{classThread}{Thread}}(name,\ name),}
+\DoxyCodeLine{00924\ \ \ \_manager(manager),}
+\DoxyCodeLine{00925\ \ \ \_working\_cvar(\_tlock)}
+\DoxyCodeLine{00926\ \{}
+\DoxyCodeLine{00927\ \}}
+\DoxyCodeLine{00928\ }
+\DoxyCodeLine{00932\ \textcolor{keywordtype}{void}\ VertexDataPage::PageThread::}
+\DoxyCodeLine{00933\ thread\_main()\ \{}
+\DoxyCodeLine{00934\ \ \ \_tlock.acquire();}
+\DoxyCodeLine{00935\ }
+\DoxyCodeLine{00936\ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00937\ \ \ \ \ PStatClient::thread\_tick();}
+\DoxyCodeLine{00938\ }
+\DoxyCodeLine{00939\ \ \ \ \ \textcolor{keywordflow}{while}\ (\_manager-\/>\_pending\_reads.empty()\ \&\&}
+\DoxyCodeLine{00940\ \ \ \ \ \ \ \ \ \ \ \ \_manager-\/>\_pending\_writes.empty())\ \{}
+\DoxyCodeLine{00941\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager-\/>\_shutdown)\ \{}
+\DoxyCodeLine{00942\ \ \ \ \ \ \ \ \ \_tlock.release();}
+\DoxyCodeLine{00943\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00944\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00945\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_thread\_wait\_pcollector);}
+\DoxyCodeLine{00946\ \ \ \ \ \ \ \_manager-\/>\_pending\_cvar.wait();}
+\DoxyCodeLine{00947\ \ \ \ \ \}}
+\DoxyCodeLine{00948\ }
+\DoxyCodeLine{00949\ \ \ \ \ \textcolor{comment}{//\ Reads\ always\ have\ priority.}}
+\DoxyCodeLine{00950\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_manager-\/>\_pending\_reads.empty())\ \{}
+\DoxyCodeLine{00951\ \ \ \ \ \ \ \_working\_page\ =\ \_manager-\/>\_pending\_reads.front();}
+\DoxyCodeLine{00952\ \ \ \ \ \ \ \_manager-\/>\_pending\_reads.pop\_front();}
+\DoxyCodeLine{00953\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00954\ \ \ \ \ \ \ \_working\_page\ =\ \_manager-\/>\_pending\_writes.front();}
+\DoxyCodeLine{00955\ \ \ \ \ \ \ \_manager-\/>\_pending\_writes.pop\_front();}
+\DoxyCodeLine{00956\ \ \ \ \ \}}
+\DoxyCodeLine{00957\ }
+\DoxyCodeLine{00958\ \ \ \ \ RamClass\ ram\_class\ =\ \_working\_page-\/>\_pending\_ram\_class;}
+\DoxyCodeLine{00959\ \ \ \ \ \_tlock.release();}
+\DoxyCodeLine{00960\ }
+\DoxyCodeLine{00961\ \ \ \ \ \{}
+\DoxyCodeLine{00962\ \ \ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_working\_page-\/>\_lock);}
+\DoxyCodeLine{00963\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (ram\_class)\ \{}
+\DoxyCodeLine{00964\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RC\_resident:}
+\DoxyCodeLine{00965\ \ \ \ \ \ \ \ \ \_working\_page-\/>make\_resident();}
+\DoxyCodeLine{00966\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00967\ }
+\DoxyCodeLine{00968\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RC\_compressed:}
+\DoxyCodeLine{00969\ \ \ \ \ \ \ \ \ \_working\_page-\/>make\_compressed();}
+\DoxyCodeLine{00970\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00971\ }
+\DoxyCodeLine{00972\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RC\_disk:}
+\DoxyCodeLine{00973\ \ \ \ \ \ \ \ \ \_working\_page-\/>make\_disk();}
+\DoxyCodeLine{00974\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00975\ }
+\DoxyCodeLine{00976\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RC\_end\_of\_list:}
+\DoxyCodeLine{00977\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00978\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00979\ \ \ \ \ \}}
+\DoxyCodeLine{00980\ }
+\DoxyCodeLine{00981\ \ \ \ \ \_tlock.acquire();}
+\DoxyCodeLine{00982\ }
+\DoxyCodeLine{00983\ \ \ \ \ \_working\_page\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00984\ \ \ \ \ \_working\_cvar.notify();}
+\DoxyCodeLine{00985\ }
+\DoxyCodeLine{00986\ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00987\ \ \ \}}
+\DoxyCodeLine{00988\ \}}
+
+\end{DoxyCode}

@@ -1,0 +1,400 @@
+\doxysection{async\+Future.\+cxx}
+\hypertarget{asyncFuture_8cxx_source}{}\label{asyncFuture_8cxx_source}\index{panda/src/event/asyncFuture.cxx@{panda/src/event/asyncFuture.cxx}}
+\mbox{\hyperlink{asyncFuture_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{asyncFuture_8h}{asyncFuture.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{asyncTask_8h}{asyncTask.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{asyncTaskManager_8h}{asyncTaskManager.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__event_8h}{config\_event.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimer_8h}{pStatTimer.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{throw__event_8h}{throw\_event.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{trueClock_8h}{trueClock.h}}"{}}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ AsyncFuture::\_type\_handle;}
+\DoxyCodeLine{00023\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ AsyncGatheringFuture::\_type\_handle;}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00028\ AsyncFuture::}
+\DoxyCodeLine{00029\ \string~AsyncFuture()\ \{}
+\DoxyCodeLine{00030\ \ \ \textcolor{comment}{//\ If\ this\ triggers,\ the\ future\ destroyed\ before\ it\ was\ cancelled,\ which\ is}}
+\DoxyCodeLine{00031\ \ \ \textcolor{comment}{//\ not\ valid.\ \ Unless\ we\ should\ simply\ call\ cancel()\ here?}}
+\DoxyCodeLine{00032\ \ \ nassertv(\_waiting.empty());}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \ \ \textcolor{comment}{//\ This\ is\ an\ attempt\ to\ work\ around\ what\ appears\ to\ be\ a\ compiler\ bug\ in}}
+\DoxyCodeLine{00035\ \ \ \textcolor{comment}{//\ MSVC\ when\ compiling\ with\ optimizations\ and\ having\ an\ EventStoreInt\ stored}}
+\DoxyCodeLine{00036\ \ \ \textcolor{comment}{//\ in\ this\ field.\ \ It\ crashes\ when\ we\ delete\ via\ the\ ReferenceCount\ base}}
+\DoxyCodeLine{00037\ \ \ \textcolor{comment}{//\ instead\ of\ via\ the\ TypedObject.\ \ I\ haven't\ been\ able\ to\ find\ out\ why;}}
+\DoxyCodeLine{00038\ \ \ \textcolor{comment}{//\ just\ that\ it\ doesn't\ happen\ with\ ParamString.\ \string~rdb}}
+\DoxyCodeLine{00039\ \ \ \mbox{\hyperlink{classReferenceCount}{ReferenceCount}}\ *result\_ref\ =\ \_result\_ref.p();}
+\DoxyCodeLine{00040\ \ \ \textcolor{keywordflow}{if}\ (result\_ref\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00041\ \ \ \ \ \_result\_ref.cheat()\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00042\ \ \ \ \ \textcolor{keywordflow}{if}\ (!result\_ref-\/>unref())\ \{}
+\DoxyCodeLine{00043\ \ \ \ \ \ \ patomic\_thread\_fence(std::memory\_order\_acquire);}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_result;}
+\DoxyCodeLine{00045\ \ \ \ \ \}}
+\DoxyCodeLine{00046\ \ \ \ \ \_result\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00047\ \ \ \}}
+\DoxyCodeLine{00048\ \}}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00062\ \textcolor{keywordtype}{bool}\ AsyncFuture::}
+\DoxyCodeLine{00063\ cancel()\ \{}
+\DoxyCodeLine{00064\ \ \ \textcolor{keywordflow}{if}\ (set\_future\_state(FS\_cancelled))\ \{}
+\DoxyCodeLine{00065\ \ \ \ \ \textcolor{comment}{//\ The\ compare-\/swap\ operation\ succeeded,\ so\ schedule\ the\ callbacks.}}
+\DoxyCodeLine{00066\ \ \ \ \ \mbox{\hyperlink{classAsyncFuture_a0b84269890d035c66df93861920a9856}{notify\_done}}(\textcolor{keyword}{false});}
+\DoxyCodeLine{00067\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00068\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00069\ \ \ \ \ \textcolor{comment}{//\ It's\ already\ done.}}
+\DoxyCodeLine{00070\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00071\ \ \ \}}
+\DoxyCodeLine{00072\ \}}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00077\ \textcolor{keywordtype}{void}\ AsyncFuture::}
+\DoxyCodeLine{00078\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00079\ \ \ out\ <<\ get\_type();}
+\DoxyCodeLine{00080\ \ \ \textcolor{keywordflow}{switch}\ (get\_future\_state())\ \{}
+\DoxyCodeLine{00081\ \ \ \textcolor{keywordflow}{case}\ FS\_pending:}
+\DoxyCodeLine{00082\ \ \ \textcolor{keywordflow}{case}\ FS\_locked\_pending:}
+\DoxyCodeLine{00083\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ (pending)"{}};}
+\DoxyCodeLine{00084\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00085\ \ \ \textcolor{keywordflow}{case}\ FS\_finished:}
+\DoxyCodeLine{00086\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ (finished)"{}};}
+\DoxyCodeLine{00087\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00088\ \ \ \textcolor{keywordflow}{case}\ FS\_cancelled:}
+\DoxyCodeLine{00089\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ (cancelled)"{}};}
+\DoxyCodeLine{00090\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00091\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00092\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ (**INVALID**)"{}};}
+\DoxyCodeLine{00093\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00094\ \ \ \}}
+\DoxyCodeLine{00095\ \}}
+\DoxyCodeLine{00096\ }
+\DoxyCodeLine{00100\ \textcolor{keywordtype}{void}\ AsyncFuture::}
+\DoxyCodeLine{00101\ wait()\ \{}
+\DoxyCodeLine{00102\ \ \ \textcolor{keywordflow}{if}\ (!done())\ \{}
+\DoxyCodeLine{00103\ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(AsyncTaskChain::\_wait\_pcollector);}
+\DoxyCodeLine{00104\ \ \ \ \ \textcolor{keywordflow}{if}\ (task\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ task\_cat.debug()}
+\DoxyCodeLine{00106\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Waiting\ for\ future\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00107\ \ \ \ \ \}}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \ \ \ \ FutureState\ state\ =\ get\_future\_state();}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{keywordflow}{while}\ (state\ <\ FS\_finished)\ \{}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (state\ ==\ FS\_locked\_pending)\ \{}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it's\ locked,\ someone\ is\ probably\ about\ to\ finish\ it,\ so\ don't}}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ go\ to\ sleep.}}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ \ \ Thread::relax();}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \ \ \ \ state\ =\ get\_future\_state();}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (state\ ==\ FS\_locked\_pending);}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (state\ >=\ FS\_finished)\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \textcolor{comment}{//\ Go\ to\ sleep.}}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \_future\_state.wait(state,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ state\ =\ get\_future\_state();}
+\DoxyCodeLine{00128\ \ \ \ \ \}}
+\DoxyCodeLine{00129\ \ \ \}}
+\DoxyCodeLine{00130\ }
+\DoxyCodeLine{00131\ \ \ \textcolor{comment}{//\ Let's\ make\ wait()\ an\ acquire\ op,\ so\ that\ people\ can\ use\ a\ future\ for}}
+\DoxyCodeLine{00132\ \ \ \textcolor{comment}{//\ synchronization.}}
+\DoxyCodeLine{00133\ \ \ patomic\_thread\_fence(std::memory\_order\_acquire);}
+\DoxyCodeLine{00134\ \}}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00141\ \textcolor{keywordtype}{void}\ AsyncFuture::}
+\DoxyCodeLine{00142\ wait(\textcolor{keywordtype}{double}\ timeout)\ \{}
+\DoxyCodeLine{00143\ \ \ \textcolor{keywordflow}{if}\ (!done())\ \{}
+\DoxyCodeLine{00144\ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(AsyncTaskChain::\_wait\_pcollector);}
+\DoxyCodeLine{00145\ \ \ \ \ \textcolor{keywordflow}{if}\ (task\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ task\_cat.debug()}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Waiting\ up\ to\ "{}}\ <<\ timeout\ <<\ \textcolor{stringliteral}{"{}\ seconds\ for\ future\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00148\ \ \ \ \ \}}
+\DoxyCodeLine{00149\ }
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{comment}{//\ Continue\ to\ yield\ while\ the\ future\ isn't\ done.\ \ It\ may\ be\ more\ efficient}}
+\DoxyCodeLine{00151\ \ \ \ \ \textcolor{comment}{//\ to\ use\ a\ condition\ variable,\ but\ let's\ not\ add\ the\ extra\ complexity}}
+\DoxyCodeLine{00152\ \ \ \ \ \textcolor{comment}{//\ unless\ we're\ sure\ that\ we\ need\ it.}}
+\DoxyCodeLine{00153\ \ \ \ \ \mbox{\hyperlink{classTrueClock}{TrueClock}}\ *clock\ =\ TrueClock::get\_global\_ptr();}
+\DoxyCodeLine{00154\ \ \ \ \ \textcolor{keywordtype}{double}\ end\ =\ clock-\/>get\_short\_time()\ +\ timeout;}
+\DoxyCodeLine{00155\ \ \ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ Thread::relax();}
+\DoxyCodeLine{00157\ \ \ \ \ \}}
+\DoxyCodeLine{00158\ \ \ \ \ \textcolor{keywordflow}{while}\ (!done()\ \&\&\ clock-\/>get\_short\_time()\ <\ end);}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \ \ patomic\_thread\_fence(std::memory\_order\_acquire);}
+\DoxyCodeLine{00161\ \ \ \}}
+\DoxyCodeLine{00162\ \}}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00169\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAsyncFuture_a0b84269890d035c66df93861920a9856}{AsyncFuture::}}}
+\DoxyCodeLine{00170\ \mbox{\hyperlink{classAsyncFuture_a0b84269890d035c66df93861920a9856}{notify\_done}}(\textcolor{keywordtype}{bool}\ clean\_exit)\ \{}
+\DoxyCodeLine{00171\ \ \ patomic\_thread\_fence(std::memory\_order\_acquire);}
+\DoxyCodeLine{00172\ \ \ nassertv(done());}
+\DoxyCodeLine{00173\ }
+\DoxyCodeLine{00174\ \ \ \textcolor{comment}{//\ Let\ any\ calls\ to\ wait()\ know\ that\ we're\ done.}}
+\DoxyCodeLine{00175\ \ \ \_future\_state.notify\_all();}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00177\ \ \ \textcolor{comment}{//\ This\ will\ only\ be\ called\ by\ the\ thread\ that\ managed\ to\ set\ the}}
+\DoxyCodeLine{00178\ \ \ \textcolor{comment}{//\ \_future\_state\ away\ from\ the\ "{}pending"{}\ state,\ so\ this\ is\ thread\ safe.}}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00180\ \ \ \textcolor{comment}{//\ Go\ through\ the\ futures\ that\ are\ waiting\ for\ this\ to\ finish.}}
+\DoxyCodeLine{00181\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classAsyncFuture}{AsyncFuture}}\ *fut\ :\ \_waiting)\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ \textcolor{keywordflow}{if}\ (fut-\/>is\_task())\ \{}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ a\ task.\ \ Make\ it\ active\ again.}}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ wake\_task((\mbox{\hyperlink{classAsyncTask}{AsyncTask}}\ *)fut);}
+\DoxyCodeLine{00185\ \ \ \ \ \}}
+\DoxyCodeLine{00186\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (fut-\/>get\_type()\ ==\ AsyncGatheringFuture::get\_class\_type())\ \{}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ a\ gathering\ future.\ \ Decrease\ the\ pending\ count\ on\ it,\ and\ if}}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \textcolor{comment}{//\ we're\ the\ last\ one,\ call\ notify\_done()\ on\ it.}}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \mbox{\hyperlink{classAsyncGatheringFuture}{AsyncGatheringFuture}}\ *gather\ =\ (\mbox{\hyperlink{classAsyncGatheringFuture}{AsyncGatheringFuture}}\ *)fut;}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gather-\/>\_num\_pending.fetch\_sub(1,\ std::memory\_order\_relaxed)\ ==\ 1)\ \{}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gather-\/>set\_future\_state(FS\_finished))\ \{}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \ \ gather-\/>\mbox{\hyperlink{classAsyncFuture_a0b84269890d035c66df93861920a9856}{notify\_done}}(\textcolor{keyword}{true});}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00195\ \ \ \ \ \}}
+\DoxyCodeLine{00196\ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ a\ shielding\ future.\ \ The\ shielding\ only\ protects\ the\ inner\ future}}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \textcolor{comment}{//\ when\ the\ outer\ is\ cancelled,\ not\ the\ other\ way\ around,\ so\ we\ have\ to}}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \textcolor{comment}{//\ propagate\ any\ cancellation\ here\ as\ well.}}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (clean\_exit\ \&\&\ \_result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Propagate\ the\ result,\ if\ any.}}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (fut-\/>try\_lock\_pending())\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ \ \ fut-\/>\_result\ =\ \_result;}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ \ \ fut-\/>\_result\_ref\ =\ \_result\_ref;}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \ \ \ \ fut-\/>unlock(FS\_finished);}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ \ \ fut-\/>notify\_done(\textcolor{keyword}{true});}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (fut-\/>set\_future\_state(clean\_exit\ ?\ FS\_finished\ :\ FS\_cancelled))\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ fut-\/>notify\_done(clean\_exit);}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00212\ \ \ \ \ \}}
+\DoxyCodeLine{00213\ \ \ \}}
+\DoxyCodeLine{00214\ \ \ \_waiting.clear();}
+\DoxyCodeLine{00215\ }
+\DoxyCodeLine{00216\ \ \ \textcolor{comment}{//\ For\ historical\ reasons,\ we\ don't\ send\ the\ "{}done\ event"{}\ if\ the\ future\ was}}
+\DoxyCodeLine{00217\ \ \ \textcolor{comment}{//\ cancelled.}}
+\DoxyCodeLine{00218\ \ \ \textcolor{keywordflow}{if}\ (clean\_exit\ \&\&\ !\_done\_event.empty())\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ \mbox{\hyperlink{classPointerTo}{PT\_Event}}\ \textcolor{keyword}{event}\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classEvent}{Event}}(\_done\_event);}
+\DoxyCodeLine{00220\ \ \ \ \ \textcolor{keyword}{event}-\/>add\_parameter(\mbox{\hyperlink{classEventParameter}{EventParameter}}(\textcolor{keyword}{this}));}
+\DoxyCodeLine{00221\ \ \ \ \ throw\_event(std::move(event));}
+\DoxyCodeLine{00222\ \ \ \}}
+\DoxyCodeLine{00223\ \}}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00228\ \textcolor{keywordtype}{void}\ AsyncFuture::}
+\DoxyCodeLine{00229\ set\_result(\mbox{\hyperlink{classTypedObject}{TypedObject}}\ *result)\ \{}
+\DoxyCodeLine{00230\ \ \ \textcolor{keywordflow}{if}\ (result-\/>is\_of\_type(TypedWritableReferenceCount::get\_class\_type()))\ \{}
+\DoxyCodeLine{00231\ \ \ \ \ set\_result((\mbox{\hyperlink{classTypedWritableReferenceCount}{TypedWritableReferenceCount}}\ *)result);}
+\DoxyCodeLine{00232\ \ \ \}}
+\DoxyCodeLine{00233\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (result-\/>is\_of\_type(TypedReferenceCount::get\_class\_type()))\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ set\_result((\mbox{\hyperlink{classTypedReferenceCount}{TypedReferenceCount}}\ *)result);}
+\DoxyCodeLine{00235\ \ \ \}}
+\DoxyCodeLine{00236\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ set\_result(result,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00238\ \ \ \}}
+\DoxyCodeLine{00239\ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00250\ \textcolor{keywordtype}{void}\ AsyncFuture::}
+\DoxyCodeLine{00251\ set\_result(\mbox{\hyperlink{classTypedObject}{TypedObject}}\ *ptr,\ \mbox{\hyperlink{classReferenceCount}{ReferenceCount}}\ *ref\_ptr)\ \{}
+\DoxyCodeLine{00252\ \ \ \textcolor{comment}{//\ We\ don't\ strictly\ need\ to\ lock\ the\ future\ since\ only\ one\ thread\ is}}
+\DoxyCodeLine{00253\ \ \ \textcolor{comment}{//\ allowed\ to\ call\ set\_result(),\ but\ we\ might\ as\ well.}}
+\DoxyCodeLine{00254\ \ \ patomic\_unsigned\_lock\_free::value\_type\ orig\_state\ =\ FS\_pending;}
+\DoxyCodeLine{00255\ \ \ \textcolor{keywordflow}{if}\ (!\_future\_state.compare\_exchange\_strong(orig\_state,\ FS\_locked\_pending,}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ std::memory\_order\_relaxed))\ \{}
+\DoxyCodeLine{00257\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ !defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00258\ \ \ \ \ \textcolor{keywordflow}{while}\ (orig\_state\ ==\ FS\_locked\_pending)\ \{}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ Thread::relax();}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ orig\_state\ =\ FS\_pending;}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \_future\_state.compare\_exchange\_weak(orig\_state,\ FS\_locked\_pending,}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00263\ \ \ \ \ \}}
+\DoxyCodeLine{00264\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00265\ \ \ \ \ \textcolor{comment}{//\ We\ can't\ lose\ control\ between\ now\ and\ calling\ unlock()\ if\ we're\ using\ a}}
+\DoxyCodeLine{00266\ \ \ \ \ \textcolor{comment}{//\ cooperative\ threading\ model.}}
+\DoxyCodeLine{00267\ \ \ \ \ nassertv(\textcolor{keyword}{false});}
+\DoxyCodeLine{00268\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00269\ \ \ \}}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \ \ \textcolor{keywordflow}{if}\ (orig\_state\ ==\ FS\_pending)\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ \_result\ =\ ptr;}
+\DoxyCodeLine{00273\ \ \ \ \ \_result\_ref\ =\ ref\_ptr;}
+\DoxyCodeLine{00274\ \ \ \ \ unlock(FS\_finished);}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00276\ \ \ \ \ \textcolor{comment}{//\ OK,\ now\ our\ thread\ owns\ the\ \_waiting\ vector\ et\ al.}}
+\DoxyCodeLine{00277\ \ \ \ \ \mbox{\hyperlink{classAsyncFuture_a0b84269890d035c66df93861920a9856}{notify\_done}}(\textcolor{keyword}{true});}
+\DoxyCodeLine{00278\ \ \ \}}
+\DoxyCodeLine{00279\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (orig\_state\ ==\ FS\_cancelled)\ \{}
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{comment}{//\ This\ was\ originally\ illegal,\ but\ there\ is\ a\ chance\ that\ the\ future\ was}}
+\DoxyCodeLine{00281\ \ \ \ \ \textcolor{comment}{//\ cancelled\ while\ another\ thread\ was\ setting\ the\ result.\ \ So,\ we\ drop}}
+\DoxyCodeLine{00282\ \ \ \ \ \textcolor{comment}{//\ this,\ but\ we\ can\ issue\ a\ warning.}}
+\DoxyCodeLine{00283\ \ \ \ \ task\_cat.warning()}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Ignoring\ set\_result()\ called\ on\ cancelled\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00285\ \ \ \}}
+\DoxyCodeLine{00286\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00287\ \ \ \ \ task\_cat.error()}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}set\_result()\ was\ called\ on\ finished\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00289\ \ \ \}}
+\DoxyCodeLine{00290\ \}}
+\DoxyCodeLine{00291\ }
+\DoxyCodeLine{00299\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classAsyncFuture_acf64f66afc103a6c3257303586623007}{AsyncFuture::}}}
+\DoxyCodeLine{00300\ \mbox{\hyperlink{classAsyncFuture_acf64f66afc103a6c3257303586623007}{add\_waiting\_task}}(\mbox{\hyperlink{classAsyncTask}{AsyncTask}}\ *task)\ \{}
+\DoxyCodeLine{00301\ \ \ nassertr(task-\/>\mbox{\hyperlink{classAsyncTask_a3267dc50cdaf3b980f978dc7adb74b75}{is\_runnable}}(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00303\ \ \ \textcolor{comment}{//\ We\ have\ to\ make\ sure\ we're\ not\ going\ to\ change\ state\ while\ we're\ in\ the}}
+\DoxyCodeLine{00304\ \ \ \textcolor{comment}{//\ process\ of\ adding\ the\ task.}}
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordflow}{if}\ (try\_lock\_pending())\ \{}
+\DoxyCodeLine{00306\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \_manager\ =\ task-\/>\_manager;}
+\DoxyCodeLine{00308\ \ \ \ \ \}}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ \ \ \_waiting.push\_back(task);}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \ \ \textcolor{comment}{//\ Unlock\ the\ state.}}
+\DoxyCodeLine{00313\ \ \ \ \ unlock();}
+\DoxyCodeLine{00314\ \ \ \ \ nassertr(task-\/>\_manager\ ==\ \textcolor{keyword}{nullptr}\ ||\ task-\/>\_manager\ ==\ \_manager,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00315\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00316\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ \textcolor{comment}{//\ It's\ already\ done.\ \ Wake\ the\ task\ immediately.}}
+\DoxyCodeLine{00318\ \ \ \ \ wake\_task(task);}
+\DoxyCodeLine{00319\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00320\ \ \ \}}
+\DoxyCodeLine{00321\ \}}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00326\ \textcolor{keywordtype}{void}\ AsyncFuture::}
+\DoxyCodeLine{00327\ wake\_task(\mbox{\hyperlink{classAsyncTask}{AsyncTask}}\ *task)\ \{}
+\DoxyCodeLine{00328\ \ \ \mbox{\hyperlink{classAsyncTaskManager}{AsyncTaskManager}}\ *manager\ =\ task-\/>\_manager;}
+\DoxyCodeLine{00329\ \ \ \textcolor{keywordflow}{if}\ (manager\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00330\ \ \ \ \ \textcolor{comment}{//\ If\ it's\ an\ unscheduled\ task,\ schedule\ it\ on\ the\ same\ manager\ as\ the}}
+\DoxyCodeLine{00331\ \ \ \ \ \textcolor{comment}{//\ rest\ of\ the\ waiting\ tasks.}}
+\DoxyCodeLine{00332\ \ \ \ \ manager\ =\ \_manager;}
+\DoxyCodeLine{00333\ \ \ \ \ \textcolor{keywordflow}{if}\ (manager\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ manager\ =\ AsyncTaskManager::get\_global\_ptr();}
+\DoxyCodeLine{00335\ \ \ \ \ \}}
+\DoxyCodeLine{00336\ \ \ \}}
+\DoxyCodeLine{00337\ }
+\DoxyCodeLine{00338\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(manager-\/>\_lock);}
+\DoxyCodeLine{00339\ \ \ \textcolor{keywordflow}{switch}\ (task-\/>\_state)\ \{}
+\DoxyCodeLine{00340\ \ \ \textcolor{keywordflow}{case}\ AsyncTask::S\_servicing\_removed:}
+\DoxyCodeLine{00341\ \ \ \ \ nassertv(task-\/>\_manager\ ==\ \_manager);}
+\DoxyCodeLine{00342\ \ \ \ \ \textcolor{comment}{//\ Re-\/adding\ a\ self-\/removed\ task;\ this\ just\ means\ clearing\ the\ removed}}
+\DoxyCodeLine{00343\ \ \ \ \ \textcolor{comment}{//\ flag.}}
+\DoxyCodeLine{00344\ \ \ \ \ task-\/>\_state\ =\ AsyncTask::S\_servicing;}
+\DoxyCodeLine{00345\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00346\ }
+\DoxyCodeLine{00347\ \ \ \textcolor{keywordflow}{case}\ AsyncTask::S\_active:}
+\DoxyCodeLine{00348\ \ \ \ \ \textcolor{comment}{//\ It\ could\ have\ already\ been\ activated,\ such\ as\ by\ a\ cancel()\ which\ then}}
+\DoxyCodeLine{00349\ \ \ \ \ \textcolor{comment}{//\ indirectly\ caused\ the\ awaiting\ future\ to\ be\ cancelled.\ \ Do\ nothing.}}
+\DoxyCodeLine{00350\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ \ \ \textcolor{keywordflow}{case}\ AsyncTask::S\_inactive:}
+\DoxyCodeLine{00353\ \ \ \ \ \textcolor{comment}{//\ Schedule\ it\ immediately.}}
+\DoxyCodeLine{00354\ \ \ \ \ nassertv(task-\/>\_manager\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00355\ }
+\DoxyCodeLine{00356\ \ \ \ \ \textcolor{keywordflow}{if}\ (task\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ task\_cat.debug()}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Adding\ "{}}\ <<\ *task\ <<\ \textcolor{stringliteral}{"{}\ (woken\ by\ future\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00359\ \ \ \ \ \}}
+\DoxyCodeLine{00360\ }
+\DoxyCodeLine{00361\ \ \ \ \ \{}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ manager-\/>\_lock.unlock();}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ task-\/>\mbox{\hyperlink{classAsyncTask_a4ea0dcbb256e6f3c18b269bb1b3eecf1}{upon\_birth}}(manager);}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ manager-\/>\_lock.lock();}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ nassertv(task-\/>\_manager\ ==\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ task-\/>\_state\ ==\ AsyncTask::S\_inactive);}
+\DoxyCodeLine{00367\ }
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \mbox{\hyperlink{classAsyncTaskChain}{AsyncTaskChain}}\ *chain\ =\ manager-\/>\mbox{\hyperlink{classAsyncTaskManager_a301a0e88488b0bdee7e742f88b5cddcf}{do\_find\_task\_chain}}(task-\/>\_chain\_name);}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (chain\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ task\_cat.warning()}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Creating\ implicit\ AsyncTaskChain\ "{}}\ <<\ task-\/>\_chain\_name}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ for\ "{}}\ <<\ manager-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ manager-\/>get\_name()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ chain\ =\ manager-\/>\mbox{\hyperlink{classAsyncTaskManager_ac4b6d34438ae6b508e5eb406a153edab}{do\_make\_task\_chain}}(task-\/>\_chain\_name);}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ chain-\/>\mbox{\hyperlink{classAsyncTaskChain_aaa34be59f9cdd753814f5008f9b57bc8}{do\_add}}(task);}
+\DoxyCodeLine{00376\ \ \ \ \ \}}
+\DoxyCodeLine{00377\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00378\ }
+\DoxyCodeLine{00379\ \ \ \textcolor{keywordflow}{case}\ AsyncTask::S\_awaiting:}
+\DoxyCodeLine{00380\ \ \ \ \ nassertv(task-\/>\_manager\ ==\ \_manager);}
+\DoxyCodeLine{00381\ \ \ \ \ task-\/>\_state\ =\ AsyncTask::S\_active;}
+\DoxyCodeLine{00382\ \ \ \ \ task-\/>\_chain-\/>\_active.push\_back(task);}
+\DoxyCodeLine{00383\ \ \ \ \ -\/-\/task-\/>\_chain-\/>\_num\_awaiting\_tasks;}
+\DoxyCodeLine{00384\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00386\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00387\ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}unexpected\ task\ state"{}});}
+\DoxyCodeLine{00388\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00389\ \ \ \}}
+\DoxyCodeLine{00390\ \}}
+\DoxyCodeLine{00391\ }
+\DoxyCodeLine{00396\ \textcolor{keywordtype}{void}\ AsyncFuture::}
+\DoxyCodeLine{00397\ token\_callback(\mbox{\hyperlink{structCompletable_1_1Data}{Completable::Data}}\ *data,\ \textcolor{keywordtype}{bool}\ success)\ \{}
+\DoxyCodeLine{00398\ \ \ \mbox{\hyperlink{classAsyncFuture}{AsyncFuture}}\ *future\ =\ (\mbox{\hyperlink{classAsyncFuture}{AsyncFuture}}\ *)data;}
+\DoxyCodeLine{00399\ \ \ future-\/>set\_result(\mbox{\hyperlink{classEventParameter}{EventParameter}}(success));}
+\DoxyCodeLine{00400\ \ \ unref\_delete(future);}
+\DoxyCodeLine{00401\ \}}
+\DoxyCodeLine{00402\ }
+\DoxyCodeLine{00406\ AsyncGatheringFuture::}
+\DoxyCodeLine{00407\ AsyncGatheringFuture(\mbox{\hyperlink{classpvector}{AsyncFuture::Futures}}\ futures)\ :}
+\DoxyCodeLine{00408\ \ \ \_futures(std::move(futures)),}
+\DoxyCodeLine{00409\ \ \ \_num\_pending(0)\ \{}
+\DoxyCodeLine{00410\ }
+\DoxyCodeLine{00411\ \ \ \textcolor{keywordtype}{bool}\ any\_pending\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00412\ }
+\DoxyCodeLine{00413\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classAsyncFuture}{AsyncFuture}}\ *fut\ :\ \_futures)\ \{}
+\DoxyCodeLine{00414\ \ \ \ \ \textcolor{comment}{//\ If\ this\ returns\ true,\ the\ future\ is\ not\ yet\ done\ and\ we\ need\ to}}
+\DoxyCodeLine{00415\ \ \ \ \ \textcolor{comment}{//\ register\ ourselves\ with\ it.\ \ This\ creates\ a\ circular\ reference,\ but\ it}}
+\DoxyCodeLine{00416\ \ \ \ \ \textcolor{comment}{//\ is\ resolved\ when\ the\ future\ is\ completed\ or\ cancelled.}}
+\DoxyCodeLine{00417\ \ \ \ \ \textcolor{keywordflow}{if}\ (fut-\/>try\_lock\_pending())\ \{}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ \_manager\ =\ fut-\/>\_manager;}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ fut-\/>\_waiting.push\_back((\mbox{\hyperlink{classAsyncFuture}{AsyncFuture}}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \_num\_pending.fetch\_add(1,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ fut-\/>unlock();}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ any\_pending\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00425\ \ \ \ \ \}}
+\DoxyCodeLine{00426\ \ \ \}}
+\DoxyCodeLine{00427\ \ \ \textcolor{keywordflow}{if}\ (!any\_pending)\ \{}
+\DoxyCodeLine{00428\ \ \ \ \ \textcolor{comment}{//\ Start\ in\ the\ done\ state\ if\ all\ the\ futures\ we\ were\ passed\ are\ done.}}
+\DoxyCodeLine{00429\ \ \ \ \ \textcolor{comment}{//\ Note\ that\ it\ is\ only\ safe\ to\ set\ this\ member\ in\ this\ manner\ if\ indeed}}
+\DoxyCodeLine{00430\ \ \ \ \ \textcolor{comment}{//\ no\ other\ future\ holds\ a\ reference\ to\ us.}}
+\DoxyCodeLine{00431\ \ \ \ \ \_future\_state.store(FS\_finished,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00432\ \ \ \}}
+\DoxyCodeLine{00433\ \}}
+\DoxyCodeLine{00434\ }
+\DoxyCodeLine{00441\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classAsyncGatheringFuture_a9b68f3623cf879a028094380e0d10132}{AsyncGatheringFuture::}}}
+\DoxyCodeLine{00442\ \mbox{\hyperlink{classAsyncGatheringFuture_a9b68f3623cf879a028094380e0d10132}{cancel}}()\ \{}
+\DoxyCodeLine{00443\ \ \ \textcolor{keywordflow}{if}\ (!done())\ \{}
+\DoxyCodeLine{00444\ \ \ \ \ \textcolor{keywordflow}{if}\ (task\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ task\_cat.debug()}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cancelling\ AsyncGatheringFuture\ ("{}}\ <<\ \_futures.size()\ <<\ \textcolor{stringliteral}{"{}\ futures)\(\backslash\)n"{}};}
+\DoxyCodeLine{00447\ \ \ \ \ \}}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00449\ \ \ \ \ \textcolor{comment}{//\ Temporarily\ increase\ the\ pending\ count\ so\ that\ the\ notify\_done()}}
+\DoxyCodeLine{00450\ \ \ \ \ \textcolor{comment}{//\ callbacks\ won't\ end\ up\ causing\ it\ to\ be\ set\ to\ "{}finished"{}.}}
+\DoxyCodeLine{00451\ \ \ \ \ \_num\_pending.fetch\_add(1,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00452\ }
+\DoxyCodeLine{00453\ \ \ \ \ \textcolor{keywordtype}{bool}\ any\_cancelled\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00454\ \ \ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classAsyncFuture}{AsyncFuture}}\ *fut\ :\ \_futures)\ \{}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (fut-\/>cancel())\ \{}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ any\_cancelled\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00458\ \ \ \ \ \}}
+\DoxyCodeLine{00459\ }
+\DoxyCodeLine{00460\ \ \ \ \ \textcolor{comment}{//\ If\ all\ the\ futures\ were\ cancelled,\ change\ state\ of\ this\ future\ to}}
+\DoxyCodeLine{00461\ \ \ \ \ \textcolor{comment}{//\ "{}cancelled"{}\ and\ call\ the\ notify\_done()\ callbacks.}}
+\DoxyCodeLine{00462\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_num\_pending.fetch\_sub(1,\ std::memory\_order\_relaxed)\ ==\ 1)\ \{}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (set\_future\_state(FS\_cancelled))\ \{}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classAsyncFuture_a0b84269890d035c66df93861920a9856}{notify\_done}}(\textcolor{keyword}{false});}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00466\ \ \ \ \ \}}
+\DoxyCodeLine{00467\ }
+\DoxyCodeLine{00468\ \ \ \ \ \textcolor{keywordflow}{return}\ any\_cancelled;}
+\DoxyCodeLine{00469\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00470\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00471\ \ \ \}}
+\DoxyCodeLine{00472\ \}}
+
+\end{DoxyCode}

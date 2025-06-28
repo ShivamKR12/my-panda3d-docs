@@ -1,0 +1,582 @@
+\doxysection{pipe\+Occlusion\+Cull\+Traverser.\+cxx}
+\hypertarget{pipeOcclusionCullTraverser_8cxx_source}{}\label{pipeOcclusionCullTraverser_8cxx_source}\index{panda/src/grutil/pipeOcclusionCullTraverser.cxx@{panda/src/grutil/pipeOcclusionCullTraverser.cxx}}
+\mbox{\hyperlink{pipeOcclusionCullTraverser_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pipeOcclusionCullTraverser_8h}{pipeOcclusionCullTraverser.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{graphicsEngine_8h}{graphicsEngine.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{graphicsPipe_8h}{graphicsPipe.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{drawCullHandler_8h}{drawCullHandler.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{boundingSphere_8h}{boundingSphere.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{boundingBox_8h}{boundingBox.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexWriter_8h}{geomVertexWriter.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomTristrips_8h}{geomTristrips.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomTriangles_8h}{geomTriangles.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimer_8h}{pStatTimer.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{depthWriteAttrib_8h}{depthWriteAttrib.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{depthTestAttrib_8h}{depthTestAttrib.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{colorWriteAttrib_8h}{colorWriteAttrib.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{colorAttrib_8h}{colorAttrib.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullBinManager_8h}{cullBinManager.h}}"{}}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableInt_8h}{configVariableInt.h}}"{}}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__grutil_8h}{config\_grutil.h}}"{}}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmImage_8h}{pnmImage.h}}"{}}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PipeOcclusionCullTraverser::\_setup\_occlusion\_pcollector(\textcolor{stringliteral}{"{}Cull:Occlusion:Setup"{}});}
+\DoxyCodeLine{00034\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PipeOcclusionCullTraverser::\_draw\_occlusion\_pcollector(\textcolor{stringliteral}{"{}Cull:Occlusion:Occluders"{}});}
+\DoxyCodeLine{00035\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PipeOcclusionCullTraverser::\_test\_occlusion\_pcollector(\textcolor{stringliteral}{"{}Cull:Occlusion:Test"{}});}
+\DoxyCodeLine{00036\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PipeOcclusionCullTraverser::\_finish\_occlusion\_pcollector(\textcolor{stringliteral}{"{}Cull:Occlusion:Finish"{}});}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PipeOcclusionCullTraverser::\_occlusion\_untested\_pcollector(\textcolor{stringliteral}{"{}Occlusion\ results:Not\ tested"{}});}
+\DoxyCodeLine{00039\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PipeOcclusionCullTraverser::\_occlusion\_passed\_pcollector(\textcolor{stringliteral}{"{}Occlusion\ results:Visible"{}});}
+\DoxyCodeLine{00040\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PipeOcclusionCullTraverser::\_occlusion\_failed\_pcollector(\textcolor{stringliteral}{"{}Occlusion\ results:Occluded"{}});}
+\DoxyCodeLine{00041\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PipeOcclusionCullTraverser::\_occlusion\_tests\_pcollector(\textcolor{stringliteral}{"{}Occlusion\ tests"{}});}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ PipeOcclusionCullTraverser::\_type\_handle;}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ min\_occlusion\_vertices}
+\DoxyCodeLine{00046\ (\textcolor{stringliteral}{"{}min-\/occlusion-\/vertices"{}},\ 300,}
+\DoxyCodeLine{00047\ \ PRC\_DESC(\textcolor{stringliteral}{"{}The\ minimum\ number\ of\ vertices\ a\ PandaNode\ or\ Geom\ must\ contain\ "{}}}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}in\ order\ to\ perform\ an\ occlusion\ query\ for\ it.\ \ Nodes\ and\ Geoms\ "{}}}
+\DoxyCodeLine{00049\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}smaller\ than\ this\ will\ be\ rendered\ directly,\ without\ bothering\ "{}}}
+\DoxyCodeLine{00050\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}with\ an\ occlusion\ query."{}}));}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ max\_occlusion\_vertices}
+\DoxyCodeLine{00053\ (\textcolor{stringliteral}{"{}max-\/occlusion-\/vertices"{}},\ 3000,}
+\DoxyCodeLine{00054\ \ PRC\_DESC(\textcolor{stringliteral}{"{}The\ maximum\ number\ of\ vertices\ that\ may\ be\ included\ in\ a\ PandaNode\ "{}}}
+\DoxyCodeLine{00055\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}and\ its\ descendents\ in\ order\ to\ perform\ an\ occlusion\ query\ for\ "{}}}
+\DoxyCodeLine{00056\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}it.\ \ Subgraphs\ whose\ total\ vertex\ count\ exceeds\ this\ number\ will\ "{}}}
+\DoxyCodeLine{00057\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}be\ subdivided\ further\ before\ performing\ an\ occlusion\ test-\/-\/the\ "{}}}
+\DoxyCodeLine{00058\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}hope\ is\ that\ we\ can\ eventually\ get\ to\ a\ finer-\/grained\ answer.\ \ "{}}}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}GeomNodes\ and\ Geoms\ will\ not\ be\ subdivided,\ regardless\ of\ this\ "{}}}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}limit."{}}));}
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00062\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}\ show\_occlusion}
+\DoxyCodeLine{00063\ (\textcolor{stringliteral}{"{}show-\/occlusion"{}},\ \textcolor{keyword}{false},}
+\DoxyCodeLine{00064\ \ PRC\_DESC(\textcolor{stringliteral}{"{}Set\ this\ true\ to\ visualize\ the\ efforts\ of\ the\ occlusion\ test."{}}));}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ occlusion\_size}
+\DoxyCodeLine{00067\ (\textcolor{stringliteral}{"{}occlusion-\/size"{}},\ \textcolor{stringliteral}{"{}256\ 256"{}},}
+\DoxyCodeLine{00068\ \ PRC\_DESC(\textcolor{stringliteral}{"{}Specify\ the\ x\ y\ size\ of\ the\ buffer\ used\ for\ occlusion\ testing."{}}));}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ occlusion\_depth\_bits}
+\DoxyCodeLine{00071\ (\textcolor{stringliteral}{"{}occlusion-\/depth-\/bits"{}},\ 1,}
+\DoxyCodeLine{00072\ \ PRC\_DESC(\textcolor{stringliteral}{"{}The\ minimum\ number\ of\ depth\ bits\ requested\ for\ the\ occlusion\ "{}}}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}buffer."{}}));}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00078\ PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00079\ PipeOcclusionCullTraverser(\mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *host)\ \{}
+\DoxyCodeLine{00080\ \ \ \_live\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00081\ \ \ \mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}}\ *gsg\ =\ host-\/>get\_gsg();}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00083\ \ \ \mbox{\hyperlink{classGraphicsThreadingModel}{GraphicsThreadingModel}}\ threading\_model\ =\ gsg-\/>get\_threading\_model();}
+\DoxyCodeLine{00084\ \ \ nassertv(threading\_model.get\_cull\_name()\ ==\ threading\_model.get\_draw\_name());}
+\DoxyCodeLine{00085\ \ \ \textcolor{keywordflow}{if}\ (!gsg-\/>get\_supports\_occlusion\_query())\ \{}
+\DoxyCodeLine{00086\ \ \ \ \ grutil\_cat.info()}
+\DoxyCodeLine{00087\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Occlusion\ queries\ are\ not\ supported\ by\ graphics\ pipe.\(\backslash\)n"{}};}
+\DoxyCodeLine{00088\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00089\ \ \ \}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \ \ \mbox{\hyperlink{classGraphicsEngine}{GraphicsEngine}}\ *engine\ =\ gsg-\/>\mbox{\hyperlink{classGraphicsStateGuardian_a2b3e8a71b60c6a512f7f200655290150}{get\_engine}}();}
+\DoxyCodeLine{00092\ \ \ \mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}}\ *pipe\ =\ gsg-\/>get\_pipe();}
+\DoxyCodeLine{00093\ }
+\DoxyCodeLine{00094\ \ \ \mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ fb\_prop;}
+\DoxyCodeLine{00095\ \ \ fb\_prop.set\_depth\_bits(occlusion\_depth\_bits);}
+\DoxyCodeLine{00096\ \ \ \mbox{\hyperlink{classWindowProperties}{WindowProperties}}\ win\_prop;}
+\DoxyCodeLine{00097\ \ \ \textcolor{keywordflow}{if}\ (occlusion\_size.get\_num\_words()\ <\ 2)\ \{}
+\DoxyCodeLine{00098\ \ \ \ \ win\_prop.set\_size(occlusion\_size,\ occlusion\_size);}
+\DoxyCodeLine{00099\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00100\ \ \ \ \ win\_prop.set\_size(occlusion\_size[0],\ occlusion\_size[1]);}
+\DoxyCodeLine{00101\ \ \ \}}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00103\ \ \ \_buffer\ =\ engine-\/>make\_output(pipe,\ \textcolor{stringliteral}{"{}occlusion"{}},\ 0,\ fb\_prop,\ win\_prop,}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GraphicsPipe::BF\_refuse\_window,}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gsg,\ host-\/>\mbox{\hyperlink{classGraphicsOutput_a9f426f4eafec2f5fc6d207a0828bab5d}{get\_host}}());}
+\DoxyCodeLine{00106\ \ \ nassertv(\_buffer\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00108\ \ \ \textcolor{comment}{//\ This\ buffer\ isn't\ really\ active-\/-\/we\ render\ it\ by\ hand;\ we\ don't\ want\ the}}
+\DoxyCodeLine{00109\ \ \ \textcolor{comment}{//\ GraphicsEngine\ to\ render\ it.}}
+\DoxyCodeLine{00110\ \ \ \_buffer-\/>set\_active(0);}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \_display\_region\ =\ \_buffer-\/>make\_display\_region();}
+\DoxyCodeLine{00113\ \ \ \_internal\_cull\_handler\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \ \ make\_sphere();}
+\DoxyCodeLine{00116\ \ \ make\_box();}
+\DoxyCodeLine{00117\ \ \ make\_solid\_test\_state();}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ \_live\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00120\ \}}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00125\ \textcolor{keywordtype}{void}\ PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00126\ set\_scene(\mbox{\hyperlink{classSceneSetup}{SceneSetup}}\ *scene\_setup,\ \mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsgbase,}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ dr\_incomplete\_render)\ \{}
+\DoxyCodeLine{00128\ \ \ CullTraverser::set\_scene(scene\_setup,\ gsgbase,\ dr\_incomplete\_render);}
+\DoxyCodeLine{00129\ \ \ \textcolor{keywordflow}{if}\ (!\_live)\ \{}
+\DoxyCodeLine{00130\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00131\ \ \ \}}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_setup\_occlusion\_pcollector);}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00135\ \ \ \mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}}\ *gsg\ =\ \_buffer-\/>\mbox{\hyperlink{classGraphicsStateGuardianBase_aa5cb7468a2b7974197fca2c5dbe654fe}{get\_gsg}}();}
+\DoxyCodeLine{00136\ \ \ nassertv(gsg\ ==\ gsgbase);}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ get\_current\_thread();}
+\DoxyCodeLine{00139\ \ \ \textcolor{keywordflow}{if}\ (!\_buffer-\/>begin\_frame(GraphicsOutput::FM\_render,\ current\_thread))\ \{}
+\DoxyCodeLine{00140\ \ \ \ \ grutil\_cat.error()\ <<\ \textcolor{stringliteral}{"{}begin\_frame\ failed\(\backslash\)n"{}};}
+\DoxyCodeLine{00141\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00142\ \ \ \}}
+\DoxyCodeLine{00143\ \ \ \_buffer-\/>clear(current\_thread);}
+\DoxyCodeLine{00144\ }
+\DoxyCodeLine{00145\ \ \ \mbox{\hyperlink{classDisplayRegionPipelineReader}{DisplayRegionPipelineReader}}\ dr\_reader(\_display\_region,\ current\_thread);}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00147\ \ \ \_buffer-\/>change\_scenes(\&dr\_reader);}
+\DoxyCodeLine{00148\ \ \ gsg-\/>\mbox{\hyperlink{classGraphicsStateGuardian_a60bb06c5987b92bc39591d4a27bea4ab}{prepare\_display\_region}}(\&dr\_reader);}
+\DoxyCodeLine{00149\ }
+\DoxyCodeLine{00150\ \ \ \_scene\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classSceneSetup}{SceneSetup}}(*scene\_setup);}
+\DoxyCodeLine{00151\ \ \ \_scene-\/>set\_display\_region(\_display\_region);}
+\DoxyCodeLine{00152\ \ \ \_scene-\/>set\_viewport\_size(\_display\_region-\/>get\_pixel\_width(),}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_display\_region-\/>get\_pixel\_height());}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ \textcolor{keywordflow}{if}\ (\_scene-\/>get\_cull\_center()\ !=\ \_scene-\/>get\_camera\_path())\ \{}
+\DoxyCodeLine{00156\ \ \ \ \ \textcolor{comment}{//\ This\ camera\ has\ a\ special\ cull\ center\ set.\ \ For\ the\ purposes\ of}}
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{comment}{//\ occlusion\ culling,\ we\ want\ to\ render\ the\ scene\ from\ the\ cull\ center,}}
+\DoxyCodeLine{00158\ \ \ \ \ \textcolor{comment}{//\ not\ from\ the\ camera\ root.}}
+\DoxyCodeLine{00159\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ cull\_center\ =\ \_scene-\/>get\_cull\_center();}
+\DoxyCodeLine{00160\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ scene\_parent\ =\ \_scene-\/>get\_scene\_root().get\_parent(current\_thread);}
+\DoxyCodeLine{00161\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ camera\_transform\ =\ cull\_center.get\_transform(scene\_parent,\ current\_thread);}
+\DoxyCodeLine{00162\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ world\_transform\ =\ scene\_parent.get\_transform(cull\_center,\ current\_thread);}
+\DoxyCodeLine{00163\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ cs\_world\_transform\ =\ \_scene-\/>get\_cs\_transform()-\/>compose(world\_transform);}
+\DoxyCodeLine{00164\ \ \ \ \ \_scene-\/>set\_camera\_transform(camera\_transform);}
+\DoxyCodeLine{00165\ \ \ \ \ \_scene-\/>set\_world\_transform(world\_transform);}
+\DoxyCodeLine{00166\ \ \ \ \ \_scene-\/>set\_cs\_world\_transform(cs\_world\_transform);}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \ \ \ \ \textcolor{comment}{//\ We\ use\ this\ to\ recover\ the\ original\ net\_transform.}}
+\DoxyCodeLine{00169\ \ \ \ \ \_inv\_cs\_world\_transform\ =\ cs\_world\_transform-\/>get\_inverse();}
+\DoxyCodeLine{00170\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00171\ \ \ \ \ \_inv\_cs\_world\_transform\ =\ \_scene-\/>get\_cs\_world\_transform()-\/>get\_inverse();}
+\DoxyCodeLine{00172\ \ \ \}}
+\DoxyCodeLine{00173\ }
+\DoxyCodeLine{00174\ \ \ nassertv(\_scene-\/>get\_cs\_transform()\ ==\ scene\_setup-\/>get\_cs\_transform());}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00176\ \ \ gsg-\/>\mbox{\hyperlink{classGraphicsStateGuardian_a24396aa9a8df4057bce0ddb5bbfb41dc}{set\_scene}}(\_scene);}
+\DoxyCodeLine{00177\ \ \ \textcolor{keywordflow}{if}\ (!gsg-\/>begin\_scene())\ \{}
+\DoxyCodeLine{00178\ \ \ \ \ grutil\_cat.error()\ <<\ \textcolor{stringliteral}{"{}begin\_scene\ failed\(\backslash\)n"{}};}
+\DoxyCodeLine{00179\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00180\ \ \ \}}
+\DoxyCodeLine{00181\ }
+\DoxyCodeLine{00182\ \ \ \textcolor{comment}{//\ Hijack\ the\ default\ cull\ handler\ so\ we\ can\ perform\ all\ of\ the\ occlusion}}
+\DoxyCodeLine{00183\ \ \ \textcolor{comment}{//\ tests\ on\ a\ per-\/object\ basis,\ and\ then\ query\ the\ results\ at\ the\ end\ of\ the}}
+\DoxyCodeLine{00184\ \ \ \textcolor{comment}{//\ traversal.}}
+\DoxyCodeLine{00185\ \ \ \_true\_cull\_handler\ =\ get\_cull\_handler();}
+\DoxyCodeLine{00186\ \ \ set\_cull\_handler(\textcolor{keyword}{this});}
+\DoxyCodeLine{00187\ }
+\DoxyCodeLine{00188\ \ \ \_internal\_cull\_handler\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classDrawCullHandler}{DrawCullHandler}}(gsg);}
+\DoxyCodeLine{00189\ \ \ \_internal\_trav\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classCullTraverser}{CullTraverser}};}
+\DoxyCodeLine{00190\ \ \ \_internal\_trav-\/>set\_cull\_handler(\_internal\_cull\_handler);}
+\DoxyCodeLine{00191\ \ \ \_internal\_trav-\/>set\_scene(\_scene,\ gsg,\ dr\_incomplete\_render);}
+\DoxyCodeLine{00192\ \ \ \_internal\_trav-\/>set\_view\_frustum(get\_view\_frustum());}
+\DoxyCodeLine{00193\ \ \ \_internal\_trav-\/>set\_camera\_mask(\_occlusion\_mask);}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00195\ \ \ \_current\_query\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00196\ \ \ \_next\_query\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00198\ \ \ \textcolor{comment}{//\ Begin\ by\ rendering\ all\ the\ occluders\ into\ our\ internal\ scene.}}
+\DoxyCodeLine{00199\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer2(\_draw\_occlusion\_pcollector);}
+\DoxyCodeLine{00200\ \ \ \_internal\_trav-\/>traverse(\_scene-\/>get\_scene\_root());}
+\DoxyCodeLine{00201\ \}}
+\DoxyCodeLine{00202\ }
+\DoxyCodeLine{00207\ \textcolor{keywordtype}{void}\ PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00208\ end\_traverse()\ \{}
+\DoxyCodeLine{00209\ \ \ \textcolor{keywordflow}{if}\ (!\_live)\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00211\ \ \ \}}
+\DoxyCodeLine{00212\ }
+\DoxyCodeLine{00213\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_finish\_occlusion\_pcollector);}
+\DoxyCodeLine{00214\ \ \ \mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}}\ *gsg\ =\ \_buffer-\/>\mbox{\hyperlink{classGraphicsStateGuardianBase_aa5cb7468a2b7974197fca2c5dbe654fe}{get\_gsg}}();}
+\DoxyCodeLine{00215\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ get\_current\_thread();}
+\DoxyCodeLine{00216\ }
+\DoxyCodeLine{00217\ \ \ \_current\_query\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00218\ \ \ \_next\_query\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00219\ }
+\DoxyCodeLine{00220\ \ \ \textcolor{keywordflow}{for}\ (PendingObject\ \&pobj\ :\ \ \_pending\_objects)\ \{}
+\DoxyCodeLine{00221\ \ \ \ \ \textcolor{keywordflow}{if}\ (pobj.\_query\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \_occlusion\_untested\_pcollector.add\_level(1);}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \_true\_cull\_handler-\/>\mbox{\hyperlink{classCullHandler_a35e3215f1c647c0ce091d234a9afa57c}{record\_object}}(std::move(pobj.\_object),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00224\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_fragments\ =\ pobj.\_query-\/>get\_num\_fragments();}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_fragments\ !=\ 0)\ \{}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \_occlusion\_passed\_pcollector.add\_level(1);}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \_true\_cull\_handler-\/>\mbox{\hyperlink{classCullHandler_a35e3215f1c647c0ce091d234a9afa57c}{record\_object}}(std::move(pobj.\_object),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ \_occlusion\_failed\_pcollector.add\_level(1);}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00232\ \ \ \ \ \}}
+\DoxyCodeLine{00233\ \ \ \}}
+\DoxyCodeLine{00234\ \ \ \_pending\_objects.clear();}
+\DoxyCodeLine{00235\ \ \ CullTraverser::end\_traverse();}
+\DoxyCodeLine{00236\ }
+\DoxyCodeLine{00237\ \ \ gsg-\/>\mbox{\hyperlink{classGraphicsStateGuardian_ab8d7bc997a78e7a442fcdb920cce0af4}{end\_scene}}();}
+\DoxyCodeLine{00238\ \ \ \_buffer-\/>end\_frame(GraphicsOutput::FM\_render,\ current\_thread);}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00240\ \ \ \_buffer-\/>begin\_flip();}
+\DoxyCodeLine{00241\ \ \ \_buffer-\/>end\_flip();}
+\DoxyCodeLine{00242\ }
+\DoxyCodeLine{00243\ \ \ \textcolor{keyword}{delete}\ \_internal\_cull\_handler;}
+\DoxyCodeLine{00244\ \ \ \_internal\_cull\_handler\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00245\ }
+\DoxyCodeLine{00246\ \ \ \_occlusion\_untested\_pcollector.flush\_level();}
+\DoxyCodeLine{00247\ \ \ \_occlusion\_passed\_pcollector.flush\_level();}
+\DoxyCodeLine{00248\ \ \ \_occlusion\_failed\_pcollector.flush\_level();}
+\DoxyCodeLine{00249\ \ \ \_occlusion\_tests\_pcollector.flush\_level();}
+\DoxyCodeLine{00250\ \}}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00256\ \mbox{\hyperlink{classTexture}{Texture}}\ *PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00257\ get\_texture()\ \{}
+\DoxyCodeLine{00258\ \ \ \textcolor{keywordflow}{if}\ (\_texture\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00259\ \ \ \ \ \textcolor{keywordflow}{return}\ \_texture;}
+\DoxyCodeLine{00260\ \ \ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \ \ \_texture\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTexture}{Texture}}(\textcolor{stringliteral}{"{}occlusion"{}});}
+\DoxyCodeLine{00263\ }
+\DoxyCodeLine{00264\ \ \ \textcolor{keywordflow}{if}\ (!\_live)\ \{}
+\DoxyCodeLine{00265\ \ \ \ \ \textcolor{comment}{//\ If\ we're\ not\ live,\ just\ create\ a\ default,\ black\ texture.}}
+\DoxyCodeLine{00266\ \ \ \ \ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ image(1,\ 1);}
+\DoxyCodeLine{00267\ \ \ \ \ \_texture-\/>load(image);}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ create\ a\ render-\/to-\/texture.}}
+\DoxyCodeLine{00271\ \ \ \ \ \_buffer-\/>add\_render\_texture(\_texture,\ GraphicsOutput::RTM\_bind\_or\_copy);}
+\DoxyCodeLine{00272\ \ \ \}}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \ \ \textcolor{keywordflow}{return}\ \_texture;}
+\DoxyCodeLine{00275\ \}}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00280\ \textcolor{keywordtype}{bool}\ PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00281\ is\_in\_view(\mbox{\hyperlink{classCullTraverserData}{CullTraverserData}}\ \&data)\ \{}
+\DoxyCodeLine{00282\ \ \ \_next\_query\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00283\ }
+\DoxyCodeLine{00284\ \ \ \textcolor{keywordflow}{if}\ (!data.is\_in\_view(get\_camera\_mask()))\ \{}
+\DoxyCodeLine{00285\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00286\ \ \ \}}
+\DoxyCodeLine{00287\ \ \ \textcolor{keywordflow}{if}\ (!\_live)\ \{}
+\DoxyCodeLine{00288\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00289\ \ \ \}}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00291\ \ \ \textcolor{keywordflow}{if}\ (\_current\_query\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{comment}{//\ We've\ already\ performed\ an\ occlusion\ test\ for\ some\ ancestor\ of\ this}}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{comment}{//\ node;\ no\ need\ to\ perform\ another.}}
+\DoxyCodeLine{00294\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00295\ \ \ \}}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node\ =\ data.node();}
+\DoxyCodeLine{00298\ \ \ \mbox{\hyperlink{classPandaNodePipelineReader}{PandaNodePipelineReader}}\ *node\_reader\ =\ data.node\_reader();}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00300\ \ \ \textcolor{keywordflow}{if}\ (node\_reader-\/>get\_nested\_vertices()\ <\ min\_occlusion\_vertices)\ \{}
+\DoxyCodeLine{00301\ \ \ \ \ \textcolor{comment}{//\ Never\ mind;\ let\ this\ puny\ one\ slide.}}
+\DoxyCodeLine{00302\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00303\ \ \ \}}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}()\ ||}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ node\_reader-\/>is\_final()\ ||}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ node\_reader-\/>get\_effects()-\/>has\_show\_bounds()\ ||}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ node\_reader-\/>get\_nested\_vertices()\ <=\ max\_occlusion\_vertices)\ \{}
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{comment}{//\ In\ any\ of\ these\ cases,\ there's\ sufficient\ reason\ to\ perform\ an}}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{comment}{//\ occlusion\ test\ on\ this\ particular\ node.\ \ Do\ it.}}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \ \ CPT(\mbox{\hyperlink{classBoundingVolume}{BoundingVolume}})\ vol\ =\ node\_reader-\/>get\_bounds();}
+\DoxyCodeLine{00313\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ net\_transform\ =\ data.get\_net\_transform(\textcolor{keyword}{this});}
+\DoxyCodeLine{00314\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ internal\_transform;}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \ \ \ \ CPT(\mbox{\hyperlink{classGeom}{Geom}})\ geom;}
+\DoxyCodeLine{00317\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_volume\_viz(vol,\ geom,\ net\_transform,\ internal\_transform))\ \{}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \_next\_query\ =}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ perform\_occlusion\_test(geom,\ net\_transform,\ internal\_transform);}
+\DoxyCodeLine{00320\ \ \ \ \ \}}
+\DoxyCodeLine{00321\ \ \ \}}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00323\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00324\ \}}
+\DoxyCodeLine{00325\ }
+\DoxyCodeLine{00330\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPipeOcclusionCullTraverser_adaa89635f37cce706a24d84a69fe39dc}{PipeOcclusionCullTraverser::}}}
+\DoxyCodeLine{00331\ \mbox{\hyperlink{classPipeOcclusionCullTraverser_adaa89635f37cce706a24d84a69fe39dc}{traverse\_below}}(\mbox{\hyperlink{classCullTraverserData}{CullTraverserData}}\ \&data)\ \{}
+\DoxyCodeLine{00332\ \ \ \textcolor{comment}{//\ Save\ and\ restore\ \_current\_query,\ and\ clear\ \_next\_query,\ for\ traversing}}
+\DoxyCodeLine{00333\ \ \ \textcolor{comment}{//\ the\ children\ of\ this\ node.}}
+\DoxyCodeLine{00334\ \ \ PT(\mbox{\hyperlink{classOcclusionQueryContext}{OcclusionQueryContext}})\ prev\_query\ =\ \_current\_query;}
+\DoxyCodeLine{00335\ \ \ \textcolor{keywordflow}{if}\ (\_next\_query\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00336\ \ \ \ \ \_current\_query\ =\ \_next\_query;}
+\DoxyCodeLine{00337\ \ \ \}}
+\DoxyCodeLine{00338\ \ \ \_next\_query\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00340\ \ \ CullTraverser::traverse\_below(data);}
+\DoxyCodeLine{00341\ }
+\DoxyCodeLine{00342\ \ \ \_current\_query\ =\ prev\_query;}
+\DoxyCodeLine{00343\ \ \ \_next\_query\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00344\ \}}
+\DoxyCodeLine{00345\ }
+\DoxyCodeLine{00356\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPipeOcclusionCullTraverser_a54507657cf96474dba8a2df9217e7922}{PipeOcclusionCullTraverser::}}}
+\DoxyCodeLine{00357\ \mbox{\hyperlink{classPipeOcclusionCullTraverser_a54507657cf96474dba8a2df9217e7922}{record\_object}}(\mbox{\hyperlink{classCullableObject}{CullableObject}}\ \&\&\textcolor{keywordtype}{object},\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCullTraverser}{CullTraverser}}\ *traverser)\ \{}
+\DoxyCodeLine{00358\ \ \ nassertv(traverser\ ==\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00359\ \ \ PendingObject\ pobj(std::move(\textcolor{keywordtype}{object}));}
+\DoxyCodeLine{00360\ }
+\DoxyCodeLine{00361\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ get\_current\_thread();}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00363\ \ \ \textcolor{keywordflow}{if}\ (\_next\_query\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00364\ \ \ \ \ \textcolor{comment}{//\ We\ have\ just\ performed\ an\ occlusion\ query\ for\ this\ node.\ \ Don't\ perform}}
+\DoxyCodeLine{00365\ \ \ \ \ \textcolor{comment}{//\ another\ one.}}
+\DoxyCodeLine{00366\ \ \ \ \ pobj.\_query\ =\ \_next\_query;}
+\DoxyCodeLine{00367\ }
+\DoxyCodeLine{00368\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_current\_query\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00369\ \ \ \ \ \textcolor{comment}{//\ We\ have\ previously\ performed\ an\ occlusion\ query\ for\ this\ node\ or\ some}}
+\DoxyCodeLine{00370\ \ \ \ \ \textcolor{comment}{//\ ancestor.\ \ Don't\ perform\ another\ one.}}
+\DoxyCodeLine{00371\ \ \ \ \ pobj.\_query\ =\ \_current\_query;}
+\DoxyCodeLine{00372\ }
+\DoxyCodeLine{00373\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (pobj.\_object.\_geom-\/>get\_nested\_vertices(current\_thread)\ <\ min\_occlusion\_vertices)\ \{}
+\DoxyCodeLine{00374\ \ \ \ \ \textcolor{comment}{//\ This\ object\ is\ too\ small\ to\ bother\ testing\ for\ occlusions.}}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00376\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00377\ \ \ \ \ \textcolor{comment}{//\ Issue\ an\ occlusion\ test\ for\ this\ object.}}
+\DoxyCodeLine{00378\ \ \ \ \ CPT(\mbox{\hyperlink{classBoundingVolume}{BoundingVolume}})\ vol\ =\ pobj.\_object.\_geom-\/>get\_bounds(current\_thread);}
+\DoxyCodeLine{00379\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ net\_transform\ =\ \_inv\_cs\_world\_transform-\/>compose(pobj.\_object.\_internal\_transform);}
+\DoxyCodeLine{00380\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ internal\_transform;}
+\DoxyCodeLine{00381\ \ \ \ \ CPT(\mbox{\hyperlink{classGeom}{Geom}})\ geom;}
+\DoxyCodeLine{00382\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_volume\_viz(vol,\ geom,\ net\_transform,\ internal\_transform))\ \{}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ pobj.\_query\ =}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ perform\_occlusion\_test(geom,\ net\_transform,\ internal\_transform);}
+\DoxyCodeLine{00385\ \ \ \ \ \}}
+\DoxyCodeLine{00386\ \ \ \}}
+\DoxyCodeLine{00387\ }
+\DoxyCodeLine{00388\ \ \ \_pending\_objects.push\_back(std::move(pobj));}
+\DoxyCodeLine{00389\ \}}
+\DoxyCodeLine{00390\ }
+\DoxyCodeLine{00394\ \textcolor{keywordtype}{void}\ PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00395\ make\_sphere()\ \{}
+\DoxyCodeLine{00396\ \ \ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ num\_slices(\textcolor{stringliteral}{"{}num-\/slices"{}},\ 16);}
+\DoxyCodeLine{00397\ \ \ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ num\_stacks(\textcolor{stringliteral}{"{}num-\/stacks"{}},\ 8);}
+\DoxyCodeLine{00398\ }
+\DoxyCodeLine{00399\ \ \ \textcolor{comment}{//\ static\ const\ int\ num\_slices\ =\ 16;\ static\ const\ int\ num\_stacks\ =\ 8;}}
+\DoxyCodeLine{00400\ }
+\DoxyCodeLine{00401\ \ \ PT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ vdata\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}}
+\DoxyCodeLine{00402\ \ \ \ \ (\textcolor{stringliteral}{"{}occlusion\_sphere"{}},\ GeomVertexFormat::get\_v3(),\ Geom::UH\_static);}
+\DoxyCodeLine{00403\ \ \ \mbox{\hyperlink{classGeomVertexWriter}{GeomVertexWriter}}\ vertex(vdata,\ InternalName::get\_vertex());}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00405\ \ \ PT(\mbox{\hyperlink{classGeomTristrips}{GeomTristrips}})\ strip\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomTristrips}{GeomTristrips}}(Geom::UH\_stream);}
+\DoxyCodeLine{00406\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ sl\ =\ 0;\ sl\ <\ num\_slices;\ ++sl)\ \{}
+\DoxyCodeLine{00407\ \ \ \ \ PN\_stdfloat\ longitude0\ =\ (PN\_stdfloat)sl\ /\ (PN\_stdfloat)num\_slices;}
+\DoxyCodeLine{00408\ \ \ \ \ PN\_stdfloat\ longitude1\ =\ (PN\_stdfloat)(sl\ +\ 1)\ /\ (PN\_stdfloat)num\_slices;}
+\DoxyCodeLine{00409\ \ \ \ \ vertex.add\_data3(compute\_sphere\_point(0.0,\ longitude0));}
+\DoxyCodeLine{00410\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ st\ =\ 1;\ st\ <\ num\_stacks;\ ++st)\ \{}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ PN\_stdfloat\ latitude\ =\ (PN\_stdfloat)st\ /\ (PN\_stdfloat)num\_stacks;}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ vertex.add\_data3(compute\_sphere\_point(latitude,\ longitude0));}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ vertex.add\_data3(compute\_sphere\_point(latitude,\ longitude1));}
+\DoxyCodeLine{00414\ \ \ \ \ \}}
+\DoxyCodeLine{00415\ \ \ \ \ vertex.add\_data3(compute\_sphere\_point(1.0,\ longitude0));}
+\DoxyCodeLine{00416\ }
+\DoxyCodeLine{00417\ \ \ \ \ strip-\/>add\_next\_vertices(num\_stacks\ *\ 2);}
+\DoxyCodeLine{00418\ \ \ \ \ strip-\/>close\_primitive();}
+\DoxyCodeLine{00419\ \ \ \}}
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00421\ \ \ \_sphere\_geom\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeom}{Geom}}(vdata);}
+\DoxyCodeLine{00422\ \ \ \_sphere\_geom-\/>add\_primitive(strip);}
+\DoxyCodeLine{00423\ \}}
+\DoxyCodeLine{00424\ }
+\DoxyCodeLine{00429\ LVertex\ PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00430\ compute\_sphere\_point(PN\_stdfloat\ latitude,\ PN\_stdfloat\ longitude)\ \{}
+\DoxyCodeLine{00431\ \ \ PN\_stdfloat\ s1,\ c1;}
+\DoxyCodeLine{00432\ \ \ csincos(latitude\ *\ MathNumbers::pi,\ \&s1,\ \&c1);}
+\DoxyCodeLine{00433\ }
+\DoxyCodeLine{00434\ \ \ PN\_stdfloat\ s2,\ c2;}
+\DoxyCodeLine{00435\ \ \ csincos(longitude\ *\ 2.0f\ *\ MathNumbers::pi,\ \&s2,\ \&c2);}
+\DoxyCodeLine{00436\ }
+\DoxyCodeLine{00437\ \ \ LVertex\ p(s1\ *\ c2,\ s1\ *\ s2,\ c1);}
+\DoxyCodeLine{00438\ \ \ \textcolor{keywordflow}{return}\ p;}
+\DoxyCodeLine{00439\ \}}
+\DoxyCodeLine{00440\ }
+\DoxyCodeLine{00444\ \textcolor{keywordtype}{void}\ PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00445\ make\_box()\ \{}
+\DoxyCodeLine{00446\ \ \ PT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ vdata\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}}
+\DoxyCodeLine{00447\ \ \ \ \ (\textcolor{stringliteral}{"{}occlusion\_box"{}},\ GeomVertexFormat::get\_v3(),\ Geom::UH\_static);}
+\DoxyCodeLine{00448\ \ \ vdata-\/>unclean\_set\_num\_rows(8);}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00450\ \ \ \{}
+\DoxyCodeLine{00451\ \ \ \ \ \mbox{\hyperlink{classGeomVertexWriter}{GeomVertexWriter}}\ vertex(vdata,\ InternalName::get\_vertex());}
+\DoxyCodeLine{00452\ \ \ \ \ vertex.set\_data3(0.0f,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{00453\ \ \ \ \ vertex.set\_data3(0.0f,\ 0.0f,\ 1.0f);}
+\DoxyCodeLine{00454\ \ \ \ \ vertex.set\_data3(0.0f,\ 1.0f,\ 0.0f);}
+\DoxyCodeLine{00455\ \ \ \ \ vertex.set\_data3(0.0f,\ 1.0f,\ 1.0f);}
+\DoxyCodeLine{00456\ \ \ \ \ vertex.set\_data3(1.0f,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{00457\ \ \ \ \ vertex.set\_data3(1.0f,\ 0.0f,\ 1.0f);}
+\DoxyCodeLine{00458\ \ \ \ \ vertex.set\_data3(1.0f,\ 1.0f,\ 0.0f);}
+\DoxyCodeLine{00459\ \ \ \ \ vertex.set\_data3(1.0f,\ 1.0f,\ 1.0f);}
+\DoxyCodeLine{00460\ \ \ \}}
+\DoxyCodeLine{00461\ }
+\DoxyCodeLine{00462\ \ \ PT(\mbox{\hyperlink{classGeomTriangles}{GeomTriangles}})\ tris\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomTriangles}{GeomTriangles}}(Geom::UH\_static);}
+\DoxyCodeLine{00463\ \ \ tris-\/>add\_vertices(0,\ 4,\ 5);}
+\DoxyCodeLine{00464\ \ \ tris-\/>add\_vertices(0,\ 5,\ 1);}
+\DoxyCodeLine{00465\ \ \ tris-\/>add\_vertices(4,\ 6,\ 7);}
+\DoxyCodeLine{00466\ \ \ tris-\/>add\_vertices(4,\ 7,\ 5);}
+\DoxyCodeLine{00467\ \ \ tris-\/>add\_vertices(6,\ 2,\ 3);}
+\DoxyCodeLine{00468\ \ \ tris-\/>add\_vertices(6,\ 3,\ 7);}
+\DoxyCodeLine{00469\ \ \ tris-\/>add\_vertices(2,\ 0,\ 1);}
+\DoxyCodeLine{00470\ \ \ tris-\/>add\_vertices(2,\ 1,\ 3);}
+\DoxyCodeLine{00471\ \ \ tris-\/>add\_vertices(1,\ 5,\ 7);}
+\DoxyCodeLine{00472\ \ \ tris-\/>add\_vertices(1,\ 7,\ 3);}
+\DoxyCodeLine{00473\ \ \ tris-\/>add\_vertices(2,\ 6,\ 4);}
+\DoxyCodeLine{00474\ \ \ tris-\/>add\_vertices(2,\ 4,\ 0);}
+\DoxyCodeLine{00475\ }
+\DoxyCodeLine{00476\ \ \ \_box\_geom\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeom}{Geom}}(vdata);}
+\DoxyCodeLine{00477\ \ \ \_box\_geom-\/>add\_primitive(tris);}
+\DoxyCodeLine{00478\ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00484\ \textcolor{keywordtype}{void}\ PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00485\ make\_solid\_test\_state()\ \{}
+\DoxyCodeLine{00486\ \ \ \_solid\_test\_state\ =\ RenderState::make}
+\DoxyCodeLine{00487\ \ \ \ \ (DepthWriteAttrib::make(DepthWriteAttrib::M\_off),}
+\DoxyCodeLine{00488\ \ \ \ \ \ DepthTestAttrib::make(DepthTestAttrib::M\_less),}
+\DoxyCodeLine{00489\ \ \ \ \ \ ColorWriteAttrib::make(ColorWriteAttrib::C\_off));}
+\DoxyCodeLine{00490\ \}}
+\DoxyCodeLine{00491\ }
+\DoxyCodeLine{00503\ \textcolor{keywordtype}{bool}\ PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00504\ get\_volume\_viz(\textcolor{keyword}{const}\ \mbox{\hyperlink{classBoundingVolume}{BoundingVolume}}\ *vol,}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classGeom}{Geom}})\ \&geom,\ \ \textcolor{comment}{//\ OUT}}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ \&net\_transform,\ \textcolor{comment}{//\ IN-\/OUT}}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ \&internal\_transform\ \ \textcolor{comment}{//\ OUT}}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ )\ \{}
+\DoxyCodeLine{00509\ \ \ \textcolor{keywordflow}{if}\ (vol-\/>is\_infinite()\ ||\ vol-\/>is\_empty())\ \{}
+\DoxyCodeLine{00510\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00511\ \ \ \}}
+\DoxyCodeLine{00512\ }
+\DoxyCodeLine{00513\ \ \ \textcolor{keywordflow}{if}\ (vol-\/>is\_exact\_type(BoundingSphere::get\_class\_type()))\ \{}
+\DoxyCodeLine{00514\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classBoundingSphere}{BoundingSphere}}\ *sphere\ =\ DCAST(\mbox{\hyperlink{classBoundingSphere}{BoundingSphere}},\ vol);}
+\DoxyCodeLine{00515\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ local\_transform\ =}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ TransformState::make\_pos\_hpr\_scale(sphere-\/>get\_center(),}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ LVecBase3(0,\ 0,\ 0),}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sphere-\/>get\_radius());}
+\DoxyCodeLine{00519\ \ \ \ \ net\_transform\ =\ net\_transform-\/>compose(local\_transform);}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ modelview\_transform\ =}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \_internal\_trav-\/>get\_world\_transform()-\/>compose(net\_transform);}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00524\ \ \ \ \ \textcolor{comment}{//\ See\ if\ the\ bounding\ sphere\ is\ clipped\ by\ the\ near\ plane.\ \ If\ it\ is,\ the}}
+\DoxyCodeLine{00525\ \ \ \ \ \textcolor{comment}{//\ occlusion\ test\ may\ fail,\ so\ we\ won't\ bother\ performing\ it\ for\ this}}
+\DoxyCodeLine{00526\ \ \ \ \ \textcolor{comment}{//\ object.\ \ Anyway,\ it's\ not\ occluded\ by\ anything,\ since\ it's\ intersecting}}
+\DoxyCodeLine{00527\ \ \ \ \ \textcolor{comment}{//\ the\ near\ plane.}}
+\DoxyCodeLine{00528\ \ \ \ \ \textcolor{keyword}{const}\ LPoint3\ \&center\ =\ modelview\_transform-\/>get\_pos();}
+\DoxyCodeLine{00529\ \ \ \ \ \textcolor{keyword}{const}\ LVecBase3\ \&radius\ =\ modelview\_transform-\/>get\_scale();}
+\DoxyCodeLine{00530\ \ \ \ \ \textcolor{keywordflow}{if}\ (center[1]\ -\/\ radius[1]\ <\ 0.0f)\ \{}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00532\ \ \ \ \ \}}
+\DoxyCodeLine{00533\ }
+\DoxyCodeLine{00534\ \ \ \ \ \textcolor{comment}{//\ Construct\ the\ internal\ transform\ for\ the\ internal\ traverser.}}
+\DoxyCodeLine{00535\ \ \ \ \ internal\_transform\ =\ \_internal\_trav-\/>get\_scene()-\/>}
+\DoxyCodeLine{00536\ \ \ \ \ \ \ get\_cs\_transform()-\/>compose(modelview\_transform);}
+\DoxyCodeLine{00537\ }
+\DoxyCodeLine{00538\ \ \ \ \ \textcolor{comment}{//\ The\ sphere\ looks\ good.}}
+\DoxyCodeLine{00539\ \ \ \ \ geom\ =\ \_sphere\_geom;}
+\DoxyCodeLine{00540\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00541\ }
+\DoxyCodeLine{00542\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (vol-\/>is\_exact\_type(BoundingBox::get\_class\_type()))\ \{}
+\DoxyCodeLine{00543\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classBoundingBox}{BoundingBox}}\ *box\ =\ DCAST(\mbox{\hyperlink{classBoundingBox}{BoundingBox}},\ vol);}
+\DoxyCodeLine{00544\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ local\_transform\ =}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ TransformState::make\_pos\_hpr\_scale(box-\/>get\_minq(),}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ LVecBase3(0,\ 0,\ 0),}
+\DoxyCodeLine{00547\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ box-\/>get\_maxq()\ -\/\ box-\/>get\_minq());}
+\DoxyCodeLine{00548\ \ \ \ \ net\_transform\ =\ net\_transform-\/>compose(local\_transform);}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00550\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ modelview\_transform\ =}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \_internal\_trav-\/>get\_world\_transform()-\/>compose(net\_transform);}
+\DoxyCodeLine{00552\ }
+\DoxyCodeLine{00553\ \ \ \ \ \textcolor{comment}{//\ See\ if\ the\ bounding\ box\ is\ clipped\ by\ the\ near\ plane.\ \ If\ it\ is,\ the}}
+\DoxyCodeLine{00554\ \ \ \ \ \textcolor{comment}{//\ occlusion\ test\ may\ fail,\ so\ we\ won't\ bother\ performing\ it\ for\ this}}
+\DoxyCodeLine{00555\ \ \ \ \ \textcolor{comment}{//\ object.\ \ Anyway,\ it's\ not\ occluded\ by\ anything,\ since\ it's\ intersecting}}
+\DoxyCodeLine{00556\ \ \ \ \ \textcolor{comment}{//\ the\ near\ plane.}}
+\DoxyCodeLine{00557\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ LPoint3\ points[8]\ =\ \{}
+\DoxyCodeLine{00558\ \ \ \ \ \ \ LPoint3(0.0f,\ 0.0f,\ 0.0f),}
+\DoxyCodeLine{00559\ \ \ \ \ \ \ LPoint3(0.0f,\ 0.0f,\ 1.0f),}
+\DoxyCodeLine{00560\ \ \ \ \ \ \ LPoint3(0.0f,\ 1.0f,\ 0.0f),}
+\DoxyCodeLine{00561\ \ \ \ \ \ \ LPoint3(0.0f,\ 1.0f,\ 1.0f),}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ LPoint3(1.0f,\ 0.0f,\ 0.0f),}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ LPoint3(1.0f,\ 0.0f,\ 1.0f),}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ LPoint3(1.0f,\ 1.0f,\ 0.0f),}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ LPoint3(1.0f,\ 1.0f,\ 1.0f),}
+\DoxyCodeLine{00566\ \ \ \ \ \};}
+\DoxyCodeLine{00567\ \ \ \ \ \textcolor{keyword}{const}\ LMatrix4\ \&mat\ =\ modelview\_transform-\/>get\_mat();}
+\DoxyCodeLine{00568\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ 8;\ ++i)\ \{}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ LPoint3\ p\ =\ points[i]\ *\ mat;}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (p[1]\ <\ 0.0f)\ \{}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00573\ \ \ \ \ \}}
+\DoxyCodeLine{00574\ }
+\DoxyCodeLine{00575\ \ \ \ \ \textcolor{comment}{//\ Construct\ the\ internal\ transform\ for\ the\ internal\ traverser.}}
+\DoxyCodeLine{00576\ \ \ \ \ internal\_transform\ =\ \_internal\_trav-\/>get\_scene()-\/>}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ get\_cs\_transform()-\/>compose(modelview\_transform);}
+\DoxyCodeLine{00578\ }
+\DoxyCodeLine{00579\ \ \ \ \ \textcolor{comment}{//\ The\ box\ looks\ good.}}
+\DoxyCodeLine{00580\ \ \ \ \ geom\ =\ \_box\_geom;}
+\DoxyCodeLine{00581\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00582\ \ \ \}}
+\DoxyCodeLine{00583\ }
+\DoxyCodeLine{00584\ \ \ \textcolor{comment}{//\ Don't\ have\ a\ suitable\ representation\ for\ this\ bounding\ volume.}}
+\DoxyCodeLine{00585\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00586\ \}}
+\DoxyCodeLine{00587\ }
+\DoxyCodeLine{00592\ PT(\mbox{\hyperlink{classOcclusionQueryContext}{OcclusionQueryContext}})\ PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00593\ perform\_occlusion\_test(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeom}{Geom}}\ *geom,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *net\_transform,}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *internal\_transform)\ \{}
+\DoxyCodeLine{00595\ \ \ \_occlusion\_tests\_pcollector.add\_level(1);}
+\DoxyCodeLine{00596\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_test\_occlusion\_pcollector);}
+\DoxyCodeLine{00597\ }
+\DoxyCodeLine{00598\ \ \ \mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}}\ *gsg\ =\ \_buffer-\/>\mbox{\hyperlink{classGraphicsStateGuardianBase_aa5cb7468a2b7974197fca2c5dbe654fe}{get\_gsg}}();}
+\DoxyCodeLine{00599\ }
+\DoxyCodeLine{00600\ \ \ gsg-\/>\mbox{\hyperlink{classGraphicsStateGuardian_ac9753e06a57b00ccbfc958bdb3af75e5}{begin\_occlusion\_query}}();}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00602\ \ \ \mbox{\hyperlink{classCullableObject}{CullableObject}}\ viz(geom,\ \_solid\_test\_state,\ internal\_transform);}
+\DoxyCodeLine{00603\ }
+\DoxyCodeLine{00604\ \ \ \textcolor{keyword}{static}\ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}\ test\_occlude(\textcolor{stringliteral}{"{}test-\/occlude"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00605\ \ \ \textcolor{keywordflow}{if}\ (test\_occlude)\ \{}
+\DoxyCodeLine{00606\ \ \ \ \ \_true\_cull\_handler-\/>\mbox{\hyperlink{classCullHandler_a35e3215f1c647c0ce091d234a9afa57c}{record\_object}}(std::move(viz),\ \_internal\_trav);}
+\DoxyCodeLine{00607\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ \_internal\_cull\_handler-\/>\mbox{\hyperlink{classCullHandler_a35e3215f1c647c0ce091d234a9afa57c}{record\_object}}(std::move(viz),\ \_internal\_trav);}
+\DoxyCodeLine{00609\ \ \ \}}
+\DoxyCodeLine{00610\ }
+\DoxyCodeLine{00611\ \ \ PT(\mbox{\hyperlink{classOcclusionQueryContext}{OcclusionQueryContext}})\ query\ =\ gsg-\/>end\_occlusion\_query();}
+\DoxyCodeLine{00612\ }
+\DoxyCodeLine{00613\ \ \ \textcolor{keywordflow}{if}\ (show\_occlusion)\ \{}
+\DoxyCodeLine{00614\ \ \ \ \ \textcolor{comment}{//\ Show\ the\ results\ of\ the\ occlusion.\ \ To\ do\ this,\ we\ need\ to\ get\ the}}
+\DoxyCodeLine{00615\ \ \ \ \ \textcolor{comment}{//\ results\ of\ the\ query\ immediately.\ \ This\ will\ stall\ the\ pipe,\ but\ we're}}
+\DoxyCodeLine{00616\ \ \ \ \ \textcolor{comment}{//\ rendering\ a\ debug\ effect,\ so\ we\ don't\ mind\ too\ much.}}
+\DoxyCodeLine{00617\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_fragments\ =\ query-\/>get\_num\_fragments();}
+\DoxyCodeLine{00618\ \ \ \ \ show\_results(num\_fragments,\ geom,\ net\_transform,\ internal\_transform);}
+\DoxyCodeLine{00619\ \ \ \}}
+\DoxyCodeLine{00620\ }
+\DoxyCodeLine{00621\ \ \ \textcolor{keywordflow}{return}\ query;}
+\DoxyCodeLine{00622\ \}}
+\DoxyCodeLine{00623\ }
+\DoxyCodeLine{00628\ \textcolor{keywordtype}{void}\ PipeOcclusionCullTraverser::}
+\DoxyCodeLine{00629\ show\_results(\textcolor{keywordtype}{int}\ num\_fragments,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeom}{Geom}}\ *geom,}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *net\_transform,}
+\DoxyCodeLine{00631\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *internal\_transform)\ \{}
+\DoxyCodeLine{00632\ \ \ LColor\ \mbox{\hyperlink{structcolor}{color}};}
+\DoxyCodeLine{00633\ \ \ \textcolor{keywordflow}{if}\ (num\_fragments\ ==\ 0)\ \{}
+\DoxyCodeLine{00634\ \ \ \ \ \textcolor{comment}{//\ Magenta:\ culled}}
+\DoxyCodeLine{00635\ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}.set(0.8f,\ 0.0f,\ 1.0f,\ 0.4f);}
+\DoxyCodeLine{00636\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{comment}{//\ Yellow:\ visible}}
+\DoxyCodeLine{00638\ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}.set(1.0f,\ 1.0f,\ 0.5f,\ 0.4f);}
+\DoxyCodeLine{00639\ \ \ \}}
+\DoxyCodeLine{00640\ }
+\DoxyCodeLine{00641\ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ state\ =\ RenderState::make}
+\DoxyCodeLine{00642\ \ \ \ \ (DepthWriteAttrib::make(DepthWriteAttrib::M\_off),}
+\DoxyCodeLine{00643\ \ \ \ \ \ DepthTestAttrib::make(DepthTestAttrib::M\_less),}
+\DoxyCodeLine{00644\ \ \ \ \ \ TransparencyAttrib::make(TransparencyAttrib::M\_alpha),}
+\DoxyCodeLine{00645\ \ \ \ \ \ ColorAttrib::make\_flat(\mbox{\hyperlink{structcolor}{color}}));}
+\DoxyCodeLine{00646\ }
+\DoxyCodeLine{00647\ \ \ \_internal\_cull\_handler-\/>\mbox{\hyperlink{classCullHandler_a35e3215f1c647c0ce091d234a9afa57c}{record\_object}}(\mbox{\hyperlink{classCullableObject}{CullableObject}}(geom,\ state,\ internal\_transform),\ \_internal\_trav);}
+\DoxyCodeLine{00648\ }
+\DoxyCodeLine{00649\ \ \ \textcolor{comment}{//\ Also\ render\ the\ viz\ in\ the\ main\ scene.}}
+\DoxyCodeLine{00650\ \ \ internal\_transform\ =\ get\_scene()-\/>get\_cs\_world\_transform()-\/>compose(net\_transform);}
+\DoxyCodeLine{00651\ \ \ \_true\_cull\_handler-\/>\mbox{\hyperlink{classCullHandler_a35e3215f1c647c0ce091d234a9afa57c}{record\_object}}(\mbox{\hyperlink{classCullableObject}{CullableObject}}(geom,\ state,\ internal\_transform),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00652\ \}}
+
+\end{DoxyCode}

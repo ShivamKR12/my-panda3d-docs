@@ -1,0 +1,1104 @@
+\doxysection{memory\+Usage.\+cxx}
+\hypertarget{memoryUsage_8cxx_source}{}\label{memoryUsage_8cxx_source}\index{panda/src/express/memoryUsage.cxx@{panda/src/express/memoryUsage.cxx}}
+\mbox{\hyperlink{memoryUsage_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{memoryUsage_8h}{memoryUsage.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{memoryUsagePointers_8h}{memoryUsagePointers.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{trueClock_8h}{trueClock.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{typedReferenceCount_8h}{typedReferenceCount.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{mutexImpl_8h}{mutexImpl.h}}"{}}}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#if\ defined(\_MSC\_VER)\ \&\&\ defined(\_DEBUG)}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ <crtdbg.h>}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__express_8h}{config\_express.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableInt64_8h}{configVariableInt64.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ <iterator>}}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{keyword}{using\ }std::pair;}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \mbox{\hyperlink{classMemoryUsage}{MemoryUsage}}\ *MemoryUsage::\_global\_ptr;}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{comment}{//\ This\ flag\ is\ used\ to\ protect\ the\ operator\ newdelete\ handlers\ against}}
+\DoxyCodeLine{00034\ \textcolor{comment}{//\ recursive\ entry.}}
+\DoxyCodeLine{00035\ \textcolor{keywordtype}{bool}\ MemoryUsage::\_recursion\_protect\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \textcolor{comment}{//\ The\ cutoff\ ages,\ in\ seconds,\ for\ the\ various\ buckets\ in\ the\ AgeHistogram.}}
+\DoxyCodeLine{00038\ \textcolor{keywordtype}{double}\ MemoryUsage::AgeHistogram::\_cutoff[MemoryUsage::AgeHistogram::num\_buckets]\ =\ \{}
+\DoxyCodeLine{00039\ \ \ 0.0,}
+\DoxyCodeLine{00040\ \ \ 0.1,}
+\DoxyCodeLine{00041\ \ \ 1.0,}
+\DoxyCodeLine{00042\ \ \ 10.0,}
+\DoxyCodeLine{00043\ \ \ 60.0,}
+\DoxyCodeLine{00044\ \};}
+\DoxyCodeLine{00045\ }
+\DoxyCodeLine{00049\ \textcolor{keywordtype}{void}\ MemoryUsage::TypeHistogram::}
+\DoxyCodeLine{00050\ add\_info(\mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type,\ MemoryInfo\ *info)\ \{}
+\DoxyCodeLine{00051\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00052\ \ \ \_counts[type].add\_info(info);}
+\DoxyCodeLine{00053\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00054\ \}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00057\ \textcolor{comment}{//\ This\ class\ is\ a\ temporary\ class\ used\ only\ in\ TypeHistogram::show(),\ below,}}
+\DoxyCodeLine{00058\ \textcolor{comment}{//\ to\ sort\ the\ types\ in\ descending\ order\ by\ counts.}}
+\DoxyCodeLine{00059\ \textcolor{keyword}{class\ }TypeHistogramCountSorter\ \{}
+\DoxyCodeLine{00060\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00061\ \ \ TypeHistogramCountSorter(\textcolor{keyword}{const}\ \mbox{\hyperlink{classMemoryUsagePointerCounts}{MemoryUsagePointerCounts}}\ \&count,}
+\DoxyCodeLine{00062\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type)\ :}
+\DoxyCodeLine{00063\ \ \ \ \ \_count(count),}
+\DoxyCodeLine{00064\ \ \ \ \ \_type(type)}
+\DoxyCodeLine{00065\ \ \ \{}
+\DoxyCodeLine{00066\ \ \ \}}
+\DoxyCodeLine{00067\ \ \ \textcolor{keywordtype}{bool}\ operator\ <\ (\textcolor{keyword}{const}\ TypeHistogramCountSorter\ \&other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00068\ \ \ \ \ \textcolor{keywordflow}{return}\ other.\_count\ <\ \_count;}
+\DoxyCodeLine{00069\ \ \ \}}
+\DoxyCodeLine{00070\ \ \ \mbox{\hyperlink{classMemoryUsagePointerCounts}{MemoryUsagePointerCounts}}\ \_count;}
+\DoxyCodeLine{00071\ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ \_type;}
+\DoxyCodeLine{00072\ \};}
+\DoxyCodeLine{00073\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00078\ \textcolor{keywordtype}{void}\ MemoryUsage::TypeHistogram::}
+\DoxyCodeLine{00079\ show()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00080\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00081\ \ \ \textcolor{comment}{//\ First,\ copy\ the\ relevant\ information\ to\ a\ vector\ so\ we\ can\ sort\ by}}
+\DoxyCodeLine{00082\ \ \ \textcolor{comment}{//\ counts.\ \ Don't\ use\ a\ pvector.}}
+\DoxyCodeLine{00083\ \ \ \textcolor{keyword}{typedef}\ std::vector<TypeHistogramCountSorter>\ CountSorter;}
+\DoxyCodeLine{00084\ \ \ CountSorter\ count\_sorter;}
+\DoxyCodeLine{00085\ \ \ Counts::const\_iterator\ ci;}
+\DoxyCodeLine{00086\ \ \ \textcolor{keywordflow}{for}\ (ci\ =\ \_counts.begin();\ ci\ !=\ \_counts.end();\ ++ci)\ \{}
+\DoxyCodeLine{00087\ \ \ \ \ count\_sorter.push\_back}
+\DoxyCodeLine{00088\ \ \ \ \ \ \ (TypeHistogramCountSorter((*ci).second,\ (*ci).first));}
+\DoxyCodeLine{00089\ \ \ \}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \ \ sort(count\_sorter.begin(),\ count\_sorter.end());}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00093\ \ \ CountSorter::const\_iterator\ vi;}
+\DoxyCodeLine{00094\ \ \ \textcolor{keywordflow}{for}\ (vi\ =\ count\_sorter.begin();\ vi\ !=\ count\_sorter.end();\ ++vi)\ \{}
+\DoxyCodeLine{00095\ \ \ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type\ =\ (*vi).\_type;}
+\DoxyCodeLine{00096\ \ \ \ \ \textcolor{keywordflow}{if}\ (type\ ==\ TypeHandle::none())\ \{}
+\DoxyCodeLine{00097\ \ \ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}unknown"{}};}
+\DoxyCodeLine{00098\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00099\ \ \ \ \ \ \ nout\ <<\ type;}
+\DoxyCodeLine{00100\ \ \ \ \ \}}
+\DoxyCodeLine{00101\ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}\ :\ "{}}\ <<\ (*vi).\_count\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00102\ \ \ \}}
+\DoxyCodeLine{00103\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00104\ \}}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00109\ \textcolor{keywordtype}{void}\ MemoryUsage::TypeHistogram::}
+\DoxyCodeLine{00110\ clear()\ \{}
+\DoxyCodeLine{00111\ \ \ \_counts.clear();}
+\DoxyCodeLine{00112\ \}}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00117\ MemoryUsage::AgeHistogram::}
+\DoxyCodeLine{00118\ AgeHistogram()\ \{}
+\DoxyCodeLine{00119\ \ \ clear();}
+\DoxyCodeLine{00120\ \}}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00125\ \textcolor{keywordtype}{void}\ MemoryUsage::AgeHistogram::}
+\DoxyCodeLine{00126\ add\_info(\textcolor{keywordtype}{double}\ age,\ MemoryInfo\ *info)\ \{}
+\DoxyCodeLine{00127\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00128\ \ \ \textcolor{keywordtype}{int}\ bucket\ =\ choose\_bucket(age);}
+\DoxyCodeLine{00129\ \ \ nassertv(bucket\ >=\ 0\ \&\&\ bucket\ <\ num\_buckets);}
+\DoxyCodeLine{00130\ \ \ \_counts[bucket].add\_info(info);}
+\DoxyCodeLine{00131\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00132\ \}}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00137\ \textcolor{keywordtype}{void}\ MemoryUsage::AgeHistogram::}
+\DoxyCodeLine{00138\ show()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00139\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00140\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_buckets\ -\/\ 1;\ i++)\ \{}
+\DoxyCodeLine{00141\ \ \ \ \ nout\ <<\ \_cutoff[i]\ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}\ <<\ \_cutoff[i\ +\ 1]\ <<\ \textcolor{stringliteral}{"{}\ seconds\ old\ :\ "{}};}
+\DoxyCodeLine{00142\ \ \ \ \ \_counts[i].output(nout);}
+\DoxyCodeLine{00143\ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00144\ \ \ \}}
+\DoxyCodeLine{00145\ \ \ nout\ <<\ \_cutoff[num\_buckets\ -\/\ 1]\ <<\ \textcolor{stringliteral}{"{}\ seconds\ old\ and\ up\ :\ "{}};}
+\DoxyCodeLine{00146\ \ \ \_counts[num\_buckets\ -\/\ 1].output(nout);}
+\DoxyCodeLine{00147\ \ \ nout\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00148\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00149\ \}}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00154\ \textcolor{keywordtype}{void}\ MemoryUsage::AgeHistogram::}
+\DoxyCodeLine{00155\ clear()\ \{}
+\DoxyCodeLine{00156\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00157\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_buckets;\ i++)\ \{}
+\DoxyCodeLine{00158\ \ \ \ \ \_counts[i].clear();}
+\DoxyCodeLine{00159\ \ \ \}}
+\DoxyCodeLine{00160\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00161\ \}}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00166\ \textcolor{keywordtype}{int}\ MemoryUsage::AgeHistogram::}
+\DoxyCodeLine{00167\ choose\_bucket(\textcolor{keywordtype}{double}\ age)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00168\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00169\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ num\_buckets\ -\/\ 1;\ i\ >=\ 0;\ i-\/-\/)\ \{}
+\DoxyCodeLine{00170\ \ \ \ \ \textcolor{keywordflow}{if}\ (age\ >=\ \_cutoff[i])\ \{}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ i;}
+\DoxyCodeLine{00172\ \ \ \ \ \}}
+\DoxyCodeLine{00173\ \ \ \}}
+\DoxyCodeLine{00174\ \ \ express\_cat.error()}
+\DoxyCodeLine{00175\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ suitable\ bucket\ for\ age\ "{}}\ <<\ age\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00176\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00177\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00178\ \}}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00184\ \textcolor{keywordtype}{void}\ *\mbox{\hyperlink{classMemoryUsage_a83b32436dd9cee3d5b59dec22a203703}{MemoryUsage::}}}
+\DoxyCodeLine{00185\ \mbox{\hyperlink{classMemoryUsage_a83b32436dd9cee3d5b59dec22a203703}{heap\_alloc\_single}}(\textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00186\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00187\ \ \ \textcolor{keywordtype}{void}\ *ptr;}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordflow}{if}\ (\_recursion\_protect)\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ ptr\ =\ \mbox{\hyperlink{classMemoryHook_a7555492ddf2d21b4e4257b4492532ed7}{MemoryHook::heap\_alloc\_single}}(size);}
+\DoxyCodeLine{00191\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Allocating\ pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ during\ recursion\ protect.\(\backslash\)n"{}};}
+\DoxyCodeLine{00195\ \ \ \ \ \}}
+\DoxyCodeLine{00196\ }
+\DoxyCodeLine{00197\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00198\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ ptr\ =\ \mbox{\hyperlink{classMemoryHook_a7555492ddf2d21b4e4257b4492532ed7}{MemoryHook::heap\_alloc\_single}}(size);}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00201\ \textcolor{comment}{\ \ \ \ \ \ if\ (express\_cat.is\_spam())\ \{}}
+\DoxyCodeLine{00202\ \textcolor{comment}{\ \ \ \ \ \ \ \ express\_cat.spam()}}
+\DoxyCodeLine{00203\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ <<\ "{}Allocating\ pointer\ "{}\ <<\ (void\ *)ptr}}
+\DoxyCodeLine{00204\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ <<\ "{}\ of\ size\ "{}\ <<\ size\ <<\ "{}.\(\backslash\)n"{};}}
+\DoxyCodeLine{00205\ \textcolor{comment}{\ \ \ \ \ \ \}}}
+\DoxyCodeLine{00206\ \textcolor{comment}{\ \ \ \ \ \ */}}
+\DoxyCodeLine{00207\ }
+\DoxyCodeLine{00208\ \ \ \ \ \ \ get\_global\_ptr()-\/>ns\_record\_void\_pointer(ptr,\ size);}
+\DoxyCodeLine{00209\ }
+\DoxyCodeLine{00210\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ ptr\ =\ \mbox{\hyperlink{classMemoryHook_a7555492ddf2d21b4e4257b4492532ed7}{MemoryHook::heap\_alloc\_single}}(size);}
+\DoxyCodeLine{00212\ \ \ \ \ \}}
+\DoxyCodeLine{00213\ \ \ \}}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00216\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00217\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classMemoryHook_a7555492ddf2d21b4e4257b4492532ed7}{MemoryHook::heap\_alloc\_single}}(size);}
+\DoxyCodeLine{00218\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00219\ \}}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00224\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classMemoryUsage_a5fd057965df5b3b88181dba761c66ba0}{MemoryUsage::}}}
+\DoxyCodeLine{00225\ \mbox{\hyperlink{classMemoryUsage_a5fd057965df5b3b88181dba761c66ba0}{heap\_free\_single}}(\textcolor{keywordtype}{void}\ *ptr)\ \{}
+\DoxyCodeLine{00226\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00227\ \ \ \textcolor{keywordflow}{if}\ (\_recursion\_protect)\ \{}
+\DoxyCodeLine{00228\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Deleting\ pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ during\ recursion\ protect.\(\backslash\)n"{}};}
+\DoxyCodeLine{00232\ \ \ \ \ \}}
+\DoxyCodeLine{00233\ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a898d872432e052aaa04113be37b53fa5}{MemoryHook::heap\_free\_single}}(ptr);}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00235\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00236\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00238\ \textcolor{comment}{\ \ \ \ \ \ if\ (express\_cat.is\_spam())\ \{}}
+\DoxyCodeLine{00239\ \textcolor{comment}{\ \ \ \ \ \ \ \ express\_cat.spam()}}
+\DoxyCodeLine{00240\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ <<\ "{}Removing\ pointer\ "{}\ <<\ (void\ *)ptr\ <<\ "{}\(\backslash\)n"{};}}
+\DoxyCodeLine{00241\ \textcolor{comment}{\ \ \ \ \ \ \}}}
+\DoxyCodeLine{00242\ \textcolor{comment}{\ \ \ \ \ \ */}}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ ns\_remove\_void\_pointer(ptr);}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a898d872432e052aaa04113be37b53fa5}{MemoryHook::heap\_free\_single}}(ptr);}
+\DoxyCodeLine{00245\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a898d872432e052aaa04113be37b53fa5}{MemoryHook::heap\_free\_single}}(ptr);}
+\DoxyCodeLine{00247\ \ \ \ \ \}}
+\DoxyCodeLine{00248\ \ \ \}}
+\DoxyCodeLine{00249\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00250\ \ \ \mbox{\hyperlink{classMemoryHook_a898d872432e052aaa04113be37b53fa5}{MemoryHook::heap\_free\_single}}(ptr);}
+\DoxyCodeLine{00251\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00252\ \}}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00258\ \textcolor{keywordtype}{void}\ *\mbox{\hyperlink{classMemoryUsage_ac19a2d0adf46d3f4bc14184c62ab19af}{MemoryUsage::}}}
+\DoxyCodeLine{00259\ \mbox{\hyperlink{classMemoryUsage_ac19a2d0adf46d3f4bc14184c62ab19af}{heap\_alloc\_array}}(\textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00260\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00261\ \ \ \textcolor{keywordtype}{void}\ *ptr;}
+\DoxyCodeLine{00262\ }
+\DoxyCodeLine{00263\ \ \ \textcolor{keywordflow}{if}\ (\_recursion\_protect)\ \{}
+\DoxyCodeLine{00264\ \ \ \ \ ptr\ =\ \mbox{\hyperlink{classMemoryHook_a48f518b2d475945b0e0dc4f256c68626}{MemoryHook::heap\_alloc\_array}}(size);}
+\DoxyCodeLine{00265\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Allocating\ array\ pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ during\ recursion\ protect.\(\backslash\)n"{}};}
+\DoxyCodeLine{00269\ \ \ \ \ \}}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ ptr\ =\ \mbox{\hyperlink{classMemoryHook_a48f518b2d475945b0e0dc4f256c68626}{MemoryHook::heap\_alloc\_array}}(size);}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00275\ \textcolor{comment}{\ \ \ \ \ \ if\ (express\_cat.is\_spam())\ \{}}
+\DoxyCodeLine{00276\ \textcolor{comment}{\ \ \ \ \ \ \ \ express\_cat.spam()}}
+\DoxyCodeLine{00277\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ <<\ "{}Allocating\ array\ pointer\ "{}\ <<\ (void\ *)ptr}}
+\DoxyCodeLine{00278\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ <<\ "{}\ of\ size\ "{}\ <<\ size\ <<\ "{}.\(\backslash\)n"{};}}
+\DoxyCodeLine{00279\ \textcolor{comment}{\ \ \ \ \ \ \}}}
+\DoxyCodeLine{00280\ \textcolor{comment}{\ \ \ \ \ \ */}}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \ \ \ \ \ \ get\_global\_ptr()-\/>ns\_record\_void\_pointer(ptr,\ size);}
+\DoxyCodeLine{00283\ }
+\DoxyCodeLine{00284\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ ptr\ =\ \mbox{\hyperlink{classMemoryHook_a48f518b2d475945b0e0dc4f256c68626}{MemoryHook::heap\_alloc\_array}}(size);}
+\DoxyCodeLine{00286\ \ \ \ \ \}}
+\DoxyCodeLine{00287\ \ \ \}}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00290\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00291\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classMemoryHook_a48f518b2d475945b0e0dc4f256c68626}{MemoryHook::heap\_alloc\_array}}(size);}
+\DoxyCodeLine{00292\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00293\ \}}
+\DoxyCodeLine{00294\ }
+\DoxyCodeLine{00298\ \textcolor{keywordtype}{void}\ *\mbox{\hyperlink{classMemoryUsage_a76cb17df1b567caa751a716529c1d7e2}{MemoryUsage::}}}
+\DoxyCodeLine{00299\ \mbox{\hyperlink{classMemoryUsage_a76cb17df1b567caa751a716529c1d7e2}{heap\_realloc\_array}}(\textcolor{keywordtype}{void}\ *ptr,\ \textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00300\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00301\ \ \ \textcolor{keywordflow}{if}\ (\_recursion\_protect)\ \{}
+\DoxyCodeLine{00302\ \ \ \ \ ptr\ =\ \mbox{\hyperlink{classMemoryHook_ab6dd724d878249f8902bab6d51e96b72}{MemoryHook::heap\_realloc\_array}}(ptr,\ size);}
+\DoxyCodeLine{00303\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reallocating\ array\ pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ during\ recursion\ protect.\(\backslash\)n"{}};}
+\DoxyCodeLine{00307\ \ \ \ \ \}}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00309\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ get\_global\_ptr()-\/>ns\_remove\_void\_pointer(ptr);}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ ptr\ =\ \mbox{\hyperlink{classMemoryHook_ab6dd724d878249f8902bab6d51e96b72}{MemoryHook::heap\_realloc\_array}}(ptr,\ size);}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00314\ \textcolor{comment}{\ \ \ \ \ \ if\ (express\_cat.is\_spam())\ \{}}
+\DoxyCodeLine{00315\ \textcolor{comment}{\ \ \ \ \ \ \ \ express\_cat.spam()}}
+\DoxyCodeLine{00316\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ <<\ "{}Reallocating\ array\ pointer\ "{}\ <<\ (void\ *)ptr}}
+\DoxyCodeLine{00317\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ <<\ "{}\ to\ size\ "{}\ <<\ size\ <<\ "{}.\(\backslash\)n"{};}}
+\DoxyCodeLine{00318\ \textcolor{comment}{\ \ \ \ \ \ \}}}
+\DoxyCodeLine{00319\ \textcolor{comment}{\ \ \ \ \ \ */}}
+\DoxyCodeLine{00320\ }
+\DoxyCodeLine{00321\ \ \ \ \ \ \ get\_global\_ptr()-\/>ns\_record\_void\_pointer(ptr,\ size);}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00323\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ ptr\ =\ \mbox{\hyperlink{classMemoryHook_ab6dd724d878249f8902bab6d51e96b72}{MemoryHook::heap\_realloc\_array}}(ptr,\ size);}
+\DoxyCodeLine{00325\ \ \ \ \ \}}
+\DoxyCodeLine{00326\ \ \ \}}
+\DoxyCodeLine{00327\ }
+\DoxyCodeLine{00328\ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00329\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00330\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classMemoryHook_ab6dd724d878249f8902bab6d51e96b72}{MemoryHook::heap\_realloc\_array}}(ptr,\ size);}
+\DoxyCodeLine{00331\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00332\ \}}
+\DoxyCodeLine{00333\ }
+\DoxyCodeLine{00337\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classMemoryUsage_a7dda729b0c75618360ea928538bba294}{MemoryUsage::}}}
+\DoxyCodeLine{00338\ \mbox{\hyperlink{classMemoryUsage_a7dda729b0c75618360ea928538bba294}{heap\_free\_array}}(\textcolor{keywordtype}{void}\ *ptr)\ \{}
+\DoxyCodeLine{00339\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00340\ \ \ \textcolor{keywordflow}{if}\ (\_recursion\_protect)\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Deleting\ pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ during\ recursion\ protect.\(\backslash\)n"{}};}
+\DoxyCodeLine{00345\ \ \ \ \ \}}
+\DoxyCodeLine{00346\ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a6c1598f606ff745dc1cb1e2c593ebd47}{MemoryHook::heap\_free\_array}}(ptr);}
+\DoxyCodeLine{00347\ }
+\DoxyCodeLine{00348\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00349\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00351\ \textcolor{comment}{\ \ \ \ \ \ if\ (express\_cat.is\_spam())\ \{}}
+\DoxyCodeLine{00352\ \textcolor{comment}{\ \ \ \ \ \ \ \ express\_cat.spam()}}
+\DoxyCodeLine{00353\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ <<\ "{}Removing\ pointer\ "{}\ <<\ (void\ *)ptr\ <<\ "{}\(\backslash\)n"{};}}
+\DoxyCodeLine{00354\ \textcolor{comment}{\ \ \ \ \ \ \}}}
+\DoxyCodeLine{00355\ \textcolor{comment}{\ \ \ \ \ \ */}}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ ns\_remove\_void\_pointer(ptr);}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a6c1598f606ff745dc1cb1e2c593ebd47}{MemoryHook::heap\_free\_array}}(ptr);}
+\DoxyCodeLine{00358\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a6c1598f606ff745dc1cb1e2c593ebd47}{MemoryHook::heap\_free\_array}}(ptr);}
+\DoxyCodeLine{00360\ \ \ \ \ \}}
+\DoxyCodeLine{00361\ \ \ \}}
+\DoxyCodeLine{00362\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00363\ \ \ \mbox{\hyperlink{classMemoryHook_a6c1598f606ff745dc1cb1e2c593ebd47}{MemoryHook::heap\_free\_array}}(ptr);}
+\DoxyCodeLine{00364\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00365\ \}}
+\DoxyCodeLine{00366\ }
+\DoxyCodeLine{00374\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classMemoryUsage_ad631b7a26b1eb7476ce9999e687addf8}{MemoryUsage::}}}
+\DoxyCodeLine{00375\ \mbox{\hyperlink{classMemoryUsage_ad631b7a26b1eb7476ce9999e687addf8}{mark\_pointer}}(\textcolor{keywordtype}{void}\ *ptr,\ \textcolor{keywordtype}{size\_t}\ size,\ \mbox{\hyperlink{classReferenceCount}{ReferenceCount}}\ *ref\_ptr)\ \{}
+\DoxyCodeLine{00376\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00377\ \ \ \textcolor{keywordflow}{if}\ (\_recursion\_protect\ ||\ !\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00378\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00379\ \ \ \}}
+\DoxyCodeLine{00380\ }
+\DoxyCodeLine{00381\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00382\ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Marking\ pointer\ "{}}\ <<\ ptr\ <<\ \textcolor{stringliteral}{"{},\ size\ "{}}\ <<\ size}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ ref\_ptr\ =\ "{}}\ <<\ ref\_ptr\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00385\ \ \ \}}
+\DoxyCodeLine{00386\ }
+\DoxyCodeLine{00387\ \ \ \textcolor{keywordflow}{if}\ (size\ !=\ 0)\ \{}
+\DoxyCodeLine{00388\ \ \ \ \ \textcolor{comment}{//\ We're\ recording\ this\ pointer\ as\ now\ in\ use.}}
+\DoxyCodeLine{00389\ \ \ \ \ ns\_record\_void\_pointer(ptr,\ size);}
+\DoxyCodeLine{00390\ }
+\DoxyCodeLine{00391\ \ \ \ \ \textcolor{keywordflow}{if}\ (ref\_ptr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \textcolor{comment}{//\ Make\ the\ pointer\ typed.\ \ This\ is\ particularly\ necessary\ in\ case\ the}}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \textcolor{comment}{//\ ref\_ptr\ is\ a\ different\ value\ than\ the\ base\ void\ pointer;\ this\ may\ be}}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \textcolor{comment}{//\ our\ only\ opportunity\ to\ associate\ the\ two\ pointers.}}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ Table::iterator\ ti;}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ ti\ =\ \_table.find(ptr);}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ nassertv(ti\ !=\ \_table.end());}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ MemoryInfo\ *info\ =\ (*ti).second;}
+\DoxyCodeLine{00399\ }
+\DoxyCodeLine{00400\ \ \ \ \ \ \ info-\/>\_ref\_ptr\ =\ ref\_ptr;}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ info-\/>\_static\_type\ =\ ReferenceCount::get\_class\_type();}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ info-\/>\_dynamic\_type\ =\ ReferenceCount::get\_class\_type();}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ info-\/>\_flags\ |=\ MemoryInfo::F\_reconsider\_dynamic\_type;}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ref\_ptr\ !=\ ptr)\ \{}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ pair<Table::iterator,\ bool>\ insert\_result\ =}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \ \ \_table.insert(Table::value\_type((\textcolor{keywordtype}{void}\ *)ref\_ptr,\ info));}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ assert(insert\_result.first\ !=\ \_table.end());}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!insert\_result.second)\ \{}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Attempt\ to\ mark\ pointer\ "{}}\ <<\ ptr\ <<\ \textcolor{stringliteral}{"{}\ as\ ReferenceCount\ "{}}}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ ref\_ptr\ <<\ \textcolor{stringliteral}{"{},\ which\ was\ already\ allocated.\(\backslash\)n"{}};}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00416\ }
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00419\ \ \ \ \ \}}
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00421\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00422\ \ \ \ \ \textcolor{comment}{//\ We're\ removing\ this\ pointer\ from\ use.}}
+\DoxyCodeLine{00423\ \ \ \ \ ns\_remove\_void\_pointer(ptr);}
+\DoxyCodeLine{00424\ \ \ \}}
+\DoxyCodeLine{00425\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00426\ \}}
+\DoxyCodeLine{00427\ }
+\DoxyCodeLine{00428\ \textcolor{preprocessor}{\#if\ defined(\_WIN32)\ \&\&\ defined(\_DEBUG)}}
+\DoxyCodeLine{00434\ \textcolor{keywordtype}{int}\ MemoryUsage::}
+\DoxyCodeLine{00435\ win32\_malloc\_hook(\textcolor{keywordtype}{int}\ alloc\_type,\ \textcolor{keywordtype}{void}\ *ptr,}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ size,\ \textcolor{keywordtype}{int}\ block\_use,\ \textcolor{keywordtype}{long}\ request,}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *filename,\ \textcolor{keywordtype}{int}\ line)\ \{}
+\DoxyCodeLine{00438\ \ \ \mbox{\hyperlink{classMemoryUsage}{MemoryUsage}}\ *mu\ =\ get\_global\_ptr();}
+\DoxyCodeLine{00439\ \ \ \textcolor{keywordtype}{int}\ increment\ =\ 0;}
+\DoxyCodeLine{00440\ \ \ \textcolor{keywordflow}{switch}\ (alloc\_type)\ \{}
+\DoxyCodeLine{00441\ \ \ \textcolor{keywordflow}{case}\ \_HOOK\_ALLOC:}
+\DoxyCodeLine{00442\ \ \ \ \ increment\ =\ size;}
+\DoxyCodeLine{00443\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \ \ \textcolor{keywordflow}{case}\ \_HOOK\_REALLOC:}
+\DoxyCodeLine{00446\ \ \ \ \ increment\ =\ size\ -\/\ \_msize(ptr);}
+\DoxyCodeLine{00447\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00449\ \ \ \textcolor{keywordflow}{case}\ \_HOOK\_FREE:}
+\DoxyCodeLine{00450\ \ \ \ \ increment\ =\ -\/\ ((int)\_msize(ptr));}
+\DoxyCodeLine{00451\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00452\ \ \ \}}
+\DoxyCodeLine{00453\ }
+\DoxyCodeLine{00454\ \ \ mu-\/>\_total\_size\ +=\ increment;}
+\DoxyCodeLine{00455\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00456\ \}}
+\DoxyCodeLine{00457\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32\ \&\&\ \_DEBUG}}
+\DoxyCodeLine{00458\ }
+\DoxyCodeLine{00459\ }
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00464\ MemoryUsage::}
+\DoxyCodeLine{00465\ MemoryUsage(\textcolor{keyword}{const}\ \mbox{\hyperlink{classMemoryHook}{MemoryHook}}\ \&copy)\ :}
+\DoxyCodeLine{00466\ \ \ \mbox{\hyperlink{classMemoryHook}{MemoryHook}}(copy),}
+\DoxyCodeLine{00467\ \ \ \_info\_set\_dirty(false),}
+\DoxyCodeLine{00468\ \ \ \_freeze\_index(0),}
+\DoxyCodeLine{00469\ \ \ \_count(0),}
+\DoxyCodeLine{00470\ \ \ \_current\_cpp\_size(0),}
+\DoxyCodeLine{00471\ \ \ \_total\_cpp\_size(0),}
+\DoxyCodeLine{00472\ \ \ \_total\_size(0),}
+\DoxyCodeLine{00473\ }
+\DoxyCodeLine{00474\ \ \ \_track\_memory\_usage(false),}
+\DoxyCodeLine{00475\ \ \ \_startup\_track\_memory\_usage(false),}
+\DoxyCodeLine{00476\ \ \ \_count\_memory\_usage(false),}
+\DoxyCodeLine{00477\ \ \ \_report\_memory\_usage(false),}
+\DoxyCodeLine{00478\ \ \ \_report\_memory\_interval(0.0),}
+\DoxyCodeLine{00479\ \ \ \_last\_report\_time(0.0)\ \{}
+\DoxyCodeLine{00480\ }
+\DoxyCodeLine{00481\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00482\ \ \ \textcolor{comment}{//\ We\ must\ get\ these\ variables\ here\ instead\ of\ in\ config\_express.cxx,}}
+\DoxyCodeLine{00483\ \ \ \textcolor{comment}{//\ because\ we\ need\ to\ know\ it\ at\ static\ init\ time,\ and\ who\ knows\ when\ the}}
+\DoxyCodeLine{00484\ \ \ \textcolor{comment}{//\ code\ in\ config\_express\ will\ be\ executed.}}
+\DoxyCodeLine{00485\ }
+\DoxyCodeLine{00486\ \ \ \_track\_memory\_usage\ =\ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}}
+\DoxyCodeLine{00487\ \ \ \ \ (\textcolor{stringliteral}{"{}track-\/memory-\/usage"{}},\ \textcolor{keyword}{false},}
+\DoxyCodeLine{00488\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}Set\ this\ to\ true\ to\ enable\ full-\/force\ tracking\ of\ C++\ allocations\ "{}}}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}and\ recordkeeping\ by\ type.\ \ It's\ quite\ expensive."{}}));}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00491\ \ \ \textcolor{comment}{//\ Since\ enabling\ this\ after\ startup\ might\ cause\ bogus\ errors,\ we'd\ like\ to}}
+\DoxyCodeLine{00492\ \ \ \textcolor{comment}{//\ know\ if\ this\ happened,\ so\ we\ can\ squelch\ those\ error\ messages.}}
+\DoxyCodeLine{00493\ \ \ \_startup\_track\_memory\_usage\ =\ \_track\_memory\_usage;}
+\DoxyCodeLine{00494\ }
+\DoxyCodeLine{00495\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ express\ category\ has\ been\ instantiated.}}
+\DoxyCodeLine{00496\ \ \ express\_cat-\/>is\_info();}
+\DoxyCodeLine{00497\ }
+\DoxyCodeLine{00498\ \ \ \_report\_memory\_usage\ =\ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}}
+\DoxyCodeLine{00499\ \ \ \ \ (\textcolor{stringliteral}{"{}report-\/memory-\/usage"{}},\ \textcolor{keyword}{false},}
+\DoxyCodeLine{00500\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}Set\ this\ true\ to\ enable\ automatic\ reporting\ of\ allocated\ objects\ "{}}}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}at\ the\ interval\ specified\ by\ report-\/memory-\/interval.\ \ This\ also\ "{}}}
+\DoxyCodeLine{00502\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}requires\ track-\/memory-\/usage."{}}));}
+\DoxyCodeLine{00503\ \ \ \_report\_memory\_interval\ =\ \mbox{\hyperlink{classConfigVariableDouble}{ConfigVariableDouble}}}
+\DoxyCodeLine{00504\ \ \ \ \ (\textcolor{stringliteral}{"{}report-\/memory-\/interval"{}},\ 5.0,}
+\DoxyCodeLine{00505\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ is\ the\ interval,\ in\ seconds,\ for\ reports\ of\ currently\ allocated\ "{}}}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}memory,\ when\ report-\/memory-\/usage\ is\ true."{}}));}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00508\ \ \ int64\_t\ max\_heap\_size\ =\ \mbox{\hyperlink{classConfigVariableInt64}{ConfigVariableInt64}}}
+\DoxyCodeLine{00509\ \ \ \ \ (\textcolor{stringliteral}{"{}max-\/heap-\/size"{}},\ 0,}
+\DoxyCodeLine{00510\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}If\ this\ is\ nonzero,\ it\ is\ the\ maximum\ number\ of\ bytes\ expected\ "{}}}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}to\ be\ allocated\ on\ the\ heap\ before\ we\ enter\ report-\/memory-\/usage\ "{}}}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}mode\ automatically.\ \ The\ assumption\ is\ that\ once\ this\ limit\ "{}}}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}has\ been\ crossed,\ we\ must\ be\ leaking."{}}));}
+\DoxyCodeLine{00514\ \ \ \textcolor{keywordflow}{if}\ (max\_heap\_size\ !=\ 0)\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \_max\_heap\_size\ =\ (size\_t)max\_heap\_size;}
+\DoxyCodeLine{00516\ \ \ \}}
+\DoxyCodeLine{00517\ }
+\DoxyCodeLine{00518\ \textcolor{preprocessor}{\#ifdef\ USE\_MEMORY\_NOWRAPPERS}}
+\DoxyCodeLine{00519\ \textcolor{preprocessor}{\#error\ Cannot\ compile\ MemoryUsage\ without\ malloc\ wrappers!}}
+\DoxyCodeLine{00520\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00521\ }
+\DoxyCodeLine{00522\ \textcolor{preprocessor}{\#ifdef\ \_MSC\_VER}}
+\DoxyCodeLine{00523\ \ \ \textcolor{comment}{//\ On\ a\ debug\ Windows\ build,\ we\ can\ set\ this\ malloc\ hook\ which\ allows}}
+\DoxyCodeLine{00524\ \ \ \textcolor{comment}{//\ tracking\ every\ malloc\ call,\ even\ from\ subordinate\ libraries.}}
+\DoxyCodeLine{00525\ \ \ \_CrtSetAllocHook(\&win32\_malloc\_hook);}
+\DoxyCodeLine{00526\ \ \ \_count\_memory\_usage\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00527\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00528\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00529\ \}}
+\DoxyCodeLine{00530\ }
+\DoxyCodeLine{00534\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{00535\ init\_memory\_usage()\ \{}
+\DoxyCodeLine{00536\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00537\ \ \ \_global\_ptr\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classMemoryUsage}{MemoryUsage}}(*memory\_hook);}
+\DoxyCodeLine{00538\ \ \ memory\_hook\ =\ \_global\_ptr;}
+\DoxyCodeLine{00539\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00540\ \ \ \textcolor{comment}{//\ If\ this\ gets\ called,\ we\ still\ need\ to\ initialize\ the\ global\_ptr\ with\ a}}
+\DoxyCodeLine{00541\ \ \ \textcolor{comment}{//\ stub\ even\ if\ we\ don't\ compile\ with\ memory\ usage\ tracking\ enabled,\ for\ ABI}}
+\DoxyCodeLine{00542\ \ \ \textcolor{comment}{//\ stability.\ \ However,\ we\ won't\ replace\ the\ memory\ hook.}}
+\DoxyCodeLine{00543\ \ \ \_global\_ptr\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classMemoryUsage}{MemoryUsage}}(*memory\_hook);}
+\DoxyCodeLine{00544\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00545\ \}}
+\DoxyCodeLine{00546\ }
+\DoxyCodeLine{00553\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classMemoryUsage_a0c80c7ac4239923e7625aac4088714ef}{MemoryUsage::}}}
+\DoxyCodeLine{00554\ \mbox{\hyperlink{classMemoryUsage_a0c80c7ac4239923e7625aac4088714ef}{overflow\_heap\_size}}()\ \{}
+\DoxyCodeLine{00555\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00556\ \ \ \mbox{\hyperlink{classMemoryHook_a384863305e12229f4f5e9d292c2e8146}{MemoryHook::overflow\_heap\_size}}();}
+\DoxyCodeLine{00557\ }
+\DoxyCodeLine{00558\ \ \ express\_cat.error()}
+\DoxyCodeLine{00559\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Total\ allocated\ memory\ has\ reached\ "{}}}
+\DoxyCodeLine{00560\ \ \ \ \ <<\ get\_panda\_heap\_single\_size()\ +\ get\_panda\_heap\_array\_size()}
+\DoxyCodeLine{00561\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes."{}}}
+\DoxyCodeLine{00562\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n\ \ heap\ single:\ "{}}\ <<\ get\_panda\_heap\_single\_size()}
+\DoxyCodeLine{00563\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n\ \ heap\ array:\ "{}}\ <<\ get\_panda\_heap\_array\_size()}
+\DoxyCodeLine{00564\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n\ \ heap\ overhead:\ "{}}\ <<\ get\_panda\_heap\_overhead()}
+\DoxyCodeLine{00565\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n\ \ mmap:\ "{}}\ <<\ get\_panda\_mmap\_size()}
+\DoxyCodeLine{00566\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n\ \ external:\ "{}}\ <<\ get\_external\_size()}
+\DoxyCodeLine{00567\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n\ \ total:\ "{}}\ <<\ get\_total\_size()}
+\DoxyCodeLine{00568\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00569\ }
+\DoxyCodeLine{00570\ \ \ \textcolor{comment}{//\ Turn\ on\ spamful\ debugging.}}
+\DoxyCodeLine{00571\ \ \ \_track\_memory\_usage\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00572\ \ \ \_report\_memory\_usage\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00573\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00574\ \}}
+\DoxyCodeLine{00575\ }
+\DoxyCodeLine{00579\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{00580\ ns\_record\_pointer(\mbox{\hyperlink{classReferenceCount}{ReferenceCount}}\ *ptr)\ \{}
+\DoxyCodeLine{00581\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00582\ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00583\ \ \ \ \ \textcolor{comment}{//\ We\ have\ to\ protect\ modifications\ to\ the\ table\ from\ recursive\ calls\ by}}
+\DoxyCodeLine{00584\ \ \ \ \ \textcolor{comment}{//\ toggling\ \_recursion\_protect\ while\ we\ adjust\ it.}}
+\DoxyCodeLine{00585\ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00586\ \ \ \ \ pair<Table::iterator,\ bool>\ insert\_result\ =}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \_table.insert(Table::value\_type((\textcolor{keywordtype}{void}\ *)ptr,\ \textcolor{keyword}{nullptr}));}
+\DoxyCodeLine{00588\ }
+\DoxyCodeLine{00589\ \ \ \ \ \textcolor{comment}{//\ This\ shouldn't\ fail.}}
+\DoxyCodeLine{00590\ \ \ \ \ assert(insert\_result.first\ !=\ \_table.end());}
+\DoxyCodeLine{00591\ }
+\DoxyCodeLine{00592\ \ \ \ \ \textcolor{keywordflow}{if}\ (insert\_result.second)\ \{}
+\DoxyCodeLine{00593\ \ \ \ \ \ \ (*insert\_result.first).second\ =\ \textcolor{keyword}{new}\ MemoryInfo;}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \_info\_set\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ ++\_count;}
+\DoxyCodeLine{00596\ \ \ \ \ \}}
+\DoxyCodeLine{00597\ }
+\DoxyCodeLine{00598\ \ \ \ \ MemoryInfo\ *info\ =\ (*insert\_result.first).second;}
+\DoxyCodeLine{00599\ }
+\DoxyCodeLine{00600\ \ \ \ \ \textcolor{comment}{//\ We\ might\ already\ have\ a\ ReferenceCount\ pointer,\ thanks\ to\ a\ previous}}
+\DoxyCodeLine{00601\ \ \ \ \ \textcolor{comment}{//\ call\ to\ mark\_pointer().}}
+\DoxyCodeLine{00602\ \ \ \ \ nassertv(info-\/>\_ref\_ptr\ ==\ \textcolor{keyword}{nullptr}\ ||\ info-\/>\_ref\_ptr\ ==\ ptr);}
+\DoxyCodeLine{00603\ }
+\DoxyCodeLine{00604\ \ \ \ \ info-\/>\_ref\_ptr\ =\ ptr;}
+\DoxyCodeLine{00605\ \ \ \ \ info-\/>\_static\_type\ =\ ReferenceCount::get\_class\_type();}
+\DoxyCodeLine{00606\ \ \ \ \ info-\/>\_dynamic\_type\ =\ ReferenceCount::get\_class\_type();}
+\DoxyCodeLine{00607\ \ \ \ \ info-\/>\_time\ =\ TrueClock::get\_global\_ptr()-\/>get\_long\_time();}
+\DoxyCodeLine{00608\ \ \ \ \ info-\/>\_freeze\_index\ =\ \_freeze\_index;}
+\DoxyCodeLine{00609\ \ \ \ \ info-\/>\_flags\ |=\ MemoryInfo::F\_reconsider\_dynamic\_type;}
+\DoxyCodeLine{00610\ }
+\DoxyCodeLine{00611\ \ \ \ \ \textcolor{comment}{//\ We\ close\ the\ recursion\_protect\ flag\ all\ the\ way\ down\ here,\ so\ that\ we}}
+\DoxyCodeLine{00612\ \ \ \ \ \textcolor{comment}{//\ also\ protect\ ourselves\ against\ a\ possible\ recursive\ call\ in}}
+\DoxyCodeLine{00613\ \ \ \ \ \textcolor{comment}{//\ TrueClock::get\_global\_ptr().}}
+\DoxyCodeLine{00614\ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00615\ }
+\DoxyCodeLine{00616\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_report\_memory\_usage)\ \{}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ now\ =\ TrueClock::get\_global\_ptr()-\/>get\_long\_time();}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (now\ -\/\ \_last\_report\_time\ >\ \_report\_memory\_interval)\ \{}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \ \ \_last\_report\_time\ =\ now;}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00621\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}***\ Current\ memory\ usage:\ "{}}\ <<\ get\_total\_size()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \ \ show\_current\_types();}
+\DoxyCodeLine{00623\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00624\ \ \ \ \ \}}
+\DoxyCodeLine{00625\ \ \ \}}
+\DoxyCodeLine{00626\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00627\ \}}
+\DoxyCodeLine{00628\ }
+\DoxyCodeLine{00629\ }
+\DoxyCodeLine{00633\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{00634\ ns\_record\_pointer(\textcolor{keywordtype}{void}\ *ptr,\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type)\ \{}
+\DoxyCodeLine{00635\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00636\ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{comment}{//\ We\ have\ to\ protect\ modifications\ to\ the\ table\ from\ recursive\ calls\ by}}
+\DoxyCodeLine{00638\ \ \ \ \ \textcolor{comment}{//\ toggling\ \_recursion\_protect\ while\ we\ adjust\ it.}}
+\DoxyCodeLine{00639\ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00640\ \ \ \ \ pair<Table::iterator,\ bool>\ insert\_result\ =}
+\DoxyCodeLine{00641\ \ \ \ \ \ \ \_table.insert(Table::value\_type(ptr,\ \textcolor{keyword}{nullptr}));}
+\DoxyCodeLine{00642\ }
+\DoxyCodeLine{00643\ \ \ \ \ \textcolor{comment}{//\ This\ shouldn't\ fail.}}
+\DoxyCodeLine{00644\ \ \ \ \ assert(insert\_result.first\ !=\ \_table.end());}
+\DoxyCodeLine{00645\ }
+\DoxyCodeLine{00646\ \ \ \ \ \textcolor{keywordflow}{if}\ (insert\_result.second)\ \{}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ (*insert\_result.first).second\ =\ \textcolor{keyword}{new}\ MemoryInfo;}
+\DoxyCodeLine{00648\ \ \ \ \ \ \ \_info\_set\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00649\ \ \ \ \ \ \ ++\_count;}
+\DoxyCodeLine{00650\ \ \ \ \ \}}
+\DoxyCodeLine{00651\ }
+\DoxyCodeLine{00652\ \ \ \ \ MemoryInfo\ *info\ =\ (*insert\_result.first).second;}
+\DoxyCodeLine{00653\ }
+\DoxyCodeLine{00654\ \ \ \ \ \textcolor{comment}{//\ We\ should\ already\ have\ a\ pointer,\ thanks\ to\ a\ previous\ call\ to}}
+\DoxyCodeLine{00655\ \ \ \ \ \textcolor{comment}{//\ mark\_pointer().}}
+\DoxyCodeLine{00656\ \ \ \ \ nassertv(info-\/>\_void\_ptr\ ==\ ptr\ \&\&\ info-\/>\_ref\_ptr\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00657\ }
+\DoxyCodeLine{00658\ \ \ \ \ info-\/>\_void\_ptr\ =\ ptr;}
+\DoxyCodeLine{00659\ \ \ \ \ info-\/>\_static\_type\ =\ type;}
+\DoxyCodeLine{00660\ \ \ \ \ info-\/>\_dynamic\_type\ =\ type;}
+\DoxyCodeLine{00661\ \ \ \ \ info-\/>\_time\ =\ TrueClock::get\_global\_ptr()-\/>get\_long\_time();}
+\DoxyCodeLine{00662\ \ \ \ \ info-\/>\_freeze\_index\ =\ \_freeze\_index;}
+\DoxyCodeLine{00663\ \ \ \ \ info-\/>\_flags\ |=\ MemoryInfo::F\_reconsider\_dynamic\_type;}
+\DoxyCodeLine{00664\ }
+\DoxyCodeLine{00665\ \ \ \ \ \textcolor{comment}{//\ We\ close\ the\ recursion\_protect\ flag\ all\ the\ way\ down\ here,\ so\ that\ we}}
+\DoxyCodeLine{00666\ \ \ \ \ \textcolor{comment}{//\ also\ protect\ ourselves\ against\ a\ possible\ recursive\ call\ in}}
+\DoxyCodeLine{00667\ \ \ \ \ \textcolor{comment}{//\ TrueClock::get\_global\_ptr().}}
+\DoxyCodeLine{00668\ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00669\ }
+\DoxyCodeLine{00670\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_report\_memory\_usage)\ \{}
+\DoxyCodeLine{00671\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ now\ =\ TrueClock::get\_global\_ptr()-\/>get\_long\_time();}
+\DoxyCodeLine{00672\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (now\ -\/\ \_last\_report\_time\ >\ \_report\_memory\_interval)\ \{}
+\DoxyCodeLine{00673\ \ \ \ \ \ \ \ \ \_last\_report\_time\ =\ now;}
+\DoxyCodeLine{00674\ \ \ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00675\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}***\ Current\ memory\ usage:\ "{}}\ <<\ get\_total\_size()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00676\ \ \ \ \ \ \ \ \ show\_current\_types();}
+\DoxyCodeLine{00677\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00678\ \ \ \ \ \}}
+\DoxyCodeLine{00679\ \ \ \}}
+\DoxyCodeLine{00680\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00681\ \}}
+\DoxyCodeLine{00682\ }
+\DoxyCodeLine{00689\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{00690\ ns\_update\_type(\textcolor{keywordtype}{void}\ *ptr,\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type)\ \{}
+\DoxyCodeLine{00691\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00692\ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00693\ \ \ \ \ Table::iterator\ ti;}
+\DoxyCodeLine{00694\ \ \ \ \ ti\ =\ \_table.find(ptr);}
+\DoxyCodeLine{00695\ \ \ \ \ \textcolor{keywordflow}{if}\ (ti\ ==\ \_table.end())\ \{}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_startup\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00697\ \ \ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00698\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Attempt\ to\ update\ type\ to\ "{}}\ <<\ type\ <<\ \textcolor{stringliteral}{"{}\ for\ unrecorded\ pointer\ "{}}}
+\DoxyCodeLine{00699\ \ \ \ \ \ \ \ \ \ \ <<\ ptr\ <<\ \textcolor{stringliteral}{"{}!\(\backslash\)n"{}};}
+\DoxyCodeLine{00700\ \ \ \ \ \ \ \ \ nassertv(\textcolor{keyword}{false});}
+\DoxyCodeLine{00701\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00702\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00703\ \ \ \ \ \}}
+\DoxyCodeLine{00704\ }
+\DoxyCodeLine{00705\ \ \ \ \ MemoryInfo\ *info\ =\ (*ti).second;}
+\DoxyCodeLine{00706\ }
+\DoxyCodeLine{00707\ \ \ \ \ info-\/>update\_type\_handle(info-\/>\_static\_type,\ type);}
+\DoxyCodeLine{00708\ \ \ \ \ info-\/>determine\_dynamic\_type();}
+\DoxyCodeLine{00709\ }
+\DoxyCodeLine{00710\ \ \ \ \ consolidate\_void\_ptr(info);}
+\DoxyCodeLine{00711\ \ \ \}}
+\DoxyCodeLine{00712\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00713\ \}}
+\DoxyCodeLine{00714\ }
+\DoxyCodeLine{00721\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{00722\ ns\_update\_type(\textcolor{keywordtype}{void}\ *ptr,\ \mbox{\hyperlink{classTypedObject}{TypedObject}}\ *typed\_ptr)\ \{}
+\DoxyCodeLine{00723\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00724\ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00725\ \ \ \ \ Table::iterator\ ti;}
+\DoxyCodeLine{00726\ \ \ \ \ ti\ =\ \_table.find(ptr);}
+\DoxyCodeLine{00727\ \ \ \ \ \textcolor{keywordflow}{if}\ (ti\ ==\ \_table.end())\ \{}
+\DoxyCodeLine{00728\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_startup\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00729\ \ \ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00730\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Attempt\ to\ update\ type\ to\ "{}}\ <<\ typed\_ptr-\/>get\_type()}
+\DoxyCodeLine{00731\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ for\ unrecorded\ pointer\ "{}}}
+\DoxyCodeLine{00732\ \ \ \ \ \ \ \ \ \ \ <<\ ptr\ <<\ \textcolor{stringliteral}{"{}!\(\backslash\)n"{}};}
+\DoxyCodeLine{00733\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00734\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00735\ \ \ \ \ \}}
+\DoxyCodeLine{00736\ }
+\DoxyCodeLine{00737\ \ \ \ \ MemoryInfo\ *info\ =\ (*ti).second;}
+\DoxyCodeLine{00738\ \ \ \ \ info-\/>\_typed\_ptr\ =\ typed\_ptr;}
+\DoxyCodeLine{00739\ \ \ \ \ info-\/>determine\_dynamic\_type();}
+\DoxyCodeLine{00740\ }
+\DoxyCodeLine{00741\ \ \ \ \ consolidate\_void\_ptr(info);}
+\DoxyCodeLine{00742\ \ \ \}}
+\DoxyCodeLine{00743\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00744\ \}}
+\DoxyCodeLine{00745\ }
+\DoxyCodeLine{00749\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{00750\ ns\_remove\_pointer(\mbox{\hyperlink{classReferenceCount}{ReferenceCount}}\ *ptr)\ \{}
+\DoxyCodeLine{00751\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00752\ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00753\ \ \ \ \ Table::iterator\ ti;}
+\DoxyCodeLine{00754\ \ \ \ \ ti\ =\ \_table.find(ptr);}
+\DoxyCodeLine{00755\ \ \ \ \ \textcolor{keywordflow}{if}\ (ti\ ==\ \_table.end())\ \{}
+\DoxyCodeLine{00756\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_startup\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00757\ \ \ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00758\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Attempt\ to\ remove\ pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr}
+\DoxyCodeLine{00759\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ not\ in\ table.\(\backslash\)n"{}}}
+\DoxyCodeLine{00760\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Possibly\ a\ double-\/destruction.\(\backslash\)n"{}};}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ \ \ nassertv(\textcolor{keyword}{false});}
+\DoxyCodeLine{00762\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00763\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00764\ \ \ \ \ \}}
+\DoxyCodeLine{00765\ }
+\DoxyCodeLine{00766\ \ \ \ \ MemoryInfo\ *info\ =\ (*ti).second;}
+\DoxyCodeLine{00767\ }
+\DoxyCodeLine{00768\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_ref\_ptr\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00769\ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00770\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr\ <<\ \textcolor{stringliteral}{"{}\ deleted\ twice!\(\backslash\)n"{}};}
+\DoxyCodeLine{00771\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00772\ \ \ \ \ \}}
+\DoxyCodeLine{00773\ \ \ \ \ nassertv(info-\/>\_ref\_ptr\ ==\ ptr);}
+\DoxyCodeLine{00774\ }
+\DoxyCodeLine{00775\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Removing\ ReferenceCount\ pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00778\ \ \ \ \ \}}
+\DoxyCodeLine{00779\ }
+\DoxyCodeLine{00780\ \ \ \ \ info-\/>\_ref\_ptr\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00781\ \ \ \ \ info-\/>\_typed\_ptr\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00782\ }
+\DoxyCodeLine{00783\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_freeze\_index\ ==\ \_freeze\_index)\ \{}
+\DoxyCodeLine{00784\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ now\ =\ TrueClock::get\_global\_ptr()-\/>get\_long\_time();}
+\DoxyCodeLine{00785\ }
+\DoxyCodeLine{00786\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ have\ to\ protect\ modifications\ to\ the\ table\ from\ recursive\ calls\ by}}
+\DoxyCodeLine{00787\ \ \ \ \ \ \ \textcolor{comment}{//\ toggling\ \_recursion\_protect\ while\ we\ adjust\ it.}}
+\DoxyCodeLine{00788\ \ \ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00789\ \ \ \ \ \ \ \_trend\_types.add\_info(info-\/>get\_type(),\ info);}
+\DoxyCodeLine{00790\ \ \ \ \ \ \ \_trend\_ages.add\_info(now\ -\/\ info-\/>\_time,\ info);}
+\DoxyCodeLine{00791\ \ \ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00792\ \ \ \ \ \}}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00794\ \ \ \ \ \textcolor{keywordflow}{if}\ (ptr\ !=\ info-\/>\_void\_ptr\ ||\ info-\/>\_void\_ptr\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00795\ \ \ \ \ \ \ \textcolor{comment}{//\ Remove\ the\ entry\ from\ the\ table.}}
+\DoxyCodeLine{00796\ }
+\DoxyCodeLine{00797\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ have\ to\ protect\ modifications\ to\ the\ table\ from\ recursive\ calls\ by}}
+\DoxyCodeLine{00798\ \ \ \ \ \ \ \textcolor{comment}{//\ toggling\ \_recursion\_protect\ while\ we\ adjust\ it.}}
+\DoxyCodeLine{00799\ \ \ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00800\ \ \ \ \ \ \ \_table.erase(ti);}
+\DoxyCodeLine{00801\ \ \ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00802\ }
+\DoxyCodeLine{00803\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_void\_ptr\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00804\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ That\ was\ the\ last\ entry.\ \ Remove\ it\ altogether.}}
+\DoxyCodeLine{00805\ \ \ \ \ \ \ \ \ \_total\_cpp\_size\ -\/=\ info-\/>\_size;}
+\DoxyCodeLine{00806\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_freeze\_index\ ==\ \_freeze\_index)\ \{}
+\DoxyCodeLine{00807\ \ \ \ \ \ \ \ \ \ \ \_current\_cpp\_size\ -\/=\ info-\/>\_size;}
+\DoxyCodeLine{00808\ \ \ \ \ \ \ \ \ \ \ \_count-\/-\/;}
+\DoxyCodeLine{00809\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00810\ }
+\DoxyCodeLine{00811\ \ \ \ \ \ \ \ \ \_info\_set\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ \ \ \textcolor{keyword}{delete}\ info;}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00814\ \ \ \ \ \}}
+\DoxyCodeLine{00815\ \ \ \}}
+\DoxyCodeLine{00816\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00817\ \}}
+\DoxyCodeLine{00818\ }
+\DoxyCodeLine{00823\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{00824\ ns\_record\_void\_pointer(\textcolor{keywordtype}{void}\ *ptr,\ \textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00825\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00826\ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00827\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00828\ \ \ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00829\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Recording\ void\ pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00830\ \ \ \ \ \}}
+\DoxyCodeLine{00831\ }
+\DoxyCodeLine{00832\ \ \ \ \ \textcolor{comment}{//\ We\ have\ to\ protect\ modifications\ to\ the\ table\ from\ recursive\ calls\ by}}
+\DoxyCodeLine{00833\ \ \ \ \ \textcolor{comment}{//\ toggling\ \_recursion\_protect\ while\ we\ adjust\ it.}}
+\DoxyCodeLine{00834\ }
+\DoxyCodeLine{00835\ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00836\ \ \ \ \ pair<Table::iterator,\ bool>\ insert\_result\ =}
+\DoxyCodeLine{00837\ \ \ \ \ \ \ \_table.insert(Table::value\_type((\textcolor{keywordtype}{void}\ *)ptr,\ \textcolor{keyword}{nullptr}));}
+\DoxyCodeLine{00838\ }
+\DoxyCodeLine{00839\ \ \ \ \ assert(insert\_result.first\ !=\ \_table.end());}
+\DoxyCodeLine{00840\ }
+\DoxyCodeLine{00841\ \ \ \ \ \textcolor{keywordflow}{if}\ (insert\_result.second)\ \{}
+\DoxyCodeLine{00842\ \ \ \ \ \ \ (*insert\_result.first).second\ =\ \textcolor{keyword}{new}\ MemoryInfo;}
+\DoxyCodeLine{00843\ \ \ \ \ \ \ \_info\_set\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00844\ \ \ \ \ \ \ ++\_count;}
+\DoxyCodeLine{00845\ \ \ \ \ \}}
+\DoxyCodeLine{00846\ }
+\DoxyCodeLine{00847\ \ \ \ \ MemoryInfo\ *info\ =\ (*insert\_result.first).second;}
+\DoxyCodeLine{00848\ }
+\DoxyCodeLine{00849\ \ \ \ \ \textcolor{comment}{//\ We\ shouldn't\ already\ have\ a\ void\ pointer.}}
+\DoxyCodeLine{00850\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_void\_ptr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00851\ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00852\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Void\ pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr\ <<\ \textcolor{stringliteral}{"{}\ recorded\ twice!\(\backslash\)n"{}};}
+\DoxyCodeLine{00853\ \ \ \ \ \ \ nassertv(\textcolor{keyword}{false});}
+\DoxyCodeLine{00854\ \ \ \ \ \}}
+\DoxyCodeLine{00855\ }
+\DoxyCodeLine{00856\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_freeze\_index\ ==\ \_freeze\_index)\ \{}
+\DoxyCodeLine{00857\ \ \ \ \ \ \ \_current\_cpp\_size\ +=\ size\ -\/\ info-\/>\_size;}
+\DoxyCodeLine{00858\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00859\ \ \ \ \ \ \ \_current\_cpp\_size\ +=\ size;}
+\DoxyCodeLine{00860\ \ \ \ \ \}}
+\DoxyCodeLine{00861\ \ \ \ \ \_total\_cpp\_size\ +=\ size\ -\/\ info-\/>\_size;}
+\DoxyCodeLine{00862\ }
+\DoxyCodeLine{00863\ \ \ \ \ info-\/>\_void\_ptr\ =\ ptr;}
+\DoxyCodeLine{00864\ \ \ \ \ info-\/>\_size\ =\ size;}
+\DoxyCodeLine{00865\ \ \ \ \ info-\/>\_time\ =\ TrueClock::get\_global\_ptr()-\/>get\_long\_time();}
+\DoxyCodeLine{00866\ \ \ \ \ info-\/>\_freeze\_index\ =\ \_freeze\_index;}
+\DoxyCodeLine{00867\ \ \ \ \ info-\/>\_flags\ |=\ MemoryInfo::F\_size\_known;}
+\DoxyCodeLine{00868\ }
+\DoxyCodeLine{00869\ \ \ \ \ \textcolor{comment}{//\ We\ close\ the\ recursion\_protect\ flag\ all\ the\ way\ down\ here,\ so\ that\ we}}
+\DoxyCodeLine{00870\ \ \ \ \ \textcolor{comment}{//\ also\ protect\ ourselves\ against\ a\ possible\ recursive\ call\ in}}
+\DoxyCodeLine{00871\ \ \ \ \ \textcolor{comment}{//\ TrueClock::get\_global\_ptr().}}
+\DoxyCodeLine{00872\ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00873\ \ \ \}}
+\DoxyCodeLine{00874\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00875\ \}}
+\DoxyCodeLine{00876\ }
+\DoxyCodeLine{00880\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{00881\ ns\_remove\_void\_pointer(\textcolor{keywordtype}{void}\ *ptr)\ \{}
+\DoxyCodeLine{00882\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00883\ \ \ \textcolor{keywordflow}{if}\ (\_track\_memory\_usage)\ \{}
+\DoxyCodeLine{00884\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00885\ \ \ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00886\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Removing\ void\ pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00887\ \ \ \ \ \}}
+\DoxyCodeLine{00888\ }
+\DoxyCodeLine{00889\ \ \ \ \ Table::iterator\ ti;}
+\DoxyCodeLine{00890\ \ \ \ \ ti\ =\ \_table.find(ptr);}
+\DoxyCodeLine{00891\ \ \ \ \ \textcolor{keywordflow}{if}\ (ti\ ==\ \_table.end())\ \{}
+\DoxyCodeLine{00892\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ pointer\ we\ tried\ to\ delete\ was\ not\ recorded\ in\ the\ table.}}
+\DoxyCodeLine{00893\ }
+\DoxyCodeLine{00894\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ can't\ report\ this\ as\ an\ error,\ because\ (a)\ we\ might\ have\ removed}}
+\DoxyCodeLine{00895\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ void\ pointer\ entry\ already\ when\ we\ consolidated,\ and\ (b)\ a\ few}}
+\DoxyCodeLine{00896\ \ \ \ \ \ \ \textcolor{comment}{//\ objects\ might\ have\ been\ created\ during\ static\ init\ time,\ before\ we}}
+\DoxyCodeLine{00897\ \ \ \ \ \ \ \textcolor{comment}{//\ grabbed\ the\ operator\ newdelete\ function\ handlers.}}
+\DoxyCodeLine{00898\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00899\ \ \ \ \ \}}
+\DoxyCodeLine{00900\ }
+\DoxyCodeLine{00901\ \ \ \ \ MemoryInfo\ *info\ =\ (*ti).second;}
+\DoxyCodeLine{00902\ }
+\DoxyCodeLine{00903\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_void\_ptr\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00904\ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00905\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr\ <<\ \textcolor{stringliteral}{"{}\ deleted\ twice!\(\backslash\)n"{}};}
+\DoxyCodeLine{00906\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00907\ \ \ \ \ \}}
+\DoxyCodeLine{00908\ \ \ \ \ nassertv(info-\/>\_void\_ptr\ ==\ ptr);}
+\DoxyCodeLine{00909\ }
+\DoxyCodeLine{00910\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_ref\_ptr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00911\ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00912\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Pointer\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)ptr}
+\DoxyCodeLine{00913\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ did\ not\ destruct\ before\ being\ deleted!\(\backslash\)n"{}};}
+\DoxyCodeLine{00914\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_ref\_ptr\ !=\ ptr)\ \{}
+\DoxyCodeLine{00915\ \ \ \ \ \ \ \ \ remove\_pointer(info-\/>\_ref\_ptr);}
+\DoxyCodeLine{00916\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00917\ \ \ \ \ \}}
+\DoxyCodeLine{00918\ }
+\DoxyCodeLine{00919\ \ \ \ \ info-\/>\_void\_ptr\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00920\ }
+\DoxyCodeLine{00921\ \ \ \ \ \textcolor{comment}{//\ Remove\ it\ from\ the\ table.}}
+\DoxyCodeLine{00922\ }
+\DoxyCodeLine{00923\ \ \ \ \ \textcolor{comment}{//\ We\ have\ to\ protect\ modifications\ to\ the\ table\ from\ recursive\ calls\ by}}
+\DoxyCodeLine{00924\ \ \ \ \ \textcolor{comment}{//\ toggling\ \_recursion\_protect\ while\ we\ adjust\ it.}}
+\DoxyCodeLine{00925\ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00926\ \ \ \ \ \_table.erase(ti);}
+\DoxyCodeLine{00927\ \ \ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00928\ }
+\DoxyCodeLine{00929\ \ \ \ \ \_total\_cpp\_size\ -\/=\ info-\/>\_size;}
+\DoxyCodeLine{00930\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_freeze\_index\ ==\ \_freeze\_index)\ \{}
+\DoxyCodeLine{00931\ \ \ \ \ \ \ -\/-\/\_count;}
+\DoxyCodeLine{00932\ \ \ \ \ \ \ \_current\_cpp\_size\ -\/=\ info-\/>\_size;}
+\DoxyCodeLine{00933\ \ \ \ \ \}}
+\DoxyCodeLine{00934\ }
+\DoxyCodeLine{00935\ \ \ \ \ \_info\_set\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00936\ \ \ \ \ \textcolor{keyword}{delete}\ info;}
+\DoxyCodeLine{00937\ \ \ \}}
+\DoxyCodeLine{00938\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00939\ \}}
+\DoxyCodeLine{00940\ }
+\DoxyCodeLine{00944\ \textcolor{keywordtype}{int}\ MemoryUsage::}
+\DoxyCodeLine{00945\ ns\_get\_num\_pointers()\ \{}
+\DoxyCodeLine{00946\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00947\ \ \ nassertr(\_track\_memory\_usage,\ 0);}
+\DoxyCodeLine{00948\ \ \ \textcolor{keywordflow}{return}\ \_count;}
+\DoxyCodeLine{00949\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00950\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00951\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00952\ \}}
+\DoxyCodeLine{00953\ }
+\DoxyCodeLine{00958\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{00959\ ns\_get\_pointers(\mbox{\hyperlink{classMemoryUsagePointers}{MemoryUsagePointers}}\ \&result)\ \{}
+\DoxyCodeLine{00960\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00961\ \ \ nassertv(\_track\_memory\_usage);}
+\DoxyCodeLine{00962\ \ \ result.clear();}
+\DoxyCodeLine{00963\ }
+\DoxyCodeLine{00964\ \ \ \textcolor{keywordflow}{if}\ (\_info\_set\_dirty)\ \{}
+\DoxyCodeLine{00965\ \ \ \ \ refresh\_info\_set();}
+\DoxyCodeLine{00966\ \ \ \}}
+\DoxyCodeLine{00967\ }
+\DoxyCodeLine{00968\ \ \ \textcolor{keywordtype}{double}\ now\ =\ TrueClock::get\_global\_ptr()-\/>get\_long\_time();}
+\DoxyCodeLine{00969\ \ \ InfoSet::iterator\ si;}
+\DoxyCodeLine{00970\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_info\_set.begin();\ si\ !=\ \_info\_set.end();\ ++si)\ \{}
+\DoxyCodeLine{00971\ \ \ \ \ MemoryInfo\ *info\ =\ (*si);}
+\DoxyCodeLine{00972\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_freeze\_index\ ==\ \_freeze\_index\ \&\&}
+\DoxyCodeLine{00973\ \ \ \ \ \ \ \ \ info-\/>\_ref\_ptr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00974\ \ \ \ \ \ \ result.add\_entry(info-\/>\_ref\_ptr,\ info-\/>\_typed\_ptr,\ info-\/>get\_type(),}
+\DoxyCodeLine{00975\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ now\ -\/\ info-\/>\_time);}
+\DoxyCodeLine{00976\ \ \ \ \ \}}
+\DoxyCodeLine{00977\ \ \ \}}
+\DoxyCodeLine{00978\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00979\ \}}
+\DoxyCodeLine{00980\ }
+\DoxyCodeLine{00985\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{00986\ ns\_get\_pointers\_of\_type(\mbox{\hyperlink{classMemoryUsagePointers}{MemoryUsagePointers}}\ \&result,\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type)\ \{}
+\DoxyCodeLine{00987\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00988\ \ \ nassertv(\_track\_memory\_usage);}
+\DoxyCodeLine{00989\ \ \ result.clear();}
+\DoxyCodeLine{00990\ }
+\DoxyCodeLine{00991\ \ \ \textcolor{keywordflow}{if}\ (\_info\_set\_dirty)\ \{}
+\DoxyCodeLine{00992\ \ \ \ \ refresh\_info\_set();}
+\DoxyCodeLine{00993\ \ \ \}}
+\DoxyCodeLine{00994\ }
+\DoxyCodeLine{00995\ \ \ \textcolor{keywordtype}{double}\ now\ =\ TrueClock::get\_global\_ptr()-\/>get\_long\_time();}
+\DoxyCodeLine{00996\ \ \ InfoSet::iterator\ si;}
+\DoxyCodeLine{00997\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_info\_set.begin();\ si\ !=\ \_info\_set.end();\ ++si)\ \{}
+\DoxyCodeLine{00998\ \ \ \ \ MemoryInfo\ *info\ =\ (*si);}
+\DoxyCodeLine{00999\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_freeze\_index\ ==\ \_freeze\_index\ \&\&}
+\DoxyCodeLine{01000\ \ \ \ \ \ \ \ \ info-\/>\_ref\_ptr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01001\ \ \ \ \ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ info\_type\ =\ info-\/>get\_type();}
+\DoxyCodeLine{01002\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (info\_type\ !=\ TypeHandle::none()\ \&\&}
+\DoxyCodeLine{01003\ \ \ \ \ \ \ \ \ \ \ info\_type.is\_derived\_from(type))\ \{}
+\DoxyCodeLine{01004\ \ \ \ \ \ \ \ \ result.add\_entry(info-\/>\_ref\_ptr,\ info-\/>\_typed\_ptr,\ info\_type,}
+\DoxyCodeLine{01005\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ now\ -\/\ info-\/>\_time);}
+\DoxyCodeLine{01006\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01007\ \ \ \ \ \}}
+\DoxyCodeLine{01008\ \ \ \}}
+\DoxyCodeLine{01009\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01010\ \}}
+\DoxyCodeLine{01011\ }
+\DoxyCodeLine{01016\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{01017\ ns\_get\_pointers\_of\_age(\mbox{\hyperlink{classMemoryUsagePointers}{MemoryUsagePointers}}\ \&result,}
+\DoxyCodeLine{01018\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ from,\ \textcolor{keywordtype}{double}\ to)\ \{}
+\DoxyCodeLine{01019\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{01020\ \ \ nassertv(\_track\_memory\_usage);}
+\DoxyCodeLine{01021\ \ \ result.clear();}
+\DoxyCodeLine{01022\ }
+\DoxyCodeLine{01023\ \ \ \textcolor{keywordflow}{if}\ (\_info\_set\_dirty)\ \{}
+\DoxyCodeLine{01024\ \ \ \ \ refresh\_info\_set();}
+\DoxyCodeLine{01025\ \ \ \}}
+\DoxyCodeLine{01026\ }
+\DoxyCodeLine{01027\ \ \ \textcolor{keywordtype}{double}\ now\ =\ TrueClock::get\_global\_ptr()-\/>get\_long\_time();}
+\DoxyCodeLine{01028\ \ \ InfoSet::iterator\ si;}
+\DoxyCodeLine{01029\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_info\_set.begin();\ si\ !=\ \_info\_set.end();\ ++si)\ \{}
+\DoxyCodeLine{01030\ \ \ \ \ MemoryInfo\ *info\ =\ (*si);}
+\DoxyCodeLine{01031\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_freeze\_index\ ==\ \_freeze\_index\ \&\&}
+\DoxyCodeLine{01032\ \ \ \ \ \ \ \ \ info-\/>\_ref\_ptr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01033\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ age\ =\ now\ -\/\ info-\/>\_time;}
+\DoxyCodeLine{01034\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((age\ >=\ from\ \&\&\ age\ <=\ to)\ ||}
+\DoxyCodeLine{01035\ \ \ \ \ \ \ \ \ \ \ (age\ >=\ to\ \&\&\ age\ <=\ from))\ \{}
+\DoxyCodeLine{01036\ \ \ \ \ \ \ \ \ result.add\_entry(info-\/>\_ref\_ptr,\ info-\/>\_typed\_ptr,\ info-\/>get\_type(),\ age);}
+\DoxyCodeLine{01037\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01038\ \ \ \ \ \}}
+\DoxyCodeLine{01039\ \ \ \}}
+\DoxyCodeLine{01040\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01041\ \}}
+\DoxyCodeLine{01042\ }
+\DoxyCodeLine{01059\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{01060\ ns\_get\_pointers\_with\_zero\_count(\mbox{\hyperlink{classMemoryUsagePointers}{MemoryUsagePointers}}\ \&result)\ \{}
+\DoxyCodeLine{01061\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{01062\ \ \ nassertv(\_track\_memory\_usage);}
+\DoxyCodeLine{01063\ \ \ result.clear();}
+\DoxyCodeLine{01064\ }
+\DoxyCodeLine{01065\ \ \ \textcolor{keywordflow}{if}\ (\_info\_set\_dirty)\ \{}
+\DoxyCodeLine{01066\ \ \ \ \ refresh\_info\_set();}
+\DoxyCodeLine{01067\ \ \ \}}
+\DoxyCodeLine{01068\ }
+\DoxyCodeLine{01069\ \ \ \textcolor{keywordtype}{double}\ now\ =\ TrueClock::get\_global\_ptr()-\/>get\_long\_time();}
+\DoxyCodeLine{01070\ \ \ InfoSet::iterator\ si;}
+\DoxyCodeLine{01071\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_info\_set.begin();\ si\ !=\ \_info\_set.end();\ ++si)\ \{}
+\DoxyCodeLine{01072\ \ \ \ \ MemoryInfo\ *info\ =\ (*si);}
+\DoxyCodeLine{01073\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_freeze\_index\ ==\ \_freeze\_index\ \&\&}
+\DoxyCodeLine{01074\ \ \ \ \ \ \ \ \ info-\/>\_ref\_ptr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01075\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_ref\_ptr-\/>get\_ref\_count()\ ==\ 0)\ \{}
+\DoxyCodeLine{01076\ \ \ \ \ \ \ \ \ info-\/>\_ref\_ptr-\/>ref();}
+\DoxyCodeLine{01077\ \ \ \ \ \ \ \ \ result.add\_entry(info-\/>\_ref\_ptr,\ info-\/>\_typed\_ptr,\ info-\/>get\_type(),}
+\DoxyCodeLine{01078\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ now\ -\/\ info-\/>\_time);}
+\DoxyCodeLine{01079\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01080\ \ \ \ \ \}}
+\DoxyCodeLine{01081\ \ \ \}}
+\DoxyCodeLine{01082\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01083\ \}}
+\DoxyCodeLine{01084\ }
+\DoxyCodeLine{01091\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{01092\ ns\_freeze()\ \{}
+\DoxyCodeLine{01093\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{01094\ \ \ \_count\ =\ 0;}
+\DoxyCodeLine{01095\ \ \ \_current\_cpp\_size\ =\ 0;}
+\DoxyCodeLine{01096\ \ \ \_trend\_types.clear();}
+\DoxyCodeLine{01097\ \ \ \_trend\_ages.clear();}
+\DoxyCodeLine{01098\ \ \ \_freeze\_index++;}
+\DoxyCodeLine{01099\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01100\ \}}
+\DoxyCodeLine{01101\ }
+\DoxyCodeLine{01105\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{01106\ ns\_show\_current\_types()\ \{}
+\DoxyCodeLine{01107\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{01108\ \ \ nassertv(\_track\_memory\_usage);}
+\DoxyCodeLine{01109\ \ \ TypeHistogram\ hist;}
+\DoxyCodeLine{01110\ }
+\DoxyCodeLine{01111\ \ \ \textcolor{keywordflow}{if}\ (\_info\_set\_dirty)\ \{}
+\DoxyCodeLine{01112\ \ \ \ \ refresh\_info\_set();}
+\DoxyCodeLine{01113\ \ \ \}}
+\DoxyCodeLine{01114\ }
+\DoxyCodeLine{01115\ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01116\ \ \ InfoSet::iterator\ si;}
+\DoxyCodeLine{01117\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_info\_set.begin();\ si\ !=\ \_info\_set.end();\ ++si)\ \{}
+\DoxyCodeLine{01118\ \ \ \ \ MemoryInfo\ *info\ =\ (*si);}
+\DoxyCodeLine{01119\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_freeze\_index\ ==\ \_freeze\_index)\ \{}
+\DoxyCodeLine{01120\ \ \ \ \ \ \ hist.add\_info(info-\/>get\_type(),\ info);}
+\DoxyCodeLine{01121\ \ \ \ \ \}}
+\DoxyCodeLine{01122\ \ \ \}}
+\DoxyCodeLine{01123\ \ \ hist.show();}
+\DoxyCodeLine{01124\ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01125\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01126\ \}}
+\DoxyCodeLine{01127\ }
+\DoxyCodeLine{01132\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{01133\ ns\_show\_trend\_types()\ \{}
+\DoxyCodeLine{01134\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{01135\ \ \ \_trend\_types.show();}
+\DoxyCodeLine{01136\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01137\ \}}
+\DoxyCodeLine{01138\ }
+\DoxyCodeLine{01142\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{01143\ ns\_show\_current\_ages()\ \{}
+\DoxyCodeLine{01144\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{01145\ \ \ nassertv(\_track\_memory\_usage);}
+\DoxyCodeLine{01146\ }
+\DoxyCodeLine{01147\ \ \ AgeHistogram\ hist;}
+\DoxyCodeLine{01148\ \ \ \textcolor{keywordtype}{double}\ now\ =\ TrueClock::get\_global\_ptr()-\/>get\_long\_time();}
+\DoxyCodeLine{01149\ }
+\DoxyCodeLine{01150\ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01151\ \ \ InfoSet::iterator\ si;}
+\DoxyCodeLine{01152\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_info\_set.begin();\ si\ !=\ \_info\_set.end();\ ++si)\ \{}
+\DoxyCodeLine{01153\ \ \ \ \ MemoryInfo\ *info\ =\ (*si);}
+\DoxyCodeLine{01154\ \ \ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_freeze\_index\ ==\ \_freeze\_index)\ \{}
+\DoxyCodeLine{01155\ \ \ \ \ \ \ hist.add\_info(now\ -\/\ info-\/>\_time,\ info);}
+\DoxyCodeLine{01156\ \ \ \ \ \}}
+\DoxyCodeLine{01157\ \ \ \}}
+\DoxyCodeLine{01158\ }
+\DoxyCodeLine{01159\ \ \ hist.show();}
+\DoxyCodeLine{01160\ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01161\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01162\ \}}
+\DoxyCodeLine{01163\ }
+\DoxyCodeLine{01168\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{01169\ ns\_show\_trend\_ages()\ \{}
+\DoxyCodeLine{01170\ \ \ \_trend\_ages.show();}
+\DoxyCodeLine{01171\ \}}
+\DoxyCodeLine{01172\ }
+\DoxyCodeLine{01173\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{01174\ }
+\DoxyCodeLine{01181\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{01182\ consolidate\_void\_ptr(MemoryInfo\ *info)\ \{}
+\DoxyCodeLine{01183\ \ \ \textcolor{keywordflow}{if}\ (info-\/>is\_size\_known())\ \{}
+\DoxyCodeLine{01184\ \ \ \ \ \textcolor{comment}{//\ We\ already\ know\ the\ size,\ so\ no\ sweat.}}
+\DoxyCodeLine{01185\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01186\ \ \ \}}
+\DoxyCodeLine{01187\ }
+\DoxyCodeLine{01188\ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_typed\_ptr\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01189\ \ \ \ \ \textcolor{comment}{//\ We\ don't\ have\ a\ typed\ pointer\ for\ this\ thing\ yet.}}
+\DoxyCodeLine{01190\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01191\ \ \ \}}
+\DoxyCodeLine{01192\ }
+\DoxyCodeLine{01193\ \ \ \mbox{\hyperlink{classTypedObject}{TypedObject}}\ *typed\_ptr\ =\ info-\/>\_typed\_ptr;}
+\DoxyCodeLine{01194\ }
+\DoxyCodeLine{01195\ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{void}\ *)typed\_ptr\ ==\ (\textcolor{keywordtype}{void}\ *)info-\/>\_ref\_ptr)\ \{}
+\DoxyCodeLine{01196\ \ \ \ \ \textcolor{comment}{//\ The\ TypedObject\ pointer\ is\ the\ same\ pointer\ as\ the\ ReferenceCount}}
+\DoxyCodeLine{01197\ \ \ \ \ \textcolor{comment}{//\ pointer,\ so\ there's\ no\ point\ in\ looking\ it\ up\ separately.\ \ Actually,}}
+\DoxyCodeLine{01198\ \ \ \ \ \textcolor{comment}{//\ this\ really\ shouldn't\ even\ be\ possible.}}
+\DoxyCodeLine{01199\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01200\ \ \ \}}
+\DoxyCodeLine{01201\ }
+\DoxyCodeLine{01202\ \ \ nassertv(info-\/>\_void\_ptr\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01203\ }
+\DoxyCodeLine{01204\ \ \ Table::iterator\ ti;}
+\DoxyCodeLine{01205\ \ \ ti\ =\ \_table.find(typed\_ptr);}
+\DoxyCodeLine{01206\ \ \ \textcolor{keywordflow}{if}\ (ti\ ==\ \_table.end())\ \{}
+\DoxyCodeLine{01207\ \ \ \ \ \textcolor{comment}{//\ No\ entry\ for\ the\ typed\ pointer,\ either.}}
+\DoxyCodeLine{01208\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01209\ \ \ \}}
+\DoxyCodeLine{01210\ }
+\DoxyCodeLine{01211\ \ \ \textcolor{comment}{//\ We\ do\ have\ an\ entry!\ \ Copy\ over\ the\ relevant\ pieces.}}
+\DoxyCodeLine{01212\ \ \ MemoryInfo\ *typed\_info\ =\ (*ti).second;}
+\DoxyCodeLine{01213\ }
+\DoxyCodeLine{01214\ \ \ nassertv(typed\_info-\/>\_void\_ptr\ ==\ typed\_ptr\ \&\&}
+\DoxyCodeLine{01215\ \ \ \ \ \ \ \ \ \ \ \ typed\_info-\/>\_ref\_ptr\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01216\ }
+\DoxyCodeLine{01217\ \ \ info-\/>\_void\_ptr\ =\ typed\_info-\/>\_void\_ptr;}
+\DoxyCodeLine{01218\ \ \ \textcolor{keywordflow}{if}\ (typed\_info-\/>is\_size\_known())\ \{}
+\DoxyCodeLine{01219\ \ \ \ \ info-\/>\_size\ =\ typed\_info-\/>get\_size();}
+\DoxyCodeLine{01220\ \ \ \ \ info-\/>\_flags\ |=\ MemoryInfo::F\_size\_known;}
+\DoxyCodeLine{01221\ \ \ \ \ \textcolor{keywordflow}{if}\ (typed\_info-\/>\_freeze\_index\ ==\ \_freeze\_index)\ \{}
+\DoxyCodeLine{01222\ \ \ \ \ \ \ \_current\_cpp\_size\ +=\ info-\/>\_size;}
+\DoxyCodeLine{01223\ \ \ \ \ \}}
+\DoxyCodeLine{01224\ \ \ \}}
+\DoxyCodeLine{01225\ }
+\DoxyCodeLine{01226\ \ \ \textcolor{comment}{//\ Now\ that\ we've\ consolidated\ the\ pointers,\ remove\ the\ entry\ for\ the\ typed}}
+\DoxyCodeLine{01227\ \ \ \textcolor{comment}{//\ pointer.}}
+\DoxyCodeLine{01228\ \ \ \textcolor{keywordflow}{if}\ (info-\/>\_freeze\_index\ ==\ \_freeze\_index)\ \{}
+\DoxyCodeLine{01229\ \ \ \ \ \_count-\/-\/;}
+\DoxyCodeLine{01230\ \ \ \ \ \_current\_cpp\_size\ -\/=\ info-\/>\_size;}
+\DoxyCodeLine{01231\ \ \ \}}
+\DoxyCodeLine{01232\ }
+\DoxyCodeLine{01233\ \ \ \_info\_set\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01234\ \ \ \textcolor{keyword}{delete}\ typed\_info;}
+\DoxyCodeLine{01235\ }
+\DoxyCodeLine{01236\ \ \ (*ti).second\ =\ info;}
+\DoxyCodeLine{01237\ \}}
+\DoxyCodeLine{01238\ }
+\DoxyCodeLine{01243\ \textcolor{keywordtype}{void}\ MemoryUsage::}
+\DoxyCodeLine{01244\ refresh\_info\_set()\ \{}
+\DoxyCodeLine{01245\ \ \ \textcolor{keywordflow}{if}\ (!\_info\_set\_dirty)\ \{}
+\DoxyCodeLine{01246\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01247\ \ \ \}}
+\DoxyCodeLine{01248\ }
+\DoxyCodeLine{01249\ \ \ \textcolor{comment}{//\ We\ have\ to\ protect\ modifications\ to\ the\ table\ from\ recursive\ calls\ by}}
+\DoxyCodeLine{01250\ \ \ \textcolor{comment}{//\ toggling\ \_recursion\_protect\ while\ we\ adjust\ it.}}
+\DoxyCodeLine{01251\ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01252\ }
+\DoxyCodeLine{01253\ \ \ \_info\_set.clear();}
+\DoxyCodeLine{01254\ \ \ Table::iterator\ ti;}
+\DoxyCodeLine{01255\ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ \_table.begin();\ ti\ !=\ \_table.end();\ ++ti)\ \{}
+\DoxyCodeLine{01256\ \ \ \ \ \_info\_set.insert((*ti).second);}
+\DoxyCodeLine{01257\ \ \ \}}
+\DoxyCodeLine{01258\ }
+\DoxyCodeLine{01259\ \ \ \_recursion\_protect\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01260\ }
+\DoxyCodeLine{01261\ \ \ \_info\_set\_dirty\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01262\ \}}
+\DoxyCodeLine{01263\ }
+\DoxyCodeLine{01264\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+
+\end{DoxyCode}

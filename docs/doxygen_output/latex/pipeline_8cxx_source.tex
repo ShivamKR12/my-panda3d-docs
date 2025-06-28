@@ -1,0 +1,500 @@
+\doxysection{pipeline.\+cxx}
+\hypertarget{pipeline_8cxx_source}{}\label{pipeline_8cxx_source}\index{panda/src/pipeline/pipeline.cxx@{panda/src/pipeline/pipeline.cxx}}
+\mbox{\hyperlink{pipeline_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pipeline_8h}{pipeline.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pipelineCyclerTrueImpl_8h}{pipelineCyclerTrueImpl.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableInt_8h}{configVariableInt.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pipeline_8h}{config\_pipeline.h}}"{}}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \mbox{\hyperlink{classPipeline}{Pipeline}}\ *Pipeline::\_render\_pipeline\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00024\ Pipeline::}
+\DoxyCodeLine{00025\ Pipeline(\textcolor{keyword}{const}\ std::string\ \&name,\ \textcolor{keywordtype}{int}\ num\_stages)\ :}
+\DoxyCodeLine{00026\ \ \ \mbox{\hyperlink{classNamable}{Namable}}(name),}
+\DoxyCodeLine{00027\ \#ifdef\ THREADED\_PIPELINE}
+\DoxyCodeLine{00028\ \ \ \_num\_stages(num\_stages),}
+\DoxyCodeLine{00029\ \ \ \_next\_cycle\_seq(1),}
+\DoxyCodeLine{00030\ \ \ \_cycle\_lock(\textcolor{stringliteral}{"{}Pipeline\ cycle"{}}),}
+\DoxyCodeLine{00031\ \ \ \_lock(\textcolor{stringliteral}{"{}Pipeline"{}})}
+\DoxyCodeLine{00032\ \#else}
+\DoxyCodeLine{00033\ \ \ \_num\_stages(1)}
+\DoxyCodeLine{00034\ \#endif}
+\DoxyCodeLine{00035\ \{}
+\DoxyCodeLine{00036\ \textcolor{preprocessor}{\#ifdef\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00037\ \ \ \textcolor{comment}{//\ We\ maintain\ all\ of\ the\ cyclers\ in\ the\ world\ on\ one\ of\ two\ linked}}
+\DoxyCodeLine{00038\ \ \ \textcolor{comment}{//\ lists.\ \ Cyclers\ that\ are\ "{}clean"{},\ which\ is\ to\ say,\ they\ have\ the}}
+\DoxyCodeLine{00039\ \ \ \textcolor{comment}{//\ same\ value\ across\ all\ pipeline\ stages,\ are\ stored\ on\ the\ \_clean}}
+\DoxyCodeLine{00040\ \ \ \textcolor{comment}{//\ list.\ \ Cyclers\ that\ are\ "{}dirty"{},\ which\ have\ different\ values}}
+\DoxyCodeLine{00041\ \ \ \textcolor{comment}{//\ across\ some\ pipeline\ stages,\ are\ stored\ instead\ on\ the\ \_dirty}}
+\DoxyCodeLine{00042\ \ \ \textcolor{comment}{//\ list.\ \ Cyclers\ can\ move\ themselves\ from\ clean\ to\ dirty\ by\ calling}}
+\DoxyCodeLine{00043\ \ \ \textcolor{comment}{//\ add\_dirty\_cycler(),\ and\ cyclers\ get\ moved\ from\ dirty\ to\ clean}}
+\DoxyCodeLine{00044\ \ \ \textcolor{comment}{//\ during\ cycle().}}
+\DoxyCodeLine{00045\ }
+\DoxyCodeLine{00046\ \ \ \textcolor{comment}{//\ To\ visit\ each\ cycler\ once\ requires\ traversing\ both\ lists.}}
+\DoxyCodeLine{00047\ \ \ \_clean.make\_head();}
+\DoxyCodeLine{00048\ \ \ \_dirty.make\_head();}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \ \ \textcolor{comment}{//\ We\ also\ store\ the\ total\ count\ of\ all\ cyclers,\ clean\ and\ dirty,\ in}}
+\DoxyCodeLine{00051\ \ \ \textcolor{comment}{//\ \_num\_cyclers;\ and\ the\ count\ of\ only\ dirty\ cyclers\ in\ \_num\_dirty\_cyclers.}}
+\DoxyCodeLine{00052\ \ \ \_num\_cyclers\ =\ 0;}
+\DoxyCodeLine{00053\ \ \ \_num\_dirty\_cyclers\ =\ 0;}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00055\ \ \ \textcolor{comment}{//\ This\ flag\ is\ true\ only\ during\ the\ call\ to\ cycle().}}
+\DoxyCodeLine{00056\ \ \ \_cycling\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00058\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00059\ \ \ \textcolor{keywordflow}{if}\ (num\_stages\ !=\ 1)\ \{}
+\DoxyCodeLine{00060\ \ \ \ \ pipeline\_cat.warning()}
+\DoxyCodeLine{00061\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Requested\ "{}}\ <<\ num\_stages}
+\DoxyCodeLine{00062\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ pipeline\ stages\ but\ multithreaded\ render\ pipelines\ not\ enabled\ in\ build.\(\backslash\)n"{}};}
+\DoxyCodeLine{00063\ \ \ \}}
+\DoxyCodeLine{00064\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \ \ nassertv(num\_stages\ >=\ 1);}
+\DoxyCodeLine{00067\ \}}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00072\ Pipeline::}
+\DoxyCodeLine{00073\ \string~Pipeline()\ \{}
+\DoxyCodeLine{00074\ \textcolor{preprocessor}{\#ifdef\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00075\ \ \ nassertv(\_num\_cyclers\ ==\ 0);}
+\DoxyCodeLine{00076\ \ \ nassertv(\_num\_dirty\_cyclers\ ==\ 0);}
+\DoxyCodeLine{00077\ \ \ \_clean.clear\_head();}
+\DoxyCodeLine{00078\ \ \ \_dirty.clear\_head();}
+\DoxyCodeLine{00079\ \ \ nassertv(!\_cycling);}
+\DoxyCodeLine{00080\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00081\ \}}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00086\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPipeline_a574b58695fd3ff4419870dae4ac3cca6}{Pipeline::}}}
+\DoxyCodeLine{00087\ \mbox{\hyperlink{classPipeline_a574b58695fd3ff4419870dae4ac3cca6}{cycle}}()\ \{}
+\DoxyCodeLine{00088\ \textcolor{preprocessor}{\#ifdef\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00089\ \ \ \textcolor{keywordflow}{if}\ (pipeline\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00090\ \ \ \ \ pipeline\_cat.spam()}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Beginning\ the\ pipeline\ cycle\(\backslash\)n"{}};}
+\DoxyCodeLine{00092\ \ \ \}}
+\DoxyCodeLine{00093\ }
+\DoxyCodeLine{00094\ \ \ \mbox{\hyperlink{classpvector}{pvector}}<\ PT(\mbox{\hyperlink{classCycleData}{CycleData}})\ >\ saved\_cdatas;}
+\DoxyCodeLine{00095\ \ \ \{}
+\DoxyCodeLine{00096\ \ \ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ cycle\_holder(\_cycle\_lock);}
+\DoxyCodeLine{00097\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ prev\_seq,\ next\_seq;}
+\DoxyCodeLine{00098\ \ \ \ \ \mbox{\hyperlink{classPipelineCyclerLinks}{PipelineCyclerLinks}}\ prev\_dirty;}
+\DoxyCodeLine{00099\ \ \ \ \ \{}
+\DoxyCodeLine{00100\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ can't\ hold\ the\ lock\ protecting\ the\ linked\ lists\ during\ the\ cycling}}
+\DoxyCodeLine{00101\ \ \ \ \ \ \ \textcolor{comment}{//\ itself,\ since\ it\ could\ cause\ a\ deadlock.}}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_num\_stages\ ==\ 1)\ \{}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ No\ need\ to\ cycle\ if\ there's\ only\ one\ stage.}}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \ \ nassertv(\_dirty.\_next\ ==\ \&\_dirty);}
+\DoxyCodeLine{00106\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \ \ \ \ \ \ nassertv(!\_cycling);}
+\DoxyCodeLine{00110\ \ \ \ \ \ \ \_cycling\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \textcolor{comment}{//\ Increment\ the\ cycle\ sequence\ number,\ which\ is\ used\ by\ this\ method\ to}}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ \textcolor{comment}{//\ communicate\ with\ remove\_cycler()\ about\ the\ status\ of\ dirty\ cyclers.}}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ prev\_seq\ =\ next\_seq\ =\ \_next\_cycle\_seq;}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (++next\_seq\ ==\ 0)\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Skip\ 0,\ which\ is\ a\ reserved\ number\ used\ to\ indicate\ a\ clean\ cycler.}}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ ++next\_seq;}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00119\ \ \ \ \ \ \ \_next\_cycle\_seq\ =\ next\_seq;}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \textcolor{comment}{//\ Move\ the\ dirty\ list\ to\ prev\_dirty,\ for\ processing.}}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ prev\_dirty.make\_head();}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ prev\_dirty.take\_list(\_dirty);}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \ \ \ \ saved\_cdatas.reserve(\_num\_dirty\_cyclers);}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \_num\_dirty\_cyclers\ =\ 0;}
+\DoxyCodeLine{00127\ \ \ \ \ \}}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00129\ \ \ \ \ \textcolor{comment}{//\ This\ is\ duplicated\ for\ different\ number\ of\ stages,\ as\ an\ optimization.}}
+\DoxyCodeLine{00130\ \ \ \ \ \textcolor{keywordflow}{switch}\ (\_num\_stages)\ \{}
+\DoxyCodeLine{00131\ \ \ \ \ \textcolor{keywordflow}{case}\ 2:}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (prev\_dirty.\_next\ !=\ \&prev\_dirty)\ \{}
+\DoxyCodeLine{00133\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPipelineCyclerLinks}{PipelineCyclerLinks}}\ *link\ =\ prev\_dirty.\_next;}
+\DoxyCodeLine{00134\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (link\ !=\ \&prev\_dirty)\ \{}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \ \ \ \ PipelineCyclerTrueImpl\ *cycler\ =\ (PipelineCyclerTrueImpl\ *)link;}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!cycler-\/>\_lock.try\_lock())\ \{}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ No\ big\ deal,\ just\ move\ on\ to\ the\ next\ one\ for\ now,\ and\ we'll}}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ come\ back\ around\ to\ it.\ \ It's\ important\ not\ to\ block\ here\ in}}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ order\ to\ prevent\ one\ cycler\ from\ deadlocking\ another.}}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (link-\/>\_prev\ !=\ \&prev\_dirty\ ||\ link-\/>\_next\ !=\ \&prev\_dirty)\ \{}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ link\ =\ cycler-\/>\_next;}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Well,\ we\ are\ the\ last\ cycler\ left,\ so\ we\ might\ as\ well\ wait.}}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ necessary\ to\ trigger\ the\ deadlock\ detection\ code.}}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cycler-\/>\_lock.lock();}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ \ \ cycler-\/>remove\_from\_list();}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ save\ the\ result\ of\ cycle(),\ so\ that\ we\ can\ defer\ the\ side-\/}}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ effects\ that\ might\ occur\ when\ CycleDatas\ destruct,\ at\ least\ until}}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ end\ of\ this\ loop.}}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \ \ saved\_cdatas.push\_back(cycler-\/>cycle\_2());}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ cycle\_2()\ won't\ leave\ a\ cycler\ dirty.\ \ Add\ it\ to\ the\ clean\ list.}}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \ \ \ \ nassertd(!cycler-\/>is\_dirty())\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ \ \ cycler-\/>insert\_before(\&\_clean);}
+\DoxyCodeLine{00162\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ \ \ inc\_cycler\_type(\_dirty\_cycler\_types,\ cycler-\/>get\_parent\_type(),\ -\/1);}
+\DoxyCodeLine{00164\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \ \ \ \ cycler-\/>\_lock.unlock();}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00171\ \ \ \ \ \textcolor{keywordflow}{case}\ 3:}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (prev\_dirty.\_next\ !=\ \&prev\_dirty)\ \{}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPipelineCyclerLinks}{PipelineCyclerLinks}}\ *link\ =\ prev\_dirty.\_next;}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (link\ !=\ \&prev\_dirty)\ \{}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ \ \ PipelineCyclerTrueImpl\ *cycler\ =\ (PipelineCyclerTrueImpl\ *)link;}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!cycler-\/>\_lock.try\_lock())\ \{}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ No\ big\ deal,\ just\ move\ on\ to\ the\ next\ one\ for\ now,\ and\ we'll}}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ come\ back\ around\ to\ it.\ \ It's\ important\ not\ to\ block\ here\ in}}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ order\ to\ prevent\ one\ cycler\ from\ deadlocking\ another.}}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (link-\/>\_prev\ !=\ \&prev\_dirty\ ||\ link-\/>\_next\ !=\ \&prev\_dirty)\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ link\ =\ cycler-\/>\_next;}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Well,\ we\ are\ the\ last\ cycler\ left,\ so\ we\ might\ as\ well\ wait.}}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ necessary\ to\ trigger\ the\ deadlock\ detection\ code.}}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cycler-\/>\_lock.lock();}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00190\ }
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \ \ cycler-\/>remove\_from\_list();}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ \ \ saved\_cdatas.push\_back(cycler-\/>cycle\_3());}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cycler-\/>is\_dirty())\ \{}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ cycler\ is\ still\ dirty.\ \ Add\ it\ back\ to\ the\ dirty\ list.}}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \ \ \ \ \ \ nassertd(!cycler-\/>is\_dirty(prev\_seq))\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \ \ \ \ \ \ cycler-\/>insert\_before(\&\_dirty);}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \ \ \ \ \ \ cycler-\/>mark\_dirty(next\_seq);}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ \ \ \ \ ++\_num\_dirty\_cyclers;}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ cycler\ is\ now\ clean.\ \ Add\ it\ back\ to\ the\ clean\ list.}}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ \ \ \ \ cycler-\/>insert\_before(\&\_clean);}
+\DoxyCodeLine{00205\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ \ \ \ \ inc\_cycler\_type(\_dirty\_cycler\_types,\ cycler-\/>get\_parent\_type(),\ -\/1);}
+\DoxyCodeLine{00207\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \ \ cycler-\/>\_lock.unlock();}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (prev\_dirty.\_next\ !=\ \&prev\_dirty)\ \{}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPipelineCyclerLinks}{PipelineCyclerLinks}}\ *link\ =\ prev\_dirty.\_next;}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (link\ !=\ \&prev\_dirty)\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ \ \ PipelineCyclerTrueImpl\ *cycler\ =\ (PipelineCyclerTrueImpl\ *)link;}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!cycler-\/>\_lock.try\_lock())\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ No\ big\ deal,\ just\ move\ on\ to\ the\ next\ one\ for\ now,\ and\ we'll}}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ come\ back\ around\ to\ it.\ \ It's\ important\ not\ to\ block\ here\ in}}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ order\ to\ prevent\ one\ cycler\ from\ deadlocking\ another.}}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (link-\/>\_prev\ !=\ \&prev\_dirty\ ||\ link-\/>\_next\ !=\ \&prev\_dirty)\ \{}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ link\ =\ cycler-\/>\_next;}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Well,\ we\ are\ the\ last\ cycler\ left,\ so\ we\ might\ as\ well\ wait.}}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ necessary\ to\ trigger\ the\ deadlock\ detection\ code.}}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cycler-\/>\_lock.lock();}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \ \ cycler-\/>remove\_from\_list();}
+\DoxyCodeLine{00237\ }
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \ \ saved\_cdatas.push\_back(cycler-\/>cycle());}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cycler-\/>is\_dirty())\ \{}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ cycler\ is\ still\ dirty.\ \ Add\ it\ back\ to\ the\ dirty\ list.}}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \ \ \ \ nassertd(!cycler-\/>is\_dirty(prev\_seq))\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ \ \ \ \ cycler-\/>insert\_before(\&\_dirty);}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ \ \ \ \ cycler-\/>mark\_dirty(next\_seq);}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \ \ \ \ \ \ ++\_num\_dirty\_cyclers;}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ cycler\ is\ now\ clean.\ \ Add\ it\ back\ to\ the\ clean\ list.}}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \ \ \ \ \ \ cycler-\/>insert\_before(\&\_clean);}
+\DoxyCodeLine{00249\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \ \ \ \ \ \ inc\_cycler\_type(\_dirty\_cycler\_types,\ cycler-\/>get\_parent\_type(),\ -\/1);}
+\DoxyCodeLine{00251\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ \ \ cycler-\/>\_lock.unlock();}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00258\ \ \ \ \ \}}
+\DoxyCodeLine{00259\ }
+\DoxyCodeLine{00260\ \ \ \ \ \textcolor{comment}{//\ Now\ we're\ ready\ for\ the\ next\ frame.}}
+\DoxyCodeLine{00261\ \ \ \ \ prev\_dirty.clear\_head();}
+\DoxyCodeLine{00262\ \ \ \ \ \_cycling\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00263\ \ \ \}}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00265\ \ \ \textcolor{comment}{//\ And\ now\ it's\ safe\ to\ let\ the\ CycleData\ pointers\ in\ saved\_cdatas\ destruct,}}
+\DoxyCodeLine{00266\ \ \ \textcolor{comment}{//\ which\ may\ cause\ cascading\ deletes,\ and\ which\ will\ in\ turn\ cause}}
+\DoxyCodeLine{00267\ \ \ \textcolor{comment}{//\ PipelineCyclers\ to\ remove\ themselves\ from\ (or\ add\ themselves\ to)\ the}}
+\DoxyCodeLine{00268\ \ \ \textcolor{comment}{//\ \_dirty\ list.}}
+\DoxyCodeLine{00269\ \ \ saved\_cdatas.clear();}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \ \ \textcolor{keywordflow}{if}\ (pipeline\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ pipeline\_cat.debug()}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Finished\ the\ pipeline\ cycle\(\backslash\)n"{}};}
+\DoxyCodeLine{00274\ \ \ \}}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00276\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00277\ \}}
+\DoxyCodeLine{00278\ }
+\DoxyCodeLine{00282\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPipeline_ac38d45bb3ea4d87eb8c913d14bb46f04}{Pipeline::}}}
+\DoxyCodeLine{00283\ \mbox{\hyperlink{classPipeline_ac38d45bb3ea4d87eb8c913d14bb46f04}{set\_num\_stages}}(\textcolor{keywordtype}{int}\ num\_stages)\ \{}
+\DoxyCodeLine{00284\ \ \ nassertv(num\_stages\ >=\ 1);}
+\DoxyCodeLine{00285\ \textcolor{preprocessor}{\#ifdef\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00286\ \ \ \textcolor{comment}{//\ Make\ sure\ it's\ not\ currently\ cycling.}}
+\DoxyCodeLine{00287\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ cycle\_holder(\_cycle\_lock);}
+\DoxyCodeLine{00288\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00289\ \ \ \textcolor{keywordflow}{if}\ (num\_stages\ !=\ \_num\_stages)\ \{}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00291\ \ \ \ \ \textcolor{comment}{//\ We\ need\ to\ lock\ every\ PipelineCycler\ object\ attached\ to\ this\ pipeline}}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{comment}{//\ before\ we\ can\ adjust\ the\ number\ of\ stages.}}
+\DoxyCodeLine{00293\ \ \ \ \ \mbox{\hyperlink{classPipelineCyclerLinks}{PipelineCyclerLinks}}\ *links;}
+\DoxyCodeLine{00294\ \ \ \ \ \textcolor{keywordflow}{for}\ (links\ =\ \_clean.\_next;\ links\ !=\ \&\_clean;\ links\ =\ links-\/>\_next)\ \{}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ PipelineCyclerTrueImpl\ *cycler\ =\ (PipelineCyclerTrueImpl\ *)links;}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ cycler-\/>\_lock.lock();}
+\DoxyCodeLine{00297\ \ \ \ \ \}}
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{keywordflow}{for}\ (links\ =\ \_dirty.\_next;\ links\ !=\ \&\_dirty;\ links\ =\ links-\/>\_next)\ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ PipelineCyclerTrueImpl\ *cycler\ =\ (PipelineCyclerTrueImpl\ *)links;}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ cycler-\/>\_lock.lock();}
+\DoxyCodeLine{00301\ \ \ \ \ \}}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00303\ \ \ \ \ \_num\_stages\ =\ num\_stages;}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \ \ \textcolor{keywordflow}{for}\ (links\ =\ \_clean.\_next;\ links\ !=\ \&\_clean;\ links\ =\ links-\/>\_next)\ \{}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ PipelineCyclerTrueImpl\ *cycler\ =\ (PipelineCyclerTrueImpl\ *)links;}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ cycler-\/>set\_num\_stages(num\_stages);}
+\DoxyCodeLine{00308\ \ \ \ \ \}}
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{keywordflow}{for}\ (links\ =\ \_dirty.\_next;\ links\ !=\ \&\_dirty;\ links\ =\ links-\/>\_next)\ \{}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ PipelineCyclerTrueImpl\ *cycler\ =\ (PipelineCyclerTrueImpl\ *)links;}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ cycler-\/>set\_num\_stages(num\_stages);}
+\DoxyCodeLine{00312\ \ \ \ \ \}}
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00314\ \ \ \ \ \textcolor{comment}{//\ Now\ release\ them\ all.}}
+\DoxyCodeLine{00315\ \ \ \ \ \textcolor{keywordtype}{int}\ count\ =\ 0;}
+\DoxyCodeLine{00316\ \ \ \ \ \textcolor{keywordflow}{for}\ (links\ =\ \_clean.\_next;\ links\ !=\ \&\_clean;\ links\ =\ links-\/>\_next)\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ PipelineCyclerTrueImpl\ *cycler\ =\ (PipelineCyclerTrueImpl\ *)links;}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ cycler-\/>\_lock.unlock();}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ ++count;}
+\DoxyCodeLine{00320\ \ \ \ \ \}}
+\DoxyCodeLine{00321\ \ \ \ \ \textcolor{keywordflow}{for}\ (links\ =\ \_dirty.\_next;\ links\ !=\ \&\_dirty;\ links\ =\ links-\/>\_next)\ \{}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ PipelineCyclerTrueImpl\ *cycler\ =\ (PipelineCyclerTrueImpl\ *)links;}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ cycler-\/>\_lock.unlock();}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ ++count;}
+\DoxyCodeLine{00325\ \ \ \ \ \}}
+\DoxyCodeLine{00326\ \ \ \ \ nassertv(count\ ==\ \_num\_cyclers);}
+\DoxyCodeLine{00327\ \ \ \}}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00329\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00330\ \ \ \textcolor{keywordflow}{if}\ (num\_stages\ !=\ 1)\ \{}
+\DoxyCodeLine{00331\ \ \ \ \ pipeline\_cat.warning()}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Requested\ "{}}\ <<\ num\_stages}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ pipeline\ stages\ but\ multithreaded\ render\ pipelines\ not\ enabled\ in\ build.\(\backslash\)n"{}};}
+\DoxyCodeLine{00334\ \ \ \}}
+\DoxyCodeLine{00335\ \ \ \_num\_stages\ =\ 1;}
+\DoxyCodeLine{00336\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00337\ \}}
+\DoxyCodeLine{00338\ }
+\DoxyCodeLine{00339\ \textcolor{preprocessor}{\#ifdef\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00344\ \textcolor{keywordtype}{void}\ Pipeline::}
+\DoxyCodeLine{00345\ add\_cycler(PipelineCyclerTrueImpl\ *cycler)\ \{}
+\DoxyCodeLine{00346\ \ \ \textcolor{comment}{//\ It's\ safe\ to\ add\ it\ to\ the\ list\ while\ cycling,\ since\ the\ \_clean\ list\ is}}
+\DoxyCodeLine{00347\ \ \ \textcolor{comment}{//\ not\ touched\ during\ the\ cycle\ loop.}}
+\DoxyCodeLine{00348\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00349\ \ \ nassertv(!cycler-\/>is\_dirty());}
+\DoxyCodeLine{00350\ }
+\DoxyCodeLine{00351\ \ \ cycler-\/>insert\_before(\&\_clean);}
+\DoxyCodeLine{00352\ \ \ ++\_num\_cyclers;}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00355\ \ \ inc\_cycler\_type(\_all\_cycler\_types,\ cycler-\/>get\_parent\_type(),\ 1);}
+\DoxyCodeLine{00356\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00357\ \}}
+\DoxyCodeLine{00358\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00359\ }
+\DoxyCodeLine{00360\ \textcolor{preprocessor}{\#ifdef\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00368\ \textcolor{keywordtype}{void}\ Pipeline::}
+\DoxyCodeLine{00369\ add\_cycler(PipelineCyclerTrueImpl\ *cycler,\ \textcolor{keywordtype}{bool}\ dirty)\ \{}
+\DoxyCodeLine{00370\ \ \ \textcolor{comment}{//\ It's\ safe\ to\ add\ it\ to\ the\ list\ while\ cycling,\ since\ the\ \_clean\ list\ is}}
+\DoxyCodeLine{00371\ \ \ \textcolor{comment}{//\ not\ touched\ during\ the\ cycle\ loop.}}
+\DoxyCodeLine{00372\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00373\ \ \ nassertv(!cycler-\/>is\_dirty());}
+\DoxyCodeLine{00374\ }
+\DoxyCodeLine{00375\ \ \ \textcolor{keywordflow}{if}\ (!dirty)\ \{}
+\DoxyCodeLine{00376\ \ \ \ \ cycler-\/>insert\_before(\&\_clean);}
+\DoxyCodeLine{00377\ \ \ \}}
+\DoxyCodeLine{00378\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00379\ \ \ \ \ nassertv(\_num\_stages\ !=\ 1);}
+\DoxyCodeLine{00380\ \ \ \ \ cycler-\/>insert\_before(\&\_dirty);}
+\DoxyCodeLine{00381\ \ \ \ \ cycler-\/>mark\_dirty(\_next\_cycle\_seq);}
+\DoxyCodeLine{00382\ \ \ \ \ ++\_num\_dirty\_cyclers;}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00384\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00385\ \ \ \ \ inc\_cycler\_type(\_dirty\_cycler\_types,\ cycler-\/>get\_parent\_type(),\ 1);}
+\DoxyCodeLine{00386\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00387\ \ \ \}}
+\DoxyCodeLine{00388\ \ \ ++\_num\_cyclers;}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00391\ \ \ inc\_cycler\_type(\_all\_cycler\_types,\ cycler-\/>get\_parent\_type(),\ 1);}
+\DoxyCodeLine{00392\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00393\ \}}
+\DoxyCodeLine{00394\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00395\ }
+\DoxyCodeLine{00396\ \textcolor{preprocessor}{\#ifdef\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00403\ \textcolor{keywordtype}{void}\ Pipeline::}
+\DoxyCodeLine{00404\ add\_dirty\_cycler(PipelineCyclerTrueImpl\ *cycler)\ \{}
+\DoxyCodeLine{00405\ \ \ nassertv(cycler-\/>\_lock.debug\_is\_locked());}
+\DoxyCodeLine{00406\ }
+\DoxyCodeLine{00407\ \ \ \textcolor{comment}{//\ It's\ safe\ to\ add\ it\ to\ the\ list\ while\ cycling,\ since\ it's\ not\ currently}}
+\DoxyCodeLine{00408\ \ \ \textcolor{comment}{//\ on\ the\ dirty\ list.}}
+\DoxyCodeLine{00409\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00410\ \ \ nassertv(!cycler-\/>is\_dirty());}
+\DoxyCodeLine{00411\ \ \ nassertv(\_num\_stages\ !=\ 1);}
+\DoxyCodeLine{00412\ }
+\DoxyCodeLine{00413\ \ \ \textcolor{comment}{//\ Remove\ it\ from\ the\ "{}clean"{}\ list\ and\ add\ it\ to\ the\ "{}dirty"{}\ list.}}
+\DoxyCodeLine{00414\ \ \ cycler-\/>remove\_from\_list();}
+\DoxyCodeLine{00415\ \ \ cycler-\/>insert\_before(\&\_dirty);}
+\DoxyCodeLine{00416\ \ \ cycler-\/>mark\_dirty(\_next\_cycle\_seq);}
+\DoxyCodeLine{00417\ \ \ ++\_num\_dirty\_cyclers;}
+\DoxyCodeLine{00418\ }
+\DoxyCodeLine{00419\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00420\ \ \ inc\_cycler\_type(\_dirty\_cycler\_types,\ cycler-\/>get\_parent\_type(),\ 1);}
+\DoxyCodeLine{00421\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00422\ \}}
+\DoxyCodeLine{00423\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00424\ }
+\DoxyCodeLine{00425\ \textcolor{preprocessor}{\#ifdef\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00430\ \textcolor{keywordtype}{void}\ Pipeline::}
+\DoxyCodeLine{00431\ remove\_cycler(PipelineCyclerTrueImpl\ *cycler)\ \{}
+\DoxyCodeLine{00432\ \ \ nassertv(cycler-\/>\_lock.debug\_is\_locked());}
+\DoxyCodeLine{00433\ }
+\DoxyCodeLine{00434\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00435\ }
+\DoxyCodeLine{00436\ \ \ \textcolor{comment}{//\ If\ it's\ dirty,\ it\ may\ currently\ be\ processed\ by\ cycle(),\ so\ we\ need\ to\ be}}
+\DoxyCodeLine{00437\ \ \ \textcolor{comment}{//\ careful\ not\ to\ cause\ a\ race\ condition.\ \ It's\ safe\ for\ us\ to\ remove\ it}}
+\DoxyCodeLine{00438\ \ \ \textcolor{comment}{//\ during\ cycle\ only\ if\ it's\ 0\ (clean)\ or\ \_next\_cycle\_seq\ (scheduled\ for\ the}}
+\DoxyCodeLine{00439\ \ \ \textcolor{comment}{//\ next\ cycle,\ so\ not\ owned\ by\ the\ current\ one).}}
+\DoxyCodeLine{00440\ \ \ \textcolor{keywordflow}{while}\ (cycler-\/>is\_dirty(\_next\_cycle\_seq))\ \{}
+\DoxyCodeLine{00441\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_cycle\_lock.try\_lock())\ \{}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \textcolor{comment}{//\ OK,\ great,\ we\ got\ the\ lock,\ so\ it\ finished\ cycling\ already.}}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ nassertv(!\_cycling);}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \ \ \ \ \ \ -\/-\/\_num\_cyclers;}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ cycler-\/>remove\_from\_list();}
+\DoxyCodeLine{00447\ }
+\DoxyCodeLine{00448\ \ \ \ \ \ \ cycler-\/>clear\_dirty();}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ -\/-\/\_num\_dirty\_cyclers;}
+\DoxyCodeLine{00450\ }
+\DoxyCodeLine{00451\ \textcolor{preprocessor}{\ \ \#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ inc\_cycler\_type(\_all\_cycler\_types,\ cycler-\/>get\_parent\_type(),\ -\/1);}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ inc\_cycler\_type(\_dirty\_cycler\_types,\ cycler-\/>get\_parent\_type(),\ -\/1);}
+\DoxyCodeLine{00454\ \textcolor{preprocessor}{\ \ \#endif}}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \_cycle\_lock.unlock();}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00458\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ possibly\ currently\ being\ cycled.\ \ We\ will\ wait\ for\ the\ cycler}}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ \textcolor{comment}{//\ to\ be\ done\ with\ it,\ so\ that\ we\ can\ safely\ remove\ it.}}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \_lock.unlock();}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ cycler-\/>\_lock.unlock();}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ cycler-\/>\_lock.lock();}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \_lock.lock();}
+\DoxyCodeLine{00466\ \ \ \ \ \}}
+\DoxyCodeLine{00467\ \ \ \}}
+\DoxyCodeLine{00468\ }
+\DoxyCodeLine{00469\ \ \ \textcolor{comment}{//\ It's\ not\ being\ owned\ by\ a\ cycle\ operation,\ so\ it's\ fair\ game.}}
+\DoxyCodeLine{00470\ \ \ -\/-\/\_num\_cyclers;}
+\DoxyCodeLine{00471\ \ \ cycler-\/>remove\_from\_list();}
+\DoxyCodeLine{00472\ }
+\DoxyCodeLine{00473\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00474\ \ \ inc\_cycler\_type(\_all\_cycler\_types,\ cycler-\/>get\_parent\_type(),\ -\/1);}
+\DoxyCodeLine{00475\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00476\ }
+\DoxyCodeLine{00477\ \ \ \textcolor{keywordflow}{if}\ (cycler-\/>is\_dirty())\ \{}
+\DoxyCodeLine{00478\ \ \ \ \ cycler-\/>clear\_dirty();}
+\DoxyCodeLine{00479\ \ \ \ \ -\/-\/\_num\_dirty\_cyclers;}
+\DoxyCodeLine{00480\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00481\ \ \ \ \ inc\_cycler\_type(\_dirty\_cycler\_types,\ cycler-\/>get\_parent\_type(),\ -\/1);}
+\DoxyCodeLine{00482\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00483\ \ \ \}}
+\DoxyCodeLine{00484\ \}}
+\DoxyCodeLine{00485\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00487\ \textcolor{preprocessor}{\#if\ defined(THREADED\_PIPELINE)\ \&\&\ defined(DEBUG\_THREADS)}}
+\DoxyCodeLine{00495\ \textcolor{keywordtype}{void}\ Pipeline::}
+\DoxyCodeLine{00496\ iterate\_all\_cycler\_types(CallbackFunc\ *func,\ \textcolor{keywordtype}{void}\ *data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00497\ \ \ \textcolor{comment}{//\ Make\ sure\ it's\ not\ currently\ cycling.}}
+\DoxyCodeLine{00498\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ cycle\_holder(\_cycle\_lock);}
+\DoxyCodeLine{00499\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00500\ \ \ TypeCount::const\_iterator\ ci;}
+\DoxyCodeLine{00501\ \ \ \textcolor{keywordflow}{for}\ (ci\ =\ \_all\_cycler\_types.begin();\ ci\ !=\ \_all\_cycler\_types.end();\ ++ci)\ \{}
+\DoxyCodeLine{00502\ \ \ \ \ func((*ci).first,\ (*ci).second,\ data);}
+\DoxyCodeLine{00503\ \ \ \}}
+\DoxyCodeLine{00504\ \}}
+\DoxyCodeLine{00505\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE\ \&\&\ DEBUG\_THREADS}}
+\DoxyCodeLine{00506\ }
+\DoxyCodeLine{00507\ \textcolor{preprocessor}{\#if\ defined(THREADED\_PIPELINE)\ \&\&\ defined(DEBUG\_THREADS)}}
+\DoxyCodeLine{00512\ \textcolor{keywordtype}{void}\ Pipeline::}
+\DoxyCodeLine{00513\ iterate\_dirty\_cycler\_types(CallbackFunc\ *func,\ \textcolor{keywordtype}{void}\ *data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00514\ \ \ \textcolor{comment}{//\ Make\ sure\ it's\ not\ currently\ cycling.}}
+\DoxyCodeLine{00515\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ cycle\_holder(\_cycle\_lock);}
+\DoxyCodeLine{00516\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00517\ \ \ TypeCount::const\_iterator\ ci;}
+\DoxyCodeLine{00518\ \ \ \textcolor{keywordflow}{for}\ (ci\ =\ \_dirty\_cycler\_types.begin();\ ci\ !=\ \_dirty\_cycler\_types.end();\ ++ci)\ \{}
+\DoxyCodeLine{00519\ \ \ \ \ func((*ci).first,\ (*ci).second,\ data);}
+\DoxyCodeLine{00520\ \ \ \}}
+\DoxyCodeLine{00521\ \}}
+\DoxyCodeLine{00522\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE\ \&\&\ DEBUG\_THREADS}}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00527\ \textcolor{keywordtype}{void}\ Pipeline::}
+\DoxyCodeLine{00528\ make\_render\_pipeline()\ \{}
+\DoxyCodeLine{00529\ \ \ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ pipeline\_stages}
+\DoxyCodeLine{00530\ \ \ \ \ (\textcolor{stringliteral}{"{}pipeline-\/stages"{}},\ 1,}
+\DoxyCodeLine{00531\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}The\ initial\ number\ of\ stages\ in\ the\ render\ pipeline.\ \ This\ is\ "{}}}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}only\ meaningful\ if\ threaded\ pipelining\ is\ compiled\ into\ "{}}}
+\DoxyCodeLine{00533\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}Panda.\ \ In\ most\ cases,\ you\ should\ not\ set\ this\ at\ all\ anyway,\ "{}}}
+\DoxyCodeLine{00534\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}since\ the\ pipeline\ can\ automatically\ grow\ stages\ as\ needed,\ "{}}}
+\DoxyCodeLine{00535\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}but\ it\ will\ not\ remove\ stages\ automatically,\ and\ having\ more\ "{}}}
+\DoxyCodeLine{00536\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}pipeline\ stages\ than\ your\ application\ requires\ will\ incur\ "{}}}
+\DoxyCodeLine{00537\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}additional\ runtime\ overhead."{}}));}
+\DoxyCodeLine{00538\ }
+\DoxyCodeLine{00539\ \ \ nassertv(\_render\_pipeline\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00540\ \ \ \_render\_pipeline\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classPipeline}{Pipeline}}(\textcolor{stringliteral}{"{}render"{}},\ pipeline\_stages);}
+\DoxyCodeLine{00541\ \}}
+\DoxyCodeLine{00542\ }
+\DoxyCodeLine{00543\ \textcolor{preprocessor}{\#if\ defined(THREADED\_PIPELINE)\ \&\&\ defined(DEBUG\_THREADS)}}
+\DoxyCodeLine{00552\ \textcolor{keywordtype}{void}\ Pipeline::}
+\DoxyCodeLine{00553\ inc\_cycler\_type(TypeCount\ \&count,\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type,\ \textcolor{keywordtype}{int}\ addend)\ \{}
+\DoxyCodeLine{00554\ \ \ TypeCount::iterator\ ci\ =\ count.find(type);}
+\DoxyCodeLine{00555\ \ \ \textcolor{keywordflow}{if}\ (ci\ ==\ count.end())\ \{}
+\DoxyCodeLine{00556\ \ \ \ \ ci\ =\ count.insert(TypeCount::value\_type(type,\ 0)).first;}
+\DoxyCodeLine{00557\ \ \ \}}
+\DoxyCodeLine{00558\ \ \ (*ci).second\ +=\ addend;}
+\DoxyCodeLine{00559\ \ \ nassertv((*ci).second\ >=\ 0);}
+\DoxyCodeLine{00560\ \}}
+\DoxyCodeLine{00561\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREADED\_PIPELINE\ \&\&\ DEBUG\_THREADS}}
+
+\end{DoxyCode}

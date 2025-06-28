@@ -1,0 +1,251 @@
+\doxysection{audio\+Manager.\+cxx}
+\hypertarget{audioManager_8cxx_source}{}\label{audioManager_8cxx_source}\index{panda/src/audio/audioManager.cxx@{panda/src/audio/audioManager.cxx}}
+\mbox{\hyperlink{audioManager_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__audio_8h}{config\_audio.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{audioManager_8h}{audioManager.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{atomicAdjust_8h}{atomicAdjust.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{nullAudioManager_8h}{nullAudioManager.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{windowsRegistry_8h}{windowsRegistry.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFileSystem_8h}{virtualFileSystem.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__putil_8h}{config\_putil.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{load__dso_8h}{load\_dso.h}}"{}}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{windows_8h}{windows.h}}>}\ \ \textcolor{comment}{//\ For\ GetSystemDirectory()}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ AudioManager::\_type\_handle;}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{keyword}{namespace\ }\{}
+\DoxyCodeLine{00035\ \ \ \mbox{\hyperlink{classAudioManager}{AudioManager}}\ *create\_NullAudioManager()\ \{}
+\DoxyCodeLine{00036\ \ \ \ \ audio\_debug(\textcolor{stringliteral}{"{}create\_NullAudioManager()"{}});}
+\DoxyCodeLine{00037\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classNullAudioManager}{NullAudioManager}}();}
+\DoxyCodeLine{00038\ \ \ \}}
+\DoxyCodeLine{00039\ \}}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00041\ Create\_AudioManager\_proc\ *AudioManager::\_create\_AudioManager\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \textcolor{keywordtype}{void}\ AudioManager::}
+\DoxyCodeLine{00044\ register\_AudioManager\_creator(Create\_AudioManager\_proc*\ proc)\ \{}
+\DoxyCodeLine{00045\ \ \ nassertv(\_create\_AudioManager\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_create\_AudioManager\ ==\ proc);}
+\DoxyCodeLine{00046\ \ \ \_create\_AudioManager\ =\ proc;}
+\DoxyCodeLine{00047\ \}}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \textcolor{comment}{//\ Factory\ method\ for\ getting\ a\ platform\ specific\ AudioManager:}}
+\DoxyCodeLine{00050\ PT(\mbox{\hyperlink{classAudioManager}{AudioManager}})\ AudioManager::create\_AudioManager()\ \{}
+\DoxyCodeLine{00051\ \ \ audio\_debug(\textcolor{stringliteral}{"{}create\_AudioManager()\(\backslash\)n\ \ audio\_library\_name=\(\backslash\)"{}"{}}<<audio\_library\_name<<\textcolor{stringliteral}{"{}\(\backslash\)"{}"{}});}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \ \ \textcolor{keywordflow}{if}\ (\_create\_AudioManager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00054\ \ \ \ \ \textcolor{comment}{//\ Someone\ was\ already\ so\ good\ as\ to\ register\ an\ audio\ manager\ creation\ function,}}
+\DoxyCodeLine{00055\ \ \ \ \ \textcolor{comment}{//\ perhaps\ by\ statically\ linking\ the\ requested\ library.\ \ Let's\ use\ that,\ then.}}
+\DoxyCodeLine{00056\ \ \ \ \ PT(\mbox{\hyperlink{classAudioManager}{AudioManager}})\ am\ =\ (*\_create\_AudioManager)();}
+\DoxyCodeLine{00057\ \ \ \ \ \textcolor{keywordflow}{if}\ (!am-\/>is\_exact\_type(NullAudioManager::get\_class\_type())\ \&\&\ !am-\/>is\_valid())\ \{}
+\DoxyCodeLine{00058\ \ \ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}\ \ "{}}\ <<\ am-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}\ is\ not\ valid,\ will\ use\ NullAudioManager"{}});}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ am\ =\ create\_NullAudioManager();}
+\DoxyCodeLine{00060\ \ \ \ \ \}}
+\DoxyCodeLine{00061\ \ \ \ \ \textcolor{keywordflow}{return}\ am;}
+\DoxyCodeLine{00062\ \ \ \}}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00064\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}\ lib\_load\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00065\ \ \ \textcolor{keywordflow}{if}\ (!lib\_load)\ \{}
+\DoxyCodeLine{00066\ \ \ \ \ lib\_load\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00067\ \ \ \ \ \textcolor{keywordflow}{if}\ (!audio\_library\_name.empty()\ \&\&\ audio\_library\_name\ !=\ \textcolor{stringliteral}{"{}null"{}})\ \{}
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ dl\_name\ =\ Filename::dso\_filename(}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}lib"{}}\ +\ \textcolor{keywordtype}{string}(audio\_library\_name)\ +\ \textcolor{stringliteral}{"{}.so"{}});}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ dl\_name.\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}();}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ audio\_debug(\textcolor{stringliteral}{"{}\ \ dl\_name=\(\backslash\)"{}"{}}<<dl\_name<<\textcolor{stringliteral}{"{}\(\backslash\)"{}"{}});}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \textcolor{keywordtype}{void}\ *handle\ =\ load\_dso(get\_plugin\_path().get\_value(),\ dl\_name);}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (handle\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00074\ \ \ \ \ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}\ \ load\_dso("{}}\ <<\ dl\_name\ <<\ \textcolor{stringliteral}{"{})\ failed,\ will\ use\ NullAudioManager"{}});}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}\ \ \ \ "{}}<<load\_dso\_error());}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \ \ nassertr(\_create\_AudioManager\ ==\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Get\ the\ special\ function\ from\ the\ dso,\ which\ should\ return\ the}}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ AudioManager\ factory\ function.}}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ lib\_name\ =\ audio\_library\_name;}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (lib\_name.substr(0,\ 2)\ ==\ \textcolor{stringliteral}{"{}p3"{}})\ \{}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ \ \ lib\_name\ =\ lib\_name.substr(2);}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00084\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ symbol\_name\ =\ \textcolor{stringliteral}{"{}get\_audio\_manager\_func\_"{}}\ +\ lib\_name;}
+\DoxyCodeLine{00085\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{void}\ *dso\_symbol\ =\ get\_dso\_symbol(handle,\ symbol\_name);}
+\DoxyCodeLine{00086\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (audio\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00087\ \ \ \ \ \ \ \ \ \ \ audio\_cat.debug()}
+\DoxyCodeLine{00088\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}symbol\ of\ "{}}\ <<\ symbol\_name\ <<\ \textcolor{stringliteral}{"{}\ =\ "{}}\ <<\ dso\_symbol\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dso\_symbol\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00092\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Couldn't\ find\ the\ module\ function.}}
+\DoxyCodeLine{00093\ \ \ \ \ \ \ \ \ \ \ unload\_dso(handle);}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ \ \ \ \ handle\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00095\ \ \ \ \ \ \ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}\ \ Audio\ library\ did\ not\ provide\ get\_audio\_manager\_func,\ will\ use\ NullAudioManager"{}});}
+\DoxyCodeLine{00096\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00097\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{typedef}\ Create\_AudioManager\_proc\ *FuncType();}
+\DoxyCodeLine{00098\ \ \ \ \ \ \ \ \ \ \ Create\_AudioManager\_proc\ *factory\_func\ =\ (*(FuncType\ *)dso\_symbol)();}
+\DoxyCodeLine{00099\ }
+\DoxyCodeLine{00100\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Note\ that\ the\ audio\ manager\ module\ may\ register\ itself\ upon\ load.}}
+\DoxyCodeLine{00101\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_create\_AudioManager\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ \ \ \ \ \ \ AudioManager::register\_AudioManager\_creator(factory\_func);}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00106\ \ \ \ \ \}}
+\DoxyCodeLine{00107\ \ \ \}}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \ \ \textcolor{keywordflow}{if}\ (\_create\_AudioManager\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00110\ \ \ \ \ \_create\_AudioManager\ =\ create\_NullAudioManager;}
+\DoxyCodeLine{00111\ \ \ \}}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00113\ \ \ PT(\mbox{\hyperlink{classAudioManager}{AudioManager}})\ am\ =\ (*\_create\_AudioManager)();}
+\DoxyCodeLine{00114\ \ \ \textcolor{keywordflow}{if}\ (!am-\/>is\_exact\_type(NullAudioManager::get\_class\_type())\ \&\&\ !am-\/>is\_valid())\ \{}
+\DoxyCodeLine{00115\ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}\ \ "{}}\ <<\ am-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}\ is\ not\ valid,\ will\ use\ NullAudioManager"{}});}
+\DoxyCodeLine{00116\ \ \ \ \ am\ =\ create\_NullAudioManager();}
+\DoxyCodeLine{00117\ \ \ \}}
+\DoxyCodeLine{00118\ \ \ \textcolor{keywordflow}{return}\ am;}
+\DoxyCodeLine{00119\ \}}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00124\ AudioManager::}
+\DoxyCodeLine{00125\ \string~AudioManager()\ \{}
+\DoxyCodeLine{00126\ \ \ \textcolor{keywordflow}{if}\ (\_null\_sound\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00127\ \ \ \ \ unref\_delete((\mbox{\hyperlink{classAudioSound}{AudioSound}}\ *)\_null\_sound);}
+\DoxyCodeLine{00128\ \ \ \}}
+\DoxyCodeLine{00129\ \}}
+\DoxyCodeLine{00130\ }
+\DoxyCodeLine{00134\ AudioManager::}
+\DoxyCodeLine{00135\ AudioManager()\ \{}
+\DoxyCodeLine{00136\ \ \ \_null\_sound\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00137\ \}}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00145\ \textcolor{keywordtype}{void}\ AudioManager::}
+\DoxyCodeLine{00146\ shutdown()\ \{}
+\DoxyCodeLine{00147\ \}}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00154\ PT(\mbox{\hyperlink{classAudioSound}{AudioSound}})\ AudioManager::}
+\DoxyCodeLine{00155\ get\_null\_sound()\ \{}
+\DoxyCodeLine{00156\ \ \ \textcolor{keywordflow}{if}\ (\_null\_sound\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00157\ \ \ \ \ \mbox{\hyperlink{classAudioSound}{AudioSound}}\ *new\_sound\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classNullAudioSound}{NullAudioSound}};}
+\DoxyCodeLine{00158\ \ \ \ \ new\_sound-\/>ref();}
+\DoxyCodeLine{00159\ \ \ \ \ \textcolor{keywordtype}{void}\ *result\ =\ AtomicAdjust::compare\_and\_exchange\_ptr(\_null\_sound,\ \textcolor{keyword}{nullptr},\ (\textcolor{keywordtype}{void}\ *)new\_sound);}
+\DoxyCodeLine{00160\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \textcolor{comment}{//\ Someone\ else\ must\ have\ assigned\ the\ AudioSound\ first.\ \ OK.}}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ nassertr(\_null\_sound\ !=\ new\_sound,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ unref\_delete(new\_sound);}
+\DoxyCodeLine{00164\ \ \ \ \ \}}
+\DoxyCodeLine{00165\ \ \ \ \ nassertr(\_null\_sound\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00166\ \ \ \}}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \ \ \textcolor{keywordflow}{return}\ (\mbox{\hyperlink{classAudioSound}{AudioSound}}\ *)\_null\_sound;}
+\DoxyCodeLine{00169\ \}}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00174\ \textcolor{keywordtype}{int}\ AudioManager::}
+\DoxyCodeLine{00175\ get\_speaker\_setup()\ \{}
+\DoxyCodeLine{00176\ \ \ \textcolor{comment}{//\ intentionally\ blank}}
+\DoxyCodeLine{00177\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00178\ \}}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00183\ \textcolor{keywordtype}{void}\ AudioManager::}
+\DoxyCodeLine{00184\ set\_speaker\_setup(SpeakerModeCategory\ cat)\ \{}
+\DoxyCodeLine{00185\ \ \ \textcolor{comment}{//\ intentionally\ blank}}
+\DoxyCodeLine{00186\ \}}
+\DoxyCodeLine{00187\ }
+\DoxyCodeLine{00195\ \textcolor{keywordtype}{bool}\ AudioManager::}
+\DoxyCodeLine{00196\ configure\_filters(\mbox{\hyperlink{classFilterProperties}{FilterProperties}}\ *config)\ \{}
+\DoxyCodeLine{00197\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classpvector}{FilterProperties::ConfigVector}}\ \&conf\ =\ config-\/>get\_config();}
+\DoxyCodeLine{00198\ \ \ \textcolor{keywordflow}{if}\ (conf.empty())\ \{}
+\DoxyCodeLine{00199\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00200\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00201\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00202\ \ \ \}}
+\DoxyCodeLine{00203\ \}}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00209\ \textcolor{keywordtype}{void}\ AudioManager::}
+\DoxyCodeLine{00210\ update()\ \{}
+\DoxyCodeLine{00211\ \ \ \textcolor{comment}{//\ Intentionally\ blank.}}
+\DoxyCodeLine{00212\ \}}
+\DoxyCodeLine{00213\ }
+\DoxyCodeLine{00217\ \textcolor{keywordtype}{void}\ AudioManager::audio\_3d\_set\_listener\_attributes(PN\_stdfloat\ px,\ PN\_stdfloat\ py,\ PN\_stdfloat\ pz,\ PN\_stdfloat\ vx,\ PN\_stdfloat\ vy,\ PN\_stdfloat\ vz,\ PN\_stdfloat\ fx,\ PN\_stdfloat\ fy,\ PN\_stdfloat\ fz,\ PN\_stdfloat\ ux,\ PN\_stdfloat\ uy,\ PN\_stdfloat\ uz)\ \{}
+\DoxyCodeLine{00218\ \ \ \ \ \textcolor{comment}{//\ intentionally\ blank.}}
+\DoxyCodeLine{00219\ \}}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00224\ \textcolor{keywordtype}{void}\ AudioManager::audio\_3d\_get\_listener\_attributes(PN\_stdfloat\ *px,\ PN\_stdfloat\ *py,\ PN\_stdfloat\ *pz,\ PN\_stdfloat\ *vx,\ PN\_stdfloat\ *vy,\ PN\_stdfloat\ *vz,\ PN\_stdfloat\ *fx,\ PN\_stdfloat\ *fy,\ PN\_stdfloat\ *fz,\ PN\_stdfloat\ *ux,\ PN\_stdfloat\ *uy,\ PN\_stdfloat\ *uz)\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \textcolor{comment}{//\ intentionally\ blank.}}
+\DoxyCodeLine{00226\ \}}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00231\ \textcolor{keywordtype}{void}\ AudioManager::audio\_3d\_set\_distance\_factor(PN\_stdfloat\ factor)\ \{}
+\DoxyCodeLine{00232\ \ \ \ \ \textcolor{comment}{//\ intentionally\ blank.}}
+\DoxyCodeLine{00233\ \}}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00238\ PN\_stdfloat\ AudioManager::audio\_3d\_get\_distance\_factor()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00239\ \ \ \ \ \textcolor{comment}{//\ intentionally\ blank.}}
+\DoxyCodeLine{00240\ \ \ \ \ \textcolor{keywordflow}{return}\ 0.0f;}
+\DoxyCodeLine{00241\ \}}
+\DoxyCodeLine{00242\ }
+\DoxyCodeLine{00246\ \textcolor{keywordtype}{void}\ AudioManager::audio\_3d\_set\_doppler\_factor(PN\_stdfloat\ factor)\ \{}
+\DoxyCodeLine{00247\ \ \ \ \ \textcolor{comment}{//\ intentionally\ blank.}}
+\DoxyCodeLine{00248\ \}}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00253\ PN\_stdfloat\ AudioManager::audio\_3d\_get\_doppler\_factor()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00254\ \ \ \ \ \textcolor{comment}{//\ intentionally\ blank.}}
+\DoxyCodeLine{00255\ \ \ \ \ \textcolor{keywordflow}{return}\ 0.0f;}
+\DoxyCodeLine{00256\ \}}
+\DoxyCodeLine{00257\ }
+\DoxyCodeLine{00261\ \textcolor{keywordtype}{void}\ AudioManager::audio\_3d\_set\_drop\_off\_factor(PN\_stdfloat\ factor)\ \{}
+\DoxyCodeLine{00262\ \ \ \ \ \textcolor{comment}{//\ intentionally\ blank.}}
+\DoxyCodeLine{00263\ \}}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00268\ PN\_stdfloat\ AudioManager::audio\_3d\_get\_drop\_off\_factor()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{comment}{//\ intentionally\ blank.}}
+\DoxyCodeLine{00270\ \ \ \ \ \textcolor{keywordflow}{return}\ 0.0f;}
+\DoxyCodeLine{00271\ \}}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00278\ \mbox{\hyperlink{classFilename}{Filename}}\ AudioManager::}
+\DoxyCodeLine{00279\ get\_dls\_pathname()\ \{}
+\DoxyCodeLine{00280\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ dls\_filename\ =\ audio\_dls\_file;}
+\DoxyCodeLine{00281\ \ \ \textcolor{keywordflow}{if}\ (!dls\_filename.empty())\ \{}
+\DoxyCodeLine{00282\ \ \ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00283\ \ \ \ \ vfs-\/>resolve\_filename(dls\_filename,\ get\_model\_path());}
+\DoxyCodeLine{00284\ }
+\DoxyCodeLine{00285\ \ \ \ \ \textcolor{keywordflow}{return}\ dls\_filename;}
+\DoxyCodeLine{00286\ \ \ \}}
+\DoxyCodeLine{00287\ }
+\DoxyCodeLine{00288\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00289\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ pathname;}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00291\ \ \ \textcolor{comment}{//\ Get\ the\ registry\ key\ from\ DirectMusic}}
+\DoxyCodeLine{00292\ \ \ \textcolor{keywordtype}{string}\ os\_filename\ =\ WindowsRegistry::get\_string\_value(\textcolor{stringliteral}{"{}SOFTWARE\(\backslash\)\(\backslash\)Microsoft\(\backslash\)\(\backslash\)DirectMusic"{}},\ \textcolor{stringliteral}{"{}GMFilePath"{}},\ \textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00293\ }
+\DoxyCodeLine{00294\ \ \ \textcolor{keywordflow}{if}\ (!os\_filename.empty())\ \{}
+\DoxyCodeLine{00295\ \ \ \ \ pathname\ =\ \mbox{\hyperlink{classFilename_ab17a80adaab942d6570d114d6f0675c3}{Filename::from\_os\_specific}}(os\_filename);}
+\DoxyCodeLine{00296\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00297\ \ \ \ \ \textcolor{keywordtype}{char}\ sysdir[MAX\_PATH+1];}
+\DoxyCodeLine{00298\ \ \ \ \ GetSystemDirectory(sysdir,MAX\_PATH+1);}
+\DoxyCodeLine{00299\ \ \ \ \ pathname\ =\ \mbox{\hyperlink{classFilename}{Filename}}(\mbox{\hyperlink{classFilename_ab17a80adaab942d6570d114d6f0675c3}{Filename::from\_os\_specific}}(sysdir),\ \mbox{\hyperlink{classFilename}{Filename}}(\textcolor{stringliteral}{"{}drivers/gm.dls"{}}));}
+\DoxyCodeLine{00300\ \ \ \}}
+\DoxyCodeLine{00301\ \ \ pathname.\mbox{\hyperlink{classFilename_aa37b95cb83d8f58f2caf0b8d8ff9d628}{make\_true\_case}}();}
+\DoxyCodeLine{00302\ \ \ \textcolor{keywordflow}{return}\ pathname;}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00304\ \textcolor{preprocessor}{\#elif\ defined(IS\_OSX)}}
+\DoxyCodeLine{00305\ \ \ \textcolor{comment}{//\ This\ appears\ to\ be\ the\ standard\ place\ for\ this\ file\ on\ OSX\ 10.4.}}
+\DoxyCodeLine{00306\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classFilename}{Filename}}(\textcolor{stringliteral}{"{}/System/Library/Components/CoreAudio.component/Contents/Resources/gs\_instruments.dls"{}});}
+\DoxyCodeLine{00307\ }
+\DoxyCodeLine{00308\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00309\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classFilename}{Filename}}();}
+\DoxyCodeLine{00310\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00311\ \}}
+\DoxyCodeLine{00312\ }
+\DoxyCodeLine{00316\ \textcolor{keywordtype}{void}\ AudioManager::}
+\DoxyCodeLine{00317\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00318\ \ \ out\ <<\ get\_type();}
+\DoxyCodeLine{00319\ \}}
+\DoxyCodeLine{00320\ }
+\DoxyCodeLine{00324\ \textcolor{keywordtype}{void}\ AudioManager::}
+\DoxyCodeLine{00325\ write(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00326\ \ \ out\ <<\ (*this)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00327\ \}}
+
+\end{DoxyCode}

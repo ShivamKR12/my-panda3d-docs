@@ -1,0 +1,835 @@
+\doxysection{pnm\+File\+Type\+PNG.\+cxx}
+\hypertarget{pnmFileTypePNG_8cxx_source}{}\label{pnmFileTypePNG_8cxx_source}\index{panda/src/pnmimagetypes/pnmFileTypePNG.cxx@{panda/src/pnmimagetypes/pnmFileTypePNG.cxx}}
+\mbox{\hyperlink{pnmFileTypePNG_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmFileTypePNG_8h}{pnmFileTypePNG.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ HAVE\_PNG}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pnmimagetypes_8h}{config\_pnmimagetypes.h}}"{}}}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmFileTypeRegistry_8h}{pnmFileTypeRegistry.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamReader_8h}{bamReader.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{keyword}{using\ }std::istream;}
+\DoxyCodeLine{00025\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00026\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *\ \textcolor{keyword}{const}\ extensions\_png[]\ =\ \{}
+\DoxyCodeLine{00029\ \ \ \textcolor{stringliteral}{"{}png"{}}}
+\DoxyCodeLine{00030\ \};}
+\DoxyCodeLine{00031\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ num\_extensions\_png\ =\ \textcolor{keyword}{sizeof}(extensions\_png)\ /\ \textcolor{keyword}{sizeof}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *);}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ PNMFileTypePNG::\_type\_handle;}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00035\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ png\_max\_palette\ =\ 256;}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \textcolor{comment}{//\ This\ STL\ comparison\ functor\ is\ used\ in\ write\_data(),\ below.\ \ It\ sorts\ the}}
+\DoxyCodeLine{00038\ \textcolor{comment}{//\ non-\/maxval\ alpha\ pixels\ to\ the\ front\ of\ the\ list.}}
+\DoxyCodeLine{00039\ \textcolor{keyword}{class\ }LowAlphaCompare\ \{}
+\DoxyCodeLine{00040\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00041\ \ \ \textcolor{keywordtype}{bool}\ operator()\ (\textcolor{keyword}{const}\ PNMImageHeader::PixelSpec\ \&a,}
+\DoxyCodeLine{00042\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ PNMImageHeader::PixelSpec\ \&b)\ \{}
+\DoxyCodeLine{00043\ \ \ \ \ \textcolor{keywordflow}{if}\ (a.\_alpha\ !=\ b.\_alpha)\ \{}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ a.\_alpha\ <\ b.\_alpha;}
+\DoxyCodeLine{00045\ \ \ \ \ \}}
+\DoxyCodeLine{00046\ \ \ \ \ \textcolor{keywordflow}{return}\ a\ <\ b;}
+\DoxyCodeLine{00047\ \ \ \}}
+\DoxyCodeLine{00048\ \};}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00053\ PNMFileTypePNG::}
+\DoxyCodeLine{00054\ PNMFileTypePNG()\ \{}
+\DoxyCodeLine{00055\ \ \ \textcolor{comment}{//\ This\ constructor\ may\ run\ at\ static\ init\ time,\ so\ we\ use\ the\ -\/>}}
+\DoxyCodeLine{00056\ \ \ \textcolor{comment}{//\ dereferencing\ convention\ on\ the\ notify\ category.}}
+\DoxyCodeLine{00057\ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00058\ \ \ \ \ pnmimage\_png\_cat-\/>debug()}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}PNG\ version\ "{}}\ <<\ PNG\_LIBPNG\_VER\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00060\ \ \ \}}
+\DoxyCodeLine{00061\ \}}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00066\ \textcolor{keywordtype}{string}\ PNMFileTypePNG::}
+\DoxyCodeLine{00067\ get\_name()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00068\ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}PNG"{}};}
+\DoxyCodeLine{00069\ \}}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00075\ \textcolor{keywordtype}{int}\ PNMFileTypePNG::}
+\DoxyCodeLine{00076\ get\_num\_extensions()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00077\ \ \ \textcolor{keywordflow}{return}\ num\_extensions\_png;}
+\DoxyCodeLine{00078\ \}}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00084\ \textcolor{keywordtype}{string}\ PNMFileTypePNG::}
+\DoxyCodeLine{00085\ get\_extension(\textcolor{keywordtype}{int}\ n)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00086\ \ \ nassertr(n\ >=\ 0\ \&\&\ n\ <\ num\_extensions\_png,\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00087\ \ \ \textcolor{keywordflow}{return}\ extensions\_png[n];}
+\DoxyCodeLine{00088\ \}}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00094\ \textcolor{keywordtype}{string}\ PNMFileTypePNG::}
+\DoxyCodeLine{00095\ get\_suggested\_extension()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00096\ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}png"{}};}
+\DoxyCodeLine{00097\ \}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00103\ \textcolor{keywordtype}{bool}\ PNMFileTypePNG::}
+\DoxyCodeLine{00104\ has\_magic\_number()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00105\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00106\ \}}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00113\ \textcolor{keywordtype}{bool}\ PNMFileTypePNG::}
+\DoxyCodeLine{00114\ matches\_magic\_number(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&magic\_number)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00115\ \ \ \textcolor{keywordflow}{return}\ png\_sig\_cmp((png\_bytep)magic\_number.data(),\ 0,\ magic\_number.length())\ ==\ 0;}
+\DoxyCodeLine{00116\ \}}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00123\ \mbox{\hyperlink{classPNMReader}{PNMReader}}\ *PNMFileTypePNG::}
+\DoxyCodeLine{00124\ make\_reader(istream\ *file,\ \textcolor{keywordtype}{bool}\ owns\_file,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&magic\_number)\ \{}
+\DoxyCodeLine{00125\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ Reader(\textcolor{keyword}{this},\ file,\ owns\_file,\ magic\_number);}
+\DoxyCodeLine{00126\ \}}
+\DoxyCodeLine{00127\ }
+\DoxyCodeLine{00133\ \mbox{\hyperlink{classPNMWriter}{PNMWriter}}\ *PNMFileTypePNG::}
+\DoxyCodeLine{00134\ make\_writer(ostream\ *file,\ \textcolor{keywordtype}{bool}\ owns\_file)\ \{}
+\DoxyCodeLine{00135\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ Writer(\textcolor{keyword}{this},\ file,\ owns\_file);}
+\DoxyCodeLine{00136\ \}}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00141\ \textcolor{keywordtype}{void}\ PNMFileTypePNG::}
+\DoxyCodeLine{00142\ register\_with\_read\_factory()\ \{}
+\DoxyCodeLine{00143\ \ \ BamReader::get\_factory()-\/>}
+\DoxyCodeLine{00144\ \ \ \ \ register\_factory(get\_class\_type(),\ make\_from\_bam);}
+\DoxyCodeLine{00145\ \}}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00155\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *PNMFileTypePNG::}
+\DoxyCodeLine{00156\ make\_from\_bam(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFactoryParams}{FactoryParams}}\ \&params)\ \{}
+\DoxyCodeLine{00157\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPNMFileTypeRegistry_a83617b215ff0b0482e86e463b43f22cf}{PNMFileTypeRegistry::get\_global\_ptr}}()-\/>\mbox{\hyperlink{classPNMFileTypeRegistry_a77cfb63495edef614b8ebf0c0d501843}{get\_type\_by\_handle}}(get\_class\_type());}
+\DoxyCodeLine{00158\ \}}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00163\ PNMFileTypePNG::Reader::}
+\DoxyCodeLine{00164\ Reader(\mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type,\ istream\ *file,\ \textcolor{keywordtype}{bool}\ owns\_file,\ \textcolor{keywordtype}{string}\ magic\_number)\ :}
+\DoxyCodeLine{00165\ \ \ \mbox{\hyperlink{classPNMReader}{PNMReader}}(type,\ file,\ owns\_file)}
+\DoxyCodeLine{00166\ \{}
+\DoxyCodeLine{00167\ \ \ \_png\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00168\ \ \ \_info\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00169\ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00171\ \ \ \_png\ =\ png\_create\_read\_struct(PNG\_LIBPNG\_VER\_STRING,\ \textcolor{keyword}{nullptr},}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ png\_error,\ png\_warning);}
+\DoxyCodeLine{00173\ \ \ \textcolor{keywordflow}{if}\ (\_png\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00174\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00175\ \ \ \}}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00177\ \ \ \_info\ =\ png\_create\_info\_struct(\_png);}
+\DoxyCodeLine{00178\ \ \ \textcolor{keywordflow}{if}\ (\_info\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00179\ \ \ \ \ png\_destroy\_read\_struct(\&\_png,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00180\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00181\ \ \ \}}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ \ \ \_is\_valid\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00184\ }
+\DoxyCodeLine{00185\ \ \ \textcolor{keywordflow}{if}\ (setjmp(\_jmpbuf))\ \{}
+\DoxyCodeLine{00186\ \ \ \ \ \textcolor{comment}{//\ This\ is\ the\ ANSI\ C\ way\ to\ handle\ exceptions.\ \ If\ setjmp(),\ above,}}
+\DoxyCodeLine{00187\ \ \ \ \ \textcolor{comment}{//\ returns\ true,\ it\ means\ that\ libpng\ detected\ an\ exception\ while}}
+\DoxyCodeLine{00188\ \ \ \ \ \textcolor{comment}{//\ executing\ the\ code\ that\ reads\ the\ header\ info,\ below.}}
+\DoxyCodeLine{00189\ \ \ \ \ free\_png();}
+\DoxyCodeLine{00190\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00191\ \ \ \}}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00193\ \ \ png\_set\_read\_fn(\_png,\ (\textcolor{keywordtype}{void}\ *)\textcolor{keyword}{this},\ png\_read\_data);}
+\DoxyCodeLine{00194\ \ \ png\_set\_sig\_bytes(\_png,\ magic\_number.length());}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ png\_read\_info(\_png,\ \_info);}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00198\ \ \ png\_uint\_32\ width;}
+\DoxyCodeLine{00199\ \ \ png\_uint\_32\ height;}
+\DoxyCodeLine{00200\ \ \ \textcolor{keywordtype}{int}\ bit\_depth;}
+\DoxyCodeLine{00201\ \ \ \textcolor{keywordtype}{int}\ color\_type;}
+\DoxyCodeLine{00202\ \ \ \textcolor{keywordtype}{int}\ srgb\_intent;}
+\DoxyCodeLine{00203\ \ \ \textcolor{keywordtype}{double}\ gamma;}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00205\ \ \ png\_get\_IHDR(\_png,\ \_info,\ \&width,\ \&height,}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \&bit\_depth,\ \&color\_type,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00207\ }
+\DoxyCodeLine{00208\ \ \ \textcolor{comment}{//\ Look\ for\ an\ sRGB\ chunk.}}
+\DoxyCodeLine{00209\ \ \ \textcolor{keywordflow}{if}\ (png\_get\_sRGB(\_png,\ \_info,\ \&srgb\_intent)\ ==\ PNG\_INFO\_sRGB)\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \_color\_space\ =\ CS\_sRGB;}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00212\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (png\_get\_gAMA(\_png,\ \_info,\ \&gamma)\ ==\ PNG\_INFO\_gAMA)\ \{}
+\DoxyCodeLine{00213\ \ \ \ \ \textcolor{comment}{//\ File\ specifies\ a\ gamma.}}
+\DoxyCodeLine{00214\ \ \ \ \ \textcolor{keywordflow}{if}\ (gamma\ >=\ 0.99\ \&\&\ gamma\ <=\ 1.01)\ \{}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \_color\_space\ =\ CS\_linear;}
+\DoxyCodeLine{00216\ }
+\DoxyCodeLine{00217\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (gamma\ >=\ 0.44999\ \&\&\ gamma\ <=\ 0.455001)\ \{}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ probably\ close\ enough\ to\ sRGB.}}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \_color\_space\ =\ CS\_sRGB;}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00221\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ pnmimage\_png\_cat.warning()}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unsupported\ image\ gamma\ "{}}\ <<\ gamma\ <<\ \textcolor{stringliteral}{"{},\ "{}}}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}please\ re-\/export\ image\ as\ sRGB\ or\ linear.\(\backslash\)n"{}};}
+\DoxyCodeLine{00225\ \ \ \ \ \}}
+\DoxyCodeLine{00226\ \ \ \}}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}width\ =\ "{}}\ <<\ width\ <<\ \textcolor{stringliteral}{"{}\ height\ =\ "{}}\ <<\ height\ <<\ \textcolor{stringliteral}{"{}\ bit\_depth\ =\ "{}}}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ <<\ bit\_depth\ <<\ \textcolor{stringliteral}{"{}\ color\_type\ =\ "{}}\ <<\ color\_type}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ color\_space\ =\ "{}}\ <<\ \_color\_space\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00233\ \ \ \}}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00235\ \ \ \_x\_size\ =\ width;}
+\DoxyCodeLine{00236\ \ \ \_y\_size\ =\ height;}
+\DoxyCodeLine{00237\ \ \ \_maxval\ =\ (1\ <<\ bit\_depth)\ -\/\ 1;}
+\DoxyCodeLine{00238\ }
+\DoxyCodeLine{00239\ \ \ \textcolor{keywordflow}{if}\ (bit\_depth\ <\ 8)\ \{}
+\DoxyCodeLine{00240\ \ \ \ \ png\_set\_packing(\_png);}
+\DoxyCodeLine{00241\ \ \ \}}
+\DoxyCodeLine{00242\ }
+\DoxyCodeLine{00243\ \ \ \textcolor{keywordflow}{switch}\ (color\_type)\ \{}
+\DoxyCodeLine{00244\ \ \ \textcolor{keywordflow}{case}\ PNG\_COLOR\_TYPE\_GRAY:}
+\DoxyCodeLine{00245\ \ \ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}PNG\_COLOR\_TYPE\_GRAY\(\backslash\)n"{}};}
+\DoxyCodeLine{00248\ \ \ \ \ \}}
+\DoxyCodeLine{00249\ \ \ \ \ \_num\_channels\ =\ 1;}
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \ \ \textcolor{keywordflow}{case}\ PNG\_COLOR\_TYPE\_GRAY\_ALPHA:}
+\DoxyCodeLine{00253\ \ \ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}PNG\_COLOR\_TYPE\_GRAY\_ALPHA\(\backslash\)n"{}};}
+\DoxyCodeLine{00256\ \ \ \ \ \}}
+\DoxyCodeLine{00257\ \ \ \ \ \_num\_channels\ =\ 2;}
+\DoxyCodeLine{00258\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00259\ }
+\DoxyCodeLine{00260\ \ \ \textcolor{keywordflow}{case}\ PNG\_COLOR\_TYPE\_RGB:}
+\DoxyCodeLine{00261\ \ \ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}PNG\_COLOR\_TYPE\_RGB\(\backslash\)n"{}};}
+\DoxyCodeLine{00264\ \ \ \ \ \}}
+\DoxyCodeLine{00265\ \ \ \ \ \_num\_channels\ =\ 3;}
+\DoxyCodeLine{00266\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00267\ }
+\DoxyCodeLine{00268\ \ \ \textcolor{keywordflow}{case}\ PNG\_COLOR\_TYPE\_RGB\_ALPHA:}
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}PNG\_COLOR\_TYPE\_RGB\_ALPHA\(\backslash\)n"{}};}
+\DoxyCodeLine{00272\ \ \ \ \ \}}
+\DoxyCodeLine{00273\ \ \ \ \ \_num\_channels\ =\ 4;}
+\DoxyCodeLine{00274\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00276\ \ \ \textcolor{keywordflow}{case}\ PNG\_COLOR\_TYPE\_PALETTE:}
+\DoxyCodeLine{00277\ \ \ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}PNG\_COLOR\_TYPE\_PALETTE\(\backslash\)n"{}};}
+\DoxyCodeLine{00280\ \ \ \ \ \}}
+\DoxyCodeLine{00281\ \ \ \ \ png\_set\_palette\_to\_rgb(\_png);}
+\DoxyCodeLine{00282\ \ \ \ \ \_maxval\ =\ 255;}
+\DoxyCodeLine{00283\ \ \ \ \ \_num\_channels\ =\ 3;}
+\DoxyCodeLine{00284\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00287\ \ \ \ \ pnmimage\_png\_cat.error()}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unsupported\ color\ type:\ "{}}\ <<\ color\_type\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00289\ \ \ \ \ free\_png();}
+\DoxyCodeLine{00290\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00291\ \ \ \}}
+\DoxyCodeLine{00292\ }
+\DoxyCodeLine{00293\ \ \ \textcolor{keywordflow}{if}\ (png\_get\_valid(\_png,\ \_info,\ PNG\_INFO\_tRNS))\ \{}
+\DoxyCodeLine{00294\ \ \ \ \ png\_set\_tRNS\_to\_alpha(\_png);}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordflow}{if}\ (!has\_alpha())\ \{}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \_num\_channels++;}
+\DoxyCodeLine{00297\ \ \ \ \ \}}
+\DoxyCodeLine{00298\ \ \ \}}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00300\ \ \ png\_read\_update\_info(\_png,\ \_info);}
+\DoxyCodeLine{00301\ \}}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00306\ PNMFileTypePNG::Reader::}
+\DoxyCodeLine{00307\ \string~Reader()\ \{}
+\DoxyCodeLine{00308\ \ \ free\_png();}
+\DoxyCodeLine{00309\ \}}
+\DoxyCodeLine{00310\ }
+\DoxyCodeLine{00320\ \textcolor{keywordtype}{int}\ PNMFileTypePNG::Reader::}
+\DoxyCodeLine{00321\ read\_data(\mbox{\hyperlink{structpixel}{xel}}\ *array,\ xelval\ *alpha\_data)\ \{}
+\DoxyCodeLine{00322\ \ \ \textcolor{keywordflow}{if}\ (!is\_valid())\ \{}
+\DoxyCodeLine{00323\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00324\ \ \ \}}
+\DoxyCodeLine{00325\ }
+\DoxyCodeLine{00326\ \ \ \textcolor{keywordflow}{if}\ (setjmp(\_jmpbuf))\ \{}
+\DoxyCodeLine{00327\ \ \ \ \ \textcolor{comment}{//\ This\ is\ the\ ANSI\ C\ way\ to\ handle\ exceptions.\ \ If\ setjmp(),\ above,}}
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{comment}{//\ returns\ true,\ it\ means\ that\ libpng\ detected\ an\ exception\ while}}
+\DoxyCodeLine{00329\ \ \ \ \ \textcolor{comment}{//\ executing\ the\ code\ that\ reads\ the\ image,\ below.}}
+\DoxyCodeLine{00330\ \ \ \ \ free\_png();}
+\DoxyCodeLine{00331\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00332\ \ \ \}}
+\DoxyCodeLine{00333\ }
+\DoxyCodeLine{00334\ \ \ \textcolor{keywordtype}{int}\ row\_byte\_length\ =\ \_x\_size\ *\ \_num\_channels;}
+\DoxyCodeLine{00335\ \ \ \textcolor{keywordflow}{if}\ (\_maxval\ >\ 255)\ \{}
+\DoxyCodeLine{00336\ \ \ \ \ row\_byte\_length\ *=\ 2;}
+\DoxyCodeLine{00337\ \ \ \}}
+\DoxyCodeLine{00338\ }
+\DoxyCodeLine{00339\ \ \ \textcolor{keywordtype}{int}\ num\_rows\ =\ \_y\_size;}
+\DoxyCodeLine{00340\ }
+\DoxyCodeLine{00341\ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00342\ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Allocating\ "{}}\ <<\ num\_rows\ <<\ \textcolor{stringliteral}{"{}\ rows\ of\ "{}}\ <<\ row\_byte\_length}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes\ each.\(\backslash\)n"{}};}
+\DoxyCodeLine{00345\ \ \ \}}
+\DoxyCodeLine{00346\ }
+\DoxyCodeLine{00347\ \ \ \textcolor{comment}{//\ We\ need\ to\ read\ a\ full\ copy\ of\ the\ image\ in\ first,\ in\ libpng's\ 2-\/d\ array}}
+\DoxyCodeLine{00348\ \ \ \textcolor{comment}{//\ format,\ mainly\ because\ we\ keep\ array\ and\ alpha\ data\ separately,\ and\ there}}
+\DoxyCodeLine{00349\ \ \ \textcolor{comment}{//\ doesn't\ appear\ to\ be\ good\ support\ to\ get\ this\ stuff\ out\ row-\/at-\/a-\/time\ for}}
+\DoxyCodeLine{00350\ \ \ \textcolor{comment}{//\ interlaced\ files.}}
+\DoxyCodeLine{00351\ \ \ png\_bytep\ *rows\ =\ (png\_bytep\ *)alloca(num\_rows\ *\ \textcolor{keyword}{sizeof}(png\_bytep));}
+\DoxyCodeLine{00352\ \ \ \textcolor{keywordtype}{int}\ yi;}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ png\_byte\ *alloc\ =\ (png\_byte\ *)PANDA\_MALLOC\_ARRAY(row\_byte\_length\ *\ \textcolor{keyword}{sizeof}(png\_byte)\ *\ num\_rows);}
+\DoxyCodeLine{00355\ \ \ \textcolor{keywordflow}{for}\ (yi\ =\ 0;\ yi\ <\ num\_rows;\ yi++)\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ rows[yi]\ =\ alloc\ +\ (row\_byte\_length\ *\ \textcolor{keyword}{sizeof}(png\_byte))\ *\ yi;}
+\DoxyCodeLine{00357\ \ \ \}}
+\DoxyCodeLine{00358\ }
+\DoxyCodeLine{00359\ \ \ png\_read\_image(\_png,\ rows);}
+\DoxyCodeLine{00360\ }
+\DoxyCodeLine{00361\ \ \ \textcolor{keywordtype}{bool}\ get\_color\ =\ !is\_grayscale();}
+\DoxyCodeLine{00362\ \ \ \textcolor{keywordtype}{bool}\ get\_alpha\ =\ has\_alpha();}
+\DoxyCodeLine{00363\ }
+\DoxyCodeLine{00364\ \ \ \textcolor{keywordtype}{int}\ pi\ =\ 0;}
+\DoxyCodeLine{00365\ \ \ \textcolor{keywordflow}{for}\ (yi\ =\ 0;\ yi\ <\ num\_rows;\ yi++)\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ png\_bytep\ source\ =\ rows[yi];}
+\DoxyCodeLine{00367\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ \_x\_size;\ xi++)\ \{}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ red\ =\ 0;}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ green\ =\ 0;}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ blue\ =\ 0;}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ alpha\ =\ 0;}
+\DoxyCodeLine{00372\ }
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_maxval\ >\ 255)\ \{}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_color)\ \{}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ \ \ red\ =\ (source[0]\ <<\ 8)\ |\ source[1];}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \ \ source\ +=\ 2;}
+\DoxyCodeLine{00377\ }
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \ \ green\ =\ (source[0]\ <<\ 8)\ |\ source[1];}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ source\ +=\ 2;}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00381\ }
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \ \ blue\ =\ (source[0]\ <<\ 8)\ |\ source[1];}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \ \ source\ +=\ 2;}
+\DoxyCodeLine{00384\ }
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_alpha)\ \{}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \ \ \ \ alpha\ =\ (source[0]\ <<\ 8)\ |\ source[1];}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \ \ \ \ source\ +=\ 2;}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_color)\ \{}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ \ \ red\ =\ *source;}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \ \ source++;}
+\DoxyCodeLine{00394\ }
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \ \ green\ =\ *source;}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \ \ source++;}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00398\ }
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ blue\ =\ *source;}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ source++;}
+\DoxyCodeLine{00401\ }
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_alpha)\ \{}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \ \ \ \ alpha\ =\ *source;}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \ \ source++;}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00408\ \ \ \ \ \ \ PPM\_ASSIGN(array[pi],\ red,\ green,\ blue);}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_alpha)\ \{}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ alpha\_data[pi]\ =\ alpha;}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ pi++;}
+\DoxyCodeLine{00413\ \ \ \ \ \}}
+\DoxyCodeLine{00414\ }
+\DoxyCodeLine{00415\ \ \ \ \ nassertr(source\ <=\ rows[yi]\ +\ row\_byte\_length,\ yi);}
+\DoxyCodeLine{00416\ \ \ \}}
+\DoxyCodeLine{00417\ }
+\DoxyCodeLine{00418\ \ \ png\_read\_end(\_png,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00419\ \ \ PANDA\_FREE\_ARRAY(alloc);}
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00421\ \ \ \textcolor{keywordflow}{return}\ \_y\_size;}
+\DoxyCodeLine{00422\ \}}
+\DoxyCodeLine{00423\ }
+\DoxyCodeLine{00427\ \textcolor{keywordtype}{void}\ PNMFileTypePNG::Reader::}
+\DoxyCodeLine{00428\ free\_png()\ \{}
+\DoxyCodeLine{00429\ \ \ \textcolor{keywordflow}{if}\ (\_is\_valid)\ \{}
+\DoxyCodeLine{00430\ \ \ \ \ png\_destroy\_read\_struct(\&\_png,\ \&\_info,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00431\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00432\ \ \ \}}
+\DoxyCodeLine{00433\ \}}
+\DoxyCodeLine{00434\ }
+\DoxyCodeLine{00438\ \textcolor{keywordtype}{void}\ PNMFileTypePNG::Reader::}
+\DoxyCodeLine{00439\ png\_read\_data(png\_structp\ png\_ptr,\ png\_bytep\ data,\ png\_size\_t\ length)\ \{}
+\DoxyCodeLine{00440\ \ \ Reader\ *self\ =\ (Reader\ *)png\_get\_io\_ptr(png\_ptr);}
+\DoxyCodeLine{00441\ \ \ self-\/>\_file-\/>read((\textcolor{keywordtype}{char}\ *)data,\ length);}
+\DoxyCodeLine{00442\ \ \ \textcolor{keywordflow}{if}\ (length\ !=\ (png\_size\_t)self-\/>\_file-\/>gcount())\ \{}
+\DoxyCodeLine{00443\ \ \ \ \ pnmimage\_png\_cat.error()}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Didn't\ read\ enough\ bytes.\(\backslash\)n"{}};}
+\DoxyCodeLine{00445\ \ \ \ \ \textcolor{comment}{//\ Is\ there\ no\ way\ to\ indicate\ a\ read\ failure\ to\ libpng?}}
+\DoxyCodeLine{00446\ \ \ \}}
+\DoxyCodeLine{00447\ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00448\ \}}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00454\ void\ (PNMFileTypePNG::Reader::}
+\DoxyCodeLine{00455\ png\_warning)(png\_structp,\ png\_const\_charp\ warning\_msg)\ \{}
+\DoxyCodeLine{00456\ \ \ pnmimage\_png\_cat.warning()}
+\DoxyCodeLine{00457\ \ \ \ \ <<\ warning\_msg\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00458\ \}}
+\DoxyCodeLine{00459\ }
+\DoxyCodeLine{00464\ void\ (PNMFileTypePNG::Reader::}
+\DoxyCodeLine{00465\ png\_error)(png\_structp\ png\_ptr,\ png\_const\_charp\ error\_msg)\ \{}
+\DoxyCodeLine{00466\ \ \ pnmimage\_png\_cat.error()}
+\DoxyCodeLine{00467\ \ \ \ \ <<\ error\_msg\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00468\ }
+\DoxyCodeLine{00469\ \ \ \textcolor{comment}{//\ The\ PNG\ library\ insists\ we\ should\ not\ return,\ so\ instead\ of\ returning,\ we}}
+\DoxyCodeLine{00470\ \ \ \textcolor{comment}{//\ will\ do\ a\ longjmp\ out\ of\ the\ png\ code.}}
+\DoxyCodeLine{00471\ \ \ Reader\ *self\ =\ (Reader\ *)png\_get\_io\_ptr(png\_ptr);}
+\DoxyCodeLine{00472\ \ \ \textcolor{keywordflow}{if}\ (self\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00473\ \ \ \ \ \textcolor{comment}{//\ Oops,\ we\ haven't\ got\ a\ self\ pointer\ yet.\ \ Return\ anyway\ and\ hope\ we'll}}
+\DoxyCodeLine{00474\ \ \ \ \ \textcolor{comment}{//\ be\ ok.}}
+\DoxyCodeLine{00475\ \ \ \ \ pnmimage\_png\_cat.error()}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Returning\ before\ opening\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00477\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00478\ \ \ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ \ \ longjmp(self-\/>\_jmpbuf,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00481\ \}}
+\DoxyCodeLine{00482\ }
+\DoxyCodeLine{00486\ PNMFileTypePNG::Writer::}
+\DoxyCodeLine{00487\ Writer(\mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type,\ ostream\ *file,\ \textcolor{keywordtype}{bool}\ owns\_file)\ :}
+\DoxyCodeLine{00488\ \ \ \mbox{\hyperlink{classPNMWriter}{PNMWriter}}(type,\ file,\ owns\_file)}
+\DoxyCodeLine{00489\ \{}
+\DoxyCodeLine{00490\ \ \ \_png\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00491\ \ \ \_info\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00492\ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00493\ }
+\DoxyCodeLine{00494\ \ \ \_png\ =\ png\_create\_write\_struct(PNG\_LIBPNG\_VER\_STRING,\ \textcolor{keyword}{nullptr},}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ png\_error,\ png\_warning);}
+\DoxyCodeLine{00496\ \ \ \textcolor{keywordflow}{if}\ (\_png\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00498\ \ \ \}}
+\DoxyCodeLine{00499\ }
+\DoxyCodeLine{00500\ \ \ \_info\ =\ png\_create\_info\_struct(\_png);}
+\DoxyCodeLine{00501\ \ \ \textcolor{keywordflow}{if}\ (\_info\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00502\ \ \ \ \ png\_destroy\_write\_struct(\&\_png,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00503\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00504\ \ \ \}}
+\DoxyCodeLine{00505\ }
+\DoxyCodeLine{00506\ \ \ \_is\_valid\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00507\ \}}
+\DoxyCodeLine{00508\ }
+\DoxyCodeLine{00512\ PNMFileTypePNG::Writer::}
+\DoxyCodeLine{00513\ \string~Writer()\ \{}
+\DoxyCodeLine{00514\ \ \ free\_png();}
+\DoxyCodeLine{00515\ \}}
+\DoxyCodeLine{00516\ }
+\DoxyCodeLine{00526\ \textcolor{keywordtype}{int}\ PNMFileTypePNG::Writer::}
+\DoxyCodeLine{00527\ write\_data(\mbox{\hyperlink{structpixel}{xel}}\ *array,\ xelval\ *alpha\_data)\ \{}
+\DoxyCodeLine{00528\ \ \ \textcolor{keywordflow}{if}\ (!is\_valid())\ \{}
+\DoxyCodeLine{00529\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00530\ \ \ \}}
+\DoxyCodeLine{00531\ }
+\DoxyCodeLine{00532\ \ \ \textcolor{keywordflow}{if}\ (setjmp(\_jmpbuf))\ \{}
+\DoxyCodeLine{00533\ \ \ \ \ \textcolor{comment}{//\ This\ is\ the\ ANSI\ C\ way\ to\ handle\ exceptions.\ \ If\ setjmp(),\ above,}}
+\DoxyCodeLine{00534\ \ \ \ \ \textcolor{comment}{//\ returns\ true,\ it\ means\ that\ libpng\ detected\ an\ exception\ while}}
+\DoxyCodeLine{00535\ \ \ \ \ \textcolor{comment}{//\ executing\ the\ code\ that\ writes\ the\ image,\ below.}}
+\DoxyCodeLine{00536\ \ \ \ \ free\_png();}
+\DoxyCodeLine{00537\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00538\ \ \ \}}
+\DoxyCodeLine{00539\ }
+\DoxyCodeLine{00540\ \ \ png\_set\_write\_fn(\_png,\ (\textcolor{keywordtype}{void}\ *)\textcolor{keyword}{this},\ png\_write\_data,\ png\_flush\_data);}
+\DoxyCodeLine{00541\ }
+\DoxyCodeLine{00542\ \ \ \textcolor{comment}{//\ The\ compression\ level\ corresponds\ directly\ to\ the\ compression\ levels\ for}}
+\DoxyCodeLine{00543\ \ \ \textcolor{comment}{//\ zlib.}}
+\DoxyCodeLine{00544\ \ \ png\_set\_compression\_level(\_png,\ png\_compression\_level);}
+\DoxyCodeLine{00545\ }
+\DoxyCodeLine{00546\ \ \ \textcolor{comment}{//\ First,\ write\ the\ header.}}
+\DoxyCodeLine{00547\ }
+\DoxyCodeLine{00548\ \ \ \textcolor{keywordtype}{int}\ true\_bit\_depth\ =\ \mbox{\hyperlink{pnmimage__base_8cxx_a1bf8e23f6b57553095e12e7cd3dd827b}{pm\_maxvaltobits}}(\_maxval);}
+\DoxyCodeLine{00549\ \ \ \textcolor{keywordtype}{int}\ png\_bit\_depth\ =\ make\_png\_bit\_depth(true\_bit\_depth);}
+\DoxyCodeLine{00550\ }
+\DoxyCodeLine{00551\ \ \ png\_color\_8\ sig\_bit;}
+\DoxyCodeLine{00552\ \ \ sig\_bit.red\ =\ true\_bit\_depth;}
+\DoxyCodeLine{00553\ \ \ sig\_bit.green\ =\ true\_bit\_depth;}
+\DoxyCodeLine{00554\ \ \ sig\_bit.blue\ =\ true\_bit\_depth;}
+\DoxyCodeLine{00555\ \ \ sig\_bit.gray\ =\ true\_bit\_depth;}
+\DoxyCodeLine{00556\ \ \ sig\_bit.alpha\ =\ true\_bit\_depth;}
+\DoxyCodeLine{00557\ }
+\DoxyCodeLine{00558\ \ \ \textcolor{keywordtype}{int}\ color\_type\ =\ 0;}
+\DoxyCodeLine{00559\ }
+\DoxyCodeLine{00560\ \ \ \textcolor{keywordflow}{if}\ (!is\_grayscale())\ \{}
+\DoxyCodeLine{00561\ \ \ \ \ color\_type\ |=\ PNG\_COLOR\_MASK\_COLOR;}
+\DoxyCodeLine{00562\ \ \ \}}
+\DoxyCodeLine{00563\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{00564\ \ \ \ \ color\_type\ |=\ PNG\_COLOR\_MASK\_ALPHA;}
+\DoxyCodeLine{00565\ \ \ \}}
+\DoxyCodeLine{00566\ }
+\DoxyCodeLine{00567\ \ \ \textcolor{comment}{//\ Determine\ if\ we\ should\ make\ a\ palettized\ image\ out\ of\ this.\ \ In\ order\ for}}
+\DoxyCodeLine{00568\ \ \ \textcolor{comment}{//\ this\ to\ be\ possible\ and\ effective,\ we\ must\ have\ no\ more\ than\ 256\ unique}}
+\DoxyCodeLine{00569\ \ \ \textcolor{comment}{//\ coloralpha\ combinations\ for\ a\ color\ image,\ and\ the\ resulting\ bitdepth}}
+\DoxyCodeLine{00570\ \ \ \textcolor{comment}{//\ should\ be\ smaller\ than\ what\ we\ would\ have\ otherwise.}}
+\DoxyCodeLine{00571\ \ \ Palette\ palette;}
+\DoxyCodeLine{00572\ \ \ HistMap\ palette\_lookup;}
+\DoxyCodeLine{00573\ \ \ png\_color\ png\_palette\_table[png\_max\_palette];}
+\DoxyCodeLine{00574\ \ \ png\_byte\ png\_trans[png\_max\_palette];}
+\DoxyCodeLine{00575\ }
+\DoxyCodeLine{00576\ \ \ \textcolor{keywordflow}{if}\ (png\_palette)\ \{}
+\DoxyCodeLine{00577\ \ \ \ \ \textcolor{keywordflow}{if}\ (png\_bit\_depth\ <=\ 8)\ \{}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (compute\_palette(palette,\ array,\ alpha\_data,\ png\_max\_palette))\ \{}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ palette.size()\ <<\ \textcolor{stringliteral}{"{}\ colors\ found.\(\backslash\)n"{}};}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00583\ }
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ palette\_bit\_depth\ =\ make\_png\_bit\_depth(\mbox{\hyperlink{pnmimage__base_8cxx_a1bf8e23f6b57553095e12e7cd3dd827b}{pm\_maxvaltobits}}(palette.size()\ -\/\ 1));}
+\DoxyCodeLine{00585\ }
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ total\_bits\ =\ png\_bit\_depth;}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!is\_grayscale())\ \{}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \ \ \ \ total\_bits\ *=\ 3;}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \ \ \ \ total\_bits\ +=\ png\_bit\_depth;}
+\DoxyCodeLine{00592\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00593\ }
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (palette\_bit\_depth\ <\ total\_bits\ ||}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \ \ \ \ \ \ \_maxval\ !=\ (1\ <<\ true\_bit\_depth)\ -\/\ 1)\ \{}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}palette\ bit\ depth\ of\ "{}}\ <<\ palette\_bit\_depth}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ improves\ on\ bit\ depth\ of\ "{}}\ <<\ total\_bits}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{};\ making\ a\ palette\ image.\(\backslash\)n"{}};}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00602\ }
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \ \ \ \ color\_type\ =\ PNG\_COLOR\_TYPE\_PALETTE;}
+\DoxyCodeLine{00604\ }
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Re-\/sort\ the\ palette\ to\ put\ the\ semitransparent\ pixels\ at\ the}}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ beginning.}}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ \ \ std::sort(palette.begin(),\ palette.end(),\ LowAlphaCompare());}
+\DoxyCodeLine{00608\ }
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ palette\_scale\ =\ 255.0\ /\ \_maxval;}
+\DoxyCodeLine{00610\ }
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_alpha\ =\ 0;}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (int)palette.size();\ i++)\ \{}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \ \ \ \ \ \ png\_palette\_table[i].red\ =\ (int)(palette[i].\_red\ *\ palette\_scale\ +\ 0.5);}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ \ \ \ \ \ \ png\_palette\_table[i].green\ =\ (int)(palette[i].\_green\ *\ palette\_scale\ +\ 0.5);}
+\DoxyCodeLine{00615\ \ \ \ \ \ \ \ \ \ \ \ \ png\_palette\_table[i].blue\ =\ (int)(palette[i].\_blue\ *\ palette\_scale\ +\ 0.5);}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ \ \ \ \ \ \ png\_trans[i]\ =\ (int)(palette[i].\_alpha\ *\ palette\_scale\ +\ 0.5);}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (palette[i].\_alpha\ !=\ \_maxval)\ \{}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ num\_alpha\ =\ i\ +\ 1;}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00620\ }
+\DoxyCodeLine{00621\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Also\ build\ a\ reverse-\/lookup\ from\ color\ to\ palette\ index\ in\ the}}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ "{}histogram"{}\ structure.}}
+\DoxyCodeLine{00623\ \ \ \ \ \ \ \ \ \ \ \ \ palette\_lookup[palette[i]]\ =\ i;}
+\DoxyCodeLine{00624\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00625\ }
+\DoxyCodeLine{00626\ \ \ \ \ \ \ \ \ \ \ png\_set\_PLTE(\_png,\ \_info,\ png\_palette\_table,\ palette.size());}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{00628\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}palette\ contains\ "{}}\ <<\ num\_alpha\ <<\ \textcolor{stringliteral}{"{}\ transparent\ entries.\(\backslash\)n"{}};}
+\DoxyCodeLine{00631\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00632\ \ \ \ \ \ \ \ \ \ \ \ \ png\_set\_tRNS(\_png,\ \_info,\ png\_trans,\ num\_alpha,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00633\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00634\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00635\ \ \ \ \ \ \ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00636\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}palette\ bit\ depth\ of\ "{}}\ <<\ palette\_bit\_depth}
+\DoxyCodeLine{00637\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ does\ not\ improve\ on\ bit\ depth\ of\ "{}}\ <<\ total\_bits}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{};\ not\ making\ a\ palette\ image.\(\backslash\)n"{}};}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00640\ }
+\DoxyCodeLine{00641\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}more\ than\ "{}}\ <<\ png\_max\_palette}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ colors\ found;\ not\ making\ a\ palette\ image.\(\backslash\)n"{}};}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00646\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00648\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}maxval\ exceeds\ 255;\ not\ making\ a\ palette\ image.\(\backslash\)n"{}};}
+\DoxyCodeLine{00649\ \ \ \ \ \}}
+\DoxyCodeLine{00650\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00651\ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}palette\ images\ are\ not\ enabled.\(\backslash\)n"{}};}
+\DoxyCodeLine{00653\ \ \ \}}
+\DoxyCodeLine{00654\ }
+\DoxyCodeLine{00655\ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00656\ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}width\ =\ "{}}\ <<\ \_x\_size\ <<\ \textcolor{stringliteral}{"{}\ height\ =\ "{}}\ <<\ \_y\_size}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ maxval\ =\ "{}}\ <<\ \_maxval\ <<\ \textcolor{stringliteral}{"{}\ bit\_depth\ =\ "{}}}
+\DoxyCodeLine{00659\ \ \ \ \ \ \ <<\ png\_bit\_depth\ <<\ \textcolor{stringliteral}{"{}\ color\_type\ =\ "{}}\ <<\ color\_type}
+\DoxyCodeLine{00660\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ color\_space\ =\ "{}}\ <<\ \_color\_space\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00661\ \ \ \}}
+\DoxyCodeLine{00662\ }
+\DoxyCodeLine{00663\ \ \ png\_set\_IHDR(\_png,\ \_info,\ \_x\_size,\ \_y\_size,\ png\_bit\_depth,}
+\DoxyCodeLine{00664\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ color\_type,\ PNG\_INTERLACE\_NONE,}
+\DoxyCodeLine{00665\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ PNG\_COMPRESSION\_TYPE\_DEFAULT,\ PNG\_FILTER\_TYPE\_DEFAULT);}
+\DoxyCodeLine{00666\ }
+\DoxyCodeLine{00667\ \ \ \textcolor{comment}{//\ Set\ the\ true\ bit\ depth\ of\ the\ image\ data.}}
+\DoxyCodeLine{00668\ \ \ \textcolor{keywordflow}{if}\ (png\_bit\_depth\ !=\ true\_bit\_depth\ ||\ color\_type\ ==\ PNG\_COLOR\_TYPE\_PALETTE)\ \{}
+\DoxyCodeLine{00669\ \ \ \ \ png\_set\_sBIT(\_png,\ \_info,\ \&sig\_bit);}
+\DoxyCodeLine{00670\ \ \ \}}
+\DoxyCodeLine{00671\ }
+\DoxyCodeLine{00672\ \ \ \textcolor{comment}{//\ Set\ the\ color\ space,\ if\ we\ know\ it.}}
+\DoxyCodeLine{00673\ \ \ \textcolor{keywordflow}{switch}\ (\_color\_space)\ \{}
+\DoxyCodeLine{00674\ \ \ \textcolor{keywordflow}{case}\ CS\_linear:}
+\DoxyCodeLine{00675\ \ \ \ \ png\_set\_gAMA(\_png,\ \_info,\ 1.0);}
+\DoxyCodeLine{00676\ \ \ \ \ \textcolor{comment}{//\ Not\ sure\ if\ we\ should\ set\ cHRM\ to\ anything.}}
+\DoxyCodeLine{00677\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00678\ }
+\DoxyCodeLine{00679\ \ \ \textcolor{keywordflow}{case}\ CS\_sRGB:}
+\DoxyCodeLine{00680\ \ \ \ \ png\_set\_sRGB\_gAMA\_and\_cHRM(\_png,\ \_info,\ PNG\_sRGB\_INTENT\_RELATIVE);}
+\DoxyCodeLine{00681\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00682\ }
+\DoxyCodeLine{00683\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00684\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00685\ \ \ \}}
+\DoxyCodeLine{00686\ }
+\DoxyCodeLine{00687\ \ \ png\_write\_info(\_png,\ \_info);}
+\DoxyCodeLine{00688\ }
+\DoxyCodeLine{00689\ }
+\DoxyCodeLine{00690\ \ \ \textcolor{comment}{//\ Now\ set\ up\ the\ transformations\ to\ write\ the\ image\ data.}}
+\DoxyCodeLine{00691\ \ \ \textcolor{keywordflow}{if}\ (png\_bit\_depth\ <\ 8)\ \{}
+\DoxyCodeLine{00692\ \ \ \ \ png\_set\_packing(\_png);}
+\DoxyCodeLine{00693\ \ \ \}}
+\DoxyCodeLine{00694\ }
+\DoxyCodeLine{00695\ \ \ \textcolor{keywordtype}{double}\ val\_scale\ =\ 1.0;}
+\DoxyCodeLine{00696\ }
+\DoxyCodeLine{00697\ \ \ \textcolor{keywordflow}{if}\ (color\_type\ !=\ PNG\_COLOR\_TYPE\_PALETTE)\ \{}
+\DoxyCodeLine{00698\ \ \ \ \ \textcolor{keywordflow}{if}\ (png\_bit\_depth\ !=\ true\_bit\_depth)\ \{}
+\DoxyCodeLine{00699\ \ \ \ \ \ \ png\_set\_shift(\_png,\ \&sig\_bit);}
+\DoxyCodeLine{00700\ \ \ \ \ \}}
+\DoxyCodeLine{00701\ \ \ \ \ \textcolor{comment}{//\ Since\ this\ assumes\ that\ \_maxval\ is\ one\ less\ than\ a\ power\ of\ 2,\ we\ set}}
+\DoxyCodeLine{00702\ \ \ \ \ \textcolor{comment}{//\ val\_scale\ to\ the\ appropriate\ factor\ in\ case\ it\ is\ not.}}
+\DoxyCodeLine{00703\ \ \ \ \ \textcolor{keywordtype}{int}\ png\_maxval\ =\ (1\ <<\ png\_bit\_depth)\ -\/\ 1;}
+\DoxyCodeLine{00704\ \ \ \ \ val\_scale\ =\ (double)png\_maxval\ /\ (\textcolor{keywordtype}{double})\_maxval;}
+\DoxyCodeLine{00705\ \ \ \}}
+\DoxyCodeLine{00706\ }
+\DoxyCodeLine{00707\ \ \ \textcolor{keywordtype}{int}\ row\_byte\_length\ =\ \_x\_size\ *\ \_num\_channels;}
+\DoxyCodeLine{00708\ \ \ \textcolor{keywordflow}{if}\ (png\_bit\_depth\ >\ 8)\ \{}
+\DoxyCodeLine{00709\ \ \ \ \ row\_byte\_length\ *=\ 2;}
+\DoxyCodeLine{00710\ \ \ \}}
+\DoxyCodeLine{00711\ }
+\DoxyCodeLine{00712\ \ \ \textcolor{keywordtype}{int}\ num\_rows\ =\ \_y\_size;}
+\DoxyCodeLine{00713\ }
+\DoxyCodeLine{00714\ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_png\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00715\ \ \ \ \ pnmimage\_png\_cat.debug()}
+\DoxyCodeLine{00716\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Allocating\ one\ row\ of\ "{}}\ <<\ row\_byte\_length}
+\DoxyCodeLine{00717\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes.\(\backslash\)n"{}};}
+\DoxyCodeLine{00718\ \ \ \}}
+\DoxyCodeLine{00719\ }
+\DoxyCodeLine{00720\ \ \ \textcolor{comment}{//\ When\ writing,\ we\ only\ need\ to\ copy\ the\ image\ out\ one\ row\ at\ a\ time,}}
+\DoxyCodeLine{00721\ \ \ \textcolor{comment}{//\ because\ we\ don't\ mess\ around\ with\ writing\ interlaced\ files.\ \ If\ we\ were}}
+\DoxyCodeLine{00722\ \ \ \textcolor{comment}{//\ writing\ an\ interlaced\ file,\ we'd\ have\ to\ copy\ the\ whole\ image\ first.}}
+\DoxyCodeLine{00723\ }
+\DoxyCodeLine{00724\ \ \ png\_bytep\ row\ =\ (png\_byte\ *)PANDA\_MALLOC\_ARRAY(row\_byte\_length\ *\ \textcolor{keyword}{sizeof}(png\_byte));}
+\DoxyCodeLine{00725\ }
+\DoxyCodeLine{00726\ \ \ \textcolor{keywordtype}{bool}\ save\_color\ =\ !is\_grayscale();}
+\DoxyCodeLine{00727\ \ \ \textcolor{keywordtype}{bool}\ save\_alpha\ =\ has\_alpha();}
+\DoxyCodeLine{00728\ }
+\DoxyCodeLine{00729\ \ \ \textcolor{keywordflow}{if}\ (val\_scale\ ==\ 1.0)\ \{}
+\DoxyCodeLine{00730\ \ \ \ \ \textcolor{comment}{//\ No\ scale\ needed;\ we're\ already\ a\ power\ of\ 2.}}
+\DoxyCodeLine{00731\ \ \ \ \ \textcolor{keywordtype}{int}\ pi\ =\ 0;}
+\DoxyCodeLine{00732\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yi\ =\ 0;\ yi\ <\ num\_rows;\ yi++)\ \{}
+\DoxyCodeLine{00733\ \ \ \ \ \ \ png\_bytep\ dest\ =\ row;}
+\DoxyCodeLine{00734\ }
+\DoxyCodeLine{00735\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (color\_type\ ==\ PNG\_COLOR\_TYPE\_PALETTE)\ \{}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ \_x\_size;\ xi++)\ \{}
+\DoxyCodeLine{00737\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ index;}
+\DoxyCodeLine{00738\ }
+\DoxyCodeLine{00739\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (save\_color)\ \{}
+\DoxyCodeLine{00740\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (save\_alpha)\ \{}
+\DoxyCodeLine{00741\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ index\ =\ palette\_lookup[PixelSpec(PPM\_GETR(array[pi]),\ PPM\_GETG(array[pi]),\ PPM\_GETB(array[pi]),\ alpha\_data[pi])];}
+\DoxyCodeLine{00742\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ index\ =\ palette\_lookup[PixelSpec(PPM\_GETR(array[pi]),\ PPM\_GETG(array[pi]),\ PPM\_GETB(array[pi]))];}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (save\_alpha)\ \{}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ index\ =\ palette\_lookup[PixelSpec(PPM\_GETB(array[pi]),\ alpha\_data[pi])];}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ index\ =\ palette\_lookup[PixelSpec(PPM\_GETB(array[pi]))];}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00752\ }
+\DoxyCodeLine{00753\ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ index;}
+\DoxyCodeLine{00754\ \ \ \ \ \ \ \ \ \ \ pi++;}
+\DoxyCodeLine{00755\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00756\ }
+\DoxyCodeLine{00757\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (png\_bit\_depth\ >\ 8)\ \{}
+\DoxyCodeLine{00758\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ \_x\_size;\ xi++)\ \{}
+\DoxyCodeLine{00759\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (save\_color)\ \{}
+\DoxyCodeLine{00760\ \ \ \ \ \ \ \ \ \ \ \ \ xelval\ red\ =\ PPM\_GETR(array[pi]);}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (red\ >>\ 8)\ \&\ 0xff;}
+\DoxyCodeLine{00762\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ red\ \&\ 0xff;}
+\DoxyCodeLine{00763\ \ \ \ \ \ \ \ \ \ \ \ \ xelval\ green\ =\ PPM\_GETG(array[pi]);}
+\DoxyCodeLine{00764\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (green\ >>\ 8)\ \&\ 0xff;}
+\DoxyCodeLine{00765\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ green\ \&\ 0xff;}
+\DoxyCodeLine{00766\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00767\ \ \ \ \ \ \ \ \ \ \ xelval\ blue\ =\ PPM\_GETB(array[pi]);}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (blue\ >>\ 8)\ \&\ 0xff;}
+\DoxyCodeLine{00769\ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ blue\ \&\ 0xff;}
+\DoxyCodeLine{00770\ }
+\DoxyCodeLine{00771\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (save\_alpha)\ \{}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \ \ \ \ \ \ xelval\ alpha\ =\ alpha\_data[pi];}
+\DoxyCodeLine{00773\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (alpha\ >>\ 8)\ \&\ 0xff;}
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ alpha\ \&\ 0xff;}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ \ \ \ \ pi++;}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00778\ }
+\DoxyCodeLine{00779\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00780\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ \_x\_size;\ xi++)\ \{}
+\DoxyCodeLine{00781\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (save\_color)\ \{}
+\DoxyCodeLine{00782\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ PPM\_GETR(array[pi]);}
+\DoxyCodeLine{00783\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ PPM\_GETG(array[pi]);}
+\DoxyCodeLine{00784\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00785\ }
+\DoxyCodeLine{00786\ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ PPM\_GETB(array[pi]);}
+\DoxyCodeLine{00787\ }
+\DoxyCodeLine{00788\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (save\_alpha)\ \{}
+\DoxyCodeLine{00789\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ alpha\_data[pi];}
+\DoxyCodeLine{00790\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00791\ \ \ \ \ \ \ \ \ \ \ pi++;}
+\DoxyCodeLine{00792\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00793\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00794\ }
+\DoxyCodeLine{00795\ \ \ \ \ \ \ nassertr(dest\ <=\ row\ +\ row\_byte\_length,\ yi);}
+\DoxyCodeLine{00796\ \ \ \ \ \ \ png\_write\_row(\_png,\ row);}
+\DoxyCodeLine{00797\ \ \ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00798\ \ \ \ \ \}}
+\DoxyCodeLine{00799\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00800\ \ \ \ \ \textcolor{comment}{//\ Here\ we\ might\ need\ to\ scale\ each\ component\ to\ match\ the\ png}}
+\DoxyCodeLine{00801\ \ \ \ \ \textcolor{comment}{//\ requirement.}}
+\DoxyCodeLine{00802\ \ \ \ \ nassertr(color\_type\ !=\ PNG\_COLOR\_TYPE\_PALETTE,\ 0);}
+\DoxyCodeLine{00803\ \ \ \ \ \textcolor{keywordtype}{int}\ pi\ =\ 0;}
+\DoxyCodeLine{00804\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yi\ =\ 0;\ yi\ <\ num\_rows;\ yi++)\ \{}
+\DoxyCodeLine{00805\ \ \ \ \ \ \ png\_bytep\ dest\ =\ row;}
+\DoxyCodeLine{00806\ }
+\DoxyCodeLine{00807\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (png\_bit\_depth\ >\ 8)\ \{}
+\DoxyCodeLine{00808\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ \_x\_size;\ xi++)\ \{}
+\DoxyCodeLine{00809\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (save\_color)\ \{}
+\DoxyCodeLine{00810\ \ \ \ \ \ \ \ \ \ \ \ \ xelval\ red\ =\ (xelval)(PPM\_GETR(array[pi])\ *\ val\_scale\ +\ 0.5);}
+\DoxyCodeLine{00811\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (red\ >>\ 8)\ \&\ 0xff;}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ red\ \&\ 0xff;}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ \ \ \ \ \ \ xelval\ green\ =\ (xelval)(PPM\_GETG(array[pi])\ *\ val\_scale\ +\ 0.5);}
+\DoxyCodeLine{00814\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (green\ >>\ 8)\ \&\ 0xff;}
+\DoxyCodeLine{00815\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ green\ \&\ 0xff;}
+\DoxyCodeLine{00816\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00817\ \ \ \ \ \ \ \ \ \ \ xelval\ blue\ =\ (xelval)(PPM\_GETB(array[pi])\ *\ val\_scale\ +\ 0.5);}
+\DoxyCodeLine{00818\ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (blue\ >>\ 8)\ \&\ 0xff;}
+\DoxyCodeLine{00819\ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ blue\ \&\ 0xff;}
+\DoxyCodeLine{00820\ }
+\DoxyCodeLine{00821\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (save\_alpha)\ \{}
+\DoxyCodeLine{00822\ \ \ \ \ \ \ \ \ \ \ \ \ xelval\ alpha\ =\ (xelval)(alpha\_data[pi]\ *\ val\_scale\ +\ 0.5);}
+\DoxyCodeLine{00823\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (alpha\ >>\ 8)\ \&\ 0xff;}
+\DoxyCodeLine{00824\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ alpha\ \&\ 0xff;}
+\DoxyCodeLine{00825\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00826\ \ \ \ \ \ \ \ \ \ \ pi++;}
+\DoxyCodeLine{00827\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00828\ }
+\DoxyCodeLine{00829\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00830\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ \_x\_size;\ xi++)\ \{}
+\DoxyCodeLine{00831\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (save\_color)\ \{}
+\DoxyCodeLine{00832\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (xelval)(PPM\_GETR(array[pi])\ *\ val\_scale\ +\ 0.5);}
+\DoxyCodeLine{00833\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (xelval)(PPM\_GETG(array[pi])\ *\ val\_scale\ +\ 0.5);}
+\DoxyCodeLine{00834\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00835\ }
+\DoxyCodeLine{00836\ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (xelval)(PPM\_GETB(array[pi])\ *\ val\_scale\ +\ 0.5);}
+\DoxyCodeLine{00837\ }
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (save\_alpha)\ \{}
+\DoxyCodeLine{00839\ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ (xelval)(alpha\_data[pi]\ *\ val\_scale\ +\ 0.5);}
+\DoxyCodeLine{00840\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00841\ \ \ \ \ \ \ \ \ \ \ pi++;}
+\DoxyCodeLine{00842\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00843\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00844\ }
+\DoxyCodeLine{00845\ \ \ \ \ \ \ nassertr(dest\ <=\ row\ +\ row\_byte\_length,\ yi);}
+\DoxyCodeLine{00846\ \ \ \ \ \ \ png\_write\_row(\_png,\ row);}
+\DoxyCodeLine{00847\ \ \ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00848\ \ \ \ \ \}}
+\DoxyCodeLine{00849\ \ \ \}}
+\DoxyCodeLine{00850\ \ \ PANDA\_FREE\_ARRAY(row);}
+\DoxyCodeLine{00851\ }
+\DoxyCodeLine{00852\ \ \ png\_write\_end(\_png,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00853\ }
+\DoxyCodeLine{00854\ \ \ \textcolor{keywordflow}{return}\ \_y\_size;}
+\DoxyCodeLine{00855\ \}}
+\DoxyCodeLine{00856\ }
+\DoxyCodeLine{00860\ \textcolor{keywordtype}{void}\ PNMFileTypePNG::Writer::}
+\DoxyCodeLine{00861\ free\_png()\ \{}
+\DoxyCodeLine{00862\ \ \ \textcolor{keywordflow}{if}\ (\_is\_valid)\ \{}
+\DoxyCodeLine{00863\ \ \ \ \ png\_destroy\_write\_struct(\&\_png,\ \&\_info);}
+\DoxyCodeLine{00864\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00865\ \ \ \}}
+\DoxyCodeLine{00866\ \}}
+\DoxyCodeLine{00867\ }
+\DoxyCodeLine{00872\ \textcolor{keywordtype}{int}\ PNMFileTypePNG::Writer::}
+\DoxyCodeLine{00873\ make\_png\_bit\_depth(\textcolor{keywordtype}{int}\ bit\_depth)\ \{}
+\DoxyCodeLine{00874\ \ \ \textcolor{keywordflow}{switch}\ (bit\_depth)\ \{}
+\DoxyCodeLine{00875\ \ \ \textcolor{keywordflow}{case}\ 0:}
+\DoxyCodeLine{00876\ \ \ \textcolor{keywordflow}{case}\ 1:}
+\DoxyCodeLine{00877\ \ \ \ \ \textcolor{keywordflow}{return}\ 1;}
+\DoxyCodeLine{00878\ }
+\DoxyCodeLine{00879\ \ \ \textcolor{keywordflow}{case}\ 2:}
+\DoxyCodeLine{00880\ \ \ \ \ \textcolor{keywordflow}{return}\ 2;}
+\DoxyCodeLine{00881\ }
+\DoxyCodeLine{00882\ \ \ \textcolor{keywordflow}{case}\ 3:}
+\DoxyCodeLine{00883\ \ \ \textcolor{keywordflow}{case}\ 4:}
+\DoxyCodeLine{00884\ \ \ \ \ \textcolor{keywordflow}{return}\ 4;}
+\DoxyCodeLine{00885\ }
+\DoxyCodeLine{00886\ \ \ \textcolor{keywordflow}{case}\ 5:}
+\DoxyCodeLine{00887\ \ \ \textcolor{keywordflow}{case}\ 6:}
+\DoxyCodeLine{00888\ \ \ \textcolor{keywordflow}{case}\ 7:}
+\DoxyCodeLine{00889\ \ \ \textcolor{keywordflow}{case}\ 8:}
+\DoxyCodeLine{00890\ \ \ \ \ \textcolor{keywordflow}{return}\ 8;}
+\DoxyCodeLine{00891\ }
+\DoxyCodeLine{00892\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00893\ \ \ \ \ \textcolor{keywordflow}{return}\ 16;}
+\DoxyCodeLine{00894\ \ \ \}}
+\DoxyCodeLine{00895\ \}}
+\DoxyCodeLine{00896\ }
+\DoxyCodeLine{00900\ \textcolor{keywordtype}{void}\ PNMFileTypePNG::Writer::}
+\DoxyCodeLine{00901\ png\_write\_data(png\_structp\ png\_ptr,\ png\_bytep\ data,\ png\_size\_t\ length)\ \{}
+\DoxyCodeLine{00902\ \ \ Writer\ *self\ =\ (Writer\ *)png\_get\_io\_ptr(png\_ptr);}
+\DoxyCodeLine{00903\ \ \ self-\/>\_file-\/>write((\textcolor{keywordtype}{char}\ *)data,\ length);}
+\DoxyCodeLine{00904\ \ \ \textcolor{keywordflow}{if}\ (self-\/>\_file-\/>fail())\ \{}
+\DoxyCodeLine{00905\ \ \ \ \ pnmimage\_png\_cat.error()}
+\DoxyCodeLine{00906\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ to\ the\ iostream.\(\backslash\)n"{}};}
+\DoxyCodeLine{00907\ \ \ \ \ \textcolor{comment}{//\ Is\ there\ no\ way\ to\ indicate\ a\ write\ failure\ to\ libpng?}}
+\DoxyCodeLine{00908\ \ \ \}}
+\DoxyCodeLine{00909\ \}}
+\DoxyCodeLine{00910\ }
+\DoxyCodeLine{00914\ \textcolor{keywordtype}{void}\ PNMFileTypePNG::Writer::}
+\DoxyCodeLine{00915\ png\_flush\_data(png\_structp\ png\_ptr)\ \{}
+\DoxyCodeLine{00916\ \ \ Writer\ *self\ =\ (Writer\ *)png\_get\_io\_ptr(png\_ptr);}
+\DoxyCodeLine{00917\ \ \ self-\/>\_file-\/>flush();}
+\DoxyCodeLine{00918\ \}}
+\DoxyCodeLine{00919\ }
+\DoxyCodeLine{00924\ void\ (PNMFileTypePNG::Writer::}
+\DoxyCodeLine{00925\ png\_warning)(png\_structp,\ png\_const\_charp\ warning\_msg)\ \{}
+\DoxyCodeLine{00926\ \ \ pnmimage\_png\_cat.warning()}
+\DoxyCodeLine{00927\ \ \ \ \ <<\ warning\_msg\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00928\ \}}
+\DoxyCodeLine{00929\ }
+\DoxyCodeLine{00934\ void\ (PNMFileTypePNG::Writer::}
+\DoxyCodeLine{00935\ png\_error)(png\_structp\ png\_ptr,\ png\_const\_charp\ error\_msg)\ \{}
+\DoxyCodeLine{00936\ \ \ pnmimage\_png\_cat.error()}
+\DoxyCodeLine{00937\ \ \ \ \ <<\ error\_msg\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00938\ }
+\DoxyCodeLine{00939\ \ \ \textcolor{comment}{//\ The\ PNG\ library\ insists\ we\ should\ not\ return,\ so\ instead\ of\ returning,\ we}}
+\DoxyCodeLine{00940\ \ \ \textcolor{comment}{//\ will\ do\ a\ longjmp\ out\ of\ the\ png\ code.}}
+\DoxyCodeLine{00941\ \ \ Writer\ *self\ =\ (Writer\ *)png\_get\_io\_ptr(png\_ptr);}
+\DoxyCodeLine{00942\ \ \ \textcolor{keywordflow}{if}\ (self\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00943\ \ \ \ \ \textcolor{comment}{//\ Oops,\ we\ haven't\ got\ a\ self\ pointer\ yet.\ \ Return\ anyway\ and\ hope\ we'll}}
+\DoxyCodeLine{00944\ \ \ \ \ \textcolor{comment}{//\ be\ ok.}}
+\DoxyCodeLine{00945\ \ \ \ \ pnmimage\_png\_cat.error()}
+\DoxyCodeLine{00946\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Returning\ before\ opening\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00947\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00948\ \ \ \}}
+\DoxyCodeLine{00949\ }
+\DoxyCodeLine{00950\ \ \ longjmp(self-\/>\_jmpbuf,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00951\ \}}
+\DoxyCodeLine{00952\ }
+\DoxyCodeLine{00953\ }
+\DoxyCodeLine{00954\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_PNG}}
+
+\end{DoxyCode}

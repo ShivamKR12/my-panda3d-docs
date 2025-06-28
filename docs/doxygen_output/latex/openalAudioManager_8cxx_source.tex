@@ -1,0 +1,1028 @@
+\doxysection{openal\+Audio\+Manager.\+cxx}
+\hypertarget{openalAudioManager_8cxx_source}{}\label{openalAudioManager_8cxx_source}\index{panda/src/audiotraits/openalAudioManager.cxx@{panda/src/audiotraits/openalAudioManager.cxx}}
+\mbox{\hyperlink{openalAudioManager_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00013\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pandabase_8h}{pandabase.h}}"{}}}
+\DoxyCodeLine{00014\ }
+\DoxyCodeLine{00015\ \textcolor{comment}{//\ Panda\ headers.}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__audio_8h}{config\_audio.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__putil_8h}{config\_putil.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__express_8h}{config\_express.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__openalAudio_8h}{config\_openalAudio.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{openalAudioManager_8h}{openalAudioManager.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{openalAudioSound_8h}{openalAudioSound.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFileSystem_8h}{virtualFileSystem.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{movieAudio_8h}{movieAudio.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{reMutexHolder_8h}{reMutexHolder.h}}"{}}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#ifndef\ ALC\_DEFAULT\_ALL\_DEVICES\_SPECIFIER}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#define\ ALC\_DEFAULT\_ALL\_DEVICES\_SPECIFIER\ 0x1012}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#ifndef\ ALC\_ALL\_DEVICES\_SPECIFIER}}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#define\ ALC\_ALL\_DEVICES\_SPECIFIER\ 0x1013}}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \textcolor{keyword}{using\ }std::endl;}
+\DoxyCodeLine{00037\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ OpenALAudioManager::\_type\_handle;}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00041\ \mbox{\hyperlink{classReMutex}{ReMutex}}\ OpenALAudioManager::\_lock;}
+\DoxyCodeLine{00042\ \textcolor{keywordtype}{int}\ OpenALAudioManager::\_active\_managers\ =\ 0;}
+\DoxyCodeLine{00043\ \textcolor{keywordtype}{bool}\ OpenALAudioManager::\_openal\_active\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00044\ ALCdevice*\ OpenALAudioManager::\_device\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00045\ ALCcontext*\ OpenALAudioManager::\_context\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00047\ \textcolor{comment}{//\ This\ is\ the\ list\ of\ all\ OpenALAudioManager\ objects\ in\ the\ world.\ \ It\ must}}
+\DoxyCodeLine{00048\ \textcolor{comment}{//\ be\ a\ pointer\ rather\ than\ a\ concrete\ object,\ so\ it\ won't\ be\ destructed\ at}}
+\DoxyCodeLine{00049\ \textcolor{comment}{//\ exit\ time\ before\ we're\ done\ removing\ things\ from\ it.}}
+\DoxyCodeLine{00050\ \mbox{\hyperlink{classpset}{OpenALAudioManager::Managers}}\ *OpenALAudioManager::\_managers\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \mbox{\hyperlink{classpset}{OpenALAudioManager::SourceCache}}\ *OpenALAudioManager::\_al\_sources\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00055\ \textcolor{comment}{//\ Central\ dispatcher\ for\ audio\ errors.}}
+\DoxyCodeLine{00056\ \textcolor{keywordtype}{void}\ al\_audio\_errcheck(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *context)\ \{}
+\DoxyCodeLine{00057\ \ \ ALenum\ result\ =\ alGetError();}
+\DoxyCodeLine{00058\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ AL\_NO\_ERROR)\ \{}
+\DoxyCodeLine{00059\ \ \ \ \ audio\_error(context\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ alGetString(result)\ );}
+\DoxyCodeLine{00060\ \ \ \}}
+\DoxyCodeLine{00061\ \}}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00063\ \textcolor{keywordtype}{void}\ alc\_audio\_errcheck(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *context,ALCdevice*\ device)\ \{}
+\DoxyCodeLine{00064\ \ \ ALCenum\ result\ =\ alcGetError(device);}
+\DoxyCodeLine{00065\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ ALC\_NO\_ERROR)\ \{}
+\DoxyCodeLine{00066\ \ \ \ \ audio\_error(context\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ alcGetString(device,result)\ );}
+\DoxyCodeLine{00067\ \ \ \}}
+\DoxyCodeLine{00068\ \}}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00073\ \mbox{\hyperlink{classAudioManager}{AudioManager}}\ *\mbox{\hyperlink{openalAudioManager_8cxx_a70a9b4dedb7d07849d20c0743072b4ec}{Create\_OpenALAudioManager}}()\ \{}
+\DoxyCodeLine{00074\ \ \ audio\_debug(\textcolor{stringliteral}{"{}Create\_OpenALAudioManager()"{}});}
+\DoxyCodeLine{00075\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classOpenALAudioManager}{OpenALAudioManager}};}
+\DoxyCodeLine{00076\ \}}
+\DoxyCodeLine{00077\ }
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00082\ OpenALAudioManager::}
+\DoxyCodeLine{00083\ OpenALAudioManager()\ \{}
+\DoxyCodeLine{00084\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00085\ \ \ \textcolor{keywordflow}{if}\ (\_managers\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00086\ \ \ \ \ \_managers\ =\ \textcolor{keyword}{new}\ Managers;}
+\DoxyCodeLine{00087\ \ \ \ \ \_al\_sources\ =\ \textcolor{keyword}{new}\ SourceCache;}
+\DoxyCodeLine{00088\ \ \ \}}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00090\ \ \ \_managers-\/>insert(\textcolor{keyword}{this});}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00092\ \ \ \_cleanup\_required\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00093\ \ \ \_active\ =\ audio\_active;}
+\DoxyCodeLine{00094\ \ \ \_volume\ =\ audio\_volume;}
+\DoxyCodeLine{00095\ \ \ \_play\_rate\ =\ 1.0f;}
+\DoxyCodeLine{00096\ }
+\DoxyCodeLine{00097\ \ \ \_cache\_limit\ =\ audio\_cache\_limit;}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \_concurrent\_sound\_limit\ =\ 0;}
+\DoxyCodeLine{00100\ \ \ \_is\_valid\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \ \ \textcolor{comment}{//\ Init\ 3D\ attributes}}
+\DoxyCodeLine{00103\ \ \ \_distance\_factor\ =\ 1;}
+\DoxyCodeLine{00104\ \ \ \_drop\_off\_factor\ =\ 1;}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00106\ \ \ \_position[0]\ =\ 0;}
+\DoxyCodeLine{00107\ \ \ \_position[1]\ =\ 0;}
+\DoxyCodeLine{00108\ \ \ \_position[2]\ =\ 0;}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ \_velocity[0]\ =\ 0;}
+\DoxyCodeLine{00111\ \ \ \_velocity[1]\ =\ 0;}
+\DoxyCodeLine{00112\ \ \ \_velocity[2]\ =\ 0;}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00114\ \ \ \_forward\_up[0]\ =\ 0;}
+\DoxyCodeLine{00115\ \ \ \_forward\_up[1]\ =\ 0;}
+\DoxyCodeLine{00116\ \ \ \_forward\_up[2]\ =\ 0;}
+\DoxyCodeLine{00117\ \ \ \_forward\_up[3]\ =\ 0;}
+\DoxyCodeLine{00118\ \ \ \_forward\_up[4]\ =\ 0;}
+\DoxyCodeLine{00119\ \ \ \_forward\_up[5]\ =\ 0;}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00121\ \ \ \textcolor{comment}{//\ Initialization}}
+\DoxyCodeLine{00122\ \ \ audio\_cat.init();}
+\DoxyCodeLine{00123\ \ \ \textcolor{keywordflow}{if}\ (\_active\_managers\ ==\ 0\ ||\ !\_openal\_active)\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ \_device\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00125\ \ \ \ \ \textcolor{keywordtype}{string}\ dev\_name\ =\ select\_audio\_device();}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00127\ \ \ \ \ \textcolor{keywordflow}{if}\ (!dev\_name.empty())\ \{}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ \textcolor{comment}{//\ Open\ a\ specific\ device\ by\ name.}}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ audio\_cat.info()\ <<\ \textcolor{stringliteral}{"{}Using\ OpenAL\ device\ "{}}\ <<\ dev\_name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \_device\ =\ alcOpenDevice(dev\_name.c\_str());}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00133\ \ \ \ \ \ \ \ \ audio\_cat.error()}
+\DoxyCodeLine{00134\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ open\ OpenAL\ device\ \(\backslash\)"{}"{}}\ <<\ dev\_name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{},\ falling\ back\ to\ default\ device\(\backslash\)n"{}};}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00136\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ audio\_cat.info()\ <<\ \textcolor{stringliteral}{"{}Using\ default\ OpenAL\ device\(\backslash\)n"{}};}
+\DoxyCodeLine{00138\ \ \ \ \ \}}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \textcolor{comment}{//\ Open\ the\ default\ device.}}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \_device\ =\ alcOpenDevice(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00143\ }
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\ ==\ \textcolor{keyword}{nullptr}\ \&\&\ dev\_name\ !=\ \textcolor{stringliteral}{"{}OpenAL\ Soft"{}})\ \{}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Try\ the\ OpenAL\ Soft\ driver\ instead,\ which\ is\ fairly\ reliable.}}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \_device\ =\ alcOpenDevice(\textcolor{stringliteral}{"{}OpenAL\ Soft"{}});}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \ \ audio\_cat.error()}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ open\ default\ OpenAL\ device\(\backslash\)n"{}};}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00153\ \ \ \ \ \}}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ managed\ to\ get\ a\ device\ open.}}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ alcGetError(\_device);\ \textcolor{comment}{//\ clear\ errors}}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00159\ \ \ \ \ \ \ ALCboolean\ is\_hrtf\_present\ =\ alcIsExtensionPresent(\_device,\ \textcolor{stringliteral}{"{}ALC\_SOFT\_HRTF"{}});}
+\DoxyCodeLine{00160\ }
+\DoxyCodeLine{00161\ \ \ \ \ \ \ ALCint\ attrs[3]\ =\ \{0\};}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00163\ \textcolor{preprocessor}{\#ifndef\ HAVE\_OPENAL\_FRAMEWORK}}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (is\_hrtf\_present)\ \{}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \ \ attrs[0]\ =\ ALC\_HRTF\_SOFT;}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ attrs[1]\ =\ audio\_want\_hrtf.get\_value()\ ?\ ALC\_TRUE\ :\ ALC\_FALSE;}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ attrs[2]\ =\ 0;\ \textcolor{comment}{//\ end\ of\ list}}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ attrs[0]\ =\ 0;\ \textcolor{comment}{//\ end\ of\ list}}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00171\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ HAVE\_OPENAL\_FRAMEWORK}}
+\DoxyCodeLine{00172\ }
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \_context\ =\ alcCreateContext(\_device,\ attrs);}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ alc\_audio\_errcheck(\textcolor{stringliteral}{"{}alcCreateContext(\_device,\ NULL)"{}},\ \_device);}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_context\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ \_openal\_active\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00178\ \ \ \ \ \}}
+\DoxyCodeLine{00179\ \ \ \}}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00181\ \ \ \textcolor{comment}{//\ We\ increment\ \_active\_managers\ regardless\ of\ possible\ errors\ above.\ \ The}}
+\DoxyCodeLine{00182\ \ \ \textcolor{comment}{//\ shutdown\ call\ will\ do\ the\ right\ thing\ when\ it's\ called,\ either\ way.}}
+\DoxyCodeLine{00183\ \ \ ++\_active\_managers;}
+\DoxyCodeLine{00184\ \ \ nassertv(\_active\_managers>0);}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00186\ \ \ \textcolor{keywordflow}{if}\ (!\_device\ ||\ !\_context)\ \{}
+\DoxyCodeLine{00187\ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}OpenALAudioManager:\ No\ open\ device\ or\ context"{}});}
+\DoxyCodeLine{00188\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00189\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ alcGetError(\_device);\ \textcolor{comment}{//\ clear\ errors}}
+\DoxyCodeLine{00191\ \ \ \ \ alcMakeContextCurrent(\_context);}
+\DoxyCodeLine{00192\ \ \ \ \ alc\_audio\_errcheck(\textcolor{stringliteral}{"{}alcMakeContextCurrent(\_context)"{}},\ \_device);}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{comment}{//\ set\ 3D\ sound\ characteristics\ as\ they\ are\ given\ in\ the\ configrc}}
+\DoxyCodeLine{00195\ \ \ \ \ \mbox{\hyperlink{classOpenALAudioManager_aa353a27b5c2a02b5082c403354038090}{audio\_3d\_set\_doppler\_factor}}(audio\_doppler\_factor);}
+\DoxyCodeLine{00196\ \ \ \ \ \mbox{\hyperlink{classOpenALAudioManager_aa4635fa8d38e107d0c75ff42e9f835ac}{audio\_3d\_set\_distance\_factor}}(audio\_distance\_factor);}
+\DoxyCodeLine{00197\ \ \ \ \ \mbox{\hyperlink{classOpenALAudioManager_ac4edc078a1459d06b12edc537cc2e6b9}{audio\_3d\_set\_drop\_off\_factor}}(audio\_drop\_off\_factor);}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00199\ \ \ \ \ \textcolor{keywordflow}{if}\ (audio\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ audio\_cat.debug()}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ALC\_DEVICE\_SPECIFIER:"{}}\ <<\ alcGetString(\_device,\ ALC\_DEVICE\_SPECIFIER)\ <<\ endl;}
+\DoxyCodeLine{00202\ \ \ \ \ \}}
+\DoxyCodeLine{00203\ \ \ \}}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00205\ \ \ \textcolor{keywordflow}{if}\ (audio\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}AL\_RENDERER:"{}}\ <<\ alGetString(AL\_RENDERER)\ <<\ endl;}
+\DoxyCodeLine{00207\ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}AL\_VENDOR:"{}}\ <<\ alGetString(AL\_VENDOR)\ <<\ endl;}
+\DoxyCodeLine{00208\ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}AL\_VERSION:"{}}\ <<\ alGetString(AL\_VERSION)\ <<\ endl;}
+\DoxyCodeLine{00209\ \ \ \}}
+\DoxyCodeLine{00210\ \}}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00215\ OpenALAudioManager::}
+\DoxyCodeLine{00216\ \string~OpenALAudioManager()\ \{}
+\DoxyCodeLine{00217\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00218\ \ \ nassertv(\_managers\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00219\ \ \ Managers::iterator\ mi\ =\ \_managers-\/>find(\textcolor{keyword}{this});}
+\DoxyCodeLine{00220\ \ \ nassertv(mi\ !=\ \_managers-\/>end());}
+\DoxyCodeLine{00221\ \ \ \_managers-\/>erase(mi);}
+\DoxyCodeLine{00222\ \ \ cleanup();}
+\DoxyCodeLine{00223\ \}}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00231\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_a6e773d97cf49b70561042515dcc4c2c6}{OpenALAudioManager::}}}
+\DoxyCodeLine{00232\ \mbox{\hyperlink{classOpenALAudioManager_a6e773d97cf49b70561042515dcc4c2c6}{shutdown}}()\ \{}
+\DoxyCodeLine{00233\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00234\ \ \ \textcolor{keywordflow}{if}\ (\_managers\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00235\ \ \ \ \ Managers::iterator\ mi;}
+\DoxyCodeLine{00236\ \ \ \ \ \textcolor{keywordflow}{for}\ (mi\ =\ \_managers-\/>begin();\ mi\ !=\ \_managers-\/>end();\ ++mi)\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ (*mi)-\/>cleanup();}
+\DoxyCodeLine{00238\ \ \ \ \ \}}
+\DoxyCodeLine{00239\ \ \ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ nassertv(\_active\_managers\ ==\ 0);}
+\DoxyCodeLine{00242\ \}}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00249\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classOpenALAudioManager_a6693238be53021ff912e594765319969}{OpenALAudioManager::}}}
+\DoxyCodeLine{00250\ \mbox{\hyperlink{classOpenALAudioManager_a6693238be53021ff912e594765319969}{is\_valid}}()\ \{}
+\DoxyCodeLine{00251\ \ \ \textcolor{keywordflow}{return}\ \_is\_valid;}
+\DoxyCodeLine{00252\ \}}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00258\ \textcolor{keywordtype}{string}\ OpenALAudioManager::}
+\DoxyCodeLine{00259\ select\_audio\_device()\ \{}
+\DoxyCodeLine{00260\ \ \ \textcolor{keywordtype}{string}\ selected\_device\ =\ openal\_device;}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *devices\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00263\ }
+\DoxyCodeLine{00264\ \ \ \textcolor{comment}{//\ This\ extension\ gives\ us\ all\ audio\ paths\ on\ all\ drivers.}}
+\DoxyCodeLine{00265\ \ \ \textcolor{keywordflow}{if}\ (alcIsExtensionPresent(\textcolor{keyword}{nullptr},\ \textcolor{stringliteral}{"{}ALC\_ENUMERATE\_ALL\_EXT"{}})\ ==\ AL\_TRUE)\ \{}
+\DoxyCodeLine{00266\ \ \ \ \ \textcolor{keywordtype}{string}\ default\_device\ =\ alcGetString(\textcolor{keyword}{nullptr},\ ALC\_DEFAULT\_ALL\_DEVICES\_SPECIFIER);}
+\DoxyCodeLine{00267\ \ \ \ \ devices\ =\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)alcGetString(\textcolor{keyword}{nullptr},\ ALC\_ALL\_DEVICES\_SPECIFIER);}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{keywordflow}{if}\ (devices)\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (audio\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}All\ OpenAL\ devices:\(\backslash\)n"{}};}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (*devices)\ \{}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ device(devices);}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \ \ devices\ +=\ device.size()\ +\ 1;}
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (audio\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (device\ ==\ selected\_device)\ \{}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \ \ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}\ \ "{}}\ <<\ device\ <<\ \textcolor{stringliteral}{"{}\ [selected]\(\backslash\)n"{}};}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (device\ ==\ default\_device)\ \{}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \ \ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}\ \ "{}}\ <<\ device\ <<\ \textcolor{stringliteral}{"{}\ [default]\(\backslash\)n"{}};}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}\ \ "{}}\ <<\ device\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00288\ \ \ \ \ \}}
+\DoxyCodeLine{00289\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00290\ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}ALC\_ENUMERATE\_ALL\_EXT\ not\ supported\(\backslash\)n"{}};}
+\DoxyCodeLine{00291\ \ \ \}}
+\DoxyCodeLine{00292\ }
+\DoxyCodeLine{00293\ \ \ \textcolor{comment}{//\ This\ extension\ just\ gives\ us\ generic\ driver\ names,\ like\ "{}OpenAL\ Soft"{}\ and}}
+\DoxyCodeLine{00294\ \ \ \textcolor{comment}{//\ "{}Generic\ Software"{},\ rather\ than\ individual\ outputs.}}
+\DoxyCodeLine{00295\ \ \ \textcolor{keywordflow}{if}\ (alcIsExtensionPresent(\textcolor{keyword}{nullptr},\ \textcolor{stringliteral}{"{}ALC\_ENUMERATION\_EXT"{}})\ ==\ AL\_TRUE)\ \{}
+\DoxyCodeLine{00296\ \ \ \ \ \textcolor{keywordtype}{string}\ default\_device\ =\ alcGetString(\textcolor{keyword}{nullptr},\ ALC\_DEFAULT\_DEVICE\_SPECIFIER);}
+\DoxyCodeLine{00297\ \ \ \ \ devices\ =\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)alcGetString(\textcolor{keyword}{nullptr},\ ALC\_DEVICE\_SPECIFIER);}
+\DoxyCodeLine{00298\ }
+\DoxyCodeLine{00299\ \ \ \ \ \textcolor{keywordflow}{if}\ (devices)\ \{}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (audio\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}OpenAL\ drivers:\(\backslash\)n"{}};}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (*devices)\ \{}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ device(devices);}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \ \ devices\ +=\ device.size()\ +\ 1;}
+\DoxyCodeLine{00307\ }
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (selected\_device.empty()\ \&\&\ device\ ==\ \textcolor{stringliteral}{"{}OpenAL\ Soft"{}}\ \&\&}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \ \ \ \ \ \ default\_device\ ==\ \textcolor{stringliteral}{"{}Generic\ Software"{}})\ \{}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Prefer\ OpenAL\ Soft\ over\ the\ buggy\ Generic\ Software\ driver.}}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \ \ selected\_device\ =\ \textcolor{stringliteral}{"{}OpenAL\ Soft"{}};}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (audio\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (device\ ==\ selected\_device)\ \{}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}\ \ "{}}\ <<\ device\ <<\ \textcolor{stringliteral}{"{}\ [selected]\(\backslash\)n"{}};}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (device\ ==\ default\_device)\ \{}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}\ \ "{}}\ <<\ device\ <<\ \textcolor{stringliteral}{"{}\ [default]\(\backslash\)n"{}};}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}\ \ "{}}\ <<\ device\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00324\ \ \ \ \ \}}
+\DoxyCodeLine{00325\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00326\ \ \ \ \ audio\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}ALC\_ENUMERATION\_EXT\ not\ supported\(\backslash\)n"{}};}
+\DoxyCodeLine{00327\ \ \ \}}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00329\ \ \ \textcolor{keywordflow}{return}\ selected\_device;}
+\DoxyCodeLine{00330\ \}}
+\DoxyCodeLine{00331\ }
+\DoxyCodeLine{00336\ \textcolor{keywordtype}{void}\ OpenALAudioManager::}
+\DoxyCodeLine{00337\ make\_current()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00338\ \ \ \textcolor{comment}{//\ Since\ we\ only\ use\ one\ context,\ this\ is\ now\ a\ no-\/op.}}
+\DoxyCodeLine{00339\ \}}
+\DoxyCodeLine{00340\ }
+\DoxyCodeLine{00346\ \textcolor{keywordtype}{bool}\ OpenALAudioManager::}
+\DoxyCodeLine{00347\ can\_use\_audio(\mbox{\hyperlink{classMovieAudioCursor}{MovieAudioCursor}}\ *source)\ \{}
+\DoxyCodeLine{00348\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00349\ \ \ \textcolor{keywordtype}{int}\ channels\ =\ source-\/>audio\_channels();}
+\DoxyCodeLine{00350\ \ \ \textcolor{keywordflow}{if}\ ((channels\ !=\ 1)\&\&(channels\ !=\ 2))\ \{}
+\DoxyCodeLine{00351\ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}Currently,\ only\ mono\ and\ stereo\ are\ supported."{}});}
+\DoxyCodeLine{00352\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00353\ \ \ \}}
+\DoxyCodeLine{00354\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00355\ \}}
+\DoxyCodeLine{00356\ }
+\DoxyCodeLine{00362\ \textcolor{keywordtype}{bool}\ OpenALAudioManager::}
+\DoxyCodeLine{00363\ should\_load\_audio(\mbox{\hyperlink{classMovieAudioCursor}{MovieAudioCursor}}\ *source,\ \textcolor{keywordtype}{int}\ mode)\ \{}
+\DoxyCodeLine{00364\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00365\ \ \ \textcolor{keywordflow}{if}\ (mode\ ==\ SM\_stream)\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ \textcolor{comment}{//\ If\ the\ user\ asked\ for\ streaming,\ give\ him\ streaming.}}
+\DoxyCodeLine{00367\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00368\ \ \ \}}
+\DoxyCodeLine{00369\ \ \ \textcolor{keywordflow}{if}\ (source-\/>get\_source()-\/>get\_filename().empty())\ \{}
+\DoxyCodeLine{00370\ \ \ \ \ \textcolor{comment}{//\ Non-\/files\ cannot\ be\ preloaded.}}
+\DoxyCodeLine{00371\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00372\ \ \ \}}
+\DoxyCodeLine{00373\ \ \ \textcolor{keywordflow}{if}\ (source-\/>ready()\ !=\ 0x40000000)\ \{}
+\DoxyCodeLine{00374\ \ \ \ \ \textcolor{comment}{//\ Streaming\ sources\ cannot\ be\ preloaded.}}
+\DoxyCodeLine{00375\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00376\ \ \ \}}
+\DoxyCodeLine{00377\ \ \ \textcolor{keywordflow}{if}\ (source-\/>length()\ >\ 3600.0)\ \{}
+\DoxyCodeLine{00378\ \ \ \ \ \textcolor{comment}{//\ Anything\ longer\ than\ an\ hour\ cannot\ be\ preloaded.}}
+\DoxyCodeLine{00379\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00380\ \ \ \}}
+\DoxyCodeLine{00381\ \ \ \textcolor{keywordtype}{int}\ channels\ =\ source-\/>audio\_channels();}
+\DoxyCodeLine{00382\ \ \ \textcolor{keywordtype}{int}\ samples\ =\ (int)(source-\/>length()\ *\ source-\/>audio\_rate());}
+\DoxyCodeLine{00383\ \ \ \textcolor{keywordtype}{int}\ bytes\ =\ samples\ *\ channels\ *\ 2;}
+\DoxyCodeLine{00384\ \ \ \textcolor{keywordflow}{if}\ ((mode\ ==\ SM\_heuristic)\&\&(bytes\ >\ audio\_preload\_threshold))\ \{}
+\DoxyCodeLine{00385\ \ \ \ \ \textcolor{comment}{//\ In\ heuristic\ mode,\ if\ file\ is\ long,\ stream\ it.}}
+\DoxyCodeLine{00386\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00387\ \ \ \}}
+\DoxyCodeLine{00388\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00389\ \}}
+\DoxyCodeLine{00390\ }
+\DoxyCodeLine{00397\ OpenALAudioManager::SoundData\ *OpenALAudioManager::}
+\DoxyCodeLine{00398\ get\_sound\_data(\mbox{\hyperlink{classMovieAudio}{MovieAudio}}\ *movie,\ \textcolor{keywordtype}{int}\ mode)\ \{}
+\DoxyCodeLine{00399\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00400\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&path\ =\ movie-\/>get\_filename();}
+\DoxyCodeLine{00401\ }
+\DoxyCodeLine{00402\ \ \ \textcolor{comment}{//\ Search\ for\ an\ already-\/cached\ sample\ or\ an\ already-\/opened\ stream.}}
+\DoxyCodeLine{00403\ \ \ \textcolor{keywordflow}{if}\ (!path.empty())\ \{}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00405\ \ \ \ \ \textcolor{keywordflow}{if}\ (mode\ !=\ SM\_stream)\ \{}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ SampleCache::iterator\ lsmi=\_sample\_cache.find(path);}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (lsmi\ !=\ \_sample\_cache.end())\ \{}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ SoundData\ *sd\ =\ (*lsmi).second;}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ increment\_client\_count(sd);}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ sd;}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00412\ \ \ \ \ \}}
+\DoxyCodeLine{00413\ }
+\DoxyCodeLine{00414\ \ \ \ \ \textcolor{keywordflow}{if}\ (mode\ !=\ SM\_sample)\ \{}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ ExpirationQueue::iterator\ exqi;}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (exqi=\_expiring\_streams.begin();\ exqi!=\_expiring\_streams.end();\ exqi++)\ \{}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ SoundData\ *sd\ =\ (SoundData*)(*exqi);}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sd-\/>\_movie-\/>get\_filename()\ ==\ path)\ \{}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ \ \ increment\_client\_count(sd);}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ sd;}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00423\ \ \ \ \ \}}
+\DoxyCodeLine{00424\ \ \ \}}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ PT(\mbox{\hyperlink{classMovieAudioCursor}{MovieAudioCursor}})\ stream\ =\ movie-\/>open();}
+\DoxyCodeLine{00427\ \ \ \textcolor{keywordflow}{if}\ (stream\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00428\ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}Cannot\ open\ file:\ "{}}<<path);}
+\DoxyCodeLine{00429\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00430\ \ \ \}}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00432\ \ \ \textcolor{keywordflow}{if}\ (!can\_use\_audio(stream))\ \{}
+\DoxyCodeLine{00433\ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}File\ is\ not\ in\ usable\ format:\ "{}}<<path);}
+\DoxyCodeLine{00434\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00435\ \ \ \}}
+\DoxyCodeLine{00436\ }
+\DoxyCodeLine{00437\ \ \ SoundData\ *sd\ =\ \textcolor{keyword}{new}\ SoundData();}
+\DoxyCodeLine{00438\ \ \ sd-\/>\_client\_count\ =\ 1;}
+\DoxyCodeLine{00439\ \ \ sd-\/>\_manager\ \ =\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00440\ \ \ sd-\/>\_movie\ \ \ \ =\ movie;}
+\DoxyCodeLine{00441\ \ \ sd-\/>\_rate\ \ \ \ \ =\ stream-\/>audio\_rate();}
+\DoxyCodeLine{00442\ \ \ sd-\/>\_channels\ =\ stream-\/>audio\_channels();}
+\DoxyCodeLine{00443\ \ \ sd-\/>\_length\ \ \ =\ stream-\/>length();}
+\DoxyCodeLine{00444\ \ \ audio\_debug(\textcolor{stringliteral}{"{}Creating:\ "{}}\ <<\ sd-\/>\_movie-\/>get\_filename().get\_basename());}
+\DoxyCodeLine{00445\ \ \ audio\_debug(\textcolor{stringliteral}{"{}\ \ -\/\ Rate:\ "{}}\ <<\ sd-\/>\_rate);}
+\DoxyCodeLine{00446\ \ \ audio\_debug(\textcolor{stringliteral}{"{}\ \ -\/\ Channels:\ "{}}\ <<\ sd-\/>\_channels);}
+\DoxyCodeLine{00447\ \ \ audio\_debug(\textcolor{stringliteral}{"{}\ \ -\/\ Length:\ "{}}\ <<\ sd-\/>\_length);}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00449\ \ \ \textcolor{keywordflow}{if}\ (should\_load\_audio(stream,\ mode))\ \{}
+\DoxyCodeLine{00450\ \ \ \ \ audio\_debug(path.get\_basename()\ <<\ \textcolor{stringliteral}{"{}:\ loading\ as\ sample"{}});}
+\DoxyCodeLine{00451\ \ \ \ \ make\_current();}
+\DoxyCodeLine{00452\ \ \ \ \ alGetError();\ \textcolor{comment}{//\ clear\ errors}}
+\DoxyCodeLine{00453\ \ \ \ \ sd-\/>\_sample\ =\ 0;}
+\DoxyCodeLine{00454\ \ \ \ \ alGenBuffers(1,\ \&sd-\/>\_sample);}
+\DoxyCodeLine{00455\ \ \ \ \ al\_audio\_errcheck(\textcolor{stringliteral}{"{}alGenBuffers"{}});}
+\DoxyCodeLine{00456\ \ \ \ \ \textcolor{keywordflow}{if}\ (sd-\/>\_sample\ ==\ 0)\ \{}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}Could\ not\ create\ an\ OpenAL\ buffer\ object"{}});}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ sd;}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00460\ \ \ \ \ \}}
+\DoxyCodeLine{00461\ \ \ \ \ \textcolor{keywordtype}{int}\ channels\ =\ stream-\/>audio\_channels();}
+\DoxyCodeLine{00462\ \ \ \ \ \textcolor{keywordtype}{int}\ samples\ =\ (int)(stream-\/>length()\ *\ stream-\/>audio\_rate());}
+\DoxyCodeLine{00463\ \ \ \ \ int16\_t\ *data\ =\ \textcolor{keyword}{new}\ int16\_t[samples\ *\ channels];}
+\DoxyCodeLine{00464\ \ \ \ \ samples\ =\ stream-\/>read\_samples(samples,\ data);}
+\DoxyCodeLine{00465\ \ \ \ \ alBufferData(sd-\/>\_sample,}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (channels>1)\ ?\ AL\_FORMAT\_STEREO16\ :\ AL\_FORMAT\_MONO16,}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ data,\ samples\ *\ channels\ *\ 2,\ stream-\/>audio\_rate());}
+\DoxyCodeLine{00468\ \ \ \ \ \textcolor{keyword}{delete}[]\ data;}
+\DoxyCodeLine{00469\ \ \ \ \ \textcolor{keywordtype}{int}\ err\ =\ alGetError();}
+\DoxyCodeLine{00470\ \ \ \ \ \textcolor{keywordflow}{if}\ (err\ !=\ AL\_NO\_ERROR)\ \{}
+\DoxyCodeLine{00471\ \ \ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}could\ not\ fill\ OpenAL\ buffer\ object\ with\ data"{}});}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ sd;}
+\DoxyCodeLine{00473\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00474\ \ \ \ \ \}}
+\DoxyCodeLine{00475\ \ \ \ \ \_sample\_cache.insert(SampleCache::value\_type(path,\ sd));}
+\DoxyCodeLine{00476\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00477\ \ \ \ \ audio\_debug(path.get\_basename()\ <<\ \textcolor{stringliteral}{"{}:\ loading\ as\ stream"{}});}
+\DoxyCodeLine{00478\ \ \ \ \ sd-\/>\_stream\ =\ stream;}
+\DoxyCodeLine{00479\ \ \ \}}
+\DoxyCodeLine{00480\ }
+\DoxyCodeLine{00481\ \ \ \textcolor{keywordflow}{return}\ sd;}
+\DoxyCodeLine{00482\ \}}
+\DoxyCodeLine{00483\ }
+\DoxyCodeLine{00487\ PT(\mbox{\hyperlink{classAudioSound}{AudioSound}})\ OpenALAudioManager::}
+\DoxyCodeLine{00488\ get\_sound(\mbox{\hyperlink{classMovieAudio}{MovieAudio}}\ *sound,\ \textcolor{keywordtype}{bool}\ positional,\ \textcolor{keywordtype}{int}\ mode)\ \{}
+\DoxyCodeLine{00489\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00490\ \ \ \textcolor{keywordflow}{if}(!\mbox{\hyperlink{classOpenALAudioManager_a6693238be53021ff912e594765319969}{is\_valid}}())\ \{}
+\DoxyCodeLine{00491\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_null\_sound();}
+\DoxyCodeLine{00492\ \ \ \}}
+\DoxyCodeLine{00493\ \ \ PT(\mbox{\hyperlink{classOpenALAudioSound}{OpenALAudioSound}})\ oas\ =}
+\DoxyCodeLine{00494\ \ \ \ \ \textcolor{keyword}{new}\ \mbox{\hyperlink{classOpenALAudioSound}{OpenALAudioSound}}(\textcolor{keyword}{this},\ sound,\ positional,\ mode);}
+\DoxyCodeLine{00495\ }
+\DoxyCodeLine{00496\ \ \ \textcolor{keywordflow}{if}(!oas-\/>\_manager)\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ \textcolor{comment}{//\ The\ sound\ cleaned\ itself\ up\ immediately.\ It\ pretty\ clearly\ didn't\ like}}
+\DoxyCodeLine{00498\ \ \ \ \ \textcolor{comment}{//\ something,\ so\ we\ should\ just\ return\ a\ null\ sound\ instead.}}
+\DoxyCodeLine{00499\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_null\_sound();}
+\DoxyCodeLine{00500\ \ \ \}}
+\DoxyCodeLine{00501\ }
+\DoxyCodeLine{00502\ \ \ \_all\_sounds.insert(oas);}
+\DoxyCodeLine{00503\ \ \ PT(\mbox{\hyperlink{classAudioSound}{AudioSound}})\ res\ =\ (\mbox{\hyperlink{classAudioSound}{AudioSound}}*)(\mbox{\hyperlink{classOpenALAudioSound}{OpenALAudioSound}}*)oas;}
+\DoxyCodeLine{00504\ \ \ \textcolor{keywordflow}{return}\ res;}
+\DoxyCodeLine{00505\ \}}
+\DoxyCodeLine{00506\ }
+\DoxyCodeLine{00510\ PT(\mbox{\hyperlink{classAudioSound}{AudioSound}})\ OpenALAudioManager::}
+\DoxyCodeLine{00511\ get\_sound(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&file\_name,\ \textcolor{keywordtype}{bool}\ positional,\ \textcolor{keywordtype}{int}\ mode)\ \{}
+\DoxyCodeLine{00512\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00513\ \ \ \textcolor{keywordflow}{if}(!\mbox{\hyperlink{classOpenALAudioManager_a6693238be53021ff912e594765319969}{is\_valid}}())\ \{}
+\DoxyCodeLine{00514\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_null\_sound();}
+\DoxyCodeLine{00515\ \ \ \}}
+\DoxyCodeLine{00516\ }
+\DoxyCodeLine{00517\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ path\ =\ file\_name;}
+\DoxyCodeLine{00518\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00519\ \ \ vfs-\/>resolve\_filename(path,\ get\_model\_path());}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ \ \ \textcolor{keywordflow}{if}\ (path.empty())\ \{}
+\DoxyCodeLine{00522\ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}get\_sound\ -\/\ invalid\ filename"{}});}
+\DoxyCodeLine{00523\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00524\ \ \ \}}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00526\ \ \ PT(\mbox{\hyperlink{classMovieAudio}{MovieAudio}})\ mva\ =\ MovieAudio::get(path);}
+\DoxyCodeLine{00527\ }
+\DoxyCodeLine{00528\ \ \ PT(\mbox{\hyperlink{classOpenALAudioSound}{OpenALAudioSound}})\ oas\ =}
+\DoxyCodeLine{00529\ \ \ \ \ \textcolor{keyword}{new}\ \mbox{\hyperlink{classOpenALAudioSound}{OpenALAudioSound}}(\textcolor{keyword}{this},\ mva,\ positional,\ mode);}
+\DoxyCodeLine{00530\ }
+\DoxyCodeLine{00531\ \ \ \textcolor{keywordflow}{if}(!oas-\/>\_manager)\ \{}
+\DoxyCodeLine{00532\ \ \ \ \ \textcolor{comment}{//\ The\ sound\ cleaned\ itself\ up\ immediately.\ It\ pretty\ clearly\ didn't\ like}}
+\DoxyCodeLine{00533\ \ \ \ \ \textcolor{comment}{//\ something,\ so\ we\ should\ just\ return\ a\ null\ sound\ instead.}}
+\DoxyCodeLine{00534\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_null\_sound();}
+\DoxyCodeLine{00535\ \ \ \}}
+\DoxyCodeLine{00536\ }
+\DoxyCodeLine{00537\ \ \ \_all\_sounds.insert(oas);}
+\DoxyCodeLine{00538\ \ \ PT(\mbox{\hyperlink{classAudioSound}{AudioSound}})\ res\ =\ (\mbox{\hyperlink{classAudioSound}{AudioSound}}*)(\mbox{\hyperlink{classOpenALAudioSound}{OpenALAudioSound}}*)oas;}
+\DoxyCodeLine{00539\ \ \ \textcolor{keywordflow}{return}\ res;}
+\DoxyCodeLine{00540\ \}}
+\DoxyCodeLine{00541\ }
+\DoxyCodeLine{00546\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_a33dae8f50f266270b3ffce7d0829173d}{OpenALAudioManager::}}}
+\DoxyCodeLine{00547\ \mbox{\hyperlink{classOpenALAudioManager_a33dae8f50f266270b3ffce7d0829173d}{uncache\_sound}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&file\_name)\ \{}
+\DoxyCodeLine{00548\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00549\ \ \ nassertv(\mbox{\hyperlink{classOpenALAudioManager_a6693238be53021ff912e594765319969}{is\_valid}}());}
+\DoxyCodeLine{00550\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ path\ =\ file\_name;}
+\DoxyCodeLine{00551\ }
+\DoxyCodeLine{00552\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00553\ \ \ vfs-\/>resolve\_filename(path,\ get\_model\_path());}
+\DoxyCodeLine{00554\ }
+\DoxyCodeLine{00555\ \ \ SampleCache::iterator\ sci\ =\ \_sample\_cache.find(path);}
+\DoxyCodeLine{00556\ \ \ \textcolor{keywordflow}{if}\ (sci\ ==\ \_sample\_cache.end())\ \{}
+\DoxyCodeLine{00557\ \ \ \ \ sci\ =\ \_sample\_cache.find(file\_name);}
+\DoxyCodeLine{00558\ \ \ \}}
+\DoxyCodeLine{00559\ \ \ \textcolor{keywordflow}{if}\ (sci\ !=\ \_sample\_cache.end())\ \{}
+\DoxyCodeLine{00560\ \ \ \ \ SoundData\ *sd\ =\ (*sci).second;}
+\DoxyCodeLine{00561\ \ \ \ \ \textcolor{keywordflow}{if}\ (sd-\/>\_client\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ \_expiring\_samples.erase(sd-\/>\_expire);}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \_sample\_cache.erase(sci);}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ sd;}
+\DoxyCodeLine{00565\ \ \ \ \ \}}
+\DoxyCodeLine{00566\ \ \ \}}
+\DoxyCodeLine{00567\ }
+\DoxyCodeLine{00568\ \ \ ExpirationQueue::iterator\ exqi;}
+\DoxyCodeLine{00569\ \ \ \textcolor{keywordflow}{for}\ (exqi\ =\ \_expiring\_streams.begin();\ exqi\ !=\ \_expiring\_streams.end();)\ \{}
+\DoxyCodeLine{00570\ \ \ \ \ SoundData\ *sd\ =\ (SoundData\ *)(*exqi);}
+\DoxyCodeLine{00571\ \ \ \ \ \textcolor{keywordflow}{if}\ (sd-\/>\_client\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sd-\/>\_movie-\/>get\_filename()\ ==\ path\ ||}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \ \ \ \ sd-\/>\_movie-\/>get\_filename()\ ==\ file\_name)\ \{}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \ \ exqi\ =\ \_expiring\_streams.erase(exqi);}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \ \ \textcolor{keyword}{delete}\ sd;}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00578\ \ \ \ \ \}}
+\DoxyCodeLine{00579\ \ \ \ \ ++exqi;}
+\DoxyCodeLine{00580\ \ \ \}}
+\DoxyCodeLine{00581\ \}}
+\DoxyCodeLine{00582\ }
+\DoxyCodeLine{00586\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_a8bbea9af2a140a6cef23b5ad8fb235b4}{OpenALAudioManager::}}}
+\DoxyCodeLine{00587\ \mbox{\hyperlink{classOpenALAudioManager_a8bbea9af2a140a6cef23b5ad8fb235b4}{clear\_cache}}()\ \{}
+\DoxyCodeLine{00588\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00589\ \ \ discard\_excess\_cache(0);}
+\DoxyCodeLine{00590\ \}}
+\DoxyCodeLine{00591\ }
+\DoxyCodeLine{00595\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_a12fa2e8fa09a08c2435c300f0c78b472}{OpenALAudioManager::}}}
+\DoxyCodeLine{00596\ \mbox{\hyperlink{classOpenALAudioManager_a12fa2e8fa09a08c2435c300f0c78b472}{set\_cache\_limit}}(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ count)\ \{}
+\DoxyCodeLine{00597\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00598\ \ \ \_cache\_limit=count;}
+\DoxyCodeLine{00599\ \ \ discard\_excess\_cache(count);}
+\DoxyCodeLine{00600\ \}}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00605\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ OpenALAudioManager::}
+\DoxyCodeLine{00606\ get\_cache\_limit()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00607\ \ \ \textcolor{keywordflow}{return}\ \_cache\_limit;}
+\DoxyCodeLine{00608\ \}}
+\DoxyCodeLine{00609\ }
+\DoxyCodeLine{00613\ \textcolor{keywordtype}{void}\ OpenALAudioManager::}
+\DoxyCodeLine{00614\ release\_sound(\mbox{\hyperlink{classOpenALAudioSound}{OpenALAudioSound}}*\ audioSound)\ \{}
+\DoxyCodeLine{00615\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00616\ \ \ AllSounds::iterator\ ai\ =\ \_all\_sounds.find(audioSound);}
+\DoxyCodeLine{00617\ \ \ \textcolor{keywordflow}{if}\ (ai\ !=\ \_all\_sounds.end())\ \{}
+\DoxyCodeLine{00618\ \ \ \ \ \_all\_sounds.erase(ai);}
+\DoxyCodeLine{00619\ \ \ \}}
+\DoxyCodeLine{00620\ \}}
+\DoxyCodeLine{00621\ }
+\DoxyCodeLine{00626\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_af7c7b23fb1fee1c260a23e6e82e70add}{OpenALAudioManager::set\_volume}}(PN\_stdfloat\ volume)\ \{}
+\DoxyCodeLine{00627\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00628\ \ \ \textcolor{keywordflow}{if}\ (\_volume!=volume)\ \{}
+\DoxyCodeLine{00629\ \ \ \ \ \_volume\ =\ volume;}
+\DoxyCodeLine{00630\ }
+\DoxyCodeLine{00631\ \ \ \ \ \textcolor{comment}{//\ Tell\ our\ AudioSounds\ to\ adjust:}}
+\DoxyCodeLine{00632\ \ \ \ \ AllSounds::iterator\ i=\_all\_sounds.begin();}
+\DoxyCodeLine{00633\ \ \ \ \ \textcolor{keywordflow}{for}\ (;\ i!=\_all\_sounds.end();\ ++i)\ \{}
+\DoxyCodeLine{00634\ \ \ \ \ \ \ (**i).set\_volume((**i).get\_volume());}
+\DoxyCodeLine{00635\ \ \ \ \ \}}
+\DoxyCodeLine{00636\ }
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00638\ \textcolor{comment}{\ \ \ \ //\ this\ was\ neat\ alternative\ to\ the\ above\ look\ when\ we\ had\ a\ seperate}}
+\DoxyCodeLine{00639\ \textcolor{comment}{\ \ \ \ //\ context\ for\ each\ manager}}
+\DoxyCodeLine{00640\ \textcolor{comment}{\ \ \ \ make\_current();}}
+\DoxyCodeLine{00641\ \textcolor{comment}{}}
+\DoxyCodeLine{00642\ \textcolor{comment}{\ \ \ \ alGetError();\ //\ clear\ errors}}
+\DoxyCodeLine{00643\ \textcolor{comment}{\ \ \ \ alListenerf(AL\_GAIN,(ALfloat)\_volume);}}
+\DoxyCodeLine{00644\ \textcolor{comment}{\ \ \ \ al\_audio\_errcheck("{}alListerf(AL\_GAIN)"{});*/}}
+\DoxyCodeLine{00645\ \ \ \}}
+\DoxyCodeLine{00646\ \}}
+\DoxyCodeLine{00647\ }
+\DoxyCodeLine{00652\ PN\_stdfloat\ \mbox{\hyperlink{classOpenALAudioManager_a8bca471a9317ed26a9925c1fe7cf0d34}{OpenALAudioManager::}}}
+\DoxyCodeLine{00653\ \mbox{\hyperlink{classOpenALAudioManager_a8bca471a9317ed26a9925c1fe7cf0d34}{get\_volume}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00654\ \ \ \textcolor{keywordflow}{return}\ \_volume;}
+\DoxyCodeLine{00655\ \}}
+\DoxyCodeLine{00656\ }
+\DoxyCodeLine{00660\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_aa14fc74313cb6d4b384180ab97d8ebea}{OpenALAudioManager::}}}
+\DoxyCodeLine{00661\ \mbox{\hyperlink{classOpenALAudioManager_aa14fc74313cb6d4b384180ab97d8ebea}{set\_play\_rate}}(PN\_stdfloat\ play\_rate)\ \{}
+\DoxyCodeLine{00662\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00663\ \ \ \textcolor{keywordflow}{if}\ (\_play\_rate!=play\_rate)\ \{}
+\DoxyCodeLine{00664\ \ \ \ \ \_play\_rate\ =\ play\_rate;}
+\DoxyCodeLine{00665\ \ \ \ \ \textcolor{comment}{//\ Tell\ our\ AudioSounds\ to\ adjust:}}
+\DoxyCodeLine{00666\ \ \ \ \ AllSounds::iterator\ i=\_all\_sounds.begin();}
+\DoxyCodeLine{00667\ \ \ \ \ \textcolor{keywordflow}{for}\ (;\ i!=\_all\_sounds.end();\ ++i)\ \{}
+\DoxyCodeLine{00668\ \ \ \ \ \ \ (**i).set\_play\_rate((**i).get\_play\_rate());}
+\DoxyCodeLine{00669\ \ \ \ \ \}}
+\DoxyCodeLine{00670\ \ \ \}}
+\DoxyCodeLine{00671\ \}}
+\DoxyCodeLine{00672\ }
+\DoxyCodeLine{00676\ PN\_stdfloat\ \mbox{\hyperlink{classOpenALAudioManager_aba1eee845eddec1c60ea75e5a10706b5}{OpenALAudioManager::}}}
+\DoxyCodeLine{00677\ \mbox{\hyperlink{classOpenALAudioManager_aba1eee845eddec1c60ea75e5a10706b5}{get\_play\_rate}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00678\ \ \ \textcolor{keywordflow}{return}\ \_play\_rate;}
+\DoxyCodeLine{00679\ \}}
+\DoxyCodeLine{00680\ }
+\DoxyCodeLine{00684\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_a00a805ffbb00c99c47a9fbd7ccf7989d}{OpenALAudioManager::}}}
+\DoxyCodeLine{00685\ \mbox{\hyperlink{classOpenALAudioManager_a00a805ffbb00c99c47a9fbd7ccf7989d}{set\_active}}(\textcolor{keywordtype}{bool}\ active)\ \{}
+\DoxyCodeLine{00686\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00687\ \ \ \textcolor{keywordflow}{if}\ (\_active!=active)\ \{}
+\DoxyCodeLine{00688\ \ \ \ \ \_active=active;}
+\DoxyCodeLine{00689\ \ \ \ \ \textcolor{comment}{//\ Tell\ our\ AudioSounds\ to\ adjust:}}
+\DoxyCodeLine{00690\ \ \ \ \ AllSounds::iterator\ i=\_all\_sounds.begin();}
+\DoxyCodeLine{00691\ \ \ \ \ \textcolor{keywordflow}{for}\ (;\ i!=\_all\_sounds.end();\ ++i)\ \{}
+\DoxyCodeLine{00692\ \ \ \ \ \ \ (**i).set\_active(\_active);}
+\DoxyCodeLine{00693\ \ \ \ \ \}}
+\DoxyCodeLine{00694\ \ \ \}}
+\DoxyCodeLine{00695\ \}}
+\DoxyCodeLine{00696\ }
+\DoxyCodeLine{00700\ \textcolor{keywordtype}{bool}\ OpenALAudioManager::}
+\DoxyCodeLine{00701\ get\_active()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00702\ \ \ \textcolor{keywordflow}{return}\ \_active;}
+\DoxyCodeLine{00703\ \}}
+\DoxyCodeLine{00704\ }
+\DoxyCodeLine{00716\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_ae0d652ebef95ad6c5ed977ca7ef30f79}{OpenALAudioManager::}}}
+\DoxyCodeLine{00717\ \mbox{\hyperlink{classOpenALAudioManager_ae0d652ebef95ad6c5ed977ca7ef30f79}{audio\_3d\_set\_listener\_attributes}}(PN\_stdfloat\ px,\ PN\_stdfloat\ py,\ PN\_stdfloat\ pz,\ PN\_stdfloat\ vx,\ PN\_stdfloat\ vy,\ PN\_stdfloat\ vz,\ PN\_stdfloat\ fx,\ PN\_stdfloat\ fy,\ PN\_stdfloat\ fz,\ PN\_stdfloat\ ux,\ PN\_stdfloat\ uy,\ PN\_stdfloat\ uz)\ \{}
+\DoxyCodeLine{00718\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00719\ \ \ \_position[0]\ =\ px;}
+\DoxyCodeLine{00720\ \ \ \_position[1]\ =\ pz;}
+\DoxyCodeLine{00721\ \ \ \_position[2]\ =\ -\/py;}
+\DoxyCodeLine{00722\ }
+\DoxyCodeLine{00723\ \ \ \_velocity[0]\ =\ vx;}
+\DoxyCodeLine{00724\ \ \ \_velocity[1]\ =\ vz;}
+\DoxyCodeLine{00725\ \ \ \_velocity[2]\ =\ -\/vy;}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00727\ \ \ \_forward\_up[0]\ =\ fx;}
+\DoxyCodeLine{00728\ \ \ \_forward\_up[1]\ =\ fz;}
+\DoxyCodeLine{00729\ \ \ \_forward\_up[2]\ =\ -\/fy;}
+\DoxyCodeLine{00730\ }
+\DoxyCodeLine{00731\ \ \ \_forward\_up[3]\ =\ ux;}
+\DoxyCodeLine{00732\ \ \ \_forward\_up[4]\ =\ uz;}
+\DoxyCodeLine{00733\ \ \ \_forward\_up[5]\ =\ -\/uy;}
+\DoxyCodeLine{00734\ }
+\DoxyCodeLine{00735\ }
+\DoxyCodeLine{00736\ \ \ make\_current();}
+\DoxyCodeLine{00737\ }
+\DoxyCodeLine{00738\ \ \ alGetError();\ \textcolor{comment}{//\ clear\ errors}}
+\DoxyCodeLine{00739\ \ \ alListenerfv(AL\_POSITION,\_position);}
+\DoxyCodeLine{00740\ \ \ al\_audio\_errcheck(\textcolor{stringliteral}{"{}alListerfv(AL\_POSITION)"{}});}
+\DoxyCodeLine{00741\ \ \ alListenerfv(AL\_VELOCITY,\_velocity);}
+\DoxyCodeLine{00742\ \ \ al\_audio\_errcheck(\textcolor{stringliteral}{"{}alListerfv(AL\_VELOCITY)"{}});}
+\DoxyCodeLine{00743\ \ \ alListenerfv(AL\_ORIENTATION,\_forward\_up);}
+\DoxyCodeLine{00744\ \ \ al\_audio\_errcheck(\textcolor{stringliteral}{"{}alListerfv(AL\_ORIENTATION)"{}});}
+\DoxyCodeLine{00745\ \}}
+\DoxyCodeLine{00746\ }
+\DoxyCodeLine{00750\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_a0808e1f6cb0e16847f247636c26cfeb6}{OpenALAudioManager::}}}
+\DoxyCodeLine{00751\ \mbox{\hyperlink{classOpenALAudioManager_a0808e1f6cb0e16847f247636c26cfeb6}{audio\_3d\_get\_listener\_attributes}}(PN\_stdfloat\ *px,\ PN\_stdfloat\ *py,\ PN\_stdfloat\ *pz,\ PN\_stdfloat\ *vx,\ PN\_stdfloat\ *vy,\ PN\_stdfloat\ *vz,\ PN\_stdfloat\ *fx,\ PN\_stdfloat\ *fy,\ PN\_stdfloat\ *fz,\ PN\_stdfloat\ *ux,\ PN\_stdfloat\ *uy,\ PN\_stdfloat\ *uz)\ \{}
+\DoxyCodeLine{00752\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00753\ \ \ *px\ =\ \_position[0];}
+\DoxyCodeLine{00754\ \ \ *py\ =\ -\/\_position[2];}
+\DoxyCodeLine{00755\ \ \ *pz\ =\ \_position[1];}
+\DoxyCodeLine{00756\ }
+\DoxyCodeLine{00757\ \ \ *vx\ =\ \_velocity[0];}
+\DoxyCodeLine{00758\ \ \ *vy\ =\ -\/\_velocity[2];}
+\DoxyCodeLine{00759\ \ \ *vz\ =\ \_velocity[1];}
+\DoxyCodeLine{00760\ }
+\DoxyCodeLine{00761\ \ \ *fx\ =\ \_forward\_up[0];}
+\DoxyCodeLine{00762\ \ \ *fy\ =\ -\/\_forward\_up[2];}
+\DoxyCodeLine{00763\ \ \ *fz\ =\ \_forward\_up[1];}
+\DoxyCodeLine{00764\ }
+\DoxyCodeLine{00765\ \ \ *ux\ =\ \_forward\_up[3];}
+\DoxyCodeLine{00766\ \ \ *uy\ =\ -\/\_forward\_up[5];}
+\DoxyCodeLine{00767\ \ \ *uz\ =\ \_forward\_up[4];}
+\DoxyCodeLine{00768\ \}}
+\DoxyCodeLine{00769\ }
+\DoxyCodeLine{00776\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_aa4635fa8d38e107d0c75ff42e9f835ac}{OpenALAudioManager::}}}
+\DoxyCodeLine{00777\ \mbox{\hyperlink{classOpenALAudioManager_aa4635fa8d38e107d0c75ff42e9f835ac}{audio\_3d\_set\_distance\_factor}}(PN\_stdfloat\ factor)\ \{}
+\DoxyCodeLine{00778\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00779\ \ \ \_distance\_factor\ =\ factor;}
+\DoxyCodeLine{00780\ }
+\DoxyCodeLine{00781\ \ \ make\_current();}
+\DoxyCodeLine{00782\ }
+\DoxyCodeLine{00783\ \ \ alGetError();\ \textcolor{comment}{//\ clear\ errors}}
+\DoxyCodeLine{00784\ }
+\DoxyCodeLine{00785\ \ \ \textcolor{keywordflow}{if}\ (\_distance\_factor>0)\ \{}
+\DoxyCodeLine{00786\ \ \ \ \ alSpeedOfSound(343.3*\_distance\_factor);}
+\DoxyCodeLine{00787\ \ \ \ \ al\_audio\_errcheck(\textcolor{stringliteral}{"{}alSpeedOfSound()"{}});}
+\DoxyCodeLine{00788\ \ \ \ \ \textcolor{comment}{//\ resets\ the\ doppler\ factor\ to\ the\ correct\ setting\ in\ case\ it\ was\ set\ to}}
+\DoxyCodeLine{00789\ \ \ \ \ \textcolor{comment}{//\ 0.0\ by\ a\ distance\_factor<=0.0}}
+\DoxyCodeLine{00790\ \ \ \ \ alDopplerFactor(\_doppler\_factor);}
+\DoxyCodeLine{00791\ \ \ \ \ al\_audio\_errcheck(\textcolor{stringliteral}{"{}alDopplerFactor()"{}});}
+\DoxyCodeLine{00792\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00793\ \ \ \ \ audio\_debug(\textcolor{stringliteral}{"{}can't\ set\ speed\ of\ sound\ if\ distance\_factor\ <=0.0,\ setting\ doppler\ factor\ to\ 0.0\ instead"{}});}
+\DoxyCodeLine{00794\ \ \ \ \ alDopplerFactor(0.0);}
+\DoxyCodeLine{00795\ \ \ \ \ al\_audio\_errcheck(\textcolor{stringliteral}{"{}alDopplerFactor()"{}});}
+\DoxyCodeLine{00796\ \ \ \}}
+\DoxyCodeLine{00797\ }
+\DoxyCodeLine{00798\ \ \ AllSounds::iterator\ i=\_all\_sounds.begin();}
+\DoxyCodeLine{00799\ \ \ \textcolor{keywordflow}{for}\ (;\ i!=\_all\_sounds.end();\ ++i)\ \{}
+\DoxyCodeLine{00800\ \ \ \ \ (**i).set\_3d\_min\_distance((**i).get\_3d\_min\_distance());}
+\DoxyCodeLine{00801\ \ \ \ \ (**i).set\_3d\_max\_distance((**i).get\_3d\_max\_distance());}
+\DoxyCodeLine{00802\ \ \ \}}
+\DoxyCodeLine{00803\ \}}
+\DoxyCodeLine{00804\ }
+\DoxyCodeLine{00808\ PN\_stdfloat\ \mbox{\hyperlink{classOpenALAudioManager_a7837440242c0c4e258b3cf595c27c279}{OpenALAudioManager::}}}
+\DoxyCodeLine{00809\ \mbox{\hyperlink{classOpenALAudioManager_a7837440242c0c4e258b3cf595c27c279}{audio\_3d\_get\_distance\_factor}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00810\ \ \ \textcolor{keywordflow}{return}\ \_distance\_factor;}
+\DoxyCodeLine{00811\ \}}
+\DoxyCodeLine{00812\ }
+\DoxyCodeLine{00816\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_aa353a27b5c2a02b5082c403354038090}{OpenALAudioManager::}}}
+\DoxyCodeLine{00817\ \mbox{\hyperlink{classOpenALAudioManager_aa353a27b5c2a02b5082c403354038090}{audio\_3d\_set\_doppler\_factor}}(PN\_stdfloat\ factor)\ \{}
+\DoxyCodeLine{00818\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00819\ \ \ \_doppler\_factor\ =\ factor;}
+\DoxyCodeLine{00820\ }
+\DoxyCodeLine{00821\ \ \ make\_current();}
+\DoxyCodeLine{00822\ }
+\DoxyCodeLine{00823\ \ \ alGetError();\ \textcolor{comment}{//\ clear\ errors}}
+\DoxyCodeLine{00824\ \ \ alDopplerFactor(\_doppler\_factor);}
+\DoxyCodeLine{00825\ \ \ al\_audio\_errcheck(\textcolor{stringliteral}{"{}alDopplerFactor()"{}});}
+\DoxyCodeLine{00826\ \}}
+\DoxyCodeLine{00827\ }
+\DoxyCodeLine{00831\ PN\_stdfloat\ OpenALAudioManager::}
+\DoxyCodeLine{00832\ audio\_3d\_get\_doppler\_factor()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00833\ \ \ \textcolor{keywordflow}{return}\ \_doppler\_factor;}
+\DoxyCodeLine{00834\ \}}
+\DoxyCodeLine{00835\ }
+\DoxyCodeLine{00839\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_ac4edc078a1459d06b12edc537cc2e6b9}{OpenALAudioManager::}}}
+\DoxyCodeLine{00840\ \mbox{\hyperlink{classOpenALAudioManager_ac4edc078a1459d06b12edc537cc2e6b9}{audio\_3d\_set\_drop\_off\_factor}}(PN\_stdfloat\ factor)\ \{}
+\DoxyCodeLine{00841\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00842\ \ \ \_drop\_off\_factor\ =\ factor;}
+\DoxyCodeLine{00843\ }
+\DoxyCodeLine{00844\ \ \ AllSounds::iterator\ i=\_all\_sounds.begin();}
+\DoxyCodeLine{00845\ \ \ \textcolor{keywordflow}{for}\ (;\ i!=\_all\_sounds.end();\ ++i)\ \{}
+\DoxyCodeLine{00846\ \ \ \ \ (**i).set\_3d\_drop\_off\_factor((**i).get\_3d\_drop\_off\_factor());}
+\DoxyCodeLine{00847\ \ \ \}}
+\DoxyCodeLine{00848\ \}}
+\DoxyCodeLine{00849\ }
+\DoxyCodeLine{00853\ PN\_stdfloat\ OpenALAudioManager::}
+\DoxyCodeLine{00854\ audio\_3d\_get\_drop\_off\_factor()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00855\ \ \ \textcolor{keywordflow}{return}\ \_drop\_off\_factor;}
+\DoxyCodeLine{00856\ \}}
+\DoxyCodeLine{00857\ }
+\DoxyCodeLine{00863\ \textcolor{keywordtype}{void}\ OpenALAudioManager::}
+\DoxyCodeLine{00864\ starting\_sound(\mbox{\hyperlink{classOpenALAudioSound}{OpenALAudioSound}}*\ audio)\ \{}
+\DoxyCodeLine{00865\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00866\ \ \ ALuint\ source=0;}
+\DoxyCodeLine{00867\ }
+\DoxyCodeLine{00868\ \ \ \textcolor{comment}{//\ If\ the\ sound\ already\ has\ a\ source,\ we\ don't\ need\ to\ do\ anything.}}
+\DoxyCodeLine{00869\ \ \ \textcolor{keywordflow}{if}\ (audio-\/>\_source)\ \{}
+\DoxyCodeLine{00870\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00871\ \ \ \}}
+\DoxyCodeLine{00872\ }
+\DoxyCodeLine{00873\ \ \ \textcolor{comment}{//\ first\ give\ all\ sounds\ that\ have\ finished\ a\ chance\ to\ stop,\ so\ that\ these}}
+\DoxyCodeLine{00874\ \ \ \textcolor{comment}{//\ get\ stopped\ first}}
+\DoxyCodeLine{00875\ \ \ \mbox{\hyperlink{classOpenALAudioManager_af6b52ea729913e77c453839df315203b}{update}}();}
+\DoxyCodeLine{00876\ }
+\DoxyCodeLine{00877\ \ \ \textcolor{keywordflow}{if}\ (\_concurrent\_sound\_limit)\ \{}
+\DoxyCodeLine{00878\ \ \ \ \ reduce\_sounds\_playing\_to(\_concurrent\_sound\_limit-\/1);\ \textcolor{comment}{//\ because\ we're\ about\ to\ add\ one}}
+\DoxyCodeLine{00879\ \ \ \}}
+\DoxyCodeLine{00880\ }
+\DoxyCodeLine{00881\ \ \ \textcolor{comment}{//\ get\ a\ source\ from\ the\ source\ pool\ or\ create\ a\ new\ source}}
+\DoxyCodeLine{00882\ \ \ \textcolor{keywordflow}{if}\ (\_al\_sources-\/>empty())\ \{}
+\DoxyCodeLine{00883\ \ \ \ \ make\_current();}
+\DoxyCodeLine{00884\ \ \ \ \ alGetError();\ \textcolor{comment}{//\ clear\ errors}}
+\DoxyCodeLine{00885\ \ \ \ \ alGenSources(1,\&source);}
+\DoxyCodeLine{00886\ \ \ \ \ ALenum\ result\ =\ alGetError();}
+\DoxyCodeLine{00887\ \ \ \ \ \textcolor{keywordflow}{if}\ (result!=AL\_NO\_ERROR)\ \{}
+\DoxyCodeLine{00888\ \ \ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}alGenSources():\ "{}}\ <<\ alGetString(result)\ );}
+\DoxyCodeLine{00889\ \ \ \ \ \ \ \textcolor{comment}{//\ if\ we\ can't\ create\ any\ more\ sources,\ set\ stop\ a\ sound\ to\ free\ a}}
+\DoxyCodeLine{00890\ \ \ \ \ \ \ \textcolor{comment}{//\ source}}
+\DoxyCodeLine{00891\ \ \ \ \ \ \ reduce\_sounds\_playing\_to(\_sounds\_playing.size()-\/1);}
+\DoxyCodeLine{00892\ \ \ \ \ \ \ source\ =\ 0;}
+\DoxyCodeLine{00893\ \ \ \ \ \}}
+\DoxyCodeLine{00894\ \ \ \}}
+\DoxyCodeLine{00895\ \ \ \textcolor{comment}{//\ get\ a\ source\ from\ the\ source\ bool\ if\ we\ didn't\ just\ allocate\ one}}
+\DoxyCodeLine{00896\ \ \ \textcolor{keywordflow}{if}\ (!source\ \&\&\ !\_al\_sources-\/>empty())\ \{}
+\DoxyCodeLine{00897\ \ \ \ \ source\ =\ *(\_al\_sources-\/>begin());}
+\DoxyCodeLine{00898\ \ \ \ \ \_al\_sources-\/>erase(source);}
+\DoxyCodeLine{00899\ \ \ \}}
+\DoxyCodeLine{00900\ }
+\DoxyCodeLine{00901\ \ \ audio-\/>\_source\ =\ source;}
+\DoxyCodeLine{00902\ }
+\DoxyCodeLine{00903\ \ \ \textcolor{keywordflow}{if}\ (source)}
+\DoxyCodeLine{00904\ \ \ \ \ \_sounds\_playing.insert(audio);}
+\DoxyCodeLine{00905\ \}}
+\DoxyCodeLine{00906\ }
+\DoxyCodeLine{00911\ \textcolor{keywordtype}{void}\ OpenALAudioManager::}
+\DoxyCodeLine{00912\ stopping\_sound(\mbox{\hyperlink{classOpenALAudioSound}{OpenALAudioSound}}*\ audio)\ \{}
+\DoxyCodeLine{00913\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00914\ \ \ \textcolor{keywordflow}{if}\ (audio-\/>\_source)\ \{}
+\DoxyCodeLine{00915\ \ \ \ \ \_al\_sources-\/>insert(audio-\/>\_source);}
+\DoxyCodeLine{00916\ \ \ \ \ audio-\/>\_source\ =\ 0;}
+\DoxyCodeLine{00917\ \ \ \}}
+\DoxyCodeLine{00918\ \ \ \_sounds\_playing.erase(audio);\ \textcolor{comment}{//\ This\ could\ cause\ the\ sound\ to\ destruct.}}
+\DoxyCodeLine{00919\ \}}
+\DoxyCodeLine{00920\ }
+\DoxyCodeLine{00924\ \textcolor{keywordtype}{void}\ OpenALAudioManager::}
+\DoxyCodeLine{00925\ set\_concurrent\_sound\_limit(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ limit)\ \{}
+\DoxyCodeLine{00926\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00927\ \ \ \_concurrent\_sound\_limit\ =\ limit;}
+\DoxyCodeLine{00928\ \ \ reduce\_sounds\_playing\_to(\_concurrent\_sound\_limit);}
+\DoxyCodeLine{00929\ \}}
+\DoxyCodeLine{00930\ }
+\DoxyCodeLine{00934\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ OpenALAudioManager::}
+\DoxyCodeLine{00935\ get\_concurrent\_sound\_limit()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00936\ \ \ \textcolor{keywordflow}{return}\ \_concurrent\_sound\_limit;}
+\DoxyCodeLine{00937\ \}}
+\DoxyCodeLine{00938\ }
+\DoxyCodeLine{00942\ \textcolor{keywordtype}{void}\ OpenALAudioManager::}
+\DoxyCodeLine{00943\ reduce\_sounds\_playing\_to(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ count)\ \{}
+\DoxyCodeLine{00944\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00945\ \ \ \textcolor{comment}{//\ first\ give\ all\ sounds\ that\ have\ finished\ a\ chance\ to\ stop,\ so\ that\ these}}
+\DoxyCodeLine{00946\ \ \ \textcolor{comment}{//\ get\ stopped\ first}}
+\DoxyCodeLine{00947\ \ \ \mbox{\hyperlink{classOpenALAudioManager_af6b52ea729913e77c453839df315203b}{update}}();}
+\DoxyCodeLine{00948\ }
+\DoxyCodeLine{00949\ \ \ \textcolor{keywordtype}{int}\ limit\ =\ \_sounds\_playing.size()\ -\/\ count;}
+\DoxyCodeLine{00950\ \ \ \textcolor{keywordflow}{while}\ (limit-\/-\/\ >\ 0)\ \{}
+\DoxyCodeLine{00951\ \ \ \ \ SoundsPlaying::iterator\ sound\ =\ \_sounds\_playing.begin();}
+\DoxyCodeLine{00952\ \ \ \ \ nassertv(sound\ !=\ \_sounds\_playing.end());}
+\DoxyCodeLine{00953\ \ \ \ \ \textcolor{comment}{//\ When\ the\ user\ stops\ a\ sound,\ there\ is\ still\ a\ PT\ in\ the\ user's\ hand.}}
+\DoxyCodeLine{00954\ \ \ \ \ \textcolor{comment}{//\ When\ we\ stop\ a\ sound\ here,\ however,\ this\ can\ remove\ the\ last\ PT.\ \ This}}
+\DoxyCodeLine{00955\ \ \ \ \ \textcolor{comment}{//\ can\ cause\ an\ ugly\ recursion\ where\ stop\ calls\ the\ destructor,\ and\ the}}
+\DoxyCodeLine{00956\ \ \ \ \ \textcolor{comment}{//\ destructor\ calls\ stop.\ \ To\ avoid\ this,\ we\ create\ a\ temporary\ PT,\ stop}}
+\DoxyCodeLine{00957\ \ \ \ \ \textcolor{comment}{//\ the\ sound,\ and\ then\ release\ the\ PT.}}
+\DoxyCodeLine{00958\ \ \ \ \ PT(\mbox{\hyperlink{classOpenALAudioSound}{OpenALAudioSound}})\ s\ =\ (*sound);}
+\DoxyCodeLine{00959\ \ \ \ \ s-\/>stop();}
+\DoxyCodeLine{00960\ \ \ \}}
+\DoxyCodeLine{00961\ \}}
+\DoxyCodeLine{00962\ }
+\DoxyCodeLine{00966\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_a5184cf3e49c97e5e46e1dfa8705e2786}{OpenALAudioManager::}}}
+\DoxyCodeLine{00967\ \mbox{\hyperlink{classOpenALAudioManager_a5184cf3e49c97e5e46e1dfa8705e2786}{stop\_all\_sounds}}()\ \{}
+\DoxyCodeLine{00968\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00969\ \ \ reduce\_sounds\_playing\_to(0);}
+\DoxyCodeLine{00970\ \}}
+\DoxyCodeLine{00971\ }
+\DoxyCodeLine{00975\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classOpenALAudioManager_af6b52ea729913e77c453839df315203b}{OpenALAudioManager::}}}
+\DoxyCodeLine{00976\ \mbox{\hyperlink{classOpenALAudioManager_af6b52ea729913e77c453839df315203b}{update}}()\ \{}
+\DoxyCodeLine{00977\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ \textcolor{keyword}{const}\ holder(\_lock);}
+\DoxyCodeLine{00978\ }
+\DoxyCodeLine{00979\ \ \ \textcolor{comment}{//\ See\ if\ any\ of\ our\ playing\ sounds\ have\ ended.}}
+\DoxyCodeLine{00980\ \ \ \textcolor{keywordtype}{double}\ \textcolor{keyword}{const}\ rtc\ =\ TrueClock::get\_global\_ptr()-\/>get\_short\_time();}
+\DoxyCodeLine{00981\ \ \ SoundsPlaying::iterator\ i\ =\ \_sounds\_playing.begin();}
+\DoxyCodeLine{00982\ \ \ \textcolor{keywordflow}{while}\ (i\ !=\ \_sounds\_playing.end())\ \{}
+\DoxyCodeLine{00983\ \ \ \ \ \textcolor{comment}{//\ The\ post-\/increment\ syntax\ is\ *very*\ important\ here.}}
+\DoxyCodeLine{00984\ \ \ \ \ \textcolor{comment}{//\ As\ both\ OpenALAudioSound::pull\_used\_buffers\ and\ OpenALAudioSound::finished\ can\ modify\ the\ list\ of\ sounds\ playing}}
+\DoxyCodeLine{00985\ \ \ \ \ \textcolor{comment}{//\ by\ erasing\ 'sound'\ from\ the\ list,\ thus\ invaliding\ the\ iterator.}}
+\DoxyCodeLine{00986\ \ \ \ \ PT(\mbox{\hyperlink{classOpenALAudioSound}{OpenALAudioSound}})\ sound\ =\ *(i++);}
+\DoxyCodeLine{00987\ \ \ \ \ sound-\/>pull\_used\_buffers();}
+\DoxyCodeLine{00988\ }
+\DoxyCodeLine{00989\ \ \ \ \ \textcolor{comment}{//\ If\ pull\_used\_buffers()\ encountered\ an\ error,\ the\ sound\ was\ cleaned\ up.}}
+\DoxyCodeLine{00990\ \ \ \ \ \textcolor{comment}{//\ No\ need\ to\ do\ anymore\ work.}}
+\DoxyCodeLine{00991\ \ \ \ \ \textcolor{keywordflow}{if}\ (!sound-\/>is\_valid())\ \{}
+\DoxyCodeLine{00992\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00993\ \ \ \ \ \}}
+\DoxyCodeLine{00994\ }
+\DoxyCodeLine{00995\ \ \ \ \ sound-\/>push\_fresh\_buffers();}
+\DoxyCodeLine{00996\ \ \ \ \ sound-\/>restart\_stalled\_audio();}
+\DoxyCodeLine{00997\ \ \ \ \ sound-\/>cache\_time(rtc);}
+\DoxyCodeLine{00998\ \ \ \ \ \textcolor{keywordflow}{if}\ (sound-\/>\_source\ ==\ 0\ ||}
+\DoxyCodeLine{00999\ \ \ \ \ \ \ \ \ (sound-\/>\_stream\_queued.empty()\ \&\&}
+\DoxyCodeLine{01000\ \ \ \ \ \ \ \ \ \ (sound-\/>\_loops\_completed\ >=\ sound-\/>\_playing\_loops)))\ \{}
+\DoxyCodeLine{01001\ \ \ \ \ \ \ sound-\/>finished();}
+\DoxyCodeLine{01002\ \ \ \ \ \}}
+\DoxyCodeLine{01003\ \ \ \}}
+\DoxyCodeLine{01004\ \}}
+\DoxyCodeLine{01005\ }
+\DoxyCodeLine{01006\ }
+\DoxyCodeLine{01011\ \textcolor{keywordtype}{void}\ OpenALAudioManager::}
+\DoxyCodeLine{01012\ cleanup()\ \{}
+\DoxyCodeLine{01013\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01014\ \ \ \textcolor{keywordflow}{if}\ (!\_cleanup\_required)\ \{}
+\DoxyCodeLine{01015\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01016\ \ \ \}}
+\DoxyCodeLine{01017\ }
+\DoxyCodeLine{01018\ \ \ \mbox{\hyperlink{classOpenALAudioManager_a5184cf3e49c97e5e46e1dfa8705e2786}{stop\_all\_sounds}}();}
+\DoxyCodeLine{01019\ }
+\DoxyCodeLine{01020\ \ \ AllSounds\ sounds(\_all\_sounds);}
+\DoxyCodeLine{01021\ \ \ AllSounds::iterator\ ai;}
+\DoxyCodeLine{01022\ \ \ \textcolor{keywordflow}{for}\ (ai\ =\ sounds.begin();\ ai\ !=\ sounds.end();\ ++ai)\ \{}
+\DoxyCodeLine{01023\ \ \ \ \ (*ai)-\/>cleanup();}
+\DoxyCodeLine{01024\ \ \ \}}
+\DoxyCodeLine{01025\ }
+\DoxyCodeLine{01026\ \ \ \mbox{\hyperlink{classOpenALAudioManager_a8bbea9af2a140a6cef23b5ad8fb235b4}{clear\_cache}}();}
+\DoxyCodeLine{01027\ }
+\DoxyCodeLine{01028\ \ \ nassertv(\_active\_managers\ >\ 0);}
+\DoxyCodeLine{01029\ \ \ -\/-\/\_active\_managers;}
+\DoxyCodeLine{01030\ }
+\DoxyCodeLine{01031\ \ \ \textcolor{keywordflow}{if}\ (\_active\_managers\ ==\ 0)\ \{}
+\DoxyCodeLine{01032\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_openal\_active)\ \{}
+\DoxyCodeLine{01033\ \ \ \ \ \ \ \textcolor{comment}{//\ empty\ the\ source\ cache}}
+\DoxyCodeLine{01034\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ i=0;}
+\DoxyCodeLine{01035\ \ \ \ \ \ \ ALuint\ *sources;}
+\DoxyCodeLine{01036\ \ \ \ \ \ \ sources\ =\ \textcolor{keyword}{new}\ ALuint[\_al\_sources-\/>size()];}
+\DoxyCodeLine{01037\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (SourceCache::iterator\ si\ =\ \_al\_sources-\/>begin();\ si!=\_al\_sources-\/>end();\ ++si)\ \{}
+\DoxyCodeLine{01038\ \ \ \ \ \ \ \ \ sources[i++]=*si;}
+\DoxyCodeLine{01039\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01040\ \ \ \ \ \ \ make\_current();}
+\DoxyCodeLine{01041\ \ \ \ \ \ \ alGetError();\ \textcolor{comment}{//\ clear\ errors}}
+\DoxyCodeLine{01042\ \ \ \ \ \ \ alDeleteSources(\_al\_sources-\/>size(),sources);}
+\DoxyCodeLine{01043\ \ \ \ \ \ \ al\_audio\_errcheck(\textcolor{stringliteral}{"{}alDeleteSources()"{}});}
+\DoxyCodeLine{01044\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ []\ sources;}
+\DoxyCodeLine{01045\ \ \ \ \ \ \ \_al\_sources-\/>clear();}
+\DoxyCodeLine{01046\ }
+\DoxyCodeLine{01047\ \ \ \ \ \ \ \textcolor{comment}{//\ make\ sure\ that\ the\ context\ is\ not\ current\ when\ it\ is\ destroyed}}
+\DoxyCodeLine{01048\ \ \ \ \ \ \ alcGetError(\_device);\ \textcolor{comment}{//\ clear\ errors}}
+\DoxyCodeLine{01049\ \ \ \ \ \ \ alcMakeContextCurrent(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01050\ \ \ \ \ \ \ alc\_audio\_errcheck(\textcolor{stringliteral}{"{}alcMakeContextCurrent(NULL)"{}},\_device);}
+\DoxyCodeLine{01051\ }
+\DoxyCodeLine{01052\ \ \ \ \ \ \ alcDestroyContext(\_context);}
+\DoxyCodeLine{01053\ \ \ \ \ \ \ alc\_audio\_errcheck(\textcolor{stringliteral}{"{}alcDestroyContext(\_context)"{}},\_device);}
+\DoxyCodeLine{01054\ \ \ \ \ \ \ \_context\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01055\ }
+\DoxyCodeLine{01056\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device)\ \{}
+\DoxyCodeLine{01057\ \ \ \ \ \ \ \ \ audio\_debug(\textcolor{stringliteral}{"{}Going\ to\ try\ to\ close\ openAL"{}});}
+\DoxyCodeLine{01058\ \ \ \ \ \ \ \ \ alcCloseDevice(\_device);}
+\DoxyCodeLine{01059\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ alc\_audio\_errcheck("{}alcCloseDevice(\_device)"{},\_device);}}
+\DoxyCodeLine{01060\ \ \ \ \ \ \ \ \ \_device\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01061\ \ \ \ \ \ \ \ \ audio\_debug(\textcolor{stringliteral}{"{}openAL\ Closed"{}});}
+\DoxyCodeLine{01062\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01063\ }
+\DoxyCodeLine{01064\ \ \ \ \ \ \ \_openal\_active\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01065\ \ \ \ \ \}}
+\DoxyCodeLine{01066\ \ \ \}}
+\DoxyCodeLine{01067\ \ \ \_cleanup\_required\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01068\ \}}
+\DoxyCodeLine{01069\ }
+\DoxyCodeLine{01073\ OpenALAudioManager::SoundData::}
+\DoxyCodeLine{01074\ SoundData()\ :}
+\DoxyCodeLine{01075\ \ \ \_manager(nullptr),}
+\DoxyCodeLine{01076\ \ \ \_sample(0),}
+\DoxyCodeLine{01077\ \ \ \_stream(nullptr),}
+\DoxyCodeLine{01078\ \ \ \_length(0.0),}
+\DoxyCodeLine{01079\ \ \ \_rate(0),}
+\DoxyCodeLine{01080\ \ \ \_channels(0),}
+\DoxyCodeLine{01081\ \ \ \_client\_count(0)}
+\DoxyCodeLine{01082\ \{}
+\DoxyCodeLine{01083\ \}}
+\DoxyCodeLine{01084\ }
+\DoxyCodeLine{01088\ OpenALAudioManager::SoundData::}
+\DoxyCodeLine{01089\ \string~SoundData()\ \{}
+\DoxyCodeLine{01090\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(OpenALAudioManager::\_lock);}
+\DoxyCodeLine{01091\ \ \ \textcolor{keywordflow}{if}\ (\_sample\ !=\ 0)\ \{}
+\DoxyCodeLine{01092\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager-\/>\_is\_valid)\ \{}
+\DoxyCodeLine{01093\ \ \ \ \ \ \ \_manager-\/>make\_current();}
+\DoxyCodeLine{01094\ \ \ \ \ \ \ \_manager-\/>delete\_buffer(\_sample);}
+\DoxyCodeLine{01095\ \ \ \ \ \}}
+\DoxyCodeLine{01096\ \ \ \ \ \_sample\ =\ 0;}
+\DoxyCodeLine{01097\ \ \ \}}
+\DoxyCodeLine{01098\ \}}
+\DoxyCodeLine{01099\ }
+\DoxyCodeLine{01104\ \textcolor{keywordtype}{void}\ OpenALAudioManager::}
+\DoxyCodeLine{01105\ increment\_client\_count(SoundData\ *sd)\ \{}
+\DoxyCodeLine{01106\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01107\ \ \ sd-\/>\_client\_count\ +=\ 1;}
+\DoxyCodeLine{01108\ \ \ audio\_debug(\textcolor{stringliteral}{"{}Incrementing:\ "{}}\ <<\ sd-\/>\_movie-\/>get\_filename().get\_basename()\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ sd-\/>\_client\_count);}
+\DoxyCodeLine{01109\ \ \ \textcolor{keywordflow}{if}\ (sd-\/>\_client\_count\ ==\ 1)\ \{}
+\DoxyCodeLine{01110\ \ \ \ \ \textcolor{keywordflow}{if}\ (sd-\/>\_sample)\ \{}
+\DoxyCodeLine{01111\ \ \ \ \ \ \ \_expiring\_samples.erase(sd-\/>\_expire);}
+\DoxyCodeLine{01112\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01113\ \ \ \ \ \ \ \_expiring\_streams.erase(sd-\/>\_expire);}
+\DoxyCodeLine{01114\ \ \ \ \ \}}
+\DoxyCodeLine{01115\ \ \ \}}
+\DoxyCodeLine{01116\ \}}
+\DoxyCodeLine{01117\ }
+\DoxyCodeLine{01123\ \textcolor{keywordtype}{void}\ OpenALAudioManager::}
+\DoxyCodeLine{01124\ decrement\_client\_count(SoundData\ *sd)\ \{}
+\DoxyCodeLine{01125\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01126\ \ \ sd-\/>\_client\_count\ -\/=\ 1;}
+\DoxyCodeLine{01127\ \ \ audio\_debug(\textcolor{stringliteral}{"{}Decrementing:\ "{}}\ <<\ sd-\/>\_movie-\/>get\_filename().get\_basename()\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ sd-\/>\_client\_count);}
+\DoxyCodeLine{01128\ \ \ \textcolor{keywordflow}{if}\ (sd-\/>\_client\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{01129\ \ \ \ \ \textcolor{keywordflow}{if}\ (sd-\/>\_sample)\ \{}
+\DoxyCodeLine{01130\ \ \ \ \ \ \ \_expiring\_samples.push\_back(sd);}
+\DoxyCodeLine{01131\ \ \ \ \ \ \ sd-\/>\_expire\ =\ \_expiring\_samples.end();}
+\DoxyCodeLine{01132\ \ \ \ \ \ \ sd-\/>\_expire-\/-\/;}
+\DoxyCodeLine{01133\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01134\ \ \ \ \ \ \ \_expiring\_streams.push\_back(sd);}
+\DoxyCodeLine{01135\ \ \ \ \ \ \ sd-\/>\_expire\ =\ \_expiring\_streams.end();}
+\DoxyCodeLine{01136\ \ \ \ \ \ \ sd-\/>\_expire-\/-\/;}
+\DoxyCodeLine{01137\ \ \ \ \ \}}
+\DoxyCodeLine{01138\ \ \ \ \ discard\_excess\_cache(\_cache\_limit);}
+\DoxyCodeLine{01139\ \ \ \}}
+\DoxyCodeLine{01140\ \}}
+\DoxyCodeLine{01141\ }
+\DoxyCodeLine{01146\ \textcolor{keywordtype}{void}\ OpenALAudioManager::}
+\DoxyCodeLine{01147\ discard\_excess\_cache(\textcolor{keywordtype}{int}\ sample\_limit)\ \{}
+\DoxyCodeLine{01148\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01149\ \ \ \textcolor{keywordtype}{int}\ stream\_limit\ =\ 5;}
+\DoxyCodeLine{01150\ }
+\DoxyCodeLine{01151\ \ \ \textcolor{keywordflow}{while}\ (((\textcolor{keywordtype}{int})\_expiring\_samples.size())\ >\ sample\_limit)\ \{}
+\DoxyCodeLine{01152\ \ \ \ \ SoundData\ *sd\ =\ (SoundData*)(\_expiring\_samples.front());}
+\DoxyCodeLine{01153\ \ \ \ \ nassertv(sd-\/>\_client\_count\ ==\ 0);}
+\DoxyCodeLine{01154\ \ \ \ \ nassertv(sd-\/>\_expire\ ==\ \_expiring\_samples.begin());}
+\DoxyCodeLine{01155\ \ \ \ \ \_expiring\_samples.pop\_front();}
+\DoxyCodeLine{01156\ \ \ \ \ \_sample\_cache.erase(\_sample\_cache.find(sd-\/>\_movie-\/>get\_filename()));}
+\DoxyCodeLine{01157\ \ \ \ \ audio\_debug(\textcolor{stringliteral}{"{}Expiring:\ "{}}\ <<\ sd-\/>\_movie-\/>get\_filename().get\_basename());}
+\DoxyCodeLine{01158\ \ \ \ \ \textcolor{keyword}{delete}\ sd;}
+\DoxyCodeLine{01159\ \ \ \}}
+\DoxyCodeLine{01160\ }
+\DoxyCodeLine{01161\ \ \ \textcolor{keywordflow}{while}\ (((\textcolor{keywordtype}{int})\_expiring\_streams.size())\ >\ stream\_limit)\ \{}
+\DoxyCodeLine{01162\ \ \ \ \ SoundData\ *sd\ =\ (SoundData*)(\_expiring\_streams.front());}
+\DoxyCodeLine{01163\ \ \ \ \ nassertv(sd-\/>\_client\_count\ ==\ 0);}
+\DoxyCodeLine{01164\ \ \ \ \ nassertv(sd-\/>\_expire\ ==\ \_expiring\_streams.begin());}
+\DoxyCodeLine{01165\ \ \ \ \ \_expiring\_streams.pop\_front();}
+\DoxyCodeLine{01166\ \ \ \ \ audio\_debug(\textcolor{stringliteral}{"{}Expiring:\ "{}}\ <<\ sd-\/>\_movie-\/>get\_filename().get\_basename());}
+\DoxyCodeLine{01167\ \ \ \ \ \textcolor{keyword}{delete}\ sd;}
+\DoxyCodeLine{01168\ \ \ \}}
+\DoxyCodeLine{01169\ \}}
+\DoxyCodeLine{01170\ }
+\DoxyCodeLine{01179\ \textcolor{keywordtype}{void}\ OpenALAudioManager::}
+\DoxyCodeLine{01180\ delete\_buffer(ALuint\ buffer)\ \{}
+\DoxyCodeLine{01181\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01182\ \ \ \textcolor{keywordtype}{int}\ tries\ =\ 0;}
+\DoxyCodeLine{01183\ \ \ ALuint\ error;}
+\DoxyCodeLine{01184\ }
+\DoxyCodeLine{01185\ \ \ \textcolor{comment}{//\ Keep\ trying\ until\ we\ succeed\ (or\ give\ up).}}
+\DoxyCodeLine{01186\ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{01187\ \ \ \ \ alDeleteBuffers(1,\ \&buffer);}
+\DoxyCodeLine{01188\ \ \ \ \ error\ =\ alGetError();}
+\DoxyCodeLine{01189\ }
+\DoxyCodeLine{01190\ \ \ \ \ \textcolor{keywordflow}{if}\ (error\ ==\ AL\_NO\_ERROR)\ \{}
+\DoxyCodeLine{01191\ \ \ \ \ \ \ \textcolor{comment}{//\ Success!\ \ This\ will\ happen\ right\ away\ 99\%\ of\ the\ time.}}
+\DoxyCodeLine{01192\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01193\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (error\ !=\ AL\_INVALID\_OPERATION)\ \{}
+\DoxyCodeLine{01194\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ weren't\ expecting\ that.\ \ This\ should\ be\ reported.}}
+\DoxyCodeLine{01195\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01196\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (tries\ >=\ openal\_buffer\_delete\_retries.get\_value())\ \{}
+\DoxyCodeLine{01197\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ ran\ out\ of\ retries.\ \ Give\ up.}}
+\DoxyCodeLine{01198\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01199\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01200\ \ \ \ \ \ \ \textcolor{comment}{//\ Make\ another\ try\ after\ (delay\ *\ 2\string^n)\ seconds.}}
+\DoxyCodeLine{01201\ \ \ \ \ \ \ Thread::sleep(openal\_buffer\_delete\_delay.get\_value()\ *\ (1\ <<\ tries));}
+\DoxyCodeLine{01202\ \ \ \ \ \ \ tries++;}
+\DoxyCodeLine{01203\ \ \ \ \ \}}
+\DoxyCodeLine{01204\ \ \ \}}
+\DoxyCodeLine{01205\ }
+\DoxyCodeLine{01206\ \ \ \textcolor{comment}{//\ If\ we\ got\ here,\ one\ of\ the\ breaks\ above\ happened,\ indicating\ an\ error.}}
+\DoxyCodeLine{01207\ \ \ audio\_error(\textcolor{stringliteral}{"{}failed\ to\ delete\ a\ buffer:\ "{}}\ <<\ alGetString(error)\ );}
+\DoxyCodeLine{01208\ \}}
+
+\end{DoxyCode}

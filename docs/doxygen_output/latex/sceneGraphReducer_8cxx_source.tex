@@ -1,0 +1,835 @@
+\doxysection{scene\+Graph\+Reducer.\+cxx}
+\hypertarget{sceneGraphReducer_8cxx_source}{}\label{sceneGraphReducer_8cxx_source}\index{panda/src/pgraph/sceneGraphReducer.cxx@{panda/src/pgraph/sceneGraphReducer.cxx}}
+\mbox{\hyperlink{sceneGraphReducer_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{sceneGraphReducer_8h}{sceneGraphReducer.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pgraph_8h}{config\_pgraph.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{accumulatedAttribs_8h}{accumulatedAttribs.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{boundingSphere_8h}{boundingSphere.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{modelNode_8h}{modelNode.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pointerTo_8h}{pointerTo.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{plist_8h}{plist.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pmap_8h}{pmap.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomNode_8h}{geomNode.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__gobj_8h}{config\_gobj.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ SceneGraphReducer::\_flatten\_collector(\textcolor{stringliteral}{"{}*:Flatten:flatten"{}});}
+\DoxyCodeLine{00027\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ SceneGraphReducer::\_apply\_collector(\textcolor{stringliteral}{"{}*:Flatten:apply"{}});}
+\DoxyCodeLine{00028\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ SceneGraphReducer::\_remove\_column\_collector(\textcolor{stringliteral}{"{}*:Flatten:remove\ column"{}});}
+\DoxyCodeLine{00029\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ SceneGraphReducer::\_compatible\_state\_collector(\textcolor{stringliteral}{"{}*:Flatten:compatible\ colors"{}});}
+\DoxyCodeLine{00030\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ SceneGraphReducer::\_collect\_collector(\textcolor{stringliteral}{"{}*:Flatten:collect"{}});}
+\DoxyCodeLine{00031\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ SceneGraphReducer::\_make\_nonindexed\_collector(\textcolor{stringliteral}{"{}*:Flatten:make\ nonindexed"{}});}
+\DoxyCodeLine{00032\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ SceneGraphReducer::\_unify\_collector(\textcolor{stringliteral}{"{}*:Flatten:unify"{}});}
+\DoxyCodeLine{00033\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ SceneGraphReducer::\_remove\_unused\_collector(\textcolor{stringliteral}{"{}*:Flatten:remove\ unused\ vertices"{}});}
+\DoxyCodeLine{00034\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ SceneGraphReducer::\_premunge\_collector(\textcolor{stringliteral}{"{}*:Premunge"{}});}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00043\ \textcolor{keywordtype}{void}\ SceneGraphReducer::}
+\DoxyCodeLine{00044\ set\_gsg(\mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg)\ \{}
+\DoxyCodeLine{00045\ \ \ \textcolor{keywordflow}{if}\ (gsg\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00046\ \ \ \ \ \_gsg\ =\ gsg;}
+\DoxyCodeLine{00047\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00048\ \ \ \ \ \_gsg\ =\ GraphicsStateGuardianBase::get\_default\_gsg();}
+\DoxyCodeLine{00049\ \ \ \}}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \ \ \textcolor{keywordtype}{int}\ max\_vertices\ =\ max\_collect\_vertices;}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \ \ \textcolor{keywordflow}{if}\ (\_gsg\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00054\ \ \ \ \ max\_vertices\ =\ std::min(max\_vertices,\ \_gsg-\/>get\_max\_vertices\_per\_array());}
+\DoxyCodeLine{00055\ \ \ \}}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00057\ \ \ \_transformer.set\_max\_collect\_vertices(max\_vertices);}
+\DoxyCodeLine{00058\ \}}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00065\ \textcolor{keywordtype}{void}\ SceneGraphReducer::}
+\DoxyCodeLine{00066\ clear\_gsg()\ \{}
+\DoxyCodeLine{00067\ \ \ \_gsg\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00068\ \ \ \_transformer.set\_max\_collect\_vertices(max\_collect\_vertices);}
+\DoxyCodeLine{00069\ \}}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00084\ \textcolor{keywordtype}{int}\ SceneGraphReducer::}
+\DoxyCodeLine{00085\ flatten(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *root,\ \textcolor{keywordtype}{int}\ combine\_siblings\_bits)\ \{}
+\DoxyCodeLine{00086\ \ \ nassertr(check\_live\_flatten(root),\ 0);}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00088\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_flatten\_collector);}
+\DoxyCodeLine{00089\ \ \ \textcolor{keywordtype}{int}\ num\_total\_nodes\ =\ 0;}
+\DoxyCodeLine{00090\ \ \ \textcolor{keywordtype}{int}\ num\_pass\_nodes;}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00092\ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00093\ \ \ \ \ num\_pass\_nodes\ =\ 0;}
+\DoxyCodeLine{00094\ }
+\DoxyCodeLine{00095\ \ \ \ \ \textcolor{comment}{//\ Get\ a\ copy\ of\ the\ children\ list,\ so\ we\ don't\ have\ to\ worry\ about\ self-\/}}
+\DoxyCodeLine{00096\ \ \ \ \ \textcolor{comment}{//\ modifications.}}
+\DoxyCodeLine{00097\ \ \ \ \ PandaNode::Children\ cr\ =\ root-\/>get\_children();}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \ \ \textcolor{comment}{//\ Now\ visit\ each\ of\ the\ children\ in\ turn.}}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ cr.get\_num\_children();}
+\DoxyCodeLine{00101\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ i++)\ \{}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ child\_node\ =\ cr.get\_child(i);}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ num\_pass\_nodes\ +=\ \mbox{\hyperlink{classSceneGraphReducer_ad5f947b2337abf02cf1239e928fb81ad}{r\_flatten}}(root,\ child\_node,\ combine\_siblings\_bits);}
+\DoxyCodeLine{00104\ \ \ \ \ \}}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{keywordflow}{if}\ (combine\_siblings\_bits\ !=\ 0\ \&\&}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ \ \ root-\/>get\_num\_children()\ >=\ 2\ \&\&}
+\DoxyCodeLine{00108\ \ \ \ \ \ \ \ \ root-\/>\mbox{\hyperlink{classPandaNode_a53cb12da0c53f0254462106b50068d49}{safe\_to\_combine\_children}}())\ \{}
+\DoxyCodeLine{00109\ \ \ \ \ \ \ num\_pass\_nodes\ +=\ \mbox{\hyperlink{classSceneGraphReducer_a226b20605e137c33988ac0b07c3d81c2}{flatten\_siblings}}(root,\ combine\_siblings\_bits);}
+\DoxyCodeLine{00110\ \ \ \ \ \}}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \ \ num\_total\_nodes\ +=\ num\_pass\_nodes;}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00114\ \ \ \ \ \textcolor{comment}{//\ If\ combine\_siblings\_bits\ has\ CS\_recurse\ set,\ we\ should\ repeat\ the\ above}}
+\DoxyCodeLine{00115\ \ \ \ \ \textcolor{comment}{//\ until\ we\ don't\ get\ any\ more\ benefit\ from\ flattening,\ because\ each\ pass}}
+\DoxyCodeLine{00116\ \ \ \ \ \textcolor{comment}{//\ could\ convert\ cousins\ into\ siblings,\ which\ may\ get\ flattened\ next\ pass.}}
+\DoxyCodeLine{00117\ \ \ \}\ \textcolor{keywordflow}{while}\ ((combine\_siblings\_bits\ \&\ CS\_recurse)\ !=\ 0\ \&\&\ num\_pass\_nodes\ !=\ 0);}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ \textcolor{keywordflow}{return}\ num\_total\_nodes;}
+\DoxyCodeLine{00120\ \}}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00126\ \textcolor{keywordtype}{int}\ SceneGraphReducer::}
+\DoxyCodeLine{00127\ remove\_column(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *root,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classInternalName}{InternalName}}\ *column)\ \{}
+\DoxyCodeLine{00128\ \ \ nassertr(check\_live\_flatten(root),\ 0);}
+\DoxyCodeLine{00129\ }
+\DoxyCodeLine{00130\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_remove\_column\_collector);}
+\DoxyCodeLine{00131\ \ \ \textcolor{keywordtype}{int}\ count\ =\ \mbox{\hyperlink{classSceneGraphReducer_af6ead787c2b356b8262c956f462d74ec}{r\_remove\_column}}(root,\ column,\ \_transformer);}
+\DoxyCodeLine{00132\ \ \ \_transformer.\mbox{\hyperlink{classGeomTransformer_a167e1cffc405dda10ee013dc85cdd935}{finish\_apply}}();}
+\DoxyCodeLine{00133\ \ \ \textcolor{keywordflow}{return}\ count;}
+\DoxyCodeLine{00134\ \}}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00142\ \textcolor{keywordtype}{int}\ SceneGraphReducer::}
+\DoxyCodeLine{00143\ make\_compatible\_state(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *root)\ \{}
+\DoxyCodeLine{00144\ \ \ nassertr(check\_live\_flatten(root),\ 0);}
+\DoxyCodeLine{00145\ }
+\DoxyCodeLine{00146\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_compatible\_state\_collector);}
+\DoxyCodeLine{00147\ \ \ \textcolor{keywordtype}{int}\ count\ =\ \mbox{\hyperlink{classSceneGraphReducer_a06b400927ebd4d39318e9493479142a9}{r\_make\_compatible\_state}}(root,\ \_transformer);}
+\DoxyCodeLine{00148\ \ \ \_transformer.\mbox{\hyperlink{classGeomTransformer_a167e1cffc405dda10ee013dc85cdd935}{finish\_apply}}();}
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordflow}{return}\ count;}
+\DoxyCodeLine{00150\ \}}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00162\ \textcolor{keywordtype}{void}\ SceneGraphReducer::}
+\DoxyCodeLine{00163\ decompose(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *root)\ \{}
+\DoxyCodeLine{00164\ \ \ nassertv(check\_live\_flatten(root));}
+\DoxyCodeLine{00165\ }
+\DoxyCodeLine{00166\ \ \ \textcolor{keywordflow}{if}\ (!preserve\_triangle\_strips)\ \{}
+\DoxyCodeLine{00167\ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_unify\_collector);}
+\DoxyCodeLine{00168\ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_a81593bf7158f9376ec94d8c435c17077}{r\_decompose}}(root);}
+\DoxyCodeLine{00169\ \ \ \}}
+\DoxyCodeLine{00170\ \}}
+\DoxyCodeLine{00171\ }
+\DoxyCodeLine{00177\ \textcolor{keywordtype}{void}\ SceneGraphReducer::}
+\DoxyCodeLine{00178\ unify(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *root,\ \textcolor{keywordtype}{bool}\ preserve\_order)\ \{}
+\DoxyCodeLine{00179\ \ \ nassertv(check\_live\_flatten(root));}
+\DoxyCodeLine{00180\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_unify\_collector);}
+\DoxyCodeLine{00181\ }
+\DoxyCodeLine{00182\ \ \ \textcolor{keywordtype}{int}\ max\_indices\ =\ max\_collect\_indices;}
+\DoxyCodeLine{00183\ \ \ \textcolor{keywordflow}{if}\ (\_gsg\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00184\ \ \ \ \ max\_indices\ =\ std::min(max\_indices,\ \_gsg-\/>get\_max\_vertices\_per\_primitive());}
+\DoxyCodeLine{00185\ \ \ \}}
+\DoxyCodeLine{00186\ \ \ \mbox{\hyperlink{classSceneGraphReducer_af6497d418d96c8be6f15c0d4018f6fb9}{r\_unify}}(root,\ max\_indices,\ preserve\_order);}
+\DoxyCodeLine{00187\ \}}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00195\ \textcolor{keywordtype}{void}\ SceneGraphReducer::}
+\DoxyCodeLine{00196\ remove\_unused\_vertices(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *root)\ \{}
+\DoxyCodeLine{00197\ \ \ nassertv(check\_live\_flatten(root));}
+\DoxyCodeLine{00198\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_remove\_unused\_collector);}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00200\ \ \ \mbox{\hyperlink{classSceneGraphReducer_aea8a1e1a29c536e3b57121bf39a2b978}{r\_register\_vertices}}(root,\ \_transformer);}
+\DoxyCodeLine{00201\ \ \ \_transformer.\mbox{\hyperlink{classGeomTransformer_a167e1cffc405dda10ee013dc85cdd935}{finish\_apply}}();}
+\DoxyCodeLine{00202\ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00203\ \}}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00214\ \textcolor{keywordtype}{bool}\ SceneGraphReducer::}
+\DoxyCodeLine{00215\ check\_live\_flatten(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node)\ \{}
+\DoxyCodeLine{00216\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00217\ \ \ \textcolor{keywordflow}{if}\ (allow\_live\_flatten)\ \{}
+\DoxyCodeLine{00218\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00219\ \ \ \}}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00221\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a8ebd7bfaea49e2a5901a020e035f4acd}{is\_under\_scene\_root}}())\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00223\ \ \ \}}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00225\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{00226\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00227\ \}}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00232\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classSceneGraphReducer_aa9f4f6a769ae5a297b366d8ae9b13de4}{SceneGraphReducer::}}}
+\DoxyCodeLine{00233\ \mbox{\hyperlink{classSceneGraphReducer_aa9f4f6a769ae5a297b366d8ae9b13de4}{r\_apply\_attribs}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classAccumulatedAttribs}{AccumulatedAttribs}}\ \&attribs,}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ attrib\_types,\ \mbox{\hyperlink{classGeomTransformer}{GeomTransformer}}\ \&transformer)\ \{}
+\DoxyCodeLine{00235\ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00236\ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}r\_apply\_attribs("{}}\ <<\ *node\ <<\ \textcolor{stringliteral}{"{}),\ node's\ attribs\ are:\(\backslash\)n"{}};}
+\DoxyCodeLine{00238\ \ \ \ \ node-\/>get\_transform()-\/>write(pgraph\_cat.spam(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{00239\ \ \ \ \ node-\/>get\_state()-\/>write(pgraph\_cat.spam(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{00240\ \ \ \ \ node-\/>get\_effects()-\/>write(pgraph\_cat.spam(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{00241\ \ \ \}}
+\DoxyCodeLine{00242\ }
+\DoxyCodeLine{00243\ \ \ \mbox{\hyperlink{classAccumulatedAttribs}{AccumulatedAttribs}}\ next\_attribs(attribs);}
+\DoxyCodeLine{00244\ \ \ next\_attribs.\mbox{\hyperlink{classAccumulatedAttribs_a356865421675298cdef0f64e497c1fae}{collect}}(node,\ attrib\_types);}
+\DoxyCodeLine{00245\ }
+\DoxyCodeLine{00246\ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00247\ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Got\ attribs\ from\ "{}}\ <<\ *node\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}}}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Accumulated\ attribs\ are:\(\backslash\)n"{}};}
+\DoxyCodeLine{00250\ \ \ \ \ next\_attribs.write(pgraph\_cat.spam(\textcolor{keyword}{false}),\ attrib\_types,\ 2);}
+\DoxyCodeLine{00251\ \ \ \}}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ \textcolor{comment}{//\ Check\ to\ see\ if\ we\ can't\ propagate\ any\ of\ these\ attribs\ past\ this\ node}}
+\DoxyCodeLine{00254\ \ \ \textcolor{comment}{//\ for\ some\ reason.}}
+\DoxyCodeLine{00255\ \ \ \textcolor{keywordflow}{if}\ (!node-\/>\mbox{\hyperlink{classPandaNode_a9a4423018e1a2151b5d65cae88f109eb}{safe\_to\_flatten\_below}}())\ \{}
+\DoxyCodeLine{00256\ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Not\ applying\ further;\ "{}}\ <<\ *node}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ doesn't\ allow\ flattening\ below\ itself.\(\backslash\)n"{}};}
+\DoxyCodeLine{00260\ \ \ \ \ \}}
+\DoxyCodeLine{00261\ \ \ \ \ next\_attribs.\mbox{\hyperlink{classAccumulatedAttribs_ac674cd9f20bed009196e32cd37aa76a8}{apply\_to\_node}}(node,\ attrib\_types);}
+\DoxyCodeLine{00262\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00263\ \ \ \}}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00265\ \ \ \textcolor{keywordtype}{int}\ apply\_types\ =\ 0;}
+\DoxyCodeLine{00266\ }
+\DoxyCodeLine{00267\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderEffects}{RenderEffects}}\ *effects\ =\ node-\/>get\_effects();}
+\DoxyCodeLine{00268\ \ \ \textcolor{keywordflow}{if}\ (!effects-\/>\mbox{\hyperlink{classRenderEffects_a9f1b0ef4ea6ea2d54e316cfdbae417da}{safe\_to\_transform}}())\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Node\ "{}}\ <<\ *node}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ contains\ a\ non-\/transformable\ effect;\ leaving\ transform\ here.\(\backslash\)n"{}};}
+\DoxyCodeLine{00273\ \ \ \ \ \}}
+\DoxyCodeLine{00274\ \ \ \ \ next\_attribs.\_transform\ =\ effects-\/>prepare\_flatten\_transform(next\_attribs.\_transform);}
+\DoxyCodeLine{00275\ \ \ \ \ apply\_types\ |=\ TT\_transform;}
+\DoxyCodeLine{00276\ \ \ \}}
+\DoxyCodeLine{00277\ \ \ \textcolor{keywordflow}{if}\ (!node-\/>\mbox{\hyperlink{classPandaNode_a2b2fa8fec37063e403fa89e20cb0cbfe}{safe\_to\_transform}}())\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cannot\ safely\ transform\ nodes\ of\ type\ "{}}\ <<\ node-\/>get\_type()}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{};\ leaving\ a\ transform\ here\ but\ carrying\ on\ otherwise.\(\backslash\)n"{}};}
+\DoxyCodeLine{00282\ \ \ \ \ \}}
+\DoxyCodeLine{00283\ \ \ \ \ apply\_types\ |=\ TT\_transform;}
+\DoxyCodeLine{00284\ \ \ \}}
+\DoxyCodeLine{00285\ \ \ apply\_types\ |=\ node-\/>\mbox{\hyperlink{classPandaNode_a27ed81e4f9ad8a36cadf06929679f847}{get\_unsafe\_to\_apply\_attribs}}();}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \ \ \textcolor{comment}{//\ Also,\ check\ the\ children\ of\ this\ node.\ \ If\ any\ of\ them\ indicates\ it\ is}}
+\DoxyCodeLine{00288\ \ \ \textcolor{comment}{//\ not\ safe\ to\ modify\ its\ transform,\ we\ must\ drop\ our\ transform\ here.}}
+\DoxyCodeLine{00289\ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ node-\/>get\_num\_children();}
+\DoxyCodeLine{00290\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00291\ \ \ \textcolor{keywordflow}{if}\ ((apply\_types\ \&\ TT\_transform)\ ==\ 0)\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{keywordtype}{bool}\ children\_transform\_friendly\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_children\ \&\&\ children\_transform\_friendly;\ i++)\ \{}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child\_node\ =\ node-\/>get\_child(i);}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ children\_transform\_friendly\ =\ child\_node-\/>\mbox{\hyperlink{classPandaNode_a5705b8b7a0dd064fc222d668c55dc52b}{safe\_to\_modify\_transform}}();}
+\DoxyCodeLine{00296\ \ \ \ \ \}}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{keywordflow}{if}\ (!children\_transform\_friendly)\ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Node\ "{}}\ <<\ *node}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ has\ a\ child\ that\ cannot\ modify\ its\ transform;\ leaving\ transform\ here.\(\backslash\)n"{}};}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ apply\_types\ |=\ TT\_transform;}
+\DoxyCodeLine{00305\ \ \ \ \ \}}
+\DoxyCodeLine{00306\ \ \ \}}
+\DoxyCodeLine{00307\ }
+\DoxyCodeLine{00308\ \ \ \textcolor{comment}{//\ Directly\ store\ whatever\ attributes\ we\ must,}}
+\DoxyCodeLine{00309\ \ \ next\_attribs.\mbox{\hyperlink{classAccumulatedAttribs_ac674cd9f20bed009196e32cd37aa76a8}{apply\_to\_node}}(node,\ attrib\_types\ \&\ apply\_types);}
+\DoxyCodeLine{00310\ }
+\DoxyCodeLine{00311\ \ \ \textcolor{comment}{//\ And\ apply\ the\ rest\ to\ the\ vertices.}}
+\DoxyCodeLine{00312\ \ \ node-\/>\mbox{\hyperlink{classPandaNode_aa5171708383a7197cf178ffd2cdb1048}{apply\_attribs\_to\_vertices}}(next\_attribs,\ attrib\_types,\ transformer);}
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00314\ \ \ \textcolor{comment}{//\ Do\ we\ need\ to\ copy\ any\ children\ to\ flatten\ instances?}}
+\DoxyCodeLine{00315\ \ \ \textcolor{keywordtype}{bool}\ resist\_copy\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00316\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_children;\ i++)\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child\_node\ =\ node-\/>get\_child(i);}
+\DoxyCodeLine{00318\ }
+\DoxyCodeLine{00319\ \ \ \ \ \textcolor{keywordflow}{if}\ (child\_node-\/>get\_num\_parents()\ >\ 1)\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!child\_node-\/>\mbox{\hyperlink{classPandaNode_afda3fef14d2f8b91310bcc5ecd0a54a3}{safe\_to\_flatten}}())\ \{}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cannot\ duplicate\ nodes\ of\ type\ "{}}\ <<\ child\_node-\/>get\_type()}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ resist\_copy\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00327\ }
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ new\_node\ =\ child\_node-\/>\mbox{\hyperlink{classPandaNode_a9c0d18fed0dc09fb13fb3842d7e0eb31}{dupe\_for\_flatten}}();}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_node-\/>get\_type()\ !=\ child\_node-\/>get\_type())\ \{}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ \ \ pgraph\_cat.error()}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Don't\ know\ how\ to\ copy\ nodes\ of\ type\ "{}}}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ child\_node-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (no\_unsupported\_copy)\ \{}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}unsupported\ copy"{}});}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ \ \ resist\_copy\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00340\ }
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Duplicated\ "{}}\ <<\ *child\_node\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00346\ }
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ \ \ new\_node-\/>\mbox{\hyperlink{classPandaNode_a00c67be81f15ca0f6d11f3ac1bf1fbb5}{copy\_children}}(child\_node);}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ \ \ node-\/>\mbox{\hyperlink{classPandaNode_a0db5cac63970ca4710013ace782db67f}{replace\_child}}(child\_node,\ new\_node);}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//child\_node\ =\ new\_node;}}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00352\ \ \ \ \ \}}
+\DoxyCodeLine{00353\ \ \ \}}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00355\ \ \ \textcolor{keywordflow}{if}\ (resist\_copy)\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \textcolor{comment}{//\ If\ any\ of\ our\ children\ should\ have\ been\ copied\ but\ weren't,\ we\ need\ to}}
+\DoxyCodeLine{00357\ \ \ \ \ \textcolor{comment}{//\ drop\ the\ state\ here\ before\ continuing.}}
+\DoxyCodeLine{00358\ \ \ \ \ next\_attribs.\mbox{\hyperlink{classAccumulatedAttribs_ac674cd9f20bed009196e32cd37aa76a8}{apply\_to\_node}}(node,\ attrib\_types);}
+\DoxyCodeLine{00359\ \ \ \}}
+\DoxyCodeLine{00360\ }
+\DoxyCodeLine{00361\ \ \ \textcolor{comment}{//\ Now\ it's\ safe\ to\ traverse\ through\ all\ of\ our\ children.}}
+\DoxyCodeLine{00362\ \ \ nassertv(num\_children\ ==\ node-\/>get\_num\_children());}
+\DoxyCodeLine{00363\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_children;\ i++)\ \{}
+\DoxyCodeLine{00364\ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child\_node\ =\ node-\/>get\_child(i);}
+\DoxyCodeLine{00365\ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_aa9f4f6a769ae5a297b366d8ae9b13de4}{r\_apply\_attribs}}(child\_node,\ next\_attribs,\ attrib\_types,\ transformer);}
+\DoxyCodeLine{00366\ \ \ \}}
+\DoxyCodeLine{00367\ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00368\ \}}
+\DoxyCodeLine{00369\ }
+\DoxyCodeLine{00370\ }
+\DoxyCodeLine{00374\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classSceneGraphReducer_ad5f947b2337abf02cf1239e928fb81ad}{SceneGraphReducer::}}}
+\DoxyCodeLine{00375\ \mbox{\hyperlink{classSceneGraphReducer_ad5f947b2337abf02cf1239e928fb81ad}{r\_flatten}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *grandparent\_node,\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *parent\_node,}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ combine\_siblings\_bits)\ \{}
+\DoxyCodeLine{00377\ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00378\ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}SceneGraphReducer::r\_flatten("{}}\ <<\ *grandparent\_node\ <<\ \textcolor{stringliteral}{"{},\ "{}}}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ <<\ *parent\_node\ <<\ \textcolor{stringliteral}{"{},\ "{}}\ <<\ std::hex\ <<\ combine\_siblings\_bits\ <<\ std::dec}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00382\ \ \ \}}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00384\ \ \ \textcolor{keywordflow}{if}\ ((combine\_siblings\_bits\ \&\ (CS\_geom\_node\ |\ CS\_other\ |\ CS\_recurse))\ !=\ 0)\ \{}
+\DoxyCodeLine{00385\ \ \ \ \ \textcolor{comment}{//\ Unset\ CS\_within\_radius,\ since\ we're\ going\ to\ flatten\ everything\ anyway.}}
+\DoxyCodeLine{00386\ \ \ \ \ \textcolor{comment}{//\ This\ avoids\ needlessly\ calculating\ the\ bounding\ volume.}}
+\DoxyCodeLine{00387\ \ \ \ \ combine\_siblings\_bits\ \&=\ \string~CS\_within\_radius;}
+\DoxyCodeLine{00388\ \ \ \}}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \textcolor{keywordtype}{int}\ num\_nodes\ =\ 0;}
+\DoxyCodeLine{00391\ }
+\DoxyCodeLine{00392\ \ \ \textcolor{keywordflow}{if}\ (!parent\_node-\/>\mbox{\hyperlink{classPandaNode_a9a4423018e1a2151b5d65cae88f109eb}{safe\_to\_flatten\_below}}())\ \{}
+\DoxyCodeLine{00393\ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Not\ traversing\ further;\ "{}}\ <<\ *parent\_node}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ doesn't\ allow\ flattening\ below\ itself.\(\backslash\)n"{}};}
+\DoxyCodeLine{00397\ \ \ \ \ \}}
+\DoxyCodeLine{00398\ }
+\DoxyCodeLine{00399\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00400\ \ \ \ \ \textcolor{keywordflow}{if}\ ((combine\_siblings\_bits\ \&\ CS\_within\_radius)\ !=\ 0)\ \{}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classBoundingVolume}{BoundingVolume}})\ bv\ =\ parent\_node-\/>get\_bounds();}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bv-\/>is\_of\_type(BoundingSphere::get\_class\_type()))\ \{}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classBoundingSphere}{BoundingSphere}}\ *bs\ =\ DCAST(\mbox{\hyperlink{classBoundingSphere}{BoundingSphere}},\ bv);}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}considering\ radius\ of\ "{}}\ <<\ *parent\_node}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ *bs\ <<\ \textcolor{stringliteral}{"{}\ vs.\ "{}}\ <<\ \_combine\_radius\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!bs-\/>is\_infinite()\ \&\&\ (bs-\/>is\_empty()\ ||\ bs-\/>get\_radius()\ <=\ \_combine\_radius))\ \{}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ node\ fits\ within\ the\ specified\ radius;\ from\ here\ on\ down,\ we}}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ will\ have\ CS\_other\ set,\ instead\ of\ CS\_within\_radius.}}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \ \ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}node\ fits\ within\ radius;\ flattening\ tighter.\(\backslash\)n"{}};}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \ \ \ \ combine\_siblings\_bits\ \&=\ \string~CS\_within\_radius;}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ \ \ combine\_siblings\_bits\ |=\ (CS\_geom\_node\ |\ CS\_other\ |\ CS\_recurse);}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00420\ \ \ \ \ \}}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00422\ \ \ \ \ \textcolor{comment}{//\ First,\ recurse\ on\ each\ of\ the\ children.}}
+\DoxyCodeLine{00423\ \ \ \ \ \{}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ PandaNode::Children\ cr\ =\ parent\_node-\/>get\_children();}
+\DoxyCodeLine{00425\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ cr.get\_num\_children();}
+\DoxyCodeLine{00426\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ i++)\ \{}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ child\_node\ =\ cr.get\_child(i);}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \ \ num\_nodes\ +=\ \mbox{\hyperlink{classSceneGraphReducer_ad5f947b2337abf02cf1239e928fb81ad}{r\_flatten}}(parent\_node,\ child\_node,\ combine\_siblings\_bits);}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00430\ \ \ \ \ \}}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{comment}{//\ Now\ that\ the\ above\ loop\ has\ removed\ some\ children,\ the\ child\ list\ saved}}
+\DoxyCodeLine{00433\ \ \ \ \ \textcolor{comment}{//\ above\ is\ no\ longer\ accurate,\ so\ hereafter\ we\ must\ ask\ the\ node\ for\ its}}
+\DoxyCodeLine{00434\ \ \ \ \ \textcolor{comment}{//\ real\ child\ list.}}
+\DoxyCodeLine{00435\ }
+\DoxyCodeLine{00436\ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ CS\_recurse\ set,\ then\ we\ flatten\ siblings\ before\ trying\ to}}
+\DoxyCodeLine{00437\ \ \ \ \ \textcolor{comment}{//\ flatten\ children.\ \ Otherwise,\ we\ flatten\ children\ first,\ and\ then}}
+\DoxyCodeLine{00438\ \ \ \ \ \textcolor{comment}{//\ flatten\ siblings,\ which\ avoids\ overly\ enthusiastic\ flattening.}}
+\DoxyCodeLine{00439\ \ \ \ \ \textcolor{keywordflow}{if}\ ((combine\_siblings\_bits\ \&\ CS\_recurse)\ !=\ 0\ \&\&}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \ \ parent\_node-\/>get\_num\_children()\ >=\ 2\ \&\&}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \ \ parent\_node-\/>\mbox{\hyperlink{classPandaNode_a53cb12da0c53f0254462106b50068d49}{safe\_to\_combine\_children}}())\ \{}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ num\_nodes\ +=\ \mbox{\hyperlink{classSceneGraphReducer_a226b20605e137c33988ac0b07c3d81c2}{flatten\_siblings}}(parent\_node,\ combine\_siblings\_bits);}
+\DoxyCodeLine{00443\ \ \ \ \ \}}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \ \ \ \ \textcolor{keywordflow}{if}\ (parent\_node-\/>get\_num\_children()\ ==\ 1)\ \{}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ now\ have\ exactly\ one\ child,\ consider\ flattening\ the\ node\ out.}}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ child\_node\ =\ parent\_node-\/>get\_child(0);}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ child\_sort\ =\ parent\_node-\/>get\_child\_sort(0);}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classSceneGraphReducer_ac6ebb6f3cd98a9308281db8337ad3f4b}{consider\_child}}(grandparent\_node,\ parent\_node,\ child\_node))\ \{}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Ok,\ do\ it.}}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \ \ parent\_node-\/>\mbox{\hyperlink{classPandaNode_a716da168c3b4828a04dc65b7ebdb89e2}{remove\_child}}(child\_node);}
+\DoxyCodeLine{00453\ }
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classSceneGraphReducer_ad22b548d430c2e5a4c4c51becbb52dba}{do\_flatten\_child}}(grandparent\_node,\ parent\_node,\ child\_node))\ \{}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Done!}}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ \ \ num\_nodes++;}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Chicken\ out.}}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ \ \ \ \ parent\_node-\/>add\_child(child\_node,\ child\_sort);}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00462\ \ \ \ \ \}}
+\DoxyCodeLine{00463\ }
+\DoxyCodeLine{00464\ \ \ \ \ \textcolor{keywordflow}{if}\ ((combine\_siblings\_bits\ \&\ CS\_recurse)\ ==\ 0\ \&\&}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \ \ (combine\_siblings\_bits\ \&\ \string~CS\_recurse)\ !=\ 0\ \&\&}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \ \ parent\_node-\/>get\_num\_children()\ >=\ 2\ \&\&}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \ \ parent\_node-\/>\mbox{\hyperlink{classPandaNode_a53cb12da0c53f0254462106b50068d49}{safe\_to\_combine\_children}}())\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ num\_nodes\ +=\ \mbox{\hyperlink{classSceneGraphReducer_a226b20605e137c33988ac0b07c3d81c2}{flatten\_siblings}}(parent\_node,\ combine\_siblings\_bits);}
+\DoxyCodeLine{00469\ \ \ \ \ \}}
+\DoxyCodeLine{00470\ }
+\DoxyCodeLine{00471\ \ \ \ \ \textcolor{comment}{//\ Finally,\ if\ any\ of\ our\ remaining\ children\ are\ plain\ PandaNodes\ with\ no}}
+\DoxyCodeLine{00472\ \ \ \ \ \textcolor{comment}{//\ children,\ just\ remove\ them.}}
+\DoxyCodeLine{00473\ \ \ \ \ \textcolor{keywordflow}{if}\ (parent\_node-\/>\mbox{\hyperlink{classPandaNode_a53cb12da0c53f0254462106b50068d49}{safe\_to\_combine\_children}}())\ \{}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ parent\_node-\/>get\_num\_children()\ -\/\ 1;\ i\ >=\ 0;\ -\/-\/i)\ \{}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child\_node\ =\ parent\_node-\/>get\_child(i);}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (child\_node-\/>is\_exact\_type(PandaNode::get\_class\_type())\ \&\&}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ \ \ \ \ \ \ child\_node-\/>get\_num\_children()\ ==\ 0\ \&\&}
+\DoxyCodeLine{00478\ \ \ \ \ \ \ \ \ \ \ \ \ child\_node-\/>get\_transform()-\/>is\_identity()\ \&\&}
+\DoxyCodeLine{00479\ \ \ \ \ \ \ \ \ \ \ \ \ child\_node-\/>get\_effects()-\/>is\_empty())\ \{}
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \ \ \ \ parent\_node-\/>\mbox{\hyperlink{classPandaNode_a716da168c3b4828a04dc65b7ebdb89e2}{remove\_child}}(child\_node);}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ \ \ \ \ ++num\_nodes;}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00484\ \ \ \ \ \}}
+\DoxyCodeLine{00485\ \ \ \}}
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00487\ \ \ \textcolor{keywordflow}{return}\ num\_nodes;}
+\DoxyCodeLine{00488\ \}}
+\DoxyCodeLine{00489\ }
+\DoxyCodeLine{00490\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classSortByState}{SortByState}}\ \{}
+\DoxyCodeLine{00491\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00492\ \ \ INLINE\ \textcolor{keywordtype}{bool}}
+\DoxyCodeLine{00493\ \ \ operator\ ()\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node1,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node2)\ \textcolor{keyword}{const};}
+\DoxyCodeLine{00494\ \};}
+\DoxyCodeLine{00495\ }
+\DoxyCodeLine{00496\ INLINE\ \textcolor{keywordtype}{bool}\ SortByState::}
+\DoxyCodeLine{00497\ operator\ ()\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node1,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node2)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00498\ \ \ \textcolor{keywordflow}{if}\ (node1-\/>get\_transform()\ !=\ node2-\/>get\_transform())\ \{}
+\DoxyCodeLine{00499\ \ \ \ \ \textcolor{keywordflow}{return}\ node1-\/>get\_transform()\ <\ node2-\/>get\_transform();}
+\DoxyCodeLine{00500\ \ \ \}}
+\DoxyCodeLine{00501\ \ \ \textcolor{keywordflow}{if}\ (node1-\/>get\_state()\ !=\ node2-\/>get\_state())\ \{}
+\DoxyCodeLine{00502\ \ \ \ \ \textcolor{keywordflow}{return}\ node1-\/>get\_state()\ <\ node2-\/>get\_state();}
+\DoxyCodeLine{00503\ \ \ \}}
+\DoxyCodeLine{00504\ \ \ \textcolor{keywordflow}{if}\ (node1-\/>get\_effects()\ !=\ node2-\/>get\_effects())\ \{}
+\DoxyCodeLine{00505\ \ \ \ \ \textcolor{keywordflow}{return}\ node1-\/>get\_effects()\ <\ node2-\/>get\_effects();}
+\DoxyCodeLine{00506\ \ \ \}}
+\DoxyCodeLine{00507\ \ \ \textcolor{keywordflow}{if}\ (node1-\/>get\_draw\_control\_mask()\ !=\ node2-\/>get\_draw\_control\_mask())\ \{}
+\DoxyCodeLine{00508\ \ \ \ \ \textcolor{keywordflow}{return}\ node1-\/>get\_draw\_control\_mask()\ <\ node2-\/>get\_draw\_control\_mask();}
+\DoxyCodeLine{00509\ \ \ \}}
+\DoxyCodeLine{00510\ \ \ \textcolor{keywordflow}{if}\ (node1-\/>get\_draw\_show\_mask()\ !=\ node2-\/>get\_draw\_show\_mask())\ \{}
+\DoxyCodeLine{00511\ \ \ \ \ \textcolor{keywordflow}{return}\ node1-\/>get\_draw\_show\_mask()\ <\ node2-\/>get\_draw\_show\_mask();}
+\DoxyCodeLine{00512\ \ \ \}}
+\DoxyCodeLine{00513\ \ \ \textcolor{keywordtype}{int}\ cmp\ =\ (node1-\/>\mbox{\hyperlink{classPandaNode_aec90e8c22a823ecc717b70aa9b6bd656}{compare\_tags}}(node2));}
+\DoxyCodeLine{00514\ \ \ \textcolor{keywordflow}{if}\ (cmp\ !=\ 0)\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \textcolor{keywordflow}{return}\ cmp\ <\ 0;}
+\DoxyCodeLine{00516\ \ \ \}}
+\DoxyCodeLine{00517\ }
+\DoxyCodeLine{00518\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00519\ \}}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ }
+\DoxyCodeLine{00526\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classSceneGraphReducer_a226b20605e137c33988ac0b07c3d81c2}{SceneGraphReducer::}}}
+\DoxyCodeLine{00527\ \mbox{\hyperlink{classSceneGraphReducer_a226b20605e137c33988ac0b07c3d81c2}{flatten\_siblings}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *parent\_node,\ \textcolor{keywordtype}{int}\ combine\_siblings\_bits)\ \{}
+\DoxyCodeLine{00528\ \ \ \textcolor{keywordtype}{int}\ num\_nodes\ =\ 0;}
+\DoxyCodeLine{00529\ }
+\DoxyCodeLine{00530\ \ \ \textcolor{comment}{//\ First,\ collect\ the\ children\ into\ groups\ of\ nodes\ with\ common\ properties.}}
+\DoxyCodeLine{00531\ \ \ \textcolor{keyword}{typedef}\ \mbox{\hyperlink{classplist}{plist}}<\ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ >\ NodeList;}
+\DoxyCodeLine{00532\ \ \ \textcolor{keyword}{typedef}\ \mbox{\hyperlink{classpmap}{pmap<PandaNode\ *,\ NodeList,\ SortByState>}}\ Collected;}
+\DoxyCodeLine{00533\ \ \ Collected\ collected;}
+\DoxyCodeLine{00534\ }
+\DoxyCodeLine{00535\ \ \ \{}
+\DoxyCodeLine{00536\ \ \ \ \ \textcolor{comment}{//\ Protect\ this\ within\ a\ local\ scope,\ so\ the\ Children\ member\ will\ destruct}}
+\DoxyCodeLine{00537\ \ \ \ \ \textcolor{comment}{//\ and\ free\ the\ read\ pointer\ before\ we\ try\ to\ write\ to\ these\ nodes.}}
+\DoxyCodeLine{00538\ \ \ \ \ PandaNode::Children\ cr\ =\ parent\_node-\/>get\_children();}
+\DoxyCodeLine{00539\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ cr.get\_num\_children();}
+\DoxyCodeLine{00540\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ i++)\ \{}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child\_node\ =\ cr.get\_child(i);}
+\DoxyCodeLine{00542\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ safe\_to\_combine\ =\ child\_node-\/>\mbox{\hyperlink{classPandaNode_a2453a75c816eb34071dd72c1f194c610}{safe\_to\_combine}}();}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (safe\_to\_combine)\ \{}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (child\_node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \ \ \ \ safe\_to\_combine\ =\ (combine\_siblings\_bits\ \&\ CS\_geom\_node)\ !=\ 0;}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00547\ \ \ \ \ \ \ \ \ \ \ safe\_to\_combine\ =\ (combine\_siblings\_bits\ \&\ CS\_other)\ !=\ 0;}
+\DoxyCodeLine{00548\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00549\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00550\ }
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (safe\_to\_combine)\ \{}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ \ \ collected[child\_node].push\_back(child\_node);}
+\DoxyCodeLine{00553\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00554\ \ \ \ \ \}}
+\DoxyCodeLine{00555\ \ \ \}}
+\DoxyCodeLine{00556\ }
+\DoxyCodeLine{00557\ \ \ \textcolor{comment}{//\ Now\ visit\ each\ of\ those\ groups\ and\ try\ to\ collapse\ them\ together.\ \ A}}
+\DoxyCodeLine{00558\ \ \ \textcolor{comment}{//\ O(n\string^2)\ operation,\ but\ presumably\ the\ number\ of\ nodes\ in\ each\ group\ is}}
+\DoxyCodeLine{00559\ \ \ \textcolor{comment}{//\ small.\ \ And\ if\ each\ node\ in\ the\ group\ can\ collapse\ with\ any\ other\ node,}}
+\DoxyCodeLine{00560\ \ \ \textcolor{comment}{//\ it\ becomes\ a\ O(n)\ operation.}}
+\DoxyCodeLine{00561\ \ \ Collected::iterator\ ci;}
+\DoxyCodeLine{00562\ \ \ \textcolor{keywordflow}{for}\ (ci\ =\ collected.begin();\ ci\ !=\ collected.end();\ ++ci)\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderEffects}{RenderEffects}}\ *effects\ =\ (*ci).first-\/>get\_effects();}
+\DoxyCodeLine{00564\ \ \ \ \ \textcolor{keywordflow}{if}\ (effects-\/>safe\_to\_combine())\ \{}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ NodeList\ \&nodes\ =\ (*ci).second;}
+\DoxyCodeLine{00566\ }
+\DoxyCodeLine{00567\ \ \ \ \ \ \ NodeList::iterator\ ai1;}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ ai1\ =\ nodes.begin();}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (ai1\ !=\ nodes.end())\ \{}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ NodeList::iterator\ ai1\_hold\ =\ ai1;}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child1\ =\ (*ai1);}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \ \ ++ai1;}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \ \ NodeList::iterator\ ai2\ =\ ai1;}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (ai2\ !=\ nodes.end())\ \{}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \ \ \ \ NodeList::iterator\ ai2\_hold\ =\ ai2;}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child2\ =\ (*ai2);}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \ \ \ \ ++ai2;}
+\DoxyCodeLine{00578\ }
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classSceneGraphReducer_af598c8eaefffc3a672f496d5ad60a5fc}{consider\_siblings}}(parent\_node,\ child1,\ child2))\ \{}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ new\_node\ =}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_ab68ca8632877bd7d1803a5b6fe7eea21}{do\_flatten\_siblings}}(parent\_node,\ child1,\ child2);}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_node\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ successfully\ collapsed\ a\ node.}}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (*ai1\_hold)\ =\ new\_node;}
+\DoxyCodeLine{00585\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ nodes.erase(ai2\_hold);}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ai1\ =\ nodes.begin();}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ai2\ =\ nodes.end();}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ num\_nodes++;}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00592\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00593\ \ \ \ \ \}}
+\DoxyCodeLine{00594\ \ \ \}}
+\DoxyCodeLine{00595\ }
+\DoxyCodeLine{00596\ \ \ \textcolor{keywordflow}{return}\ num\_nodes;}
+\DoxyCodeLine{00597\ \}}
+\DoxyCodeLine{00598\ }
+\DoxyCodeLine{00604\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classSceneGraphReducer_ac6ebb6f3cd98a9308281db8337ad3f4b}{SceneGraphReducer::}}}
+\DoxyCodeLine{00605\ \mbox{\hyperlink{classSceneGraphReducer_ac6ebb6f3cd98a9308281db8337ad3f4b}{consider\_child}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *grandparent\_node,\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *parent\_node,}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child\_node)\ \{}
+\DoxyCodeLine{00607\ \ \ \textcolor{keywordflow}{if}\ (!parent\_node-\/>\mbox{\hyperlink{classPandaNode_a2453a75c816eb34071dd72c1f194c610}{safe\_to\_combine}}()\ ||\ !child\_node-\/>\mbox{\hyperlink{classPandaNode_a2453a75c816eb34071dd72c1f194c610}{safe\_to\_combine}}())\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ \textcolor{comment}{//\ One\ or\ both\ nodes\ cannot\ be\ safely\ combined\ with\ another\ node;\ do}}
+\DoxyCodeLine{00609\ \ \ \ \ \textcolor{comment}{//\ nothing.}}
+\DoxyCodeLine{00610\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00611\ \ \ \}}
+\DoxyCodeLine{00612\ }
+\DoxyCodeLine{00613\ \ \ \textcolor{keywordflow}{if}\ (parent\_node-\/>get\_transform()\ !=\ child\_node-\/>get\_transform()\ ||}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ parent\_node-\/>get\_state()\ !=\ child\_node-\/>get\_state()\ ||}
+\DoxyCodeLine{00615\ \ \ \ \ \ \ parent\_node-\/>get\_effects()\ !=\ child\_node-\/>get\_effects()\ ||}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ parent\_node-\/>get\_draw\_control\_mask()\ !=\ child\_node-\/>get\_draw\_control\_mask()\ ||}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ parent\_node-\/>get\_draw\_show\_mask()\ !=\ child\_node-\/>get\_draw\_show\_mask()\ ||}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ parent\_node-\/>\mbox{\hyperlink{classPandaNode_aec90e8c22a823ecc717b70aa9b6bd656}{compare\_tags}}(child\_node)\ !=\ 0)\ \{}
+\DoxyCodeLine{00619\ \ \ \ \ \textcolor{comment}{//\ The\ two\ nodes\ have\ a\ different\ state;\ too\ bad.}}
+\DoxyCodeLine{00620\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00621\ \ \ \}}
+\DoxyCodeLine{00622\ }
+\DoxyCodeLine{00623\ \ \ \textcolor{keywordflow}{if}\ (!parent\_node-\/>get\_effects()-\/>\mbox{\hyperlink{classPandaNode_a2453a75c816eb34071dd72c1f194c610}{safe\_to\_combine}}())\ \{}
+\DoxyCodeLine{00624\ \ \ \ \ \textcolor{comment}{//\ The\ effects\ don't\ want\ to\ be\ combined.}}
+\DoxyCodeLine{00625\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00626\ \ \ \}}
+\DoxyCodeLine{00627\ }
+\DoxyCodeLine{00628\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00629\ \}}
+\DoxyCodeLine{00630\ }
+\DoxyCodeLine{00636\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classSceneGraphReducer_af598c8eaefffc3a672f496d5ad60a5fc}{SceneGraphReducer::}}}
+\DoxyCodeLine{00637\ \mbox{\hyperlink{classSceneGraphReducer_af598c8eaefffc3a672f496d5ad60a5fc}{consider\_siblings}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *parent\_node,\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child1,}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child2)\ \{}
+\DoxyCodeLine{00639\ \ \ \textcolor{comment}{//\ We\ don't\ have\ to\ worry\ about\ the\ states\ being\ different\ betweeen\ child1}}
+\DoxyCodeLine{00640\ \ \ \textcolor{comment}{//\ and\ child2,\ since\ the\ SortByState\ object\ already\ guaranteed\ we\ only}}
+\DoxyCodeLine{00641\ \ \ \textcolor{comment}{//\ consider\ children\ that\ have\ the\ same\ state.}}
+\DoxyCodeLine{00642\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00643\ \}}
+\DoxyCodeLine{00644\ }
+\DoxyCodeLine{00650\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classSceneGraphReducer_ad22b548d430c2e5a4c4c51becbb52dba}{SceneGraphReducer::}}}
+\DoxyCodeLine{00651\ \mbox{\hyperlink{classSceneGraphReducer_ad22b548d430c2e5a4c4c51becbb52dba}{do\_flatten\_child}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *grandparent\_node,\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *parent\_node,}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child\_node)\ \{}
+\DoxyCodeLine{00653\ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00654\ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Collapsing\ "{}}\ <<\ *parent\_node\ <<\ \textcolor{stringliteral}{"{}\ and\ "{}}\ <<\ *child\_node\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00656\ \ \ \}}
+\DoxyCodeLine{00657\ }
+\DoxyCodeLine{00658\ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ new\_parent\ =\ collapse\_nodes(parent\_node,\ child\_node,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00659\ \ \ \textcolor{keywordflow}{if}\ (new\_parent\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00660\ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00661\ \ \ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00662\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Decided\ not\ to\ collapse\ "{}}\ <<\ *parent\_node}
+\DoxyCodeLine{00663\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ and\ "{}}\ <<\ *child\_node\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00664\ \ \ \ \ \}}
+\DoxyCodeLine{00665\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00666\ \ \ \}}
+\DoxyCodeLine{00667\ }
+\DoxyCodeLine{00668\ \ \ \mbox{\hyperlink{classSceneGraphReducer_a62c2f9d16dc25665494a664a8cb9c775}{choose\_name}}(new\_parent,\ parent\_node,\ child\_node);}
+\DoxyCodeLine{00669\ }
+\DoxyCodeLine{00670\ \ \ new\_parent-\/>replace\_node(child\_node);}
+\DoxyCodeLine{00671\ \ \ new\_parent-\/>replace\_node(parent\_node);}
+\DoxyCodeLine{00672\ }
+\DoxyCodeLine{00673\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00674\ \}}
+\DoxyCodeLine{00675\ }
+\DoxyCodeLine{00684\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *\mbox{\hyperlink{classSceneGraphReducer_ab68ca8632877bd7d1803a5b6fe7eea21}{SceneGraphReducer::}}}
+\DoxyCodeLine{00685\ \mbox{\hyperlink{classSceneGraphReducer_ab68ca8632877bd7d1803a5b6fe7eea21}{do\_flatten\_siblings}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *parent\_node,\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child1,}
+\DoxyCodeLine{00686\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *child2)\ \{}
+\DoxyCodeLine{00687\ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00688\ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00689\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Collapsing\ "{}}\ <<\ *child1\ <<\ \textcolor{stringliteral}{"{}\ and\ "{}}\ <<\ *child2\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00690\ \ \ \}}
+\DoxyCodeLine{00691\ }
+\DoxyCodeLine{00692\ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ new\_child\ =\ collapse\_nodes(child2,\ child1,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00693\ \ \ \textcolor{keywordflow}{if}\ (new\_child\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00694\ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ pgraph\_cat.spam()}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Decided\ not\ to\ collapse\ "{}}\ <<\ *child1\ <<\ \textcolor{stringliteral}{"{}\ and\ "{}}\ <<\ *child2\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00697\ \ \ \ \ \}}
+\DoxyCodeLine{00698\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00699\ \ \ \}}
+\DoxyCodeLine{00700\ }
+\DoxyCodeLine{00701\ \ \ \mbox{\hyperlink{classSceneGraphReducer_a62c2f9d16dc25665494a664a8cb9c775}{choose\_name}}(new\_child,\ child2,\ child1);}
+\DoxyCodeLine{00702\ }
+\DoxyCodeLine{00703\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ new\ child\ list\ has\ child1's\ children\ first,\ followed\ by}}
+\DoxyCodeLine{00704\ \ \ \textcolor{comment}{//\ child2's\ children.}}
+\DoxyCodeLine{00705\ \ \ child1-\/>\mbox{\hyperlink{classPandaNode_ae1104ae4377c3d15b90faa9ebfc3db46}{replace\_node}}(child2);}
+\DoxyCodeLine{00706\ \ \ new\_child-\/>replace\_node(child1);}
+\DoxyCodeLine{00707\ }
+\DoxyCodeLine{00708\ \ \ \textcolor{keywordflow}{return}\ new\_child;}
+\DoxyCodeLine{00709\ \}}
+\DoxyCodeLine{00710\ }
+\DoxyCodeLine{00718\ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ SceneGraphReducer::}
+\DoxyCodeLine{00719\ collapse\_nodes(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node1,\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node2,\ \textcolor{keywordtype}{bool}\ siblings)\ \{}
+\DoxyCodeLine{00720\ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ result\ =\ node2-\/>combine\_with(node1);}
+\DoxyCodeLine{00721\ \ \ \textcolor{keywordflow}{if}\ (result\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00722\ \ \ \ \ result\ =\ node1-\/>combine\_with(node2);}
+\DoxyCodeLine{00723\ \ \ \}}
+\DoxyCodeLine{00724\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00725\ \}}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00727\ }
+\DoxyCodeLine{00732\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classSceneGraphReducer_a62c2f9d16dc25665494a664a8cb9c775}{SceneGraphReducer::}}}
+\DoxyCodeLine{00733\ \mbox{\hyperlink{classSceneGraphReducer_a62c2f9d16dc25665494a664a8cb9c775}{choose\_name}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *preserve,\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *source1,\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *source2)\ \{}
+\DoxyCodeLine{00734\ \ \ std::string\ name;}
+\DoxyCodeLine{00735\ \ \ \textcolor{keywordtype}{bool}\ got\_name\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00736\ }
+\DoxyCodeLine{00737\ \ \ name\ =\ source1-\/>get\_name();}
+\DoxyCodeLine{00738\ \ \ got\_name\ =\ !name.empty()\ ||\ source1-\/>\mbox{\hyperlink{classPandaNode_a0b5c708b788df52184bc5acc5918fc7f}{preserve\_name}}();}
+\DoxyCodeLine{00739\ }
+\DoxyCodeLine{00740\ \ \ \textcolor{keywordflow}{if}\ (source2-\/>\mbox{\hyperlink{classPandaNode_a0b5c708b788df52184bc5acc5918fc7f}{preserve\_name}}()\ ||\ !got\_name)\ \{}
+\DoxyCodeLine{00741\ \ \ \ \ name\ =\ source2-\/>get\_name();}
+\DoxyCodeLine{00742\ \ \ \ \ got\_name\ =\ !name.empty()\ ||\ source2-\/>\mbox{\hyperlink{classPandaNode_a0b5c708b788df52184bc5acc5918fc7f}{preserve\_name}}();}
+\DoxyCodeLine{00743\ \ \ \}}
+\DoxyCodeLine{00744\ }
+\DoxyCodeLine{00745\ \ \ \textcolor{keywordflow}{if}\ (got\_name)\ \{}
+\DoxyCodeLine{00746\ \ \ \ \ preserve-\/>set\_name(name);}
+\DoxyCodeLine{00747\ \ \ \}}
+\DoxyCodeLine{00748\ \}}
+\DoxyCodeLine{00749\ }
+\DoxyCodeLine{00753\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classSceneGraphReducer_af6ead787c2b356b8262c956f462d74ec}{SceneGraphReducer::}}}
+\DoxyCodeLine{00754\ \mbox{\hyperlink{classSceneGraphReducer_af6ead787c2b356b8262c956f462d74ec}{r\_remove\_column}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classInternalName}{InternalName}}\ *column,}
+\DoxyCodeLine{00755\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classGeomTransformer}{GeomTransformer}}\ \&transformer)\ \{}
+\DoxyCodeLine{00756\ \ \ \textcolor{keywordtype}{int}\ num\_changed\ =\ 0;}
+\DoxyCodeLine{00757\ }
+\DoxyCodeLine{00758\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00759\ \ \ \ \ \textcolor{keywordflow}{if}\ (transformer.\mbox{\hyperlink{classGeomTransformer_aa9ecf4d903a1a04a08b186abdf150a60}{remove\_column}}(DCAST(\mbox{\hyperlink{classGeomNode}{GeomNode}},\ node),\ column))\ \{}
+\DoxyCodeLine{00760\ \ \ \ \ \ \ ++num\_changed;}
+\DoxyCodeLine{00761\ \ \ \ \ \}}
+\DoxyCodeLine{00762\ \ \ \}}
+\DoxyCodeLine{00763\ }
+\DoxyCodeLine{00764\ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00765\ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00766\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00767\ \ \ \ \ num\_changed\ +=}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_af6ead787c2b356b8262c956f462d74ec}{r\_remove\_column}}(children.get\_child(i),\ column,\ transformer);}
+\DoxyCodeLine{00769\ \ \ \}}
+\DoxyCodeLine{00770\ }
+\DoxyCodeLine{00771\ \ \ \textcolor{keywordflow}{return}\ num\_changed;}
+\DoxyCodeLine{00772\ \}}
+\DoxyCodeLine{00773\ }
+\DoxyCodeLine{00777\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classSceneGraphReducer_a06b400927ebd4d39318e9493479142a9}{SceneGraphReducer::}}}
+\DoxyCodeLine{00778\ \mbox{\hyperlink{classSceneGraphReducer_a06b400927ebd4d39318e9493479142a9}{r\_make\_compatible\_state}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node,\ \mbox{\hyperlink{classGeomTransformer}{GeomTransformer}}\ \&transformer)\ \{}
+\DoxyCodeLine{00779\ \ \ \textcolor{keywordtype}{int}\ num\_changed\ =\ 0;}
+\DoxyCodeLine{00780\ }
+\DoxyCodeLine{00781\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00782\ \ \ \ \ \textcolor{keywordflow}{if}\ (transformer.\mbox{\hyperlink{classGeomTransformer_a323fa63f782aaa67f1ed8c9ea20b1e3d}{make\_compatible\_state}}(DCAST(\mbox{\hyperlink{classGeomNode}{GeomNode}},\ node)))\ \{}
+\DoxyCodeLine{00783\ \ \ \ \ \ \ ++num\_changed;}
+\DoxyCodeLine{00784\ \ \ \ \ \}}
+\DoxyCodeLine{00785\ \ \ \}}
+\DoxyCodeLine{00786\ }
+\DoxyCodeLine{00787\ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00788\ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00789\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00790\ \ \ \ \ num\_changed\ +=}
+\DoxyCodeLine{00791\ \ \ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_a06b400927ebd4d39318e9493479142a9}{r\_make\_compatible\_state}}(children.get\_child(i),\ transformer);}
+\DoxyCodeLine{00792\ \ \ \}}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00794\ \ \ \textcolor{keywordflow}{return}\ num\_changed;}
+\DoxyCodeLine{00795\ \}}
+\DoxyCodeLine{00796\ }
+\DoxyCodeLine{00800\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classSceneGraphReducer_a34780c3e90ba153a18517835dabc4baf}{SceneGraphReducer::}}}
+\DoxyCodeLine{00801\ \mbox{\hyperlink{classSceneGraphReducer_a34780c3e90ba153a18517835dabc4baf}{r\_collect\_vertex\_data}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node,\ \textcolor{keywordtype}{int}\ collect\_bits,}
+\DoxyCodeLine{00802\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classGeomTransformer}{GeomTransformer}}\ \&transformer,\ \textcolor{keywordtype}{bool}\ format\_only)\ \{}
+\DoxyCodeLine{00803\ \ \ \textcolor{keywordtype}{int}\ num\_adjusted\ =\ 0;}
+\DoxyCodeLine{00804\ }
+\DoxyCodeLine{00805\ \ \ \textcolor{keywordtype}{int}\ this\_node\_bits\ =\ 0;}
+\DoxyCodeLine{00806\ \ \ \textcolor{keywordflow}{if}\ (node-\/>is\_of\_type(ModelNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{00807\ \ \ \ \ this\_node\_bits\ |=\ CVD\_model;}
+\DoxyCodeLine{00808\ \ \ \}}
+\DoxyCodeLine{00809\ \ \ \textcolor{keywordflow}{if}\ (!node-\/>get\_transform()-\/>is\_identity())\ \{}
+\DoxyCodeLine{00810\ \ \ \ \ this\_node\_bits\ |=\ CVD\_transform;}
+\DoxyCodeLine{00811\ \ \ \}}
+\DoxyCodeLine{00812\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00813\ \ \ \ \ this\_node\_bits\ |=\ CVD\_one\_node\_only;}
+\DoxyCodeLine{00814\ \ \ \}}
+\DoxyCodeLine{00815\ }
+\DoxyCodeLine{00816\ \ \ \textcolor{keywordflow}{if}\ ((collect\_bits\ \&\ this\_node\_bits)\ !=\ 0)\ \{}
+\DoxyCodeLine{00817\ \ \ \ \ \textcolor{comment}{//\ We\ need\ to\ start\ a\ unique\ collection\ here.}}
+\DoxyCodeLine{00818\ \ \ \ \ \mbox{\hyperlink{classGeomTransformer}{GeomTransformer}}\ new\_transformer(transformer);}
+\DoxyCodeLine{00819\ }
+\DoxyCodeLine{00820\ \ \ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00821\ \ \ \ \ \ \ \textcolor{comment}{//\ When\ we\ come\ to\ a\ geom\ node,\ collect.}}
+\DoxyCodeLine{00822\ \ \ \ \ \ \ num\_adjusted\ +=\ new\_transformer.\mbox{\hyperlink{classGeomTransformer_ab3d999288f3fedc57af66cd5f82723c1}{collect\_vertex\_data}}(DCAST(\mbox{\hyperlink{classGeomNode}{GeomNode}},\ node),\ collect\_bits,\ format\_only);}
+\DoxyCodeLine{00823\ \ \ \ \ \}}
+\DoxyCodeLine{00824\ }
+\DoxyCodeLine{00825\ \ \ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00826\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00827\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00828\ \ \ \ \ \ \ num\_adjusted\ +=}
+\DoxyCodeLine{00829\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_a34780c3e90ba153a18517835dabc4baf}{r\_collect\_vertex\_data}}(children.get\_child(i),\ collect\_bits,\ new\_transformer,\ format\_only);}
+\DoxyCodeLine{00830\ \ \ \ \ \}}
+\DoxyCodeLine{00831\ }
+\DoxyCodeLine{00832\ \ \ \ \ num\_adjusted\ +=\ new\_transformer.\mbox{\hyperlink{classGeomTransformer_ad439d76c266edf9c0762e3b8f6f22e61}{finish\_collect}}(format\_only);}
+\DoxyCodeLine{00833\ }
+\DoxyCodeLine{00834\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00835\ \ \ \ \ \textcolor{comment}{//\ Keep\ the\ same\ collection.}}
+\DoxyCodeLine{00836\ }
+\DoxyCodeLine{00837\ \ \ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00838\ \ \ \ \ \ \ num\_adjusted\ +=\ transformer.\mbox{\hyperlink{classGeomTransformer_ab3d999288f3fedc57af66cd5f82723c1}{collect\_vertex\_data}}(DCAST(\mbox{\hyperlink{classGeomNode}{GeomNode}},\ node),\ collect\_bits,\ format\_only);}
+\DoxyCodeLine{00839\ \ \ \ \ \}}
+\DoxyCodeLine{00840\ }
+\DoxyCodeLine{00841\ \ \ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00842\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00843\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00844\ \ \ \ \ \ \ num\_adjusted\ +=}
+\DoxyCodeLine{00845\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_a34780c3e90ba153a18517835dabc4baf}{r\_collect\_vertex\_data}}(children.get\_child(i),\ collect\_bits,\ transformer,\ format\_only);}
+\DoxyCodeLine{00846\ \ \ \ \ \}}
+\DoxyCodeLine{00847\ \ \ \}}
+\DoxyCodeLine{00848\ }
+\DoxyCodeLine{00849\ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00850\ \ \ \textcolor{keywordflow}{return}\ num\_adjusted;}
+\DoxyCodeLine{00851\ \}}
+\DoxyCodeLine{00852\ }
+\DoxyCodeLine{00856\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classSceneGraphReducer_a526117358e3c552b34f30a4da5291a87}{SceneGraphReducer::}}}
+\DoxyCodeLine{00857\ \mbox{\hyperlink{classSceneGraphReducer_a526117358e3c552b34f30a4da5291a87}{r\_make\_nonindexed}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node,\ \textcolor{keywordtype}{int}\ nonindexed\_bits)\ \{}
+\DoxyCodeLine{00858\ \ \ \textcolor{keywordtype}{int}\ num\_changed\ =\ 0;}
+\DoxyCodeLine{00859\ }
+\DoxyCodeLine{00860\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00861\ \ \ \ \ \mbox{\hyperlink{classGeomNode}{GeomNode}}\ *geom\_node\ =\ DCAST(\mbox{\hyperlink{classGeomNode}{GeomNode}},\ node);}
+\DoxyCodeLine{00862\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_geoms\ =\ geom\_node-\/>get\_num\_geoms();}
+\DoxyCodeLine{00863\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_geoms;\ ++i)\ \{}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeom}{Geom}}\ *geom\ =\ geom\_node-\/>get\_geom(i);}
+\DoxyCodeLine{00865\ }
+\DoxyCodeLine{00866\ \ \ \ \ \ \ \textcolor{comment}{//\ Check\ whether\ the\ geom\ is\ animated\ or\ dynamic,\ and\ skip\ it\ if\ the}}
+\DoxyCodeLine{00867\ \ \ \ \ \ \ \textcolor{comment}{//\ user\ specified\ so.}}
+\DoxyCodeLine{00868\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}\ *data\ =\ geom-\/>get\_vertex\_data();}
+\DoxyCodeLine{00869\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ this\_geom\_bits\ =\ 0;}
+\DoxyCodeLine{00870\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (data-\/>get\_format()-\/>get\_animation().get\_animation\_type()\ !=}
+\DoxyCodeLine{00871\ \ \ \ \ \ \ \ \ \ \ Geom::AT\_none)\ \{}
+\DoxyCodeLine{00872\ \ \ \ \ \ \ \ \ this\_geom\_bits\ |=\ MN\_avoid\_animated;}
+\DoxyCodeLine{00873\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00874\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (data-\/>get\_usage\_hint()\ !=\ Geom::UH\_static\ ||}
+\DoxyCodeLine{00875\ \ \ \ \ \ \ \ \ \ \ geom-\/>\mbox{\hyperlink{classGeom_afc5dd05d9f365a2acba5221f368ec455}{get\_usage\_hint}}()\ !=\ Geom::UH\_static)\ \{}
+\DoxyCodeLine{00876\ \ \ \ \ \ \ \ \ this\_geom\_bits\ |=\ MN\_avoid\_dynamic;}
+\DoxyCodeLine{00877\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00878\ }
+\DoxyCodeLine{00879\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((nonindexed\_bits\ \&\ this\_geom\_bits)\ ==\ 0)\ \{}
+\DoxyCodeLine{00880\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ geom\ meets\ the\ user's\ qualifications\ for\ making\ nonindexed,\ so}}
+\DoxyCodeLine{00881\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ do\ it.}}
+\DoxyCodeLine{00882\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGeom}{Geom}})\ mgeom\ =\ geom\_node-\/>modify\_geom(i);}
+\DoxyCodeLine{00883\ \ \ \ \ \ \ \ \ num\_changed\ +=\ mgeom-\/>make\_nonindexed((nonindexed\_bits\ \&\ MN\_composite\_only)\ !=\ 0);}
+\DoxyCodeLine{00884\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00885\ \ \ \ \ \}}
+\DoxyCodeLine{00886\ \ \ \}}
+\DoxyCodeLine{00887\ }
+\DoxyCodeLine{00888\ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00889\ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00890\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00891\ \ \ \ \ num\_changed\ +=}
+\DoxyCodeLine{00892\ \ \ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_a526117358e3c552b34f30a4da5291a87}{r\_make\_nonindexed}}(children.get\_child(i),\ nonindexed\_bits);}
+\DoxyCodeLine{00893\ \ \ \}}
+\DoxyCodeLine{00894\ }
+\DoxyCodeLine{00895\ \ \ \textcolor{keywordflow}{return}\ num\_changed;}
+\DoxyCodeLine{00896\ \}}
+\DoxyCodeLine{00897\ }
+\DoxyCodeLine{00901\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classSceneGraphReducer_af6497d418d96c8be6f15c0d4018f6fb9}{SceneGraphReducer::}}}
+\DoxyCodeLine{00902\ \mbox{\hyperlink{classSceneGraphReducer_af6497d418d96c8be6f15c0d4018f6fb9}{r\_unify}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node,\ \textcolor{keywordtype}{int}\ max\_indices,\ \textcolor{keywordtype}{bool}\ preserve\_order)\ \{}
+\DoxyCodeLine{00903\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00904\ \ \ \ \ \mbox{\hyperlink{classGeomNode}{GeomNode}}\ *geom\_node\ =\ DCAST(\mbox{\hyperlink{classGeomNode}{GeomNode}},\ node);}
+\DoxyCodeLine{00905\ \ \ \ \ geom\_node-\/>\mbox{\hyperlink{classGeomNode_a2bc5b616cbf7cfe6bb67da664f311a0c}{unify}}(max\_indices,\ preserve\_order);}
+\DoxyCodeLine{00906\ \ \ \}}
+\DoxyCodeLine{00907\ }
+\DoxyCodeLine{00908\ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00909\ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00910\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00911\ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_af6497d418d96c8be6f15c0d4018f6fb9}{r\_unify}}(children.get\_child(i),\ max\_indices,\ preserve\_order);}
+\DoxyCodeLine{00912\ \ \ \}}
+\DoxyCodeLine{00913\ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00914\ \}}
+\DoxyCodeLine{00915\ }
+\DoxyCodeLine{00920\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classSceneGraphReducer_aea8a1e1a29c536e3b57121bf39a2b978}{SceneGraphReducer::}}}
+\DoxyCodeLine{00921\ \mbox{\hyperlink{classSceneGraphReducer_aea8a1e1a29c536e3b57121bf39a2b978}{r\_register\_vertices}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node,\ \mbox{\hyperlink{classGeomTransformer}{GeomTransformer}}\ \&transformer)\ \{}
+\DoxyCodeLine{00922\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00923\ \ \ \ \ \mbox{\hyperlink{classGeomNode}{GeomNode}}\ *geom\_node\ =\ DCAST(\mbox{\hyperlink{classGeomNode}{GeomNode}},\ node);}
+\DoxyCodeLine{00924\ \ \ \ \ transformer.\mbox{\hyperlink{classGeomTransformer_af68df9bb98381a78db84d6b874084bd3}{register\_vertices}}(geom\_node,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00925\ \ \ \}}
+\DoxyCodeLine{00926\ }
+\DoxyCodeLine{00927\ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00928\ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00929\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00930\ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_aea8a1e1a29c536e3b57121bf39a2b978}{r\_register\_vertices}}(children.get\_child(i),\ transformer);}
+\DoxyCodeLine{00931\ \ \ \}}
+\DoxyCodeLine{00932\ \}}
+\DoxyCodeLine{00933\ }
+\DoxyCodeLine{00937\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classSceneGraphReducer_a81593bf7158f9376ec94d8c435c17077}{SceneGraphReducer::}}}
+\DoxyCodeLine{00938\ \mbox{\hyperlink{classSceneGraphReducer_a81593bf7158f9376ec94d8c435c17077}{r\_decompose}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node)\ \{}
+\DoxyCodeLine{00939\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00940\ \ \ \ \ \mbox{\hyperlink{classGeomNode}{GeomNode}}\ *geom\_node\ =\ DCAST(\mbox{\hyperlink{classGeomNode}{GeomNode}},\ node);}
+\DoxyCodeLine{00941\ \ \ \ \ geom\_node-\/>\mbox{\hyperlink{classGeomNode_ad12f491ed935e8d0f0b029e6a3bf4459}{decompose}}();}
+\DoxyCodeLine{00942\ \ \ \}}
+\DoxyCodeLine{00943\ }
+\DoxyCodeLine{00944\ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00945\ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00946\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00947\ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_a81593bf7158f9376ec94d8c435c17077}{r\_decompose}}(children.get\_child(i));}
+\DoxyCodeLine{00948\ \ \ \}}
+\DoxyCodeLine{00949\ \}}
+\DoxyCodeLine{00950\ }
+\DoxyCodeLine{00954\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classSceneGraphReducer_a0a7f47b15569bbd4e60ddd1bccc44121}{SceneGraphReducer::}}}
+\DoxyCodeLine{00955\ \mbox{\hyperlink{classSceneGraphReducer_a0a7f47b15569bbd4e60ddd1bccc44121}{r\_premunge}}(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state)\ \{}
+\DoxyCodeLine{00956\ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ next\_state\ =\ state-\/>compose(node-\/>get\_state());}
+\DoxyCodeLine{00957\ }
+\DoxyCodeLine{00958\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00959\ \ \ \ \ \mbox{\hyperlink{classGeomNode}{GeomNode}}\ *geom\_node\ =\ DCAST(\mbox{\hyperlink{classGeomNode}{GeomNode}},\ node);}
+\DoxyCodeLine{00960\ \ \ \ \ geom\_node-\/>\mbox{\hyperlink{classGeomNode_a0758e6a90e05867d746957ade9e12125}{do\_premunge}}(\_gsg,\ next\_state,\ \_transformer);}
+\DoxyCodeLine{00961\ \ \ \}}
+\DoxyCodeLine{00962\ }
+\DoxyCodeLine{00963\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00964\ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00965\ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00966\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00967\ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_a0a7f47b15569bbd4e60ddd1bccc44121}{r\_premunge}}(children.get\_child(i),\ next\_state);}
+\DoxyCodeLine{00968\ \ \ \}}
+\DoxyCodeLine{00969\ }
+\DoxyCodeLine{00970\ \ \ PandaNode::Stashed\ stashed\ =\ node-\/>get\_stashed();}
+\DoxyCodeLine{00971\ \ \ \textcolor{keywordtype}{int}\ num\_stashed\ =\ stashed.get\_num\_stashed();}
+\DoxyCodeLine{00972\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_stashed;\ ++i)\ \{}
+\DoxyCodeLine{00973\ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer_a0a7f47b15569bbd4e60ddd1bccc44121}{r\_premunge}}(stashed.get\_stashed(i),\ next\_state);}
+\DoxyCodeLine{00974\ \ \ \}}
+\DoxyCodeLine{00975\ \}}
+
+\end{DoxyCode}

@@ -1,0 +1,164 @@
+\doxysection{thread.\+cxx}
+\hypertarget{thread_8cxx_source}{}\label{thread_8cxx_source}\index{panda/src/pipeline/thread.cxx@{panda/src/pipeline/thread.cxx}}
+\mbox{\hyperlink{thread_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{mainThread_8h}{mainThread.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{externalThread_8h}{externalThread.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pipeline_8h}{config\_pipeline.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{mutexDebug_8h}{mutexDebug.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{conditionVarDebug_8h}{conditionVarDebug.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \mbox{\hyperlink{classThread}{Thread}}\ *Thread::\_main\_thread;}
+\DoxyCodeLine{00022\ \mbox{\hyperlink{classThread}{Thread}}\ *Thread::\_external\_thread;}
+\DoxyCodeLine{00023\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ Thread::\_type\_handle;}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ void\ (*Thread::\_sleep\_func)(double)\ =\ \&ThreadImpl::sleep;}
+\DoxyCodeLine{00026\ void\ (*Thread::\_yield\_func)()\ =\ \&ThreadImpl::yield;}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00040\ \mbox{\hyperlink{classThread_a08ab177026a4e81aff7cd21867802b62}{Thread::}}}
+\DoxyCodeLine{00041\ \mbox{\hyperlink{classThread_a08ab177026a4e81aff7cd21867802b62}{Thread}}(\textcolor{keyword}{const}\ std::string\ \&name,\ \textcolor{keyword}{const}\ std::string\ \&sync\_name)\ :}
+\DoxyCodeLine{00042\ \ \ \mbox{\hyperlink{classNamable}{Namable}}(name),}
+\DoxyCodeLine{00043\ \ \ \_sync\_name(sync\_name),}
+\DoxyCodeLine{00044\ \ \ \_impl(this)}
+\DoxyCodeLine{00045\ \{}
+\DoxyCodeLine{00046\ \ \ \_started\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00047\ \ \ \_pstats\_index\ =\ -\/1;}
+\DoxyCodeLine{00048\ \ \ \_python\_index\ =\ -\/1;}
+\DoxyCodeLine{00049\ \ \ \_pstats\_callback\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00050\ \ \ \_pipeline\_stage\ =\ 0;}
+\DoxyCodeLine{00051\ \ \ \_joinable\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00052\ \ \ \_current\_task\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00055\ \ \ \_blocked\_on\_mutex\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00056\ \ \ \_waiting\_on\_cvar\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00057\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00058\ \}}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00063\ Thread::}
+\DoxyCodeLine{00064\ \string~Thread()\ \{}
+\DoxyCodeLine{00065\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00066\ \ \ nassertv(\_blocked\_on\_mutex\ ==\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{00067\ \ \ \ \ \ \ \ \ \ \ \ \_waiting\_on\_cvar\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00068\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ \ \ \textcolor{keywordflow}{if}\ (\_pstats\_callback\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00071\ \ \ \ \ \_pstats\_callback-\/>\mbox{\hyperlink{classThread_1_1PStatsCallback_ae7e138955c2a5a36e5d839739e0d1a11}{delete\_hook}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00072\ \ \ \}}
+\DoxyCodeLine{00073\ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00093\ PT(\mbox{\hyperlink{classThread}{Thread}})\ Thread::}
+\DoxyCodeLine{00094\ bind\_thread(\textcolor{keyword}{const}\ std::string\ \&name,\ \textcolor{keyword}{const}\ std::string\ \&sync\_name)\ \{}
+\DoxyCodeLine{00095\ \ \ PT(\mbox{\hyperlink{classThread}{Thread}})\ thread\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classExternalThread}{ExternalThread}}(name,\ sync\_name);}
+\DoxyCodeLine{00096\ \textcolor{preprocessor}{\#ifndef\ HAVE\_THREADS}}
+\DoxyCodeLine{00097\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ get\_main\_thread();}
+\DoxyCodeLine{00098\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00099\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ ThreadImpl::bind\_thread(thread);}
+\DoxyCodeLine{00100\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00101\ \ \ \textcolor{keywordflow}{if}\ (current\_thread\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ current\_thread\ !=\ thread.p())\ \{}
+\DoxyCodeLine{00103\ \ \ \ \ \textcolor{comment}{//\ This\ thread\ already\ has\ an\ associated\ thread.}}
+\DoxyCodeLine{00104\ \ \ \ \ nassertr(current\_thread-\/>get\_name()\ ==\ name\ \&\&}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \ \ \ \ \ \ \ current\_thread-\/>get\_sync\_name()\ ==\ sync\_name,\ current\_thread);}
+\DoxyCodeLine{00106\ \ \ \ \ thread\ =\ current\_thread;}
+\DoxyCodeLine{00107\ \ \ \}}
+\DoxyCodeLine{00108\ \ \ \textcolor{keywordflow}{return}\ thread;}
+\DoxyCodeLine{00109\ \}}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00121\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classThread_af7101798f72dd1646f300c1204591503}{Thread::}}}
+\DoxyCodeLine{00122\ \mbox{\hyperlink{classThread_af7101798f72dd1646f300c1204591503}{set\_pipeline\_stage}}(\textcolor{keywordtype}{int}\ pipeline\_stage)\ \{}
+\DoxyCodeLine{00123\ \textcolor{preprocessor}{\#ifdef\ THREADED\_PIPELINE}}
+\DoxyCodeLine{00124\ \ \ \_pipeline\_stage\ =\ pipeline\_stage;}
+\DoxyCodeLine{00125\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00126\ \ \ \textcolor{keywordflow}{if}\ (pipeline\_stage\ !=\ 0)\ \{}
+\DoxyCodeLine{00127\ \ \ \ \ pipeline\_cat.warning()}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Requested\ pipeline\ stage\ "{}}\ <<\ pipeline\_stage}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ but\ multithreaded\ render\ pipelines\ not\ enabled\ in\ build.\(\backslash\)n"{}};}
+\DoxyCodeLine{00130\ \ \ \}}
+\DoxyCodeLine{00131\ \ \ \_pipeline\_stage\ =\ 0;}
+\DoxyCodeLine{00132\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00133\ \}}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00138\ \textcolor{keywordtype}{void}\ Thread::}
+\DoxyCodeLine{00139\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00140\ \ \ out\ <<\ get\_type()\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ get\_name();}
+\DoxyCodeLine{00141\ \}}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00148\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classThread_a20e6017fbc9510e2fa64452bcc56c734}{Thread::}}}
+\DoxyCodeLine{00149\ \mbox{\hyperlink{classThread_a20e6017fbc9510e2fa64452bcc56c734}{output\_blocker}}(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00150\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00151\ \ \ \textcolor{keywordflow}{if}\ (\_blocked\_on\_mutex\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00152\ \ \ \ \ \_blocked\_on\_mutex-\/>output\_with\_holder(out);}
+\DoxyCodeLine{00153\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_waiting\_on\_cvar\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00154\ \ \ \ \ out\ <<\ *\_waiting\_on\_cvar;}
+\DoxyCodeLine{00155\ \ \ \}}
+\DoxyCodeLine{00156\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DEBUG\_THREADS}}
+\DoxyCodeLine{00157\ \}}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00162\ \textcolor{keywordtype}{void}\ Thread::}
+\DoxyCodeLine{00163\ write\_status(std::ostream\ \&out)\ \{}
+\DoxyCodeLine{00164\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00165\ \ \ ThreadImpl::write\_status(out);}
+\DoxyCodeLine{00166\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00167\ \}}
+\DoxyCodeLine{00168\ }
+\DoxyCodeLine{00188\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classThread_a9ec29921d6f86880e81288a90ca34b14}{Thread::}}}
+\DoxyCodeLine{00189\ \mbox{\hyperlink{classThread_a9ec29921d6f86880e81288a90ca34b14}{start}}(ThreadPriority\ priority,\ \textcolor{keywordtype}{bool}\ joinable)\ \{}
+\DoxyCodeLine{00190\ \ \ nassertr(!\_started,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00191\ }
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordflow}{if}\ (!support\_threads)\ \{}
+\DoxyCodeLine{00193\ \ \ \ \ thread\_cat-\/>warning()}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\ could\ not\ be\ started:\ support-\/threads\ is\ false.\(\backslash\)n"{}};}
+\DoxyCodeLine{00195\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00196\ \ \ \}}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00198\ \ \ \_joinable\ =\ joinable;}
+\DoxyCodeLine{00199\ \ \ \_started\ =\ \_impl.start(priority,\ joinable);}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ \textcolor{keywordflow}{if}\ (!\_started)\ \{}
+\DoxyCodeLine{00202\ \ \ \ \ thread\_cat-\/>warning()}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\ could\ not\ be\ started!\(\backslash\)n"{}};}
+\DoxyCodeLine{00204\ \ \ \}}
+\DoxyCodeLine{00205\ }
+\DoxyCodeLine{00206\ \ \ \textcolor{keywordflow}{return}\ \_started;}
+\DoxyCodeLine{00207\ \}}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00212\ \textcolor{keywordtype}{void}\ Thread::}
+\DoxyCodeLine{00213\ init\_main\_thread()\ \{}
+\DoxyCodeLine{00214\ \ \ \textcolor{comment}{//\ There\ is\ a\ chance\ of\ mutual\ recursion\ at\ startup.\ \ The\ count\ variable}}
+\DoxyCodeLine{00215\ \ \ \textcolor{comment}{//\ here\ attempts\ to\ protect\ against\ that.}}
+\DoxyCodeLine{00216\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}\ count\ =\ 0;}
+\DoxyCodeLine{00217\ \ \ ++count;}
+\DoxyCodeLine{00218\ \ \ \textcolor{keywordflow}{if}\ (count\ ==\ 1\ \&\&\ \_main\_thread\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ \_main\_thread\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classMainThread}{MainThread}};}
+\DoxyCodeLine{00220\ \ \ \ \ \_main\_thread-\/>ref();}
+\DoxyCodeLine{00221\ \ \ \}}
+\DoxyCodeLine{00222\ \}}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00227\ \textcolor{keywordtype}{void}\ Thread::}
+\DoxyCodeLine{00228\ init\_external\_thread()\ \{}
+\DoxyCodeLine{00229\ \ \ \textcolor{keywordflow}{if}\ (\_external\_thread\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00230\ \ \ \ \ \_external\_thread\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classExternalThread}{ExternalThread}};}
+\DoxyCodeLine{00231\ \ \ \ \ \_external\_thread-\/>ref();}
+\DoxyCodeLine{00232\ \ \ \}}
+\DoxyCodeLine{00233\ \}}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00240\ \mbox{\hyperlink{classThread_1_1PStatsCallback_a274bab0d7acee602302023f245e1fc48}{Thread::PStatsCallback::}}}
+\DoxyCodeLine{00241\ \mbox{\hyperlink{classThread_1_1PStatsCallback_a274bab0d7acee602302023f245e1fc48}{\string~PStatsCallback}}()\ \{}
+\DoxyCodeLine{00242\ \}}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00249\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classThread_1_1PStatsCallback_a75bde834f55741accc1add4e800ece94}{Thread::PStatsCallback::}}}
+\DoxyCodeLine{00250\ \mbox{\hyperlink{classThread_1_1PStatsCallback_a75bde834f55741accc1add4e800ece94}{deactivate\_hook}}(\mbox{\hyperlink{classThread}{Thread}}\ *)\ \{}
+\DoxyCodeLine{00251\ \}}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00258\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classThread_1_1PStatsCallback_ac97b39639e3e402d65eef6137f5cd2a2}{Thread::PStatsCallback::}}}
+\DoxyCodeLine{00259\ \mbox{\hyperlink{classThread_1_1PStatsCallback_ac97b39639e3e402d65eef6137f5cd2a2}{activate\_hook}}(\mbox{\hyperlink{classThread}{Thread}}\ *)\ \{}
+\DoxyCodeLine{00260\ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00266\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classThread_1_1PStatsCallback_ae7e138955c2a5a36e5d839739e0d1a11}{Thread::PStatsCallback::}}}
+\DoxyCodeLine{00267\ \mbox{\hyperlink{classThread_1_1PStatsCallback_ae7e138955c2a5a36e5d839739e0d1a11}{delete\_hook}}(\mbox{\hyperlink{classThread}{Thread}}\ *)\ \{}
+\DoxyCodeLine{00268\ \}}
+
+\end{DoxyCode}

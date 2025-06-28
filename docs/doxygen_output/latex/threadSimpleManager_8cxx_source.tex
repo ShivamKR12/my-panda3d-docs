@@ -1,0 +1,728 @@
+\doxysection{thread\+Simple\+Manager.\+cxx}
+\hypertarget{threadSimpleManager_8cxx_source}{}\label{threadSimpleManager_8cxx_source}\index{panda/src/pipeline/threadSimpleManager.cxx@{panda/src/pipeline/threadSimpleManager.cxx}}
+\mbox{\hyperlink{threadSimpleManager_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{threadSimpleManager_8h}{threadSimpleManager.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ THREAD\_SIMPLE\_IMPL}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{threadSimpleImpl_8h}{threadSimpleImpl.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{blockerSimple_8h}{blockerSimple.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{mainThread_8h}{mainThread.h}}"{}}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#ifdef\ WIN32}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#ifndef\ WIN32\_LEAN\_AND\_MEAN}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#define\ WIN32\_LEAN\_AND\_MEAN\ 1}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{windows_8h}{windows.h}}>}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{keywordtype}{bool}\ ThreadSimpleManager::\_pointers\_initialized;}
+\DoxyCodeLine{00030\ ThreadSimpleManager\ *ThreadSimpleManager::\_global\_ptr;}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00035\ ThreadSimpleManager::}
+\DoxyCodeLine{00036\ ThreadSimpleManager()\ :}
+\DoxyCodeLine{00037\ \ \ \_simple\_thread\_epoch\_timeslice}
+\DoxyCodeLine{00038\ \ \ (\textcolor{stringliteral}{"{}simple-\/thread-\/epoch-\/timeslice"{}},\ 0.05,}
+\DoxyCodeLine{00039\ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}When\ SIMPLE\_THREADS\ is\ defined,\ this\ defines\ the\ amount\ of\ time,\ "{}}}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}in\ seconds,\ that\ should\ be\ considered\ the\ "{}}}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}typical\ timeslice\ for\ one\ epoch\ (to\ run\ all\ threads\ once)."{}})),}
+\DoxyCodeLine{00042\ \ \ \_simple\_thread\_volunteer\_delay}
+\DoxyCodeLine{00043\ \ \ (\textcolor{stringliteral}{"{}simple-\/thread-\/volunteer-\/delay"{}},\ 0.0,}
+\DoxyCodeLine{00044\ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}When\ SIMPLE\_THREADS\ is\ defined,\ this\ defines\ the\ amount\ of\ time,\ "{}}}
+\DoxyCodeLine{00045\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}in\ seconds,\ for\ which\ a\ task\ that\ voluntarily\ yields\ should\ "{}}}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}be\ delayed."{}})),}
+\DoxyCodeLine{00047\ \ \ \_simple\_thread\_yield\_sleep}
+\DoxyCodeLine{00048\ \ \ (\textcolor{stringliteral}{"{}simple-\/thread-\/yield-\/sleep"{}},\ 0.001,}
+\DoxyCodeLine{00049\ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}When\ SIMPLE\_THREADS\ is\ defined,\ this\ defines\ the\ amount\ of\ time,\ "{}}}
+\DoxyCodeLine{00050\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}in\ seconds,\ for\ which\ the\ process\ should\ be\ put\ to\ sleep\ when\ "{}}}
+\DoxyCodeLine{00051\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}yielding\ the\ timeslice\ to\ the\ system."{}})),}
+\DoxyCodeLine{00052\ \ \ \_simple\_thread\_window}
+\DoxyCodeLine{00053\ \ \ (\textcolor{stringliteral}{"{}simple-\/thread-\/window"{}},\ 1.0,}
+\DoxyCodeLine{00054\ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}When\ SIMPLE\_THREADS\ is\ defined,\ this\ defines\ the\ amount\ of\ time,\ "{}}}
+\DoxyCodeLine{00055\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}in\ seconds,\ over\ which\ to\ average\ all\ the\ threads'\ runtimes,\ "{}}}
+\DoxyCodeLine{00056\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}for\ the\ purpose\ of\ scheduling\ threads."{}})),}
+\DoxyCodeLine{00057\ \ \ \_simple\_thread\_low\_weight}
+\DoxyCodeLine{00058\ \ \ (\textcolor{stringliteral}{"{}simple-\/thread-\/low-\/weight"{}},\ 0.2,}
+\DoxyCodeLine{00059\ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}When\ SIMPLE\_THREADS\ is\ defined,\ this\ determines\ the\ relative\ "{}}}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}amount\ of\ time\ that\ is\ given\ to\ threads\ with\ priority\ TP\_low."{}})),}
+\DoxyCodeLine{00061\ \ \ \_simple\_thread\_normal\_weight}
+\DoxyCodeLine{00062\ \ \ (\textcolor{stringliteral}{"{}simple-\/thread-\/normal-\/weight"{}},\ 1.0,}
+\DoxyCodeLine{00063\ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}When\ SIMPLE\_THREADS\ is\ defined,\ this\ determines\ the\ relative\ "{}}}
+\DoxyCodeLine{00064\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}amount\ of\ time\ that\ is\ given\ to\ threads\ with\ priority\ TP\_normal."{}})),}
+\DoxyCodeLine{00065\ \ \ \_simple\_thread\_high\_weight}
+\DoxyCodeLine{00066\ \ \ (\textcolor{stringliteral}{"{}simple-\/thread-\/high-\/weight"{}},\ 5.0,}
+\DoxyCodeLine{00067\ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}When\ SIMPLE\_THREADS\ is\ defined,\ this\ determines\ the\ relative\ "{}}}
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}amount\ of\ time\ that\ is\ given\ to\ threads\ with\ priority\ TP\_high."{}})),}
+\DoxyCodeLine{00069\ \ \ \_simple\_thread\_urgent\_weight}
+\DoxyCodeLine{00070\ \ \ (\textcolor{stringliteral}{"{}simple-\/thread-\/urgent-\/weight"{}},\ 10.0,}
+\DoxyCodeLine{00071\ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}When\ SIMPLE\_THREADS\ is\ defined,\ this\ determines\ the\ relative\ "{}}}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}amount\ of\ time\ that\ is\ given\ to\ threads\ with\ priority\ TP\_urgent."{}}))}
+\DoxyCodeLine{00073\ \{}
+\DoxyCodeLine{00074\ \ \ \_tick\_scale\ =\ 1000000.0;}
+\DoxyCodeLine{00075\ \ \ \_total\_ticks\ =\ 0;}
+\DoxyCodeLine{00076\ \ \ \_current\_thread\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00077\ \ \ \_clock\ =\ TrueClock::get\_global\_ptr();}
+\DoxyCodeLine{00078\ \ \ \_waiting\_for\_exit\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \ \ \textcolor{comment}{//\ Install\ these\ global\ pointers\ so\ very\ low-\/level\ code\ (code\ defined\ before}}
+\DoxyCodeLine{00081\ \ \ \textcolor{comment}{//\ the\ pipeline\ directory)\ can\ yield\ when\ necessary.}}
+\DoxyCodeLine{00082\ \ \ global\_thread\_yield\ =\ \&Thread::force\_yield;}
+\DoxyCodeLine{00083\ \ \ global\_thread\_consider\_yield\ =\ \&Thread::consider\_yield;}
+\DoxyCodeLine{00084\ \}}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00095\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00096\ enqueue\_ready(ThreadSimpleImpl\ *thread,\ \textcolor{keywordtype}{bool}\ volunteer)\ \{}
+\DoxyCodeLine{00097\ \ \ \textcolor{comment}{//\ We\ actually\ add\ it\ to\ \_next\_ready,\ so\ that\ we\ can\ tell\ when\ we\ have}}
+\DoxyCodeLine{00098\ \ \ \textcolor{comment}{//\ processed\ every\ thread\ in\ a\ given\ epoch.}}
+\DoxyCodeLine{00099\ \ \ \textcolor{keywordflow}{if}\ (!volunteer)\ \{}
+\DoxyCodeLine{00100\ \ \ \ \ \_next\_ready.push\_back(thread);}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00103\ \ \ \ \ \textcolor{comment}{//\ Unless\ it's\ a\ volunteer,\ in\ which\ case\ we\ actually\ put\ it\ to\ sleep\ for}}
+\DoxyCodeLine{00104\ \ \ \ \ \textcolor{comment}{//\ the\ duration\ of\ the\ timeslice,\ so\ it\ won't\ interfere\ with\ timeslice}}
+\DoxyCodeLine{00105\ \ \ \ \ \textcolor{comment}{//\ accounting\ for\ the\ remaining\ ready\ threads.}}
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{keywordtype}{double}\ now\ =\ get\_current\_time();}
+\DoxyCodeLine{00107\ \ \ \ \ thread-\/>\_wake\_time\ =\ now\ +\ \_simple\_thread\_volunteer\_delay;}
+\DoxyCodeLine{00108\ \ \ \ \ \_volunteers.push\_back(thread);}
+\DoxyCodeLine{00109\ \ \ \ \ push\_heap(\_volunteers.begin(),\ \_volunteers.end(),\ CompareStartTime());}
+\DoxyCodeLine{00110\ \ \ \}}
+\DoxyCodeLine{00111\ \}}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00118\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00119\ enqueue\_sleep(ThreadSimpleImpl\ *thread,\ \textcolor{keywordtype}{double}\ seconds)\ \{}
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ <<\ *\_current\_thread-\/>\_parent\_obj\ <<\ \textcolor{stringliteral}{"{}\ sleeping\ for\ "{}}}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ <<\ seconds\ <<\ \textcolor{stringliteral}{"{}\ seconds\(\backslash\)n"{}};}
+\DoxyCodeLine{00124\ \ \ \}}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \ \ \textcolor{keywordtype}{double}\ now\ =\ get\_current\_time();}
+\DoxyCodeLine{00127\ \ \ thread-\/>\_wake\_time\ =\ now\ +\ seconds;}
+\DoxyCodeLine{00128\ \ \ \_sleeping.push\_back(thread);}
+\DoxyCodeLine{00129\ \ \ push\_heap(\_sleeping.begin(),\ \_sleeping.end(),\ CompareStartTime());}
+\DoxyCodeLine{00130\ \}}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00137\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00138\ enqueue\_block(ThreadSimpleImpl\ *thread,\ BlockerSimple\ *blocker)\ \{}
+\DoxyCodeLine{00139\ \ \ \_blocked[blocker].push\_back(thread);}
+\DoxyCodeLine{00140\ \ \ blocker-\/>\_flags\ |=\ BlockerSimple::F\_has\_waiters;}
+\DoxyCodeLine{00141\ \}}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00147\ \textcolor{keywordtype}{bool}\ ThreadSimpleManager::}
+\DoxyCodeLine{00148\ unblock\_one(BlockerSimple\ *blocker)\ \{}
+\DoxyCodeLine{00149\ \ \ Blocked::iterator\ bi\ =\ \_blocked.find(blocker);}
+\DoxyCodeLine{00150\ \ \ \textcolor{keywordflow}{if}\ (bi\ !=\ \_blocked.end())\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ nassertr(blocker-\/>\_flags\ \&\ BlockerSimple::F\_has\_waiters,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ \ \ \ \ FifoThreads\ \&threads\ =\ (*bi).second;}
+\DoxyCodeLine{00154\ \ \ \ \ nassertr(!threads.empty(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00155\ \ \ \ \ ThreadSimpleImpl\ *thread\ =\ threads.front();}
+\DoxyCodeLine{00156\ \ \ \ \ threads.pop\_front();}
+\DoxyCodeLine{00157\ \ \ \ \ \_ready.push\_back(thread);}
+\DoxyCodeLine{00158\ \ \ \ \ \textcolor{keywordflow}{if}\ (threads.empty())\ \{}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ blocker-\/>\_flags\ \&=\ \string~BlockerSimple::F\_has\_waiters;}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \_blocked.erase(bi);}
+\DoxyCodeLine{00161\ \ \ \ \ \}}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00163\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00164\ \ \ \}}
+\DoxyCodeLine{00165\ }
+\DoxyCodeLine{00166\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00167\ \}}
+\DoxyCodeLine{00168\ }
+\DoxyCodeLine{00173\ \textcolor{keywordtype}{bool}\ ThreadSimpleManager::}
+\DoxyCodeLine{00174\ unblock\_all(BlockerSimple\ *blocker)\ \{}
+\DoxyCodeLine{00175\ \ \ Blocked::iterator\ bi\ =\ \_blocked.find(blocker);}
+\DoxyCodeLine{00176\ \ \ \textcolor{keywordflow}{if}\ (bi\ !=\ \_blocked.end())\ \{}
+\DoxyCodeLine{00177\ \ \ \ \ nassertr(blocker-\/>\_flags\ \&\ BlockerSimple::F\_has\_waiters,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00178\ }
+\DoxyCodeLine{00179\ \ \ \ \ FifoThreads\ \&threads\ =\ (*bi).second;}
+\DoxyCodeLine{00180\ \ \ \ \ nassertr(!threads.empty(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00181\ \ \ \ \ \textcolor{keywordflow}{while}\ (!threads.empty())\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ ThreadSimpleImpl\ *thread\ =\ threads.front();}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ threads.pop\_front();}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \_ready.push\_back(thread);}
+\DoxyCodeLine{00185\ \ \ \ \ \}}
+\DoxyCodeLine{00186\ \ \ \ \ blocker-\/>\_flags\ \&=\ \string~BlockerSimple::F\_has\_waiters;}
+\DoxyCodeLine{00187\ \ \ \ \ \_blocked.erase(bi);}
+\DoxyCodeLine{00188\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00189\ \ \ \}}
+\DoxyCodeLine{00190\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00191\ \}}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00199\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00200\ enqueue\_finished(ThreadSimpleImpl\ *thread)\ \{}
+\DoxyCodeLine{00201\ \ \ \_finished.push\_back(thread);}
+\DoxyCodeLine{00202\ \}}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00208\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00209\ preempt(ThreadSimpleImpl\ *thread)\ \{}
+\DoxyCodeLine{00210\ \ \ FifoThreads::iterator\ ti;}
+\DoxyCodeLine{00211\ \ \ ti\ =\ find(\_ready.begin(),\ \_ready.end(),\ thread);}
+\DoxyCodeLine{00212\ \ \ \textcolor{keywordflow}{if}\ (ti\ !=\ \_ready.end())\ \{}
+\DoxyCodeLine{00213\ \ \ \ \ \_ready.erase(ti);}
+\DoxyCodeLine{00214\ \ \ \ \ \_ready.push\_front(thread);}
+\DoxyCodeLine{00215\ \ \ \}}
+\DoxyCodeLine{00216\ \}}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00226\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00227\ next\_context()\ \{}
+\DoxyCodeLine{00228\ \ \ \textcolor{comment}{//\ Delete\ any\ threads\ that\ need\ it.\ \ We\ can't\ delete\ the\ current\ thread,}}
+\DoxyCodeLine{00229\ \ \ \textcolor{comment}{//\ though.}}
+\DoxyCodeLine{00230\ \ \ \textcolor{keywordflow}{while}\ (!\_finished.empty()\ \&\&\ \_finished.front()\ !=\ \_current\_thread)\ \{}
+\DoxyCodeLine{00231\ \ \ \ \ ThreadSimpleImpl\ *finished\_thread\ =\ \_finished.front();}
+\DoxyCodeLine{00232\ \ \ \ \ \_finished.pop\_front();}
+\DoxyCodeLine{00233\ \ \ \ \ unref\_delete(finished\_thread-\/>\_parent\_obj);}
+\DoxyCodeLine{00234\ \ \ \}}
+\DoxyCodeLine{00235\ }
+\DoxyCodeLine{00236\ \ \ ++\_current\_thread-\/>\_context\_switches;}
+\DoxyCodeLine{00237\ }
+\DoxyCodeLine{00238\ \ \ \textcolor{comment}{//\ Mark\ the\ current\ thread's\ resume\ point.}}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00240\ \textcolor{preprocessor}{\#ifdef\ HAVE\_PYTHON}}
+\DoxyCodeLine{00241\ \ \ \textcolor{comment}{//\ Save\ the\ current\ Python\ thread\ state.}}
+\DoxyCodeLine{00242\ \ \ \_current\_thread-\/>\_python\_state\ =\ thread\_state\_swap(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00243\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_PYTHON}}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00245\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00246\ \ \ \mbox{\hyperlink{classThread_1_1PStatsCallback}{Thread::PStatsCallback}}\ *pstats\_callback\ =\ \_current\_thread-\/>\_parent\_obj-\/>get\_pstats\_callback();}
+\DoxyCodeLine{00247\ \ \ \textcolor{keywordflow}{if}\ (pstats\_callback\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00248\ \ \ \ \ pstats\_callback-\/>\mbox{\hyperlink{classThread_1_1PStatsCallback_a75bde834f55741accc1add4e800ece94}{deactivate\_hook}}(\_current\_thread-\/>\_parent\_obj);}
+\DoxyCodeLine{00249\ \ \ \}}
+\DoxyCodeLine{00250\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \ \ save\_thread\_context(\_current\_thread-\/>\_context,\ st\_choose\_next\_context,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00253\ \ \ \textcolor{comment}{//\ Pass\ 2:\ we\ have\ returned\ into\ the\ context,\ and\ are\ now\ resuming\ the}}
+\DoxyCodeLine{00254\ \ \ \textcolor{comment}{//\ current\ thread.}}
+\DoxyCodeLine{00255\ }
+\DoxyCodeLine{00256\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00257\ \ \ \textcolor{keywordflow}{if}\ (pstats\_callback\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00258\ \ \ \ \ pstats\_callback-\/>\mbox{\hyperlink{classThread_1_1PStatsCallback_ac97b39639e3e402d65eef6137f5cd2a2}{activate\_hook}}(\_current\_thread-\/>\_parent\_obj);}
+\DoxyCodeLine{00259\ \ \ \}}
+\DoxyCodeLine{00260\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \textcolor{preprocessor}{\#ifdef\ HAVE\_PYTHON}}
+\DoxyCodeLine{00263\ \ \ thread\_state\_swap(\_current\_thread-\/>\_python\_state);}
+\DoxyCodeLine{00264\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_PYTHON}}
+\DoxyCodeLine{00265\ \}}
+\DoxyCodeLine{00266\ }
+\DoxyCodeLine{00272\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00273\ prepare\_for\_exit()\ \{}
+\DoxyCodeLine{00274\ \ \ \textcolor{keywordflow}{if}\ (!\_current\_thread-\/>\_parent\_obj-\/>is\_exact\_type(MainThread::get\_class\_type()))\ \{}
+\DoxyCodeLine{00275\ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Ignoring\ prepare\_for\_exit\ called\ from\ "{}}}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \ \ <<\ *(\_current\_thread-\/>\_parent\_obj)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00279\ \ \ \ \ \}}
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00281\ \ \ \}}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00283\ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}prepare\_for\_exit\(\backslash\)n"{}};}
+\DoxyCodeLine{00286\ \ \ \}}
+\DoxyCodeLine{00287\ }
+\DoxyCodeLine{00288\ \ \ nassertv(\_waiting\_for\_exit\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00289\ \ \ \_waiting\_for\_exit\ =\ \_current\_thread;}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00291\ \ \ \textcolor{comment}{//\ At\ this\ point,\ any\ non-\/joinable\ threads\ on\ any\ of\ the\ queues\ are}}
+\DoxyCodeLine{00292\ \ \ \textcolor{comment}{//\ automatically\ killed.}}
+\DoxyCodeLine{00293\ \ \ kill\_non\_joinable(\_ready);}
+\DoxyCodeLine{00294\ }
+\DoxyCodeLine{00295\ \ \ Blocked::iterator\ bi\ =\ \_blocked.begin();}
+\DoxyCodeLine{00296\ \ \ \textcolor{keywordflow}{while}\ (bi\ !=\ \_blocked.end())\ \{}
+\DoxyCodeLine{00297\ \ \ \ \ Blocked::iterator\ bnext\ =\ bi;}
+\DoxyCodeLine{00298\ \ \ \ \ ++bnext;}
+\DoxyCodeLine{00299\ \ \ \ \ BlockerSimple\ *blocker\ =\ (*bi).first;}
+\DoxyCodeLine{00300\ \ \ \ \ FifoThreads\ \&threads\ =\ (*bi).second;}
+\DoxyCodeLine{00301\ \ \ \ \ kill\_non\_joinable(threads);}
+\DoxyCodeLine{00302\ \ \ \ \ \textcolor{keywordflow}{if}\ (threads.empty())\ \{}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ blocker-\/>\_flags\ \&=\ \string~BlockerSimple::F\_has\_waiters;}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \_blocked.erase(bi);}
+\DoxyCodeLine{00305\ \ \ \ \ \}}
+\DoxyCodeLine{00306\ \ \ \ \ bi\ =\ bnext;}
+\DoxyCodeLine{00307\ \ \ \}}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00309\ \ \ kill\_non\_joinable(\_sleeping);}
+\DoxyCodeLine{00310\ \ \ kill\_non\_joinable(\_volunteers);}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ next\_context();}
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00314\ \ \ \textcolor{comment}{//\ Delete\ any\ remaining\ threads.}}
+\DoxyCodeLine{00315\ \ \ \textcolor{keywordflow}{while}\ (!\_finished.empty()\ \&\&\ \_finished.front()\ !=\ \_current\_thread)\ \{}
+\DoxyCodeLine{00316\ \ \ \ \ ThreadSimpleImpl\ *finished\_thread\ =\ \_finished.front();}
+\DoxyCodeLine{00317\ \ \ \ \ \_finished.pop\_front();}
+\DoxyCodeLine{00318\ \ \ \ \ unref\_delete(finished\_thread-\/>\_parent\_obj);}
+\DoxyCodeLine{00319\ \ \ \}}
+\DoxyCodeLine{00320\ \}}
+\DoxyCodeLine{00321\ }
+\DoxyCodeLine{00326\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00327\ set\_current\_thread(ThreadSimpleImpl\ *current\_thread)\ \{}
+\DoxyCodeLine{00328\ \ \ nassertv(\_current\_thread\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00329\ \ \ \_current\_thread\ =\ current\_thread;}
+\DoxyCodeLine{00330\ \}}
+\DoxyCodeLine{00331\ }
+\DoxyCodeLine{00336\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00337\ remove\_thread(ThreadSimpleImpl\ *thread)\ \{}
+\DoxyCodeLine{00338\ \ \ TickRecords\ new\_records;}
+\DoxyCodeLine{00339\ \ \ TickRecords::iterator\ ri;}
+\DoxyCodeLine{00340\ \ \ \textcolor{keywordflow}{for}\ (ri\ =\ \_tick\_records.begin();\ ri\ !=\ \_tick\_records.end();\ ++ri)\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*ri).\_thread\ !=\ thread)\ \{}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \textcolor{comment}{//\ Keep\ this\ record.}}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ new\_records.push\_back(*ri);}
+\DoxyCodeLine{00344\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \textcolor{comment}{//\ Lose\ this\ record.}}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ nassertv(\_total\_ticks\ >=\ (*ri).\_tick\_count);}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \_total\_ticks\ -\/=\ (*ri).\_tick\_count;}
+\DoxyCodeLine{00348\ \ \ \ \ \}}
+\DoxyCodeLine{00349\ \ \ \}}
+\DoxyCodeLine{00350\ }
+\DoxyCodeLine{00351\ \ \ \_tick\_records.swap(new\_records);}
+\DoxyCodeLine{00352\ \}}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00358\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00359\ system\_sleep(\textcolor{keywordtype}{double}\ seconds)\ \{}
+\DoxyCodeLine{00360\ \textcolor{preprocessor}{\#ifdef\ WIN32}}
+\DoxyCodeLine{00361\ \ \ Sleep((\textcolor{keywordtype}{int})(seconds\ *\ 1000\ +\ 0.5));}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00363\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00364\ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00365\ \textcolor{comment}{\ \ struct\ timespec\ rqtp;}}
+\DoxyCodeLine{00366\ \textcolor{comment}{\ \ rqtp.tv\_sec\ =\ time\_t(seconds);}}
+\DoxyCodeLine{00367\ \textcolor{comment}{\ \ rqtp.tv\_nsec\ =\ long((seconds\ -\/\ (double)rqtp.tv\_sec)\ *\ 1000000000.0\ +\ 0.5);}}
+\DoxyCodeLine{00368\ \textcolor{comment}{\ \ nanosleep(\&rqtp,\ NULL);}}
+\DoxyCodeLine{00369\ \textcolor{comment}{\ \ */}}
+\DoxyCodeLine{00370\ }
+\DoxyCodeLine{00371\ \ \ \textcolor{comment}{//\ We\ use\ select()\ as\ the\ only\ way\ that\ seems\ to\ actually\ yield\ the}}
+\DoxyCodeLine{00372\ \ \ \textcolor{comment}{//\ timeslice.\ \ sleep()\ and\ nanosleep()\ don't\ appear\ to\ do\ the\ trick.}}
+\DoxyCodeLine{00373\ \ \ \textcolor{keyword}{struct\ }timeval\ tv;}
+\DoxyCodeLine{00374\ \ \ tv.tv\_sec\ =\ time\_t(seconds);}
+\DoxyCodeLine{00375\ \ \ tv.tv\_usec\ =\ long((seconds\ -\/\ (\textcolor{keywordtype}{double})tv.tv\_sec)\ *\ 1000000.0\ +\ 0.5);}
+\DoxyCodeLine{00376\ \ \ select(0,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ \&tv);}
+\DoxyCodeLine{00377\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ WIN32}}
+\DoxyCodeLine{00378\ \}}
+\DoxyCodeLine{00379\ }
+\DoxyCodeLine{00383\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00384\ write\_status(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00385\ \ \ out\ <<\ \textcolor{stringliteral}{"{}Currently\ running:\ "{}}\ <<\ *\_current\_thread-\/>\_parent\_obj\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00386\ }
+\DoxyCodeLine{00387\ \ \ out\ <<\ \textcolor{stringliteral}{"{}Ready:"{}};}
+\DoxyCodeLine{00388\ \ \ FifoThreads::const\_iterator\ ti;}
+\DoxyCodeLine{00389\ \ \ Sleeping::const\_iterator\ si;}
+\DoxyCodeLine{00390\ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ \_ready.begin();\ ti\ !=\ \_ready.end();\ ++ti)\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ *(*ti)-\/>\_parent\_obj;}
+\DoxyCodeLine{00392\ \ \ \}}
+\DoxyCodeLine{00393\ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ \_next\_ready.begin();\ ti\ !=\ \_next\_ready.end();\ ++ti)\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ *(*ti)-\/>\_parent\_obj;}
+\DoxyCodeLine{00395\ \ \ \}}
+\DoxyCodeLine{00396\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_volunteers.begin();\ si\ !=\ \_volunteers.end();\ ++si)\ \{}
+\DoxyCodeLine{00397\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ *(*si)-\/>\_parent\_obj;}
+\DoxyCodeLine{00398\ \ \ \}}
+\DoxyCodeLine{00399\ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00400\ }
+\DoxyCodeLine{00401\ \ \ \textcolor{keywordtype}{double}\ now\ =\ get\_current\_time();}
+\DoxyCodeLine{00402\ }
+\DoxyCodeLine{00403\ \ \ out\ <<\ \textcolor{stringliteral}{"{}Sleeping:"{}};}
+\DoxyCodeLine{00404\ \ \ \textcolor{comment}{//\ Copy\ and\ sort\ for\ convenience.}}
+\DoxyCodeLine{00405\ \ \ Sleeping\ s2\ =\ \_sleeping;}
+\DoxyCodeLine{00406\ \ \ std::sort(s2.begin(),\ s2.end(),\ CompareStartTime());}
+\DoxyCodeLine{00407\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ s2.begin();\ si\ !=\ s2.end();\ ++si)\ \{}
+\DoxyCodeLine{00408\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ *(*si)-\/>\_parent\_obj\ <<\ \textcolor{stringliteral}{"{}("{}}\ <<\ (*si)-\/>\_wake\_time\ -\/\ now}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}s)"{}};}
+\DoxyCodeLine{00410\ \ \ \}}
+\DoxyCodeLine{00411\ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00412\ }
+\DoxyCodeLine{00413\ \ \ Blocked::const\_iterator\ bi;}
+\DoxyCodeLine{00414\ \ \ \textcolor{keywordflow}{for}\ (bi\ =\ \_blocked.begin();\ bi\ !=\ \_blocked.end();\ ++bi)\ \{}
+\DoxyCodeLine{00415\ \ \ \ \ BlockerSimple\ *blocker\ =\ (*bi).first;}
+\DoxyCodeLine{00416\ \ \ \ \ \textcolor{keyword}{const}\ FifoThreads\ \&threads\ =\ (*bi).second;}
+\DoxyCodeLine{00417\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}On\ blocker\ "{}}\ <<\ blocker\ <<\ \textcolor{stringliteral}{"{}:\(\backslash\)n"{}};}
+\DoxyCodeLine{00418\ \ \ \ \ FifoThreads::const\_iterator\ ti;}
+\DoxyCodeLine{00419\ \ \ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ threads.begin();\ ti\ !=\ threads.end();\ ++ti)\ \{}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ ThreadSimpleImpl\ *thread\ =\ (*ti);}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ *thread-\/>\_parent\_obj;}
+\DoxyCodeLine{00422\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ ("{}};}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ thread-\/>\_parent\_obj-\/>output\_blocker(out);}
+\DoxyCodeLine{00425\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{})"{}};}
+\DoxyCodeLine{00426\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DEBUG\_THREADS}}
+\DoxyCodeLine{00427\ \ \ \ \ \}}
+\DoxyCodeLine{00428\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00429\ \ \ \}}
+\DoxyCodeLine{00430\ \}}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00436\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00437\ system\_yield()\ \{}
+\DoxyCodeLine{00438\ \ \ \textcolor{keywordflow}{if}\ (!\_pointers\_initialized)\ \{}
+\DoxyCodeLine{00439\ \ \ \ \ \textcolor{comment}{//\ Ignore\ this\ call\ before\ we\ construct\ the\ global\ ThreadSimpleManager.}}
+\DoxyCodeLine{00440\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00441\ \ \ \}}
+\DoxyCodeLine{00442\ }
+\DoxyCodeLine{00443\ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00444\ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}system\_yield\(\backslash\)n"{}};}
+\DoxyCodeLine{00446\ \ \ \}}
+\DoxyCodeLine{00447\ }
+\DoxyCodeLine{00448\ \ \ \textcolor{comment}{//\ There\ seem\ to\ be\ some\ issues\ with\ modern\ operating\ systems\ not\ wanting\ to}}
+\DoxyCodeLine{00449\ \ \ \textcolor{comment}{//\ actually\ yield\ the\ timeslice\ in\ response\ to\ sleep(0).\ In\ particular,}}
+\DoxyCodeLine{00450\ \ \ \textcolor{comment}{//\ Windows\ and\ OSX\ both\ seemed\ to\ do\ nothing\ in\ that\ call.\ \ Whatever.\ \ We'll}}
+\DoxyCodeLine{00451\ \ \ \textcolor{comment}{//\ force\ the\ point\ by\ explicitly\ sleeping\ for\ 1\ ms\ in\ both\ cases.\ \ This\ is}}
+\DoxyCodeLine{00452\ \ \ \textcolor{comment}{//\ user-\/configurable\ in\ case\ 1\ ms\ is\ too\ much\ (though\ on\ Windows\ that's\ all}}
+\DoxyCodeLine{00453\ \ \ \textcolor{comment}{//\ the\ resolution\ you\ have).}}
+\DoxyCodeLine{00454\ \ \ system\_sleep(\_global\_ptr-\/>\_simple\_thread\_yield\_sleep);}
+\DoxyCodeLine{00455\ \}}
+\DoxyCodeLine{00456\ }
+\DoxyCodeLine{00461\ \textcolor{keywordtype}{double}\ ThreadSimpleManager::}
+\DoxyCodeLine{00462\ get\_current\_time()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00463\ \ \ \textcolor{keywordflow}{return}\ \_clock-\/>get\_short\_raw\_time();}
+\DoxyCodeLine{00464\ \}}
+\DoxyCodeLine{00465\ }
+\DoxyCodeLine{00469\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00470\ init\_pointers()\ \{}
+\DoxyCodeLine{00471\ \ \ \textcolor{keywordflow}{if}\ (!\_pointers\_initialized)\ \{}
+\DoxyCodeLine{00472\ \ \ \ \ \_pointers\_initialized\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00473\ \ \ \ \ \_global\_ptr\ =\ \textcolor{keyword}{new}\ ThreadSimpleManager;}
+\DoxyCodeLine{00474\ \ \ \ \ Thread::get\_main\_thread();}
+\DoxyCodeLine{00475\ \ \ \}}
+\DoxyCodeLine{00476\ \}}
+\DoxyCodeLine{00477\ }
+\DoxyCodeLine{00481\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00482\ st\_choose\_next\_context(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structThreadContext}{ThreadContext}}\ *from\_context,\ \textcolor{keywordtype}{void}\ *data)\ \{}
+\DoxyCodeLine{00483\ \ \ ThreadSimpleManager\ *self\ =\ (ThreadSimpleManager\ *)data;}
+\DoxyCodeLine{00484\ \ \ self-\/>choose\_next\_context(from\_context);}
+\DoxyCodeLine{00485\ \}}
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00490\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00491\ choose\_next\_context(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structThreadContext}{ThreadContext}}\ *from\_context)\ \{}
+\DoxyCodeLine{00492\ \ \ \textcolor{keywordtype}{double}\ now\ =\ get\_current\_time();}
+\DoxyCodeLine{00493\ }
+\DoxyCodeLine{00494\ \ \ do\_timeslice\_accounting(\_current\_thread,\ now);}
+\DoxyCodeLine{00495\ \ \ \_current\_thread\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00497\ \ \ \textcolor{keywordflow}{if}\ (!\_sleeping.empty()\ ||\ !\_volunteers.empty())\ \{}
+\DoxyCodeLine{00498\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_ready.empty()\ \&\&\ \_next\_ready.empty())\ \{}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ \textcolor{comment}{//\ All\ of\ our\ threads\ are\ currently\ sleeping.\ \ Therefore,\ wake\ the}}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ \textcolor{comment}{//\ volunteer(s)\ immediately.}}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ wake\_all\_sleepers(\_volunteers);}
+\DoxyCodeLine{00502\ }
+\DoxyCodeLine{00503\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ should\ also\ yield\ the\ whole\ process\ now,\ to\ be\ polite\ to\ the\ rest}}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \textcolor{comment}{//\ of\ the\ system.}}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ system\_yield();}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ now\ =\ get\_current\_time();}
+\DoxyCodeLine{00507\ \ \ \ \ \}}
+\DoxyCodeLine{00508\ \ \ \ \ wake\_sleepers(\_sleeping,\ now);}
+\DoxyCodeLine{00509\ \ \ \ \ wake\_sleepers(\_volunteers,\ now);}
+\DoxyCodeLine{00510\ \ \ \}}
+\DoxyCodeLine{00511\ }
+\DoxyCodeLine{00512\ \ \ \textcolor{keywordtype}{bool}\ new\_epoch\ =\ !\_ready.empty()\ \&\&\ \_next\_ready.empty();}
+\DoxyCodeLine{00513\ }
+\DoxyCodeLine{00514\ \ \ \textcolor{comment}{//\ Choose\ a\ new\ thread\ to\ execute.}}
+\DoxyCodeLine{00515\ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00516\ \ \ \ \ \textcolor{comment}{//\ If\ there\ are\ no\ threads,\ sleep.}}
+\DoxyCodeLine{00517\ \ \ \ \ \textcolor{keywordflow}{while}\ (\_ready.empty())\ \{}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_next\_ready.empty())\ \{}
+\DoxyCodeLine{00519\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We've\ finished\ an\ epoch.}}
+\DoxyCodeLine{00520\ \ \ \ \ \ \ \ \ \_ready.swap(\_next\_ready);}
+\DoxyCodeLine{00521\ }
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_epoch\ \&\&\ !\_tick\_records.empty())\ \{}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Pop\ the\ oldest\ timeslice\ record\ off\ when\ we\ finish\ an\ epoch}}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ without\ executing\ any\ threads,\ to\ ensure\ we\ don't\ get\ caught\ in}}
+\DoxyCodeLine{00525\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ an\ "{}all\ threads\ reached\ budget"{}\ loop.}}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00527\ \ \ \ \ \ \ \ \ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00528\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}All\ threads\ exceeded\ budget.\(\backslash\)n"{}};}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ \ \ \ \ TickRecord\ \&record\ =\ \_tick\_records.front();}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ \ \ \ \ \_total\_ticks\ -\/=\ record.\_tick\_count;}
+\DoxyCodeLine{00532\ }
+\DoxyCodeLine{00533\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (record.\_thread-\/>\_run\_ticks\ >=\ record.\_tick\_count)\ \{}
+\DoxyCodeLine{00534\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Ensure\ we\ don't\ go\ negative.}}
+\DoxyCodeLine{00535\ \ \ \ \ \ \ \ \ \ \ \ \ record.\_thread-\/>\_run\_ticks\ -\/=\ record.\_tick\_count;}
+\DoxyCodeLine{00536\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00537\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ It\ is\ possible\ for\ this\ to\ happen\ if\ the\ application\ has\ been}}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ paused\ for\ more\ than\ 2\string^31\ ticks.}}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \ \ \ \ \ \ record.\_thread-\/>\_run\_ticks\ =\ 0;}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \ \ \ \ \_tick\_records.pop\_front();}
+\DoxyCodeLine{00542\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \ \ new\_epoch\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00544\ }
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!\_volunteers.empty())\ \{}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ There\ are\ some\ volunteers.\ \ Wake\ them.\ \ Also\ wake\ any\ sleepers\ that}}
+\DoxyCodeLine{00547\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ need\ it.}}
+\DoxyCodeLine{00548\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00549\ \ \ \ \ \ \ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00550\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Waking\ volunteers.\(\backslash\)n"{}};}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ should\ yield\ the\ whole\ process\ now,\ to\ be\ polite\ to\ the\ rest\ of}}
+\DoxyCodeLine{00553\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ system.}}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \ \ system\_yield();}
+\DoxyCodeLine{00555\ \ \ \ \ \ \ \ \ now\ =\ get\_current\_time();}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ \ \ wake\_all\_sleepers(\_volunteers);}
+\DoxyCodeLine{00557\ \ \ \ \ \ \ \ \ wake\_sleepers(\_sleeping,\ now);}
+\DoxyCodeLine{00558\ }
+\DoxyCodeLine{00559\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!\_sleeping.empty())\ \{}
+\DoxyCodeLine{00560\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ All\ threads\ are\ sleeping.}}
+\DoxyCodeLine{00561\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ wait\ =\ \_sleeping.front()-\/>\_wake\_time\ -\/\ now;}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (wait\ >\ 0.0)\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \ \ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Sleeping\ all\ threads\ "{}}\ <<\ wait\ <<\ \textcolor{stringliteral}{"{}\ seconds\(\backslash\)n"{}};}
+\DoxyCodeLine{00566\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \ \ \ \ system\_sleep(wait);}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \ \ now\ =\ get\_current\_time();}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ wake\_sleepers(\_sleeping,\ now);}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ wake\_sleepers(\_volunteers,\ now);}
+\DoxyCodeLine{00572\ }
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ No\ threads\ are\ ready!}}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_waiting\_for\_exit\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ a\ shutdown\ situation.\ \ In\ this\ case,\ we\ quietly\ abandoned}}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ remaining\ blocked\ threads,\ if\ any,\ and\ switch\ back\ to\ the}}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ main\ thread\ to\ finish\ shutting\ down.}}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \ \ \ \ \_ready.push\_back(\_waiting\_for\_exit);}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ \ \ \ \ \_waiting\_for\_exit\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00583\ }
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ No\ threads\ are\ ready\ to\ run,\ but\ we're\ not\ explicitly\ shutting}}
+\DoxyCodeLine{00585\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ down.\ \ This\ is\ an\ error\ condition,\ an\ unintentional\ deadlock.}}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_blocked.empty())\ \{}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \ \ \ \ thread\_cat-\/>error()}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Deadlock!\ \ All\ threads\ blocked.\(\backslash\)n"{}};}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \ \ \ \ report\_deadlock();}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \ \ \ \ abort();}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00592\ }
+\DoxyCodeLine{00593\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ No\ threads\ are\ queued\ anywhere.\ \ This\ is\ some\ kind\ of\ internal}}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ error,\ since\ normally\ the\ main\ thread,\ at\ least,\ should\ be\ queued}}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ somewhere.}}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \ \ thread\_cat-\/>error()}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}All\ threads\ disappeared!\(\backslash\)n"{}};}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \ \ exit(0);}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00600\ \ \ \ \ \}}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00602\ \ \ \ \ ThreadSimpleImpl\ *chosen\_thread\ =\ \_ready.front();}
+\DoxyCodeLine{00603\ \ \ \ \ \_ready.pop\_front();}
+\DoxyCodeLine{00604\ }
+\DoxyCodeLine{00605\ \ \ \ \ \textcolor{keywordtype}{double}\ timeslice\ =\ determine\_timeslice(chosen\_thread);}
+\DoxyCodeLine{00606\ \ \ \ \ \textcolor{keywordflow}{if}\ (timeslice\ >\ 0.0)\ \{}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ thread\ is\ ready\ to\ roll.\ \ Break\ out\ of\ the\ loop.}}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ chosen\_thread-\/>\_start\_time\ =\ now;}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ chosen\_thread-\/>\_stop\_time\ =\ now\ +\ timeslice;}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \_current\_thread\ =\ chosen\_thread;}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00612\ \ \ \ \ \}}
+\DoxyCodeLine{00613\ }
+\DoxyCodeLine{00614\ \ \ \ \ \textcolor{comment}{//\ This\ thread\ is\ not\ ready\ to\ wake\ up\ yet.\ \ Put\ it\ back\ for\ next\ epoch.}}
+\DoxyCodeLine{00615\ \ \ \ \ \textcolor{comment}{//\ It\ doesn't\ count\ as\ a\ volunteer,\ though-\/-\/its\ timeslice\ was\ used\ up.}}
+\DoxyCodeLine{00616\ \ \ \ \ \_next\_ready.push\_back(chosen\_thread);}
+\DoxyCodeLine{00617\ \ \ \}}
+\DoxyCodeLine{00618\ }
+\DoxyCodeLine{00619\ \ \ \textcolor{comment}{//\ All\ right,\ the\ thread\ is\ ready\ to\ roll.\ \ Begin.}}
+\DoxyCodeLine{00620\ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00621\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ blocked\_count\ =\ 0;}
+\DoxyCodeLine{00622\ \ \ \ \ Blocked::const\_iterator\ bi;}
+\DoxyCodeLine{00623\ \ \ \ \ \textcolor{keywordflow}{for}\ (bi\ =\ \_blocked.begin();\ bi\ !=\ \_blocked.end();\ ++bi)\ \{}
+\DoxyCodeLine{00624\ \ \ \ \ \ \ \textcolor{keyword}{const}\ FifoThreads\ \&threads\ =\ (*bi).second;}
+\DoxyCodeLine{00625\ \ \ \ \ \ \ blocked\_count\ +=\ threads.size();}
+\DoxyCodeLine{00626\ \ \ \ \ \}}
+\DoxyCodeLine{00627\ }
+\DoxyCodeLine{00628\ \ \ \ \ \textcolor{keywordtype}{double}\ timeslice\ =\ \_current\_thread-\/>\_stop\_time\ -\/\ \_current\_thread-\/>\_start\_time;}
+\DoxyCodeLine{00629\ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Switching\ to\ "{}}\ <<\ *\_current\_thread-\/>\_parent\_obj}
+\DoxyCodeLine{00631\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ for\ "{}}\ <<\ timeslice\ <<\ \textcolor{stringliteral}{"{}\ s\ ("{}}}
+\DoxyCodeLine{00632\ \ \ \ \ \ \ <<\ \_ready.size()\ <<\ \textcolor{stringliteral}{"{}\ +\ "{}}\ <<\ \_next\_ready.size()}
+\DoxyCodeLine{00633\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ +\ "{}}\ <<\ \_volunteers.size()}
+\DoxyCodeLine{00634\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ other\ threads\ ready,\ "{}}\ <<\ blocked\_count}
+\DoxyCodeLine{00635\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ blocked,\ "{}}\ <<\ \_sleeping.size()\ <<\ \textcolor{stringliteral}{"{}\ sleeping)\(\backslash\)n"{}};}
+\DoxyCodeLine{00636\ \ \ \}}
+\DoxyCodeLine{00637\ }
+\DoxyCodeLine{00638\ \ \ switch\_to\_thread\_context(from\_context,\ \_current\_thread-\/>\_context);}
+\DoxyCodeLine{00639\ }
+\DoxyCodeLine{00640\ \ \ \textcolor{comment}{//\ Shouldn't\ get\ here.}}
+\DoxyCodeLine{00641\ \ \ nassertv(\textcolor{keyword}{false});}
+\DoxyCodeLine{00642\ \ \ abort();}
+\DoxyCodeLine{00643\ \}}
+\DoxyCodeLine{00644\ }
+\DoxyCodeLine{00649\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00650\ do\_timeslice\_accounting(ThreadSimpleImpl\ *thread,\ \textcolor{keywordtype}{double}\ now)\ \{}
+\DoxyCodeLine{00651\ \ \ \textcolor{keywordtype}{double}\ elapsed\ =\ now\ -\/\ thread-\/>\_start\_time;}
+\DoxyCodeLine{00652\ \ \ \textcolor{keywordflow}{if}\ (thread\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00653\ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ <<\ *thread-\/>\_parent\_obj\ <<\ \textcolor{stringliteral}{"{}\ ran\ for\ "{}}\ <<\ elapsed\ <<\ \textcolor{stringliteral}{"{}\ s\ of\ "{}}}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ <<\ thread-\/>\_stop\_time\ -\/\ thread-\/>\_start\_time\ <<\ \textcolor{stringliteral}{"{}\ requested.\(\backslash\)n"{}};}
+\DoxyCodeLine{00656\ \ \ \}}
+\DoxyCodeLine{00657\ }
+\DoxyCodeLine{00658\ \ \ \textcolor{comment}{//\ Clamp\ the\ elapsed\ time\ at\ 0.\ \ (If\ it's\ less\ than\ 0,\ the\ clock\ is\ running}}
+\DoxyCodeLine{00659\ \ \ \textcolor{comment}{//\ backwards,\ ick.)}}
+\DoxyCodeLine{00660\ \ \ elapsed\ =\ std::max(elapsed,\ 0.0);}
+\DoxyCodeLine{00661\ }
+\DoxyCodeLine{00662\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ ticks\ =\ (\textcolor{keywordtype}{unsigned}\ int)(elapsed\ *\ \_tick\_scale\ +\ 0.5);}
+\DoxyCodeLine{00663\ \ \ thread-\/>\_run\_ticks\ +=\ ticks;}
+\DoxyCodeLine{00664\ }
+\DoxyCodeLine{00665\ \ \ \textcolor{comment}{//\ Now\ remove\ any\ old\ records.}}
+\DoxyCodeLine{00666\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ ticks\_window\ =\ (\textcolor{keywordtype}{unsigned}\ int)(\_simple\_thread\_window\ *\ \_tick\_scale\ +\ 0.5);}
+\DoxyCodeLine{00667\ \ \ \textcolor{keywordflow}{while}\ (\_total\_ticks\ >\ ticks\_window)\ \{}
+\DoxyCodeLine{00668\ \ \ \ \ nassertv(!\_tick\_records.empty());}
+\DoxyCodeLine{00669\ \ \ \ \ TickRecord\ \&record\ =\ \_tick\_records.front();}
+\DoxyCodeLine{00670\ \ \ \ \ \_total\_ticks\ -\/=\ record.\_tick\_count;}
+\DoxyCodeLine{00671\ \ \ \ \ \textcolor{keywordflow}{if}\ (record.\_thread-\/>\_run\_ticks\ >=\ record.\_tick\_count)\ \{}
+\DoxyCodeLine{00672\ \ \ \ \ \ \ \textcolor{comment}{//\ Ensure\ we\ don't\ go\ negative.}}
+\DoxyCodeLine{00673\ \ \ \ \ \ \ record.\_thread-\/>\_run\_ticks\ -\/=\ record.\_tick\_count;}
+\DoxyCodeLine{00674\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00675\ \ \ \ \ \ \ \textcolor{comment}{//\ It\ is\ possible\ for\ this\ to\ happen\ if\ the\ application\ has\ been\ paused}}
+\DoxyCodeLine{00676\ \ \ \ \ \ \ \textcolor{comment}{//\ for\ more\ than\ 2\string^31\ ticks.}}
+\DoxyCodeLine{00677\ \ \ \ \ \ \ record.\_thread-\/>\_run\_ticks\ =\ 0;}
+\DoxyCodeLine{00678\ \ \ \ \ \}}
+\DoxyCodeLine{00679\ \ \ \ \ \_tick\_records.pop\_front();}
+\DoxyCodeLine{00680\ \ \ \}}
+\DoxyCodeLine{00681\ }
+\DoxyCodeLine{00682\ \ \ \textcolor{comment}{//\ Finally,\ record\ the\ new\ record.}}
+\DoxyCodeLine{00683\ \ \ TickRecord\ record;}
+\DoxyCodeLine{00684\ \ \ record.\_tick\_count\ =\ ticks;}
+\DoxyCodeLine{00685\ \ \ record.\_thread\ =\ thread;}
+\DoxyCodeLine{00686\ \ \ \_tick\_records.push\_back(record);}
+\DoxyCodeLine{00687\ \ \ \_total\_ticks\ +=\ ticks;}
+\DoxyCodeLine{00688\ \}}
+\DoxyCodeLine{00689\ }
+\DoxyCodeLine{00690\ }
+\DoxyCodeLine{00695\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00696\ wake\_sleepers(ThreadSimpleManager::Sleeping\ \&sleepers,\ \textcolor{keywordtype}{double}\ now)\ \{}
+\DoxyCodeLine{00697\ \ \ \textcolor{keywordflow}{while}\ (!sleepers.empty()\ \&\&\ sleepers.front()-\/>\_wake\_time\ <=\ now)\ \{}
+\DoxyCodeLine{00698\ \ \ \ \ ThreadSimpleImpl\ *thread\ =\ sleepers.front();}
+\DoxyCodeLine{00699\ \ \ \ \ pop\_heap(sleepers.begin(),\ sleepers.end(),\ CompareStartTime());}
+\DoxyCodeLine{00700\ \ \ \ \ sleepers.pop\_back();}
+\DoxyCodeLine{00701\ \ \ \ \ \_ready.push\_back(thread);}
+\DoxyCodeLine{00702\ \ \ \}}
+\DoxyCodeLine{00703\ \}}
+\DoxyCodeLine{00704\ }
+\DoxyCodeLine{00709\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00710\ wake\_all\_sleepers(ThreadSimpleManager::Sleeping\ \&sleepers)\ \{}
+\DoxyCodeLine{00711\ \ \ \textcolor{keywordflow}{while}\ (!sleepers.empty())\ \{}
+\DoxyCodeLine{00712\ \ \ \ \ ThreadSimpleImpl\ *thread\ =\ sleepers.front();}
+\DoxyCodeLine{00713\ \ \ \ \ pop\_heap(sleepers.begin(),\ sleepers.end(),\ CompareStartTime());}
+\DoxyCodeLine{00714\ \ \ \ \ sleepers.pop\_back();}
+\DoxyCodeLine{00715\ \ \ \ \ \_ready.push\_back(thread);}
+\DoxyCodeLine{00716\ \ \ \}}
+\DoxyCodeLine{00717\ \}}
+\DoxyCodeLine{00718\ }
+\DoxyCodeLine{00722\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00723\ report\_deadlock()\ \{}
+\DoxyCodeLine{00724\ \ \ Blocked::const\_iterator\ bi;}
+\DoxyCodeLine{00725\ \ \ \textcolor{keywordflow}{for}\ (bi\ =\ \_blocked.begin();\ bi\ !=\ \_blocked.end();\ ++bi)\ \{}
+\DoxyCodeLine{00726\ \ \ \ \ BlockerSimple\ *blocker\ =\ (*bi).first;}
+\DoxyCodeLine{00727\ \ \ \ \ \textcolor{keyword}{const}\ FifoThreads\ \&threads\ =\ (*bi).second;}
+\DoxyCodeLine{00728\ \ \ \ \ thread\_cat.info()}
+\DoxyCodeLine{00729\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}On\ blocker\ "{}}\ <<\ blocker\ <<\ \textcolor{stringliteral}{"{}:\(\backslash\)n"{}};}
+\DoxyCodeLine{00730\ \ \ \ \ FifoThreads::const\_iterator\ ti;}
+\DoxyCodeLine{00731\ \ \ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ threads.begin();\ ti\ !=\ threads.end();\ ++ti)\ \{}
+\DoxyCodeLine{00732\ \ \ \ \ \ \ ThreadSimpleImpl\ *thread\ =\ (*ti);}
+\DoxyCodeLine{00733\ \ \ \ \ \ \ thread\_cat.info()}
+\DoxyCodeLine{00734\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ "{}}\ <<\ *thread-\/>\_parent\_obj;}
+\DoxyCodeLine{00735\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ thread\_cat.info(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ ("{}};}
+\DoxyCodeLine{00737\ \ \ \ \ \ \ thread-\/>\_parent\_obj-\/>output\_blocker(thread\_cat.info(\textcolor{keyword}{false}));}
+\DoxyCodeLine{00738\ \ \ \ \ \ \ thread\_cat.info(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{})"{}};}
+\DoxyCodeLine{00739\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DEBUG\_THREADS}}
+\DoxyCodeLine{00740\ \ \ \ \ \ \ thread\_cat.info(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00741\ \ \ \ \ \}}
+\DoxyCodeLine{00742\ \ \ \}}
+\DoxyCodeLine{00743\ \}}
+\DoxyCodeLine{00744\ }
+\DoxyCodeLine{00750\ \textcolor{keywordtype}{double}\ ThreadSimpleManager::}
+\DoxyCodeLine{00751\ determine\_timeslice(ThreadSimpleImpl\ *chosen\_thread)\ \{}
+\DoxyCodeLine{00752\ \ \ \textcolor{keywordflow}{if}\ (\_ready.empty()\ \&\&\ \_next\_ready.empty())\ \{}
+\DoxyCodeLine{00753\ \ \ \ \ \textcolor{comment}{//\ This\ is\ the\ only\ ready\ thread.\ \ It\ gets\ the\ full\ timeslice.}}
+\DoxyCodeLine{00754\ \ \ \ \ \textcolor{keywordflow}{return}\ \_simple\_thread\_epoch\_timeslice;}
+\DoxyCodeLine{00755\ \ \ \}}
+\DoxyCodeLine{00756\ }
+\DoxyCodeLine{00757\ \ \ \textcolor{comment}{//\ Count\ up\ the\ total\ runtime\ and\ weight\ of\ all\ ready\ threads.}}
+\DoxyCodeLine{00758\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ total\_ticks\ =\ chosen\_thread-\/>\_run\_ticks;}
+\DoxyCodeLine{00759\ \ \ \textcolor{keywordtype}{double}\ total\_weight\ =\ chosen\_thread-\/>\_priority\_weight;}
+\DoxyCodeLine{00760\ }
+\DoxyCodeLine{00761\ \ \ FifoThreads::const\_iterator\ ti;}
+\DoxyCodeLine{00762\ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ \_ready.begin();\ ti\ !=\ \_ready.end();\ ++ti)\ \{}
+\DoxyCodeLine{00763\ \ \ \ \ total\_ticks\ +=\ (*ti)-\/>\_run\_ticks;}
+\DoxyCodeLine{00764\ \ \ \ \ total\_weight\ +=\ (*ti)-\/>\_priority\_weight;}
+\DoxyCodeLine{00765\ \ \ \}}
+\DoxyCodeLine{00766\ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ \_next\_ready.begin();\ ti\ !=\ \_next\_ready.end();\ ++ti)\ \{}
+\DoxyCodeLine{00767\ \ \ \ \ total\_ticks\ +=\ (*ti)-\/>\_run\_ticks;}
+\DoxyCodeLine{00768\ \ \ \ \ total\_weight\ +=\ (*ti)-\/>\_priority\_weight;}
+\DoxyCodeLine{00769\ \ \ \}}
+\DoxyCodeLine{00770\ }
+\DoxyCodeLine{00771\ \ \ nassertr(total\_weight\ !=\ 0.0,\ 0.0);}
+\DoxyCodeLine{00772\ \ \ \textcolor{keywordtype}{double}\ budget\_ratio\ =\ chosen\_thread-\/>\_priority\_weight\ /\ total\_weight;}
+\DoxyCodeLine{00773\ }
+\DoxyCodeLine{00774\ \ \ \textcolor{keywordflow}{if}\ (total\_ticks\ ==\ 0)\ \{}
+\DoxyCodeLine{00775\ \ \ \ \ \textcolor{comment}{//\ This\ must\ be\ the\ first\ thread.\ \ Special\ case.}}
+\DoxyCodeLine{00776\ \ \ \ \ \textcolor{keywordflow}{return}\ budget\_ratio\ *\ \_simple\_thread\_epoch\_timeslice;}
+\DoxyCodeLine{00777\ \ \ \}}
+\DoxyCodeLine{00778\ }
+\DoxyCodeLine{00779\ \ \ \textcolor{keywordtype}{double}\ run\_ratio\ =\ (double)chosen\_thread-\/>\_run\_ticks\ /\ (\textcolor{keywordtype}{double})total\_ticks;}
+\DoxyCodeLine{00780\ \ \ \textcolor{keywordtype}{double}\ remaining\_ratio\ =\ budget\_ratio\ -\/\ run\_ratio;}
+\DoxyCodeLine{00781\ }
+\DoxyCodeLine{00782\ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00783\ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00784\ \ \ \ \ \ \ <<\ *chosen\_thread-\/>\_parent\_obj\ <<\ \textcolor{stringliteral}{"{}\ accrued\ "{}}}
+\DoxyCodeLine{00785\ \ \ \ \ \ \ <<\ chosen\_thread-\/>\_run\_ticks\ /\ \_tick\_scale\ <<\ \textcolor{stringliteral}{"{}\ s\ of\ "{}}}
+\DoxyCodeLine{00786\ \ \ \ \ \ \ <<\ total\_ticks\ /\ \_tick\_scale\ <<\ \textcolor{stringliteral}{"{};\ budget\ is\ "{}}}
+\DoxyCodeLine{00787\ \ \ \ \ \ \ <<\ budget\_ratio\ *\ total\_ticks\ /\ \_tick\_scale\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00788\ \ \ \ \ \textcolor{keywordflow}{if}\ (remaining\_ratio\ <=\ 0.0)\ \{}
+\DoxyCodeLine{00789\ \ \ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00790\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Exceeded\ budget.\(\backslash\)n"{}};}
+\DoxyCodeLine{00791\ \ \ \ \ \}}
+\DoxyCodeLine{00792\ \ \ \}}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00794\ \ \ \textcolor{keywordflow}{return}\ remaining\_ratio\ *\ \_simple\_thread\_epoch\_timeslice;}
+\DoxyCodeLine{00795\ \}}
+\DoxyCodeLine{00796\ }
+\DoxyCodeLine{00801\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00802\ kill\_non\_joinable(ThreadSimpleManager::FifoThreads\ \&threads)\ \{}
+\DoxyCodeLine{00803\ \ \ FifoThreads\ new\_threads;}
+\DoxyCodeLine{00804\ \ \ FifoThreads::iterator\ ti;}
+\DoxyCodeLine{00805\ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ threads.begin();\ ti\ !=\ threads.end();\ ++ti)\ \{}
+\DoxyCodeLine{00806\ \ \ \ \ ThreadSimpleImpl\ *thread\ =\ (*ti);}
+\DoxyCodeLine{00807\ \ \ \ \ \textcolor{keywordflow}{if}\ (thread-\/>\_joinable)\ \{}
+\DoxyCodeLine{00808\ \ \ \ \ \ \ new\_threads.push\_back(thread);}
+\DoxyCodeLine{00809\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00810\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00811\ \ \ \ \ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Killing\ "{}}\ <<\ *thread-\/>\_parent\_obj\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00814\ \ \ \ \ \ \ thread-\/>\_status\ =\ ThreadSimpleImpl::TS\_killed;}
+\DoxyCodeLine{00815\ \ \ \ \ \ \ enqueue\_finished(thread);}
+\DoxyCodeLine{00816\ \ \ \ \ \}}
+\DoxyCodeLine{00817\ \ \ \}}
+\DoxyCodeLine{00818\ }
+\DoxyCodeLine{00819\ \ \ threads.swap(new\_threads);}
+\DoxyCodeLine{00820\ \}}
+\DoxyCodeLine{00821\ }
+\DoxyCodeLine{00826\ \textcolor{keywordtype}{void}\ ThreadSimpleManager::}
+\DoxyCodeLine{00827\ kill\_non\_joinable(ThreadSimpleManager::Sleeping\ \&threads)\ \{}
+\DoxyCodeLine{00828\ \ \ Sleeping\ new\_threads;}
+\DoxyCodeLine{00829\ \ \ Sleeping::iterator\ ti;}
+\DoxyCodeLine{00830\ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ threads.begin();\ ti\ !=\ threads.end();\ ++ti)\ \{}
+\DoxyCodeLine{00831\ \ \ \ \ ThreadSimpleImpl\ *thread\ =\ (*ti);}
+\DoxyCodeLine{00832\ \ \ \ \ \textcolor{keywordflow}{if}\ (thread-\/>\_joinable)\ \{}
+\DoxyCodeLine{00833\ \ \ \ \ \ \ new\_threads.push\_back(thread);}
+\DoxyCodeLine{00834\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00835\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00836\ \ \ \ \ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00837\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Killing\ "{}}\ <<\ *thread-\/>\_parent\_obj\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00839\ \ \ \ \ \ \ thread-\/>\_status\ =\ ThreadSimpleImpl::TS\_killed;}
+\DoxyCodeLine{00840\ \ \ \ \ \ \ enqueue\_finished(thread);}
+\DoxyCodeLine{00841\ \ \ \ \ \}}
+\DoxyCodeLine{00842\ \ \ \}}
+\DoxyCodeLine{00843\ \ \ make\_heap(new\_threads.begin(),\ new\_threads.end(),\ CompareStartTime());}
+\DoxyCodeLine{00844\ \ \ threads.swap(new\_threads);}
+\DoxyCodeLine{00845\ \}}
+\DoxyCodeLine{00846\ }
+\DoxyCodeLine{00847\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ THREAD\_SIMPLE\_IMPL}}
+
+\end{DoxyCode}

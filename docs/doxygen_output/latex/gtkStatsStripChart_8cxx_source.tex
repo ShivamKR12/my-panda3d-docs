@@ -1,0 +1,669 @@
+\doxysection{gtk\+Stats\+Strip\+Chart.\+cxx}
+\hypertarget{gtkStatsStripChart_8cxx_source}{}\label{gtkStatsStripChart_8cxx_source}\index{pandatool/src/gtk-\/stats/gtkStatsStripChart.cxx@{pandatool/src/gtk-\/stats/gtkStatsStripChart.cxx}}
+\mbox{\hyperlink{gtkStatsStripChart_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{gtkStatsStripChart_8h}{gtkStatsStripChart.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{gtkStatsMonitor_8h}{gtkStatsMonitor.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatCollectorDef_8h}{pStatCollectorDef.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{numeric__types_8h}{numeric\_types.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{string__utils_8h}{string\_utils.h}}"{}}}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ default\_strip\_chart\_width\ =\ 400;}
+\DoxyCodeLine{00021\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ default\_strip\_chart\_height\ =\ 100;}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00026\ GtkStatsStripChart::}
+\DoxyCodeLine{00027\ GtkStatsStripChart(\mbox{\hyperlink{classGtkStatsMonitor}{GtkStatsMonitor}}\ *monitor,\ \textcolor{keywordtype}{int}\ thread\_index,}
+\DoxyCodeLine{00028\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{bool}\ show\_level)\ :}
+\DoxyCodeLine{00029\ \ \ \mbox{\hyperlink{classPStatStripChart}{PStatStripChart}}(monitor,\ thread\_index,\ collector\_index,\ show\_level,\ 0,\ 0),}
+\DoxyCodeLine{00030\ \ \ \mbox{\hyperlink{classGtkStatsGraph}{GtkStatsGraph}}(monitor,\ true)}
+\DoxyCodeLine{00031\ \{}
+\DoxyCodeLine{00032\ \ \ \textcolor{keywordflow}{if}\ (show\_level)\ \{}
+\DoxyCodeLine{00033\ \ \ \ \ \textcolor{comment}{//\ If\ it's\ a\ level-\/type\ graph,\ show\ the\ appropriate\ units.}}
+\DoxyCodeLine{00034\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_unit\_name.empty())\ \{}
+\DoxyCodeLine{00035\ \ \ \ \ \ \ set\_guide\_bar\_units(GBU\_named);}
+\DoxyCodeLine{00036\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00037\ \ \ \ \ \ \ set\_guide\_bar\_units(GBU\_named\ |\ GBU\_show\_units);}
+\DoxyCodeLine{00038\ \ \ \ \ \}}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00041\ \ \ \ \ \textcolor{comment}{//\ If\ it's\ a\ time-\/type\ graph,\ show\ the\ msHz\ units.}}
+\DoxyCodeLine{00042\ \ \ \ \ set\_guide\_bar\_units(get\_guide\_bar\_units()\ |\ GBU\_show\_units);}
+\DoxyCodeLine{00043\ \ \ \}}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \ \ \textcolor{comment}{//\ Put\ some\ stuff\ on\ top\ of\ the\ graph.}}
+\DoxyCodeLine{00046\ \ \ \_top\_hbox\ =\ gtk\_box\_new(GTK\_ORIENTATION\_HORIZONTAL,\ 0);}
+\DoxyCodeLine{00047\ \ \ gtk\_box\_pack\_start(GTK\_BOX(\_graph\_vbox),\ \_top\_hbox,\ FALSE,\ FALSE,\ 0);}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \ \ \_smooth\_check\_box\ =\ gtk\_check\_button\_new\_with\_label(\textcolor{stringliteral}{"{}Smooth"{}});}
+\DoxyCodeLine{00050\ \ \ g\_signal\_connect(G\_OBJECT(\_smooth\_check\_box),\ \textcolor{stringliteral}{"{}toggled"{}},}
+\DoxyCodeLine{00051\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ G\_CALLBACK(toggled\_callback),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \ \ \_total\_label\ =\ gtk\_label\_new(\textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00054\ \ \ gtk\_box\_pack\_start(GTK\_BOX(\_top\_hbox),\ \_smooth\_check\_box,\ FALSE,\ FALSE,\ 0);}
+\DoxyCodeLine{00055\ \ \ gtk\_box\_pack\_end(GTK\_BOX(\_top\_hbox),\ \_total\_label,\ FALSE,\ FALSE,\ 0);}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00057\ \ \ \textcolor{comment}{//\ Add\ a\ DrawingArea\ widget\ to\ the\ right\ of\ the\ graph,\ to\ display\ all\ of\ the}}
+\DoxyCodeLine{00058\ \ \ \textcolor{comment}{//\ scale\ units.}}
+\DoxyCodeLine{00059\ \ \ \_scale\_area\ =\ gtk\_drawing\_area\_new();}
+\DoxyCodeLine{00060\ \ \ g\_signal\_connect(G\_OBJECT(\_scale\_area),\ \textcolor{stringliteral}{"{}draw"{}},}
+\DoxyCodeLine{00061\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ G\_CALLBACK(draw\_callback),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00062\ \ \ gtk\_box\_pack\_start(GTK\_BOX(\_graph\_hbox),\ \_scale\_area,\ FALSE,\ FALSE,\ 0);}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00064\ \ \ \textcolor{comment}{//\ Make\ it\ wide\ enough\ to\ display\ a\ typical\ label.}}
+\DoxyCodeLine{00065\ \ \ \{}
+\DoxyCodeLine{00066\ \ \ \ \ PangoLayout\ *layout\ =\ gtk\_widget\_create\_pango\_layout(\_scale\_area,\ \textcolor{stringliteral}{"{}99\ ms"{}});}
+\DoxyCodeLine{00067\ \ \ \ \ \textcolor{keywordtype}{int}\ width,\ height;}
+\DoxyCodeLine{00068\ \ \ \ \ pango\_layout\_get\_pixel\_size(layout,\ \&width,\ \&height);}
+\DoxyCodeLine{00069\ \ \ \ \ gtk\_widget\_set\_size\_request(\_scale\_area,\ width,\ 0);}
+\DoxyCodeLine{00070\ \ \ \ \ g\_object\_unref(layout);}
+\DoxyCodeLine{00071\ \ \ \}}
+\DoxyCodeLine{00072\ }
+\DoxyCodeLine{00073\ \ \ gtk\_widget\_set\_size\_request(\_graph\_window,}
+\DoxyCodeLine{00074\ \ \ \ \ default\_strip\_chart\_width\ *\ monitor-\/>\mbox{\hyperlink{classGtkStatsMonitor_a0ab854d38f5cb9d8c134d11033bffa67}{get\_resolution}}()\ /\ 96,}
+\DoxyCodeLine{00075\ \ \ \ \ default\_strip\_chart\_height\ *\ monitor-\/>\mbox{\hyperlink{classGtkStatsMonitor_a0ab854d38f5cb9d8c134d11033bffa67}{get\_resolution}}()\ /\ 96);}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00077\ \ \ gtk\_widget\_show\_all(\_window);}
+\DoxyCodeLine{00078\ \ \ gtk\_widget\_show(\_window);}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \ \ \textcolor{comment}{//\ Allow\ the\ window\ to\ be\ resized\ as\ small\ as\ the\ user\ likes.\ \ We\ have\ to\ do}}
+\DoxyCodeLine{00081\ \ \ \textcolor{comment}{//\ this\ after\ the\ window\ has\ been\ shown;\ otherwise,\ it\ will\ affect\ the}}
+\DoxyCodeLine{00082\ \ \ \textcolor{comment}{//\ window's\ initial\ size.}}
+\DoxyCodeLine{00083\ \ \ gtk\_widget\_set\_size\_request(\_graph\_window,\ 0,\ 0);}
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00085\ \ \ clear\_region();}
+\DoxyCodeLine{00086\ }
+\DoxyCodeLine{00087\ \ \ \textcolor{comment}{//\ Update\ window\ title\ and\ total\ label.}}
+\DoxyCodeLine{00088\ \ \ new\_data(0,\ 0);}
+\DoxyCodeLine{00089\ \}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00094\ GtkStatsStripChart::}
+\DoxyCodeLine{00095\ \string~GtkStatsStripChart()\ \{}
+\DoxyCodeLine{00096\ \}}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00101\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_a908440585c9a0cb6affa83ce5553e55e}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00102\ \mbox{\hyperlink{classGtkStatsStripChart_a908440585c9a0cb6affa83ce5553e55e}{new\_collector}}(\textcolor{keywordtype}{int}\ collector\_index)\ \{}
+\DoxyCodeLine{00103\ \ \ \mbox{\hyperlink{classGtkStatsGraph_ac40ff8d3a450be60ef830921ae569f5f}{GtkStatsGraph::new\_collector}}(collector\_index);}
+\DoxyCodeLine{00104\ \}}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00112\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_a6464c5d00f5f77d75c7706bd1e042a51}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00113\ \mbox{\hyperlink{classGtkStatsStripChart_a6464c5d00f5f77d75c7706bd1e042a51}{new\_data}}(\textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{int}\ frame\_number)\ \{}
+\DoxyCodeLine{00114\ \ \ \textcolor{keywordflow}{if}\ (is\_title\_unknown())\ \{}
+\DoxyCodeLine{00115\ \ \ \ \ std::string\ window\_title\ =\ \mbox{\hyperlink{classPStatStripChart_a0a82fe4c239622dacc00324ddfd8a82f}{get\_title\_text}}();}
+\DoxyCodeLine{00116\ \ \ \ \ \textcolor{keywordflow}{if}\ (!is\_title\_unknown())\ \{}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ gtk\_window\_set\_title(GTK\_WINDOW(\_window),\ window\_title.c\_str());}
+\DoxyCodeLine{00118\ \ \ \ \ \}}
+\DoxyCodeLine{00119\ \ \ \}}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00121\ \ \ \textcolor{keywordflow}{if}\ (!\_pause)\ \{}
+\DoxyCodeLine{00122\ \ \ \ \ \mbox{\hyperlink{classPStatStripChart_a87afb99523c7cdd69b7e789d6f0d90f1}{update}}();}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \ \ \ \ std::string\ text\ =\ \mbox{\hyperlink{classPStatStripChart_a8f58e934d36b58008f68bc3c71cb785a}{get\_total\_text}}();}
+\DoxyCodeLine{00125\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_net\_value\_text\ !=\ text)\ \{}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \_net\_value\_text\ =\ text;}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ gtk\_label\_set\_text(GTK\_LABEL(\_total\_label),\ \_net\_value\_text.c\_str());}
+\DoxyCodeLine{00128\ \ \ \ \ \}}
+\DoxyCodeLine{00129\ \ \ \}}
+\DoxyCodeLine{00130\ \}}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00135\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_affe8957d2f4f38f1344860bae6ffdaa0}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00136\ \mbox{\hyperlink{classGtkStatsStripChart_affe8957d2f4f38f1344860bae6ffdaa0}{force\_redraw}}()\ \{}
+\DoxyCodeLine{00137\ \ \ \textcolor{keywordflow}{if}\ (\_cr)\ \{}
+\DoxyCodeLine{00138\ \ \ \ \ \mbox{\hyperlink{classPStatStripChart_a765485a6699c435b0dd774c760e21c09}{PStatStripChart::force\_redraw}}();}
+\DoxyCodeLine{00139\ \ \ \}}
+\DoxyCodeLine{00140\ \}}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00145\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_a041f953ef9cb45b9d6805cda19c7df43}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00146\ \mbox{\hyperlink{classGtkStatsStripChart_a041f953ef9cb45b9d6805cda19c7df43}{changed\_graph\_size}}(\textcolor{keywordtype}{int}\ graph\_xsize,\ \textcolor{keywordtype}{int}\ graph\_ysize)\ \{}
+\DoxyCodeLine{00147\ \ \ \mbox{\hyperlink{classPStatStripChart_a26a5e6062591d9b8ff6545528e02fa31}{PStatStripChart::changed\_size}}(graph\_xsize,\ graph\_ysize);}
+\DoxyCodeLine{00148\ \}}
+\DoxyCodeLine{00149\ }
+\DoxyCodeLine{00155\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_a088375873928c25b367ebec15598f35c}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00156\ \mbox{\hyperlink{classGtkStatsStripChart_a088375873928c25b367ebec15598f35c}{set\_time\_units}}(\textcolor{keywordtype}{int}\ unit\_mask)\ \{}
+\DoxyCodeLine{00157\ \ \ \textcolor{keywordtype}{int}\ old\_unit\_mask\ =\ get\_guide\_bar\_units();}
+\DoxyCodeLine{00158\ \ \ \textcolor{keywordflow}{if}\ ((old\_unit\_mask\ \&\ (GBU\_hz\ |\ GBU\_ms))\ !=\ 0)\ \{}
+\DoxyCodeLine{00159\ \ \ \ \ unit\_mask\ =\ unit\_mask\ \&\ (GBU\_hz\ |\ GBU\_ms);}
+\DoxyCodeLine{00160\ \ \ \ \ unit\_mask\ |=\ (old\_unit\_mask\ \&\ GBU\_show\_units);}
+\DoxyCodeLine{00161\ \ \ \ \ set\_guide\_bar\_units(unit\_mask);}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00163\ \ \ \ \ gtk\_widget\_queue\_draw(\_scale\_area);}
+\DoxyCodeLine{00164\ \ \ \}}
+\DoxyCodeLine{00165\ \}}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00171\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_ad269dc684839f4bd62276b32a0f260c6}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00172\ \mbox{\hyperlink{classGtkStatsStripChart_ad269dc684839f4bd62276b32a0f260c6}{set\_scroll\_speed}}(\textcolor{keywordtype}{double}\ scroll\_speed)\ \{}
+\DoxyCodeLine{00173\ \ \ \textcolor{comment}{//\ The\ speed\ factor\ indicates\ chart\ widths\ per\ minute.}}
+\DoxyCodeLine{00174\ \ \ \textcolor{keywordflow}{if}\ (scroll\_speed\ !=\ 0.0f)\ \{}
+\DoxyCodeLine{00175\ \ \ \ \ set\_horizontal\_scale(60.0f\ /\ scroll\_speed);}
+\DoxyCodeLine{00176\ \ \ \}}
+\DoxyCodeLine{00177\ \}}
+\DoxyCodeLine{00178\ }
+\DoxyCodeLine{00182\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_a980579fd58466a0c9507b8a4bd67365f}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00183\ \mbox{\hyperlink{classGtkStatsStripChart_a980579fd58466a0c9507b8a4bd67365f}{on\_click\_label}}(\textcolor{keywordtype}{int}\ collector\_index)\ \{}
+\DoxyCodeLine{00184\ \ \ \textcolor{keywordflow}{if}\ (collector\_index\ <\ 0)\ \{}
+\DoxyCodeLine{00185\ \ \ \ \ \textcolor{comment}{//\ Clicking\ on\ whitespace\ in\ the\ graph\ is\ the\ same\ as\ clicking\ on\ the\ top}}
+\DoxyCodeLine{00186\ \ \ \ \ \textcolor{comment}{//\ label.}}
+\DoxyCodeLine{00187\ \ \ \ \ collector\_index\ =\ get\_collector\_index();}
+\DoxyCodeLine{00188\ \ \ \}}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00190\ \ \ \textcolor{keywordflow}{if}\ (collector\_index\ ==\ get\_collector\_index()\ \&\&\ collector\_index\ !=\ 0)\ \{}
+\DoxyCodeLine{00191\ \ \ \ \ \textcolor{comment}{//\ Clicking\ on\ the\ top\ label\ means\ to\ go\ up\ to\ the\ parent\ level.}}
+\DoxyCodeLine{00192\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ GtkStatsGraph::\_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keywordflow}{if}\ (client\_data-\/>\mbox{\hyperlink{classPStatClientData_aa9e2c591cab46b192ff3aa9409e1f681}{has\_collector}}(collector\_index))\ \{}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatCollectorDef}{PStatCollectorDef}}\ \&def\ =}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a24e17a5885214596815115a8bb768e2a}{get\_collector\_def}}(collector\_index);}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (def.\_parent\_index\ ==\ 0\ \&\&\ get\_view().get\_show\_level())\ \{}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Unless\ the\ parent\ is\ "{}Frame"{},\ and\ we're\ not\ a\ time\ collector.}}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatStripChart_a8f7aad19132463ef4a375ec5e8005c1f}{set\_collector\_index}}(def.\_parent\_index);}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00202\ \ \ \ \ \}}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00204\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00205\ \ \ \ \ \textcolor{comment}{//\ Clicking\ on\ any\ other\ label\ means\ to\ focus\ on\ that.}}
+\DoxyCodeLine{00206\ \ \ \ \ \mbox{\hyperlink{classPStatStripChart_a8f7aad19132463ef4a375ec5e8005c1f}{set\_collector\_index}}(collector\_index);}
+\DoxyCodeLine{00207\ \ \ \}}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00209\ \ \ \textcolor{comment}{//\ Update\ window\ title\ and\ total\ label.}}
+\DoxyCodeLine{00210\ \ \ \mbox{\hyperlink{classGtkStatsStripChart_a6464c5d00f5f77d75c7706bd1e042a51}{new\_data}}(0,\ 0);}
+\DoxyCodeLine{00211\ \}}
+\DoxyCodeLine{00212\ }
+\DoxyCodeLine{00216\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_a4f30ab07909b63e3277cb3ee06ed5134}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00217\ \mbox{\hyperlink{classGtkStatsStripChart_a4f30ab07909b63e3277cb3ee06ed5134}{on\_popup\_label}}(\textcolor{keywordtype}{int}\ collector\_index)\ \{}
+\DoxyCodeLine{00218\ \ \ GtkWidget\ *menu\ =\ gtk\_menu\_new();}
+\DoxyCodeLine{00219\ \ \ \_popup\_index\ =\ collector\_index;}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00221\ \ \ std::string\ label\ =\ \mbox{\hyperlink{classGtkStatsStripChart_abc460a92cdb41176843f8b07a9d52231}{get\_label\_tooltip}}(collector\_index);}
+\DoxyCodeLine{00222\ \ \ \textcolor{keywordflow}{if}\ (!label.empty())\ \{}
+\DoxyCodeLine{00223\ \ \ \ \ GtkWidget\ *menu\_item\ =\ gtk\_menu\_item\_new\_with\_label(label.c\_str());}
+\DoxyCodeLine{00224\ \ \ \ \ gtk\_menu\_shell\_append(GTK\_MENU\_SHELL(menu),\ menu\_item);}
+\DoxyCodeLine{00225\ \ \ \ \ gtk\_widget\_set\_sensitive(menu\_item,\ FALSE);}
+\DoxyCodeLine{00226\ \ \ \}}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \{}
+\DoxyCodeLine{00229\ \ \ \ \ GtkWidget\ *menu\_item\ =\ gtk\_menu\_item\_new\_with\_label(\textcolor{stringliteral}{"{}Set\ as\ Focus"{}});}
+\DoxyCodeLine{00230\ \ \ \ \ gtk\_menu\_shell\_append(GTK\_MENU\_SHELL(menu),\ menu\_item);}
+\DoxyCodeLine{00231\ }
+\DoxyCodeLine{00232\ \ \ \ \ \textcolor{keywordflow}{if}\ (collector\_index\ ==\ 0\ \&\&\ get\_collector\_index()\ ==\ 0)\ \{}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ gtk\_widget\_set\_sensitive(menu\_item,\ FALSE);}
+\DoxyCodeLine{00234\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ g\_signal\_connect(G\_OBJECT(menu\_item),\ \textcolor{stringliteral}{"{}activate"{}},}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ G\_CALLBACK(+[]\ (GtkWidget\ *widget,\ gpointer\ data)\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classGtkStatsStripChart}{GtkStatsStripChart}}\ *self\ =\ (\mbox{\hyperlink{classGtkStatsStripChart}{GtkStatsStripChart}}\ *)data;}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \ \ self-\/>\mbox{\hyperlink{classPStatStripChart_a8f7aad19132463ef4a375ec5e8005c1f}{set\_collector\_index}}(self-\/>\_popup\_index);}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \}),}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \ \ \textcolor{keyword}{this});}
+\DoxyCodeLine{00241\ \ \ \ \ \}}
+\DoxyCodeLine{00242\ \ \ \}}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00244\ \ \ \{}
+\DoxyCodeLine{00245\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGtkStatsMonitor_1_1MenuDef}{GtkStatsMonitor::MenuDef}}\ *menu\_def\ =\ GtkStatsGraph::\_monitor-\/>\mbox{\hyperlink{classGtkStatsMonitor_a9e6da0c29b29e7bf376ebdf743968dd6}{add\_menu}}(\{}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ GtkStatsMonitor::CT\_strip\_chart,\ \_thread\_index,\ collector\_index,\ -\/1,}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ get\_view().get\_show\_level(),}
+\DoxyCodeLine{00248\ \ \ \ \ \});}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00250\ \ \ \ \ GtkWidget\ *menu\_item\ =\ gtk\_menu\_item\_new\_with\_label(\textcolor{stringliteral}{"{}Open\ Strip\ Chart"{}});}
+\DoxyCodeLine{00251\ \ \ \ \ gtk\_menu\_shell\_append(GTK\_MENU\_SHELL(menu),\ menu\_item);}
+\DoxyCodeLine{00252\ \ \ \ \ g\_signal\_connect(G\_OBJECT(menu\_item),\ \textcolor{stringliteral}{"{}activate"{}},}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ G\_CALLBACK(\mbox{\hyperlink{classGtkStatsMonitor_a35a4d279db316126b4f8f564d7f2fb92}{GtkStatsMonitor::menu\_activate}}),}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{void}\ *)menu\_def);}
+\DoxyCodeLine{00255\ \ \ \}}
+\DoxyCodeLine{00256\ }
+\DoxyCodeLine{00257\ \ \ \textcolor{keywordflow}{if}\ (!get\_view().get\_show\_level())\ \{}
+\DoxyCodeLine{00258\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGtkStatsMonitor_1_1MenuDef}{GtkStatsMonitor::MenuDef}}\ *menu\_def\ =\ GtkStatsGraph::\_monitor-\/>\mbox{\hyperlink{classGtkStatsMonitor_a9e6da0c29b29e7bf376ebdf743968dd6}{add\_menu}}(\{}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ GtkStatsMonitor::CT\_flame\_graph,\ \_thread\_index,\ collector\_index,}
+\DoxyCodeLine{00260\ \ \ \ \ \});}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \ \ \ \ GtkWidget\ *menu\_item\ =\ gtk\_menu\_item\_new\_with\_label(\textcolor{stringliteral}{"{}Open\ Flame\ Graph"{}});}
+\DoxyCodeLine{00263\ \ \ \ \ gtk\_menu\_shell\_append(GTK\_MENU\_SHELL(menu),\ menu\_item);}
+\DoxyCodeLine{00264\ \ \ \ \ g\_signal\_connect(G\_OBJECT(menu\_item),\ \textcolor{stringliteral}{"{}activate"{}},}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ G\_CALLBACK(\mbox{\hyperlink{classGtkStatsMonitor_a35a4d279db316126b4f8f564d7f2fb92}{GtkStatsMonitor::menu\_activate}}),}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{void}\ *)menu\_def);}
+\DoxyCodeLine{00267\ \ \ \}}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ \{}
+\DoxyCodeLine{00270\ \ \ \ \ GtkWidget\ *menu\_item\ =\ gtk\_separator\_menu\_item\_new();}
+\DoxyCodeLine{00271\ \ \ \ \ gtk\_menu\_shell\_append(GTK\_MENU\_SHELL(menu),\ menu\_item);}
+\DoxyCodeLine{00272\ \ \ \}}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \ \ \{}
+\DoxyCodeLine{00275\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGtkStatsMonitor_1_1MenuDef}{GtkStatsMonitor::MenuDef}}\ *menu\_def\ =\ GtkStatsGraph::\_monitor-\/>\mbox{\hyperlink{classGtkStatsMonitor_a9e6da0c29b29e7bf376ebdf743968dd6}{add\_menu}}(\{}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ GtkStatsMonitor::CT\_choose\_color,\ -\/1,\ collector\_index,}
+\DoxyCodeLine{00277\ \ \ \ \ \});}
+\DoxyCodeLine{00278\ }
+\DoxyCodeLine{00279\ \ \ \ \ GtkWidget\ *menu\_item\ =\ gtk\_menu\_item\_new\_with\_label(\textcolor{stringliteral}{"{}Change\ Color..."{}});}
+\DoxyCodeLine{00280\ \ \ \ \ gtk\_menu\_shell\_append(GTK\_MENU\_SHELL(menu),\ menu\_item);}
+\DoxyCodeLine{00281\ \ \ \ \ g\_signal\_connect(G\_OBJECT(menu\_item),\ \textcolor{stringliteral}{"{}activate"{}},}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ G\_CALLBACK(\mbox{\hyperlink{classGtkStatsMonitor_a35a4d279db316126b4f8f564d7f2fb92}{GtkStatsMonitor::menu\_activate}}),}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{void}\ *)menu\_def);}
+\DoxyCodeLine{00284\ \ \ \}}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \{}
+\DoxyCodeLine{00287\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGtkStatsMonitor_1_1MenuDef}{GtkStatsMonitor::MenuDef}}\ *menu\_def\ =\ GtkStatsGraph::\_monitor-\/>\mbox{\hyperlink{classGtkStatsMonitor_a9e6da0c29b29e7bf376ebdf743968dd6}{add\_menu}}(\{}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ GtkStatsMonitor::CT\_reset\_color,\ -\/1,\ collector\_index,}
+\DoxyCodeLine{00289\ \ \ \ \ \});}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00291\ \ \ \ \ GtkWidget\ *menu\_item\ =\ gtk\_menu\_item\_new\_with\_label(\textcolor{stringliteral}{"{}Reset\ Color"{}});}
+\DoxyCodeLine{00292\ \ \ \ \ gtk\_menu\_shell\_append(GTK\_MENU\_SHELL(menu),\ menu\_item);}
+\DoxyCodeLine{00293\ \ \ \ \ g\_signal\_connect(G\_OBJECT(menu\_item),\ \textcolor{stringliteral}{"{}activate"{}},}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ G\_CALLBACK(\mbox{\hyperlink{classGtkStatsMonitor_a35a4d279db316126b4f8f564d7f2fb92}{GtkStatsMonitor::menu\_activate}}),}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{void}\ *)menu\_def);}
+\DoxyCodeLine{00296\ \ \ \}}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \ \ gtk\_widget\_show\_all(menu);}
+\DoxyCodeLine{00299\ \ \ gtk\_menu\_popup\_at\_pointer(GTK\_MENU(menu),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00300\ \}}
+\DoxyCodeLine{00301\ }
+\DoxyCodeLine{00306\ std::string\ \mbox{\hyperlink{classGtkStatsStripChart_abc460a92cdb41176843f8b07a9d52231}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00307\ \mbox{\hyperlink{classGtkStatsStripChart_abc460a92cdb41176843f8b07a9d52231}{get\_label\_tooltip}}(\textcolor{keywordtype}{int}\ collector\_index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00308\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatStripChart_a40bffaef86f537a63f6c7fe6c8a4195d}{PStatStripChart::get\_label\_tooltip}}(collector\_index);}
+\DoxyCodeLine{00309\ \}}
+\DoxyCodeLine{00310\ }
+\DoxyCodeLine{00315\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_a4ee83adaf44182a14bba9db8c2ea836e}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00316\ \mbox{\hyperlink{classGtkStatsStripChart_a4ee83adaf44182a14bba9db8c2ea836e}{set\_vertical\_scale}}(\textcolor{keywordtype}{double}\ value\_height)\ \{}
+\DoxyCodeLine{00317\ \ \ PStatStripChart::set\_vertical\_scale(value\_height);}
+\DoxyCodeLine{00318\ }
+\DoxyCodeLine{00319\ \ \ gtk\_widget\_queue\_draw(\_graph\_window);}
+\DoxyCodeLine{00320\ \ \ gtk\_widget\_queue\_draw(\_scale\_area);}
+\DoxyCodeLine{00321\ \}}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00326\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_ab99d668bcc3225d8497c8e3d880b9bfd}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00327\ \mbox{\hyperlink{classGtkStatsStripChart_ab99d668bcc3225d8497c8e3d880b9bfd}{update\_labels}}()\ \{}
+\DoxyCodeLine{00328\ \ \ \mbox{\hyperlink{classPStatStripChart_a813aa0118c3899168606f35fec5669bd}{PStatStripChart::update\_labels}}();}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00330\ \ \ \_label\_stack.\mbox{\hyperlink{classGtkStatsLabelStack_a8d9cca92be268640161e958aded25e54}{clear\_labels}}();}
+\DoxyCodeLine{00331\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ get\_num\_labels();\ i++)\ \{}
+\DoxyCodeLine{00332\ \ \ \ \ \_label\_stack.\mbox{\hyperlink{classGtkStatsLabelStack_a0b7f41102ef42abacaf4c904c0f58f28}{add\_label}}(GtkStatsGraph::\_monitor,\ \textcolor{keyword}{this},\ \_thread\_index,}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ get\_label\_collector(i),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00334\ \ \ \}}
+\DoxyCodeLine{00335\ \ \ \_labels\_changed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00336\ \}}
+\DoxyCodeLine{00337\ }
+\DoxyCodeLine{00341\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_aa2f75f8fff8f975fa9537bab0788f2df}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00342\ \mbox{\hyperlink{classGtkStatsStripChart_aa2f75f8fff8f975fa9537bab0788f2df}{clear\_region}}()\ \{}
+\DoxyCodeLine{00343\ \ \ cairo\_set\_source\_rgb(\_cr,\ 1.0,\ 1.0,\ 1.0);}
+\DoxyCodeLine{00344\ \ \ cairo\_paint(\_cr);}
+\DoxyCodeLine{00345\ \}}
+\DoxyCodeLine{00346\ }
+\DoxyCodeLine{00351\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_af5ddc42851131dbb584f090d8e9dcce3}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00352\ \mbox{\hyperlink{classGtkStatsStripChart_af5ddc42851131dbb584f090d8e9dcce3}{copy\_region}}(\textcolor{keywordtype}{int}\ start\_x,\ \textcolor{keywordtype}{int}\ end\_x,\ \textcolor{keywordtype}{int}\ dest\_x)\ \{}
+\DoxyCodeLine{00353\ \ \ \textcolor{comment}{//\ We\ are\ not\ allowed\ to\ copy\ a\ surface\ onto\ itself,\ so\ we\ have\ to\ create\ a}}
+\DoxyCodeLine{00354\ \ \ \textcolor{comment}{//\ temporary\ surface\ to\ copy\ to.}}
+\DoxyCodeLine{00355\ \ \ end\_x\ =\ std::min(end\_x,\ get\_xsize());}
+\DoxyCodeLine{00356\ \ \ GdkWindow\ *window\ =\ gtk\_widget\_get\_window(\_graph\_window);}
+\DoxyCodeLine{00357\ \ \ cairo\_surface\_t\ *temp\_surface\ =}
+\DoxyCodeLine{00358\ \ \ \ \ gdk\_window\_create\_similar\_image\_surface(window,\ CAIRO\_FORMAT\_RGB24,\ end\_x\ -\/\ start\_x,\ get\_ysize(),\ 1);}
+\DoxyCodeLine{00359\ \ \ \{}
+\DoxyCodeLine{00360\ \ \ \ \ cairo\_t\ *temp\_cr\ =\ cairo\_create(temp\_surface);}
+\DoxyCodeLine{00361\ \ \ \ \ cairo\_set\_source\_surface(temp\_cr,\ \_cr\_surface,\ -\/start\_x,\ 0);}
+\DoxyCodeLine{00362\ \ \ \ \ cairo\_paint(temp\_cr);}
+\DoxyCodeLine{00363\ \ \ \ \ cairo\_destroy(temp\_cr);}
+\DoxyCodeLine{00364\ \ \ \}}
+\DoxyCodeLine{00365\ }
+\DoxyCodeLine{00366\ \ \ cairo\_set\_source\_surface(\_cr,\ temp\_surface,\ 0,\ 0);}
+\DoxyCodeLine{00367\ \ \ cairo\_rectangle(\_cr,\ dest\_x,\ 0,\ end\_x\ -\/\ start\_x,\ get\_ysize());}
+\DoxyCodeLine{00368\ \ \ cairo\_fill(\_cr);}
+\DoxyCodeLine{00369\ }
+\DoxyCodeLine{00370\ \ \ cairo\_surface\_destroy(temp\_surface);}
+\DoxyCodeLine{00371\ }
+\DoxyCodeLine{00372\ \ \ gdk\_window\_invalidate\_rect(window,\ \textcolor{keyword}{nullptr},\ FALSE);}
+\DoxyCodeLine{00373\ \}}
+\DoxyCodeLine{00374\ }
+\DoxyCodeLine{00379\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_a003c012ba11a3f411da8227ba834c5c4}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00380\ \mbox{\hyperlink{classGtkStatsStripChart_a003c012ba11a3f411da8227ba834c5c4}{draw\_slice}}(\textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ w,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatStripChart_1_1FrameData}{PStatStripChart::FrameData}}\ \&fdata)\ \{}
+\DoxyCodeLine{00381\ \ \ \textcolor{comment}{//\ Start\ by\ clearing\ the\ band\ first.}}
+\DoxyCodeLine{00382\ \ \ cairo\_set\_source\_rgb(\_cr,\ 1.0,\ 1.0,\ 1.0);}
+\DoxyCodeLine{00383\ \ \ cairo\_rectangle(\_cr,\ x,\ 0,\ w,\ get\_ysize());}
+\DoxyCodeLine{00384\ \ \ cairo\_fill(\_cr);}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00386\ \ \ \textcolor{keywordtype}{double}\ overall\_time\ =\ 0.0;}
+\DoxyCodeLine{00387\ \ \ \textcolor{keywordtype}{int}\ y\ =\ get\_ysize();}
+\DoxyCodeLine{00388\ }
+\DoxyCodeLine{00389\ \ \ FrameData::const\_iterator\ fi;}
+\DoxyCodeLine{00390\ \ \ \textcolor{keywordflow}{for}\ (fi\ =\ fdata.begin();\ fi\ !=\ fdata.end();\ ++fi)\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatStripChart_1_1ColorData}{ColorData}}\ \&cd\ =\ (*fi);}
+\DoxyCodeLine{00392\ \ \ \ \ overall\_time\ +=\ cd.\_net\_value;}
+\DoxyCodeLine{00393\ \ \ \ \ cairo\_set\_source(\_cr,\ \mbox{\hyperlink{classGtkStatsGraph_a2b81b4929003d42bf4aaf5b4ce450c61}{get\_collector\_pattern}}(cd.\_collector\_index,}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \_highlighted\_index\ ==\ cd.\_collector\_index));}
+\DoxyCodeLine{00395\ }
+\DoxyCodeLine{00396\ \ \ \ \ \textcolor{keywordflow}{if}\ (overall\_time\ >\ get\_vertical\_scale())\ \{}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \textcolor{comment}{//\ Off\ the\ top.\ \ Go\ ahead\ and\ clamp\ it\ by\ hand,\ in\ case\ it's\ so\ far\ off}}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ top\ we'd\ overflow\ the\ 16-\/bit\ pixel\ value.}}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ cairo\_rectangle(\_cr,\ x,\ 0,\ w,\ y);}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ cairo\_fill(\_cr);}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \textcolor{comment}{//\ And\ we\ can\ consider\ ourselves\ done\ now.}}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00403\ \ \ \ \ \}}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00405\ \ \ \ \ \textcolor{keywordtype}{int}\ top\_y\ =\ height\_to\_pixel(overall\_time);}
+\DoxyCodeLine{00406\ \ \ \ \ cairo\_rectangle(\_cr,\ x,\ top\_y,\ w,\ y\ -\/\ top\_y);}
+\DoxyCodeLine{00407\ \ \ \ \ cairo\_fill(\_cr);}
+\DoxyCodeLine{00408\ \ \ \ \ y\ =\ top\_y;}
+\DoxyCodeLine{00409\ \ \ \}}
+\DoxyCodeLine{00410\ \}}
+\DoxyCodeLine{00411\ }
+\DoxyCodeLine{00415\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_a39a916af851c40d4c037995f6d409734}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00416\ \mbox{\hyperlink{classGtkStatsStripChart_a39a916af851c40d4c037995f6d409734}{draw\_empty}}(\textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ w)\ \{}
+\DoxyCodeLine{00417\ \ \ cairo\_set\_source\_rgb(\_cr,\ 1.0,\ 1.0,\ 1.0);}
+\DoxyCodeLine{00418\ \ \ cairo\_rectangle(\_cr,\ x,\ 0,\ w,\ get\_ysize());}
+\DoxyCodeLine{00419\ \}}
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00424\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_acd1436288cdc25fb994a472381525292}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00425\ \mbox{\hyperlink{classGtkStatsStripChart_acd1436288cdc25fb994a472381525292}{draw\_cursor}}(\textcolor{keywordtype}{int}\ x)\ \{}
+\DoxyCodeLine{00426\ \ \ cairo\_set\_source\_rgb(\_cr,\ 0.0,\ 0.0,\ 0.0);}
+\DoxyCodeLine{00427\ \ \ cairo\_move\_to(\_cr,\ x,\ 0);}
+\DoxyCodeLine{00428\ \ \ cairo\_line\_to(\_cr,\ x,\ get\_ysize());}
+\DoxyCodeLine{00429\ \ \ cairo\_stroke(\_cr);}
+\DoxyCodeLine{00430\ \}}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00437\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_ad6c49927c3d7c30eb76bae4aec7d2e23}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00438\ \mbox{\hyperlink{classGtkStatsStripChart_ad6c49927c3d7c30eb76bae4aec7d2e23}{end\_draw}}(\textcolor{keywordtype}{int}\ from\_x,\ \textcolor{keywordtype}{int}\ to\_x)\ \{}
+\DoxyCodeLine{00439\ \ \ \textcolor{comment}{//\ Draw\ in\ the\ guide\ bars.}}
+\DoxyCodeLine{00440\ \ \ \textcolor{keywordtype}{int}\ num\_guide\_bars\ =\ \mbox{\hyperlink{classPStatGraph_a96e40e4ab86f48d9c72c36067b9e5be2}{get\_num\_guide\_bars}}();}
+\DoxyCodeLine{00441\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_guide\_bars;\ i++)\ \{}
+\DoxyCodeLine{00442\ \ \ \ \ draw\_guide\_bar(\_cr,\ from\_x,\ to\_x,\ \mbox{\hyperlink{classPStatGraph_ae15abb62d95fe941e8bfa2c42a38b284}{get\_guide\_bar}}(i));}
+\DoxyCodeLine{00443\ \ \ \}}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \ \ GdkWindow\ *window\ =\ gtk\_widget\_get\_window(\_graph\_window);}
+\DoxyCodeLine{00446\ \ \ \textcolor{keywordtype}{int}\ scale\ =\ gdk\_window\_get\_scale\_factor(window);}
+\DoxyCodeLine{00447\ \ \ GdkRectangle\ rect\ =\ \{}
+\DoxyCodeLine{00448\ \ \ \ \ (from\_x\ *\ scale)\ /\ scale,\ 0,\ (to\_x\ -\/\ from\_x)\ /\ scale,\ get\_ysize()\ /\ scale}
+\DoxyCodeLine{00449\ \ \ \};}
+\DoxyCodeLine{00450\ \ \ gdk\_window\_invalidate\_rect(window,\ \&rect,\ FALSE);}
+\DoxyCodeLine{00451\ \}}
+\DoxyCodeLine{00452\ }
+\DoxyCodeLine{00456\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classGtkStatsStripChart_a465a46d4053348592d2b6d37c9b8d157}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00457\ \mbox{\hyperlink{classGtkStatsStripChart_a465a46d4053348592d2b6d37c9b8d157}{get\_window\_state}}(\textcolor{keywordtype}{int}\ \&x,\ \textcolor{keywordtype}{int}\ \&y,\ \textcolor{keywordtype}{int}\ \&width,\ \textcolor{keywordtype}{int}\ \&height,}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ \&maximized,\ \textcolor{keywordtype}{bool}\ \&minimized)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00459\ \ \ \mbox{\hyperlink{classGtkStatsGraph_a1fd380d910629fce8e84d64524b8aa93}{GtkStatsGraph::get\_window\_state}}(x,\ y,\ width,\ height,\ maximized,\ minimized);}
+\DoxyCodeLine{00460\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00461\ \}}
+\DoxyCodeLine{00462\ }
+\DoxyCodeLine{00466\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_ad3c0e71c614c10fe82655196b5c38d9f}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00467\ \mbox{\hyperlink{classGtkStatsStripChart_ad3c0e71c614c10fe82655196b5c38d9f}{set\_window\_state}}(\textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y,\ \textcolor{keywordtype}{int}\ width,\ \textcolor{keywordtype}{int}\ height,}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ maximized,\ \textcolor{keywordtype}{bool}\ minimized)\ \{}
+\DoxyCodeLine{00469\ \ \ \mbox{\hyperlink{classGtkStatsGraph_a3297782d1fe8ebc6375ea52a9f53618d}{GtkStatsGraph::set\_window\_state}}(x,\ y,\ width,\ height,\ maximized,\ minimized);}
+\DoxyCodeLine{00470\ \}}
+\DoxyCodeLine{00471\ }
+\DoxyCodeLine{00476\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_af1a873ad8b25a0fcfd98257817b402ae}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00477\ \mbox{\hyperlink{classGtkStatsStripChart_af1a873ad8b25a0fcfd98257817b402ae}{additional\_graph\_window\_paint}}(cairo\_t\ *cr)\ \{}
+\DoxyCodeLine{00478\ \ \ \textcolor{keywordtype}{int}\ num\_user\_guide\_bars\ =\ \mbox{\hyperlink{classPStatGraph_a2817d0202ae60465812dfff807245561}{get\_num\_user\_guide\_bars}}();}
+\DoxyCodeLine{00479\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_user\_guide\_bars;\ i++)\ \{}
+\DoxyCodeLine{00480\ \ \ \ \ draw\_guide\_bar(cr,\ 0,\ get\_xsize(),\ \mbox{\hyperlink{classPStatGraph_a065acd03e0e9d4da1b575fe8feb77909}{get\_user\_guide\_bar}}(i));}
+\DoxyCodeLine{00481\ \ \ \}}
+\DoxyCodeLine{00482\ \}}
+\DoxyCodeLine{00483\ }
+\DoxyCodeLine{00488\ std::string\ \mbox{\hyperlink{classGtkStatsStripChart_a07ef0e3b280d196db94cc5b635c67b54}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00489\ \mbox{\hyperlink{classGtkStatsStripChart_a07ef0e3b280d196db94cc5b635c67b54}{get\_graph\_tooltip}}(\textcolor{keywordtype}{int}\ mouse\_x,\ \textcolor{keywordtype}{int}\ mouse\_y)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00490\ \ \ \textcolor{keywordflow}{if}\ (\_highlighted\_index\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00491\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classGtkStatsStripChart_abc460a92cdb41176843f8b07a9d52231}{get\_label\_tooltip}}(\_highlighted\_index);}
+\DoxyCodeLine{00492\ \ \ \}}
+\DoxyCodeLine{00493\ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{00494\ \}}
+\DoxyCodeLine{00495\ }
+\DoxyCodeLine{00501\ GtkStatsGraph::DragMode\ \mbox{\hyperlink{classGtkStatsStripChart_a6626670689b41e355588a71dd4cb48be}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00502\ \mbox{\hyperlink{classGtkStatsStripChart_a6626670689b41e355588a71dd4cb48be}{consider\_drag\_start}}(\textcolor{keywordtype}{int}\ graph\_x,\ \textcolor{keywordtype}{int}\ graph\_y)\ \{}
+\DoxyCodeLine{00503\ \ \ \textcolor{keywordflow}{if}\ (graph\_x\ >=\ 0\ \&\&\ graph\_x\ <\ get\_xsize())\ \{}
+\DoxyCodeLine{00504\ \ \ \ \ \textcolor{keywordflow}{if}\ (graph\_y\ >=\ 0\ \&\&\ graph\_y\ <\ get\_ysize())\ \{}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \textcolor{comment}{//\ See\ if\ the\ mouse\ is\ over\ a\ user-\/defined\ guide\ bar.}}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ y\ =\ graph\_y;}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ from\_height\ =\ pixel\_to\_height(y\ +\ 2);}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ to\_height\ =\ pixel\_to\_height(y\ -\/\ 2);}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ \_drag\_guide\_bar\ =\ \mbox{\hyperlink{classPStatGraph_a27bac34846a7622cab2d7aa247fc570e}{find\_user\_guide\_bar}}(from\_height,\ to\_height);}
+\DoxyCodeLine{00510\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_drag\_guide\_bar\ >=\ 0)\ \{}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ DM\_guide\_bar;}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00513\ }
+\DoxyCodeLine{00514\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ mouse\ is\ above\ or\ below\ the\ graph;\ maybe\ create\ a\ new\ guide\ bar.}}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ DM\_new\_guide\_bar;}
+\DoxyCodeLine{00517\ \ \ \ \ \}}
+\DoxyCodeLine{00518\ \ \ \}}
+\DoxyCodeLine{00519\ }
+\DoxyCodeLine{00520\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classGtkStatsGraph_a00927751e3fa0207c85ff6d08e0c940c}{GtkStatsGraph::consider\_drag\_start}}(graph\_x,\ graph\_y);}
+\DoxyCodeLine{00521\ \}}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00527\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGtkStatsStripChart_ae8c88d79d9433fd5dd884e24aff1618f}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00528\ \mbox{\hyperlink{classGtkStatsStripChart_ae8c88d79d9433fd5dd884e24aff1618f}{set\_drag\_mode}}(GtkStatsGraph::DragMode\ drag\_mode)\ \{}
+\DoxyCodeLine{00529\ \ \ \mbox{\hyperlink{classGtkStatsGraph_acf477ec8aaef7e698414175536e33199}{GtkStatsGraph::set\_drag\_mode}}(drag\_mode);}
+\DoxyCodeLine{00530\ }
+\DoxyCodeLine{00531\ \ \ \textcolor{keywordflow}{if}\ (\_drag\_mode\ ==\ DM\_none)\ \{}
+\DoxyCodeLine{00532\ \ \ \ \ \textcolor{comment}{//\ Restore\ smoothing\ according\ to\ the\ current\ setting\ of\ the\ check\ box.}}
+\DoxyCodeLine{00533\ \ \ \ \ \textcolor{keywordtype}{bool}\ active\ =}
+\DoxyCodeLine{00534\ \ \ \ \ \ \ gtk\_toggle\_button\_get\_active(GTK\_TOGGLE\_BUTTON(\_smooth\_check\_box));}
+\DoxyCodeLine{00535\ \ \ \ \ set\_average\_mode(active);}
+\DoxyCodeLine{00536\ \ \ \}}
+\DoxyCodeLine{00537\ \}}
+\DoxyCodeLine{00538\ }
+\DoxyCodeLine{00542\ gboolean\ \mbox{\hyperlink{classGtkStatsStripChart_a6cd281212c0f80157addb8f60bc621b0}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00543\ \mbox{\hyperlink{classGtkStatsStripChart_a6cd281212c0f80157addb8f60bc621b0}{handle\_button\_press}}(\textcolor{keywordtype}{int}\ graph\_x,\ \textcolor{keywordtype}{int}\ graph\_y,\ \textcolor{keywordtype}{bool}\ double\_click,\ \textcolor{keywordtype}{int}\ button)\ \{}
+\DoxyCodeLine{00544\ \ \ \textcolor{keywordflow}{if}\ (graph\_x\ >=\ 0\ \&\&\ graph\_y\ >=\ 0\ \&\&\ graph\_x\ <\ get\_xsize()\ \&\&\ graph\_y\ <\ get\_ysize())\ \{}
+\DoxyCodeLine{00545\ \ \ \ \ \textcolor{keywordtype}{int}\ collector\_index\ =\ \mbox{\hyperlink{classPStatStripChart_a8cbc8c0eaa367792d80e44e46c2f5adf}{get\_collector\_under\_pixel}}(graph\_x,\ graph\_y);}
+\DoxyCodeLine{00546\ \ \ \ \ \textcolor{keywordflow}{if}\ (button\ ==\ 3)\ \{}
+\DoxyCodeLine{00547\ \ \ \ \ \ \ \textcolor{comment}{//\ Right-\/clicking\ on\ a\ color\ bar\ in\ the\ graph\ is\ the\ same\ as\ right-\/}}
+\DoxyCodeLine{00548\ \ \ \ \ \ \ \textcolor{comment}{//\ clicking\ on\ the\ corresponding\ label.}}
+\DoxyCodeLine{00549\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (collector\_index\ >=\ 0)\ \{}
+\DoxyCodeLine{00550\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classGtkStatsStripChart_a4f30ab07909b63e3277cb3ee06ed5134}{on\_popup\_label}}(collector\_index);}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00553\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ FALSE;}
+\DoxyCodeLine{00554\ \ \ \ \ \}}
+\DoxyCodeLine{00555\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (double\_click\ \&\&\ button\ ==\ 1)\ \{}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ \textcolor{comment}{//\ Double-\/clicking\ on\ a\ color\ bar\ in\ the\ graph\ is\ the\ same\ as\ double-\/}}
+\DoxyCodeLine{00557\ \ \ \ \ \ \ \textcolor{comment}{//\ clicking\ on\ the\ corresponding\ label.}}
+\DoxyCodeLine{00558\ \ \ \ \ \ \ \mbox{\hyperlink{classGtkStatsStripChart_a980579fd58466a0c9507b8a4bd67365f}{on\_click\_label}}(\mbox{\hyperlink{classPStatStripChart_a8cbc8c0eaa367792d80e44e46c2f5adf}{get\_collector\_under\_pixel}}(graph\_x,\ graph\_y));}
+\DoxyCodeLine{00559\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00560\ \ \ \ \ \}}
+\DoxyCodeLine{00561\ }
+\DoxyCodeLine{00562\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_potential\_drag\_mode\ ==\ DM\_none)\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \mbox{\hyperlink{classGtkStatsStripChart_ae8c88d79d9433fd5dd884e24aff1618f}{set\_drag\_mode}}(DM\_scale);}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \_drag\_scale\_start\ =\ pixel\_to\_height(graph\_y);}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \textcolor{comment}{//\ SetCapture(\_graph\_window);}}
+\DoxyCodeLine{00566\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00567\ \ \ \ \ \}}
+\DoxyCodeLine{00568\ \ \ \}}
+\DoxyCodeLine{00569\ }
+\DoxyCodeLine{00570\ \ \ \textcolor{keywordflow}{if}\ (\_potential\_drag\_mode\ ==\ DM\_guide\_bar\ \&\&\ \_drag\_guide\_bar\ >=\ 0)\ \{}
+\DoxyCodeLine{00571\ \ \ \ \ \mbox{\hyperlink{classGtkStatsStripChart_ae8c88d79d9433fd5dd884e24aff1618f}{set\_drag\_mode}}(DM\_guide\_bar);}
+\DoxyCodeLine{00572\ \ \ \ \ \_drag\_start\_y\ =\ graph\_y;}
+\DoxyCodeLine{00573\ \ \ \ \ \textcolor{comment}{//\ SetCapture(\_graph\_window);}}
+\DoxyCodeLine{00574\ \ \ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00575\ \ \ \}}
+\DoxyCodeLine{00576\ }
+\DoxyCodeLine{00577\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classGtkStatsGraph_a76128b5582850e6385a9fb4946e0429d}{GtkStatsGraph::handle\_button\_press}}(graph\_x,\ graph\_y,}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ double\_click,\ button);}
+\DoxyCodeLine{00579\ \}}
+\DoxyCodeLine{00580\ }
+\DoxyCodeLine{00584\ gboolean\ \mbox{\hyperlink{classGtkStatsStripChart_a03279b0a2d697c569a87e726aad66f33}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00585\ \mbox{\hyperlink{classGtkStatsStripChart_a03279b0a2d697c569a87e726aad66f33}{handle\_button\_release}}(\textcolor{keywordtype}{int}\ graph\_x,\ \textcolor{keywordtype}{int}\ graph\_y)\ \{}
+\DoxyCodeLine{00586\ \ \ \textcolor{keywordflow}{if}\ (\_drag\_mode\ ==\ DM\_scale)\ \{}
+\DoxyCodeLine{00587\ \ \ \ \ \mbox{\hyperlink{classGtkStatsStripChart_ae8c88d79d9433fd5dd884e24aff1618f}{set\_drag\_mode}}(DM\_none);}
+\DoxyCodeLine{00588\ \ \ \ \ \textcolor{comment}{//\ ReleaseCapture();}}
+\DoxyCodeLine{00589\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classGtkStatsStripChart_aef2cf44ef55f5b9c52d9353cc1cc945e}{handle\_motion}}(graph\_x,\ graph\_y);}
+\DoxyCodeLine{00590\ \ \ \}}
+\DoxyCodeLine{00591\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_drag\_mode\ ==\ DM\_guide\_bar)\ \{}
+\DoxyCodeLine{00592\ \ \ \ \ \textcolor{keywordflow}{if}\ (graph\_y\ <\ 0\ ||\ graph\_y\ >=\ get\_ysize())\ \{}
+\DoxyCodeLine{00593\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatGraph_a7627d5e29b88196713f4ba3cea78ea17}{remove\_user\_guide\_bar}}(\_drag\_guide\_bar);}
+\DoxyCodeLine{00594\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatGraph_a45ecee227793ee5f2059e58f8d844ad8}{move\_user\_guide\_bar}}(\_drag\_guide\_bar,\ pixel\_to\_height(graph\_y));}
+\DoxyCodeLine{00596\ \ \ \ \ \}}
+\DoxyCodeLine{00597\ \ \ \ \ \mbox{\hyperlink{classGtkStatsStripChart_ae8c88d79d9433fd5dd884e24aff1618f}{set\_drag\_mode}}(DM\_none);}
+\DoxyCodeLine{00598\ \ \ \ \ \textcolor{comment}{//\ ReleaseCapture();}}
+\DoxyCodeLine{00599\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classGtkStatsStripChart_aef2cf44ef55f5b9c52d9353cc1cc945e}{handle\_motion}}(graph\_x,\ graph\_y);}
+\DoxyCodeLine{00600\ \ \ \}}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00602\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classGtkStatsGraph_a43c79da697920e23e53ea8db754444e8}{GtkStatsGraph::handle\_button\_release}}(graph\_x,\ graph\_y);}
+\DoxyCodeLine{00603\ \}}
+\DoxyCodeLine{00604\ }
+\DoxyCodeLine{00608\ gboolean\ \mbox{\hyperlink{classGtkStatsStripChart_aef2cf44ef55f5b9c52d9353cc1cc945e}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00609\ \mbox{\hyperlink{classGtkStatsStripChart_aef2cf44ef55f5b9c52d9353cc1cc945e}{handle\_motion}}(\textcolor{keywordtype}{int}\ graph\_x,\ \textcolor{keywordtype}{int}\ graph\_y)\ \{}
+\DoxyCodeLine{00610\ \ \ \textcolor{keywordflow}{if}\ (\_drag\_mode\ ==\ DM\_none\ \&\&\ \_potential\_drag\_mode\ ==\ DM\_none\ \&\&}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ graph\_x\ >=\ 0\ \&\&\ graph\_y\ >=\ 0\ \&\&\ graph\_x\ <\ get\_xsize()\ \&\&\ graph\_y\ <\ get\_ysize())\ \{}
+\DoxyCodeLine{00612\ \ \ \ \ \textcolor{comment}{//\ When\ the\ mouse\ is\ over\ a\ color\ bar,\ highlight\ it.}}
+\DoxyCodeLine{00613\ \ \ \ \ \textcolor{keywordtype}{int}\ collector\_index\ =\ \mbox{\hyperlink{classPStatStripChart_a8cbc8c0eaa367792d80e44e46c2f5adf}{get\_collector\_under\_pixel}}(graph\_x,\ graph\_y);}
+\DoxyCodeLine{00614\ \ \ \ \ \_label\_stack.\mbox{\hyperlink{classGtkStatsLabelStack_aa63faf14812118c7dfb2f5d8653d6dda}{highlight\_label}}(collector\_index);}
+\DoxyCodeLine{00615\ \ \ \ \ \mbox{\hyperlink{classGtkStatsGraph_a897a97bb022489ca76a0300cc8c25085}{on\_enter\_label}}(collector\_index);}
+\DoxyCodeLine{00616\ \ \ \}}
+\DoxyCodeLine{00617\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00618\ \ \ \ \ \textcolor{comment}{//\ If\ the\ mouse\ is\ in\ some\ drag\ mode,\ stop\ highlighting.}}
+\DoxyCodeLine{00619\ \ \ \ \ \_label\_stack.\mbox{\hyperlink{classGtkStatsLabelStack_aa63faf14812118c7dfb2f5d8653d6dda}{highlight\_label}}(-\/1);}
+\DoxyCodeLine{00620\ \ \ \ \ \mbox{\hyperlink{classGtkStatsGraph_a552728a8a2493e7844a6fccf200b28ca}{on\_leave\_label}}(\_highlighted\_index);}
+\DoxyCodeLine{00621\ \ \ \}}
+\DoxyCodeLine{00622\ }
+\DoxyCodeLine{00623\ \ \ \textcolor{keywordflow}{if}\ (\_drag\_mode\ ==\ DM\_scale)\ \{}
+\DoxyCodeLine{00624\ \ \ \ \ \textcolor{keywordtype}{double}\ ratio\ =\ 1.0\ -\/\ ((double)graph\_y\ /\ (\textcolor{keywordtype}{double})get\_ysize());}
+\DoxyCodeLine{00625\ \ \ \ \ \textcolor{keywordflow}{if}\ (ratio\ >\ 0.0)\ \{}
+\DoxyCodeLine{00626\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ new\_scale\ =\ \_drag\_scale\_start\ /\ ratio;}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!IS\_NEARLY\_EQUAL(get\_vertical\_scale(),\ new\_scale))\ \{}
+\DoxyCodeLine{00628\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Disable\ smoothing\ while\ we\ do\ this\ expensive\ operation.}}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ \ \ set\_average\_mode(\textcolor{keyword}{false});}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classGtkStatsStripChart_a4ee83adaf44182a14bba9db8c2ea836e}{set\_vertical\_scale}}(\_drag\_scale\_start\ /\ ratio);}
+\DoxyCodeLine{00631\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00632\ \ \ \ \ \}}
+\DoxyCodeLine{00633\ \ \ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00634\ \ \ \}}
+\DoxyCodeLine{00635\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_drag\_mode\ ==\ DM\_new\_guide\_bar)\ \{}
+\DoxyCodeLine{00636\ \ \ \ \ \textcolor{comment}{//\ We\ haven't\ created\ the\ new\ guide\ bar\ yet;\ we\ won't\ until\ the\ mouse}}
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{comment}{//\ comes\ within\ the\ graph's\ region.}}
+\DoxyCodeLine{00638\ \ \ \ \ \textcolor{keywordflow}{if}\ (graph\_y\ >=\ 0\ \&\&\ graph\_y\ <\ get\_ysize())\ \{}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \mbox{\hyperlink{classGtkStatsStripChart_ae8c88d79d9433fd5dd884e24aff1618f}{set\_drag\_mode}}(DM\_guide\_bar);}
+\DoxyCodeLine{00640\ \ \ \ \ \ \ \_drag\_guide\_bar\ =\ \mbox{\hyperlink{classPStatGraph_a3a7fc8b8eb05e7ff7a6f044ebee7035a}{add\_user\_guide\_bar}}(pixel\_to\_height(graph\_y));}
+\DoxyCodeLine{00641\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00642\ \ \ \ \ \}}
+\DoxyCodeLine{00643\ \ \ \}}
+\DoxyCodeLine{00644\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_drag\_mode\ ==\ DM\_guide\_bar)\ \{}
+\DoxyCodeLine{00645\ \ \ \ \ \mbox{\hyperlink{classPStatGraph_a45ecee227793ee5f2059e58f8d844ad8}{move\_user\_guide\_bar}}(\_drag\_guide\_bar,\ pixel\_to\_height(graph\_y));}
+\DoxyCodeLine{00646\ \ \ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00647\ \ \ \}}
+\DoxyCodeLine{00648\ }
+\DoxyCodeLine{00649\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classGtkStatsGraph_a36a7bae6cbad842a6998fcd97ab3e26a}{GtkStatsGraph::handle\_motion}}(graph\_x,\ graph\_y);}
+\DoxyCodeLine{00650\ \}}
+\DoxyCodeLine{00651\ }
+\DoxyCodeLine{00655\ gboolean\ \mbox{\hyperlink{classGtkStatsStripChart_ad9c69760376673d6112884633390c8bc}{GtkStatsStripChart::}}}
+\DoxyCodeLine{00656\ \mbox{\hyperlink{classGtkStatsStripChart_ad9c69760376673d6112884633390c8bc}{handle\_leave}}()\ \{}
+\DoxyCodeLine{00657\ \ \ \_label\_stack.\mbox{\hyperlink{classGtkStatsLabelStack_aa63faf14812118c7dfb2f5d8653d6dda}{highlight\_label}}(-\/1);}
+\DoxyCodeLine{00658\ \ \ \mbox{\hyperlink{classGtkStatsGraph_a552728a8a2493e7844a6fccf200b28ca}{on\_leave\_label}}(\_highlighted\_index);}
+\DoxyCodeLine{00659\ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00660\ \}}
+\DoxyCodeLine{00661\ }
+\DoxyCodeLine{00665\ \textcolor{keywordtype}{void}\ GtkStatsStripChart::}
+\DoxyCodeLine{00666\ draw\_guide\_bar(cairo\_t\ *cr,\ \textcolor{keywordtype}{int}\ from\_x,\ \textcolor{keywordtype}{int}\ to\_x,}
+\DoxyCodeLine{00667\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatGraph_1_1GuideBar}{PStatGraph::GuideBar}}\ \&bar)\ \{}
+\DoxyCodeLine{00668\ \ \ \textcolor{keywordtype}{int}\ y\ =\ height\_to\_pixel(bar.\_height);}
+\DoxyCodeLine{00669\ }
+\DoxyCodeLine{00670\ \ \ \textcolor{keywordflow}{if}\ (y\ >\ 0)\ \{}
+\DoxyCodeLine{00671\ \ \ \ \ \textcolor{comment}{//\ Only\ draw\ it\ if\ it's\ not\ too\ close\ to\ the\ top.}}
+\DoxyCodeLine{00672\ \ \ \ \ \textcolor{keywordflow}{switch}\ (bar.\_style)\ \{}
+\DoxyCodeLine{00673\ \ \ \ \ \textcolor{keywordflow}{case}\ GBS\_target:}
+\DoxyCodeLine{00674\ \ \ \ \ \ \ cairo\_set\_source\_rgb(cr,\ rgb\_light\_gray[0],\ rgb\_light\_gray[1],\ rgb\_light\_gray[2]);}
+\DoxyCodeLine{00675\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00676\ }
+\DoxyCodeLine{00677\ \ \ \ \ \textcolor{keywordflow}{case}\ GBS\_user:}
+\DoxyCodeLine{00678\ \ \ \ \ \ \ cairo\_set\_source\_rgb(cr,\ rgb\_user\_guide\_bar[0],\ rgb\_user\_guide\_bar[1],\ rgb\_user\_guide\_bar[2]);}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00680\ }
+\DoxyCodeLine{00681\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00682\ \ \ \ \ \ \ cairo\_set\_source\_rgb(cr,\ rgb\_dark\_gray[0],\ rgb\_dark\_gray[1],\ rgb\_dark\_gray[2]);}
+\DoxyCodeLine{00683\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00684\ \ \ \ \ \}}
+\DoxyCodeLine{00685\ \ \ \ \ cairo\_move\_to(cr,\ from\_x,\ y);}
+\DoxyCodeLine{00686\ \ \ \ \ cairo\_line\_to(cr,\ to\_x,\ y);}
+\DoxyCodeLine{00687\ \ \ \ \ cairo\_stroke(cr);}
+\DoxyCodeLine{00688\ \ \ \}}
+\DoxyCodeLine{00689\ \}}
+\DoxyCodeLine{00690\ }
+\DoxyCodeLine{00694\ \textcolor{keywordtype}{void}\ GtkStatsStripChart::}
+\DoxyCodeLine{00695\ draw\_guide\_labels(cairo\_t\ *cr)\ \{}
+\DoxyCodeLine{00696\ \ \ \textcolor{comment}{//\ Draw\ in\ the\ labels\ for\ the\ guide\ bars.}}
+\DoxyCodeLine{00697\ \ \ \textcolor{keywordtype}{int}\ last\_y\ =\ -\/100;}
+\DoxyCodeLine{00698\ }
+\DoxyCodeLine{00699\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00700\ \ \ \textcolor{keywordtype}{int}\ num\_guide\_bars\ =\ \mbox{\hyperlink{classPStatGraph_a96e40e4ab86f48d9c72c36067b9e5be2}{get\_num\_guide\_bars}}();}
+\DoxyCodeLine{00701\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_guide\_bars;\ i++)\ \{}
+\DoxyCodeLine{00702\ \ \ \ \ last\_y\ =\ draw\_guide\_label(cr,\ \mbox{\hyperlink{classPStatGraph_ae15abb62d95fe941e8bfa2c42a38b284}{get\_guide\_bar}}(i),\ last\_y);}
+\DoxyCodeLine{00703\ \ \ \}}
+\DoxyCodeLine{00704\ }
+\DoxyCodeLine{00705\ \ \ GuideBar\ top\_value\ =\ \mbox{\hyperlink{classPStatGraph_a3361dd9894e280326e4831f2d575e19a}{make\_guide\_bar}}(get\_vertical\_scale());}
+\DoxyCodeLine{00706\ \ \ draw\_guide\_label(cr,\ top\_value,\ last\_y);}
+\DoxyCodeLine{00707\ }
+\DoxyCodeLine{00708\ \ \ last\_y\ =\ -\/100;}
+\DoxyCodeLine{00709\ \ \ \textcolor{keywordtype}{int}\ num\_user\_guide\_bars\ =\ \mbox{\hyperlink{classPStatGraph_a2817d0202ae60465812dfff807245561}{get\_num\_user\_guide\_bars}}();}
+\DoxyCodeLine{00710\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_user\_guide\_bars;\ i++)\ \{}
+\DoxyCodeLine{00711\ \ \ \ \ last\_y\ =\ draw\_guide\_label(cr,\ \mbox{\hyperlink{classPStatGraph_a065acd03e0e9d4da1b575fe8feb77909}{get\_user\_guide\_bar}}(i),\ last\_y);}
+\DoxyCodeLine{00712\ \ \ \}}
+\DoxyCodeLine{00713\ \}}
+\DoxyCodeLine{00714\ }
+\DoxyCodeLine{00720\ \textcolor{keywordtype}{int}\ GtkStatsStripChart::}
+\DoxyCodeLine{00721\ draw\_guide\_label(cairo\_t\ *cr,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatGraph_1_1GuideBar}{PStatGraph::GuideBar}}\ \&bar,\ \textcolor{keywordtype}{int}\ last\_y)\ \{}
+\DoxyCodeLine{00722\ \ \ \textcolor{keywordflow}{switch}\ (bar.\_style)\ \{}
+\DoxyCodeLine{00723\ \ \ \textcolor{keywordflow}{case}\ GBS\_target:}
+\DoxyCodeLine{00724\ \ \ \ \ cairo\_set\_source\_rgb(cr,\ rgb\_light\_gray[0],\ rgb\_light\_gray[1],\ rgb\_light\_gray[2]);}
+\DoxyCodeLine{00725\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00727\ \ \ \textcolor{keywordflow}{case}\ GBS\_user:}
+\DoxyCodeLine{00728\ \ \ \ \ cairo\_set\_source\_rgb(cr,\ rgb\_user\_guide\_bar[0],\ rgb\_user\_guide\_bar[1],\ rgb\_user\_guide\_bar[2]);}
+\DoxyCodeLine{00729\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00730\ }
+\DoxyCodeLine{00731\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00732\ \ \ \ \ cairo\_set\_source\_rgb(cr,\ rgb\_dark\_gray[0],\ rgb\_dark\_gray[1],\ rgb\_dark\_gray[2]);}
+\DoxyCodeLine{00733\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00734\ \ \ \}}
+\DoxyCodeLine{00735\ }
+\DoxyCodeLine{00736\ \ \ \textcolor{keywordtype}{int}\ y\ =\ height\_to\_pixel(bar.\_height);}
+\DoxyCodeLine{00737\ \ \ \textcolor{keyword}{const}\ std::string\ \&label\ =\ bar.\_label;}
+\DoxyCodeLine{00738\ }
+\DoxyCodeLine{00739\ \ \ PangoLayout\ *layout\ =\ gtk\_widget\_create\_pango\_layout(\_scale\_area,\ label.c\_str());}
+\DoxyCodeLine{00740\ \ \ \textcolor{keywordtype}{int}\ width,\ height;}
+\DoxyCodeLine{00741\ \ \ pango\_layout\_get\_pixel\_size(layout,\ \&width,\ \&height);}
+\DoxyCodeLine{00742\ }
+\DoxyCodeLine{00743\ \ \ \textcolor{keywordflow}{if}\ (bar.\_style\ !=\ GBS\_user)\ \{}
+\DoxyCodeLine{00744\ \ \ \ \ \textcolor{keywordtype}{double}\ from\_height\ =\ pixel\_to\_height(y\ +\ height\ *\ \_cr\_scale);}
+\DoxyCodeLine{00745\ \ \ \ \ \textcolor{keywordtype}{double}\ to\_height\ =\ pixel\_to\_height(y\ -\/\ height\ *\ \_cr\_scale);}
+\DoxyCodeLine{00746\ \ \ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classPStatGraph_a27bac34846a7622cab2d7aa247fc570e}{find\_user\_guide\_bar}}(from\_height,\ to\_height)\ >=\ 0)\ \{}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \textcolor{comment}{//\ Omit\ the\ label:\ there's\ a\ user-\/defined\ guide\ bar\ in\ the\ same\ space.}}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ g\_object\_unref(layout);}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ last\_y;}
+\DoxyCodeLine{00750\ \ \ \ \ \}}
+\DoxyCodeLine{00751\ \ \ \}}
+\DoxyCodeLine{00752\ }
+\DoxyCodeLine{00753\ \ \ \textcolor{keywordflow}{if}\ (y\ >=\ 0\ \&\&\ y\ <\ get\_ysize())\ \{}
+\DoxyCodeLine{00754\ \ \ \ \ \textcolor{comment}{//\ Now\ convert\ our\ y\ to\ a\ coordinate\ within\ our\ drawing\ area.}}
+\DoxyCodeLine{00755\ \ \ \ \ \textcolor{keywordtype}{int}\ junk\_x;}
+\DoxyCodeLine{00756\ }
+\DoxyCodeLine{00757\ \ \ \ \ y\ /=\ \_cr\_scale;}
+\DoxyCodeLine{00758\ }
+\DoxyCodeLine{00759\ \ \ \ \ \textcolor{comment}{//\ The\ y\ coordinate\ comes\ from\ the\ graph\_window.}}
+\DoxyCodeLine{00760\ \ \ \ \ gtk\_widget\_translate\_coordinates(\_graph\_window,\ \_scale\_area,}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ \ \ \ \ \ \ \ 0,\ y,}
+\DoxyCodeLine{00762\ \ \ \ \ \ \ \ \ \ \ \ \ \ \&junk\_x,\ \&y);}
+\DoxyCodeLine{00763\ }
+\DoxyCodeLine{00764\ \ \ \ \ \textcolor{keywordtype}{int}\ this\_y\ =\ y\ -\/\ height\ /\ 2;}
+\DoxyCodeLine{00765\ \ \ \ \ \textcolor{keywordflow}{if}\ (last\_y\ <\ this\_y\ ||\ last\_y\ >\ this\_y\ +\ height)\ \{}
+\DoxyCodeLine{00766\ \ \ \ \ \ \ cairo\_move\_to(cr,\ 0,\ this\_y);}
+\DoxyCodeLine{00767\ \ \ \ \ \ \ pango\_cairo\_show\_layout(cr,\ layout);}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ last\_y\ =\ this\_y;}
+\DoxyCodeLine{00769\ \ \ \ \ \}}
+\DoxyCodeLine{00770\ \ \ \}}
+\DoxyCodeLine{00771\ }
+\DoxyCodeLine{00772\ \ \ g\_object\_unref(layout);}
+\DoxyCodeLine{00773\ \ \ \textcolor{keywordflow}{return}\ last\_y;}
+\DoxyCodeLine{00774\ \}}
+\DoxyCodeLine{00775\ }
+\DoxyCodeLine{00779\ \textcolor{keywordtype}{void}\ GtkStatsStripChart::}
+\DoxyCodeLine{00780\ toggled\_callback(GtkToggleButton\ *button,\ gpointer\ data)\ \{}
+\DoxyCodeLine{00781\ \ \ \mbox{\hyperlink{classGtkStatsStripChart}{GtkStatsStripChart}}\ *self\ =\ (\mbox{\hyperlink{classGtkStatsStripChart}{GtkStatsStripChart}}\ *)data;}
+\DoxyCodeLine{00782\ }
+\DoxyCodeLine{00783\ \ \ \textcolor{keywordtype}{bool}\ active\ =\ gtk\_toggle\_button\_get\_active(button);}
+\DoxyCodeLine{00784\ \ \ self-\/>set\_average\_mode(active);}
+\DoxyCodeLine{00785\ \}}
+\DoxyCodeLine{00786\ }
+\DoxyCodeLine{00790\ gboolean\ GtkStatsStripChart::}
+\DoxyCodeLine{00791\ draw\_callback(GtkWidget\ *widget,\ cairo\_t\ *cr,\ gpointer\ data)\ \{}
+\DoxyCodeLine{00792\ \ \ \mbox{\hyperlink{classGtkStatsStripChart}{GtkStatsStripChart}}\ *self\ =\ (\mbox{\hyperlink{classGtkStatsStripChart}{GtkStatsStripChart}}\ *)data;}
+\DoxyCodeLine{00793\ \ \ self-\/>draw\_guide\_labels(cr);}
+\DoxyCodeLine{00794\ }
+\DoxyCodeLine{00795\ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00796\ \}}
+
+\end{DoxyCode}

@@ -1,0 +1,182 @@
+\doxysection{linear\+Euler\+Integrator.\+cxx}
+\hypertarget{linearEulerIntegrator_8cxx_source}{}\label{linearEulerIntegrator_8cxx_source}\index{panda/src/physics/linearEulerIntegrator.cxx@{panda/src/physics/linearEulerIntegrator.cxx}}
+\mbox{\hyperlink{linearEulerIntegrator_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{linearEulerIntegrator_8h}{linearEulerIntegrator.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{forceNode_8h}{forceNode.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{physicalNode_8h}{physicalNode.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__physics_8h}{config\_physics.h}}"{}}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00022\ LinearEulerIntegrator::}
+\DoxyCodeLine{00023\ LinearEulerIntegrator()\ \{}
+\DoxyCodeLine{00024\ \}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00029\ LinearEulerIntegrator::}
+\DoxyCodeLine{00030\ \string~LinearEulerIntegrator()\ \{}
+\DoxyCodeLine{00031\ \}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00041\ \textcolor{keywordtype}{void}\ LinearEulerIntegrator::}
+\DoxyCodeLine{00042\ child\_integrate(\mbox{\hyperlink{classPhysical}{Physical}}\ *physical,}
+\DoxyCodeLine{00043\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ LinearForceVector\&\ forces,}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ PN\_stdfloat\ dt)\ \{}
+\DoxyCodeLine{00045\ \ \ \textcolor{comment}{//\ perform\ the\ precomputation.\ \ Note\ that\ the\ vector\ returned\ by}}
+\DoxyCodeLine{00046\ \ \ \textcolor{comment}{//\ get\_precomputed\_matrices()\ has\ the\ matrices\ loaded\ in\ order\ of\ force}}
+\DoxyCodeLine{00047\ \ \ \textcolor{comment}{//\ type:\ first\ global,\ then\ local.\ \ If\ you're\ using\ this\ as\ a\ guide\ to\ write}}
+\DoxyCodeLine{00048\ \ \ \textcolor{comment}{//\ another\ integrator,\ be\ sure\ to\ process\ your\ forces\ global,\ then\ local.}}
+\DoxyCodeLine{00049\ \ \ \textcolor{comment}{//\ otherwise\ your\ transforms\ will\ be\ VERY\ bad.}}
+\DoxyCodeLine{00050\ \ \ \mbox{\hyperlink{classBaseIntegrator_a12d4cd1feb4517019e61857676a460da}{precompute\_linear\_matrices}}(physical,\ forces);}
+\DoxyCodeLine{00051\ \ \ \textcolor{keyword}{const}\ MatrixVector\ \&matrices\ =\ get\_precomputed\_linear\_matrices();}
+\DoxyCodeLine{00052\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00053\ \ \ MatrixVector::const\_iterator\ mi;}
+\DoxyCodeLine{00054\ \ \ \textcolor{keywordflow}{for}\ (mi\ =\ matrices.begin();\ mi\ !=\ matrices.end();\ ++mi)\ \{}
+\DoxyCodeLine{00055\ \ \ \ \ nassertv(!(*mi).is\_nan());}
+\DoxyCodeLine{00056\ \ \ \}}
+\DoxyCodeLine{00057\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00059\ \ \ \textcolor{comment}{//\ Get\ the\ greater\ of\ the\ local\ or\ global\ viscosity:}}
+\DoxyCodeLine{00060\ \ \ PN\_stdfloat\ viscosityDamper=1.0f-\/physical-\/>get\_viscosity();}
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00062\ \ \ \textcolor{comment}{//\ Loop\ through\ each\ object\ in\ the\ set.\ \ This\ processing\ occurs\ in\ O(pf)}}
+\DoxyCodeLine{00063\ \ \ \textcolor{comment}{//\ time,\ where\ p\ is\ the\ number\ of\ physical\ objects\ and\ f\ is\ the\ number\ of}}
+\DoxyCodeLine{00064\ \ \ \textcolor{comment}{//\ forces.\ \ Unfortunately,\ no\ precomputation\ of\ forces\ can\ occur,\ as\ each}}
+\DoxyCodeLine{00065\ \ \ \textcolor{comment}{//\ force\ is\ possibly\ contingent\ on\ such\ things\ as\ the\ position\ and\ velocity}}
+\DoxyCodeLine{00066\ \ \ \textcolor{comment}{//\ of\ each\ physicsobject\ in\ the\ set.\ \ Accordingly,\ we\ have\ to\ grunt\ our\ way}}
+\DoxyCodeLine{00067\ \ \ \textcolor{comment}{//\ through\ each\ one.\ \ wrt\ caching\ of\ the\ xform\ matrix\ should\ help.}}
+\DoxyCodeLine{00068\ \ \ PhysicsObject::Vector::const\_iterator\ current\_object\_iter;}
+\DoxyCodeLine{00069\ \ \ current\_object\_iter\ =\ physical-\/>get\_object\_vector().begin();}
+\DoxyCodeLine{00070\ \ \ \textcolor{keywordflow}{for}\ (;\ current\_object\_iter\ !=\ physical-\/>get\_object\_vector().end();}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \ ++current\_object\_iter)\ \{}
+\DoxyCodeLine{00072\ \ \ \ \ \mbox{\hyperlink{classPhysicsObject}{PhysicsObject}}\ *current\_object\ =\ *current\_object\_iter;}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00074\ \ \ \ \ \textcolor{comment}{//\ bail\ out\ if\ this\ object\ doesn't\ exist\ or\ doesn't\ want\ to\ be\ processed.}}
+\DoxyCodeLine{00075\ \ \ \ \ \textcolor{keywordflow}{if}\ (current\_object\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00077\ \ \ \ \ \}}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00079\ \ \ \ \ \textcolor{keywordflow}{if}\ (current\_object-\/>get\_active()\ ==\ \textcolor{keyword}{false})\ \{}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00081\ \ \ \ \ \}}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00083\ \ \ \ \ LVector3\ md\_accum\_vec;\ \textcolor{comment}{//\ mass\ dependent\ accumulation\ vector.}}
+\DoxyCodeLine{00084\ \ \ \ \ LVector3\ non\_md\_accum\_vec;}
+\DoxyCodeLine{00085\ \ \ \ \ LVector3\ accel\_vec;}
+\DoxyCodeLine{00086\ \ \ \ \ LVector3\ vel\_vec;}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00088\ \ \ \ \ \textcolor{comment}{//\ reset\ the\ accumulation\ vectors\ for\ this\ object}}
+\DoxyCodeLine{00089\ \ \ \ \ md\_accum\_vec.set(0.0f,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{00090\ \ \ \ \ non\_md\_accum\_vec.set(0.0f,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00092\ \ \ \ \ \textcolor{comment}{//\ run\ through\ each\ acting\ force\ and\ sum\ it}}
+\DoxyCodeLine{00093\ \ \ \ \ LVector3\ f;}
+\DoxyCodeLine{00094\ \ \ \ \ \textcolor{comment}{//\ LMatrix4\ force\_to\_object\_xform;}}
+\DoxyCodeLine{00095\ }
+\DoxyCodeLine{00096\ \ \ \ \ LinearForceVector::const\_iterator\ f\_cur;}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00098\ \ \ \ \ \textcolor{comment}{//\ global\ forces}}
+\DoxyCodeLine{00099\ \ \ \ \ f\_cur\ =\ forces.begin();}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ 0;}
+\DoxyCodeLine{00101\ \ \ \ \ \textcolor{keywordflow}{for}\ (;\ f\_cur\ !=\ forces.end();\ ++f\_cur)\ \{}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ \mbox{\hyperlink{classLinearForce}{LinearForce}}\ *cur\_force\ =\ *f\_cur;}
+\DoxyCodeLine{00103\ }
+\DoxyCodeLine{00104\ \ \ \ \ \ \ \textcolor{comment}{//\ make\ sure\ the\ force\ is\ turned\ on.}}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cur\_force-\/>get\_active()\ ==\ \textcolor{keyword}{false})\ \{}
+\DoxyCodeLine{00106\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \ \ \ \ \ \ \textcolor{comment}{//\ now\ we\ go\ from\ force\ space\ to\ our\ object's\ space.}}
+\DoxyCodeLine{00110\ \ \ \ \ \ \ f\ =\ cur\_force-\/>get\_vector(current\_object)\ *\ matrices[index++];}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \ \ \ \ physics\_spam(\textcolor{stringliteral}{"{}child\_integrate\ "{}}<<f);}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ \textcolor{comment}{//\ tally\ it\ into\ the\ accum\ vectors.}}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cur\_force-\/>get\_mass\_dependent()\ ==\ \textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ md\_accum\_vec\ +=\ f;}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ non\_md\_accum\_vec\ +=\ f;}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00119\ \ \ \ \ \}}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00121\ \ \ \ \ \textcolor{comment}{//\ local\ forces}}
+\DoxyCodeLine{00122\ \ \ \ \ f\_cur\ =\ physical-\/>get\_linear\_forces().begin();}
+\DoxyCodeLine{00123\ \ \ \ \ \textcolor{keywordflow}{for}\ (;\ f\_cur\ !=\ physical-\/>get\_linear\_forces().end();\ ++f\_cur)\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \mbox{\hyperlink{classLinearForce}{LinearForce}}\ *cur\_force\ =\ *f\_cur;}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \textcolor{comment}{//\ make\ sure\ the\ force\ is\ turned\ on.}}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cur\_force-\/>get\_active()\ ==\ \textcolor{keyword}{false})\ \{}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00130\ }
+\DoxyCodeLine{00131\ \ \ \ \ \ \ \textcolor{comment}{//\ go\ from\ force\ space\ to\ object\ space}}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ f\ =\ cur\_force-\/>get\_vector(current\_object)\ *\ matrices[index++];}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \ \ \ \ \ \ physics\_spam(\textcolor{stringliteral}{"{}child\_integrate\ "{}}<<f);}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \textcolor{comment}{//\ tally\ it\ into\ the\ accum\ vectors}}
+\DoxyCodeLine{00136\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cur\_force-\/>get\_mass\_dependent()\ ==\ \textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \ \ md\_accum\_vec\ +=\ f;}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ non\_md\_accum\_vec\ +=\ f;}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00141\ \ \ \ \ \}}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00143\ \ \ \ \ \textcolor{comment}{//\ get\ this\ object's\ physical\ info}}
+\DoxyCodeLine{00144\ \ \ \ \ LPoint3\ pos\ =\ current\_object-\/>get\_position();}
+\DoxyCodeLine{00145\ \ \ \ \ vel\_vec\ =\ current\_object-\/>get\_velocity();}
+\DoxyCodeLine{00146\ \ \ \ \ PN\_stdfloat\ mass\ =\ current\_object-\/>get\_mass();}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \ \ \ \ \textcolor{comment}{//\ we\ want\ 'a'\ in\ F\ =\ ma\ get\ it\ by\ computing\ F\ \ m}}
+\DoxyCodeLine{00149\ \ \ \ \ nassertv(mass\ !=\ 0.0f);}
+\DoxyCodeLine{00150\ \ \ \ \ accel\_vec\ =\ md\_accum\_vec\ /\ mass;}
+\DoxyCodeLine{00151\ \ \ \ \ accel\_vec\ +=\ non\_md\_accum\_vec;}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ \textcolor{preprocessor}{\ \ \ \ \#if\ 0\ }\textcolor{comment}{//[}}
+\DoxyCodeLine{00154\ \ \ \ \ \textcolor{comment}{//\ step\ the\ position\ and\ velocity}}
+\DoxyCodeLine{00155\ \ \ \ \ vel\_vec\ +=\ accel\_vec\ *\ dt;}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{comment}{//\ cap\ terminal\ velocity}}
+\DoxyCodeLine{00158\ \ \ \ \ PN\_stdfloat\ len\ =\ vel\_vec.length();}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \ \ \textcolor{keywordflow}{if}\ (len\ >\ current\_object-\/>get\_terminal\_velocity())\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \textcolor{comment}{//\ cout\ <<\ "{}Capping\ terminal\ velocity\ at:\ "{}\ <<}}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \textcolor{comment}{//\ current\_object-\/>get\_terminal\_velocity()\ <<\ endl;}}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ vel\_vec\ *=\ current\_object-\/>get\_terminal\_velocity()\ /\ len;}
+\DoxyCodeLine{00164\ \ \ \ \ \}}
+\DoxyCodeLine{00165\ }
+\DoxyCodeLine{00166\ \ \ \ \ pos\ +=\ vel\_vec\ *\ dt;}
+\DoxyCodeLine{00167\ \textcolor{preprocessor}{\ \ \ \ \#else\ }\textcolor{comment}{//][}}
+\DoxyCodeLine{00168\ \ \ \ \ assert(current\_object-\/>get\_position()==current\_object-\/>get\_last\_position());}
+\DoxyCodeLine{00169\ }
+\DoxyCodeLine{00170\ \ \ \ \ accel\_vec*=viscosityDamper;}
+\DoxyCodeLine{00171\ }
+\DoxyCodeLine{00172\ \ \ \ \ \textcolor{comment}{//\ x\ =\ x\ +\ v\ *\ t\ +\ 0.5\ *\ a\ *\ t\ *\ t}}
+\DoxyCodeLine{00173\ \ \ \ \ pos\ +=\ vel\_vec\ *\ dt\ +\ 0.5\ *\ accel\_vec\ *\ dt\ *\ dt;}
+\DoxyCodeLine{00174\ \ \ \ \ \textcolor{comment}{//\ v\ =\ v\ +\ a\ *\ t}}
+\DoxyCodeLine{00175\ \ \ \ \ vel\_vec\ +=\ accel\_vec\ *\ dt;}
+\DoxyCodeLine{00176\ \textcolor{preprocessor}{\ \ \ \ \#endif\ }\textcolor{comment}{//]}}
+\DoxyCodeLine{00177\ }
+\DoxyCodeLine{00178\ \ \ \ \ \textcolor{comment}{//\ and\ store\ them\ back.}}
+\DoxyCodeLine{00179\ \ \ \ \ \textcolor{keywordflow}{if}\ (!pos.is\_nan())\ \{}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ current\_object-\/>set\_position(pos);}
+\DoxyCodeLine{00181\ \ \ \ \ \}}
+\DoxyCodeLine{00182\ \ \ \ \ \textcolor{keywordflow}{if}\ (!vel\_vec.is\_nan())\ \{}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ current\_object-\/>set\_velocity(vel\_vec);}
+\DoxyCodeLine{00184\ \ \ \ \ \}}
+\DoxyCodeLine{00185\ \ \ \}}
+\DoxyCodeLine{00186\ \}}
+\DoxyCodeLine{00187\ }
+\DoxyCodeLine{00191\ \textcolor{keywordtype}{void}\ LinearEulerIntegrator::}
+\DoxyCodeLine{00192\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00193\ \textcolor{preprocessor}{\ \ \#ifndef\ NDEBUG\ }\textcolor{comment}{//[}}
+\DoxyCodeLine{00194\ \ \ out<<\textcolor{stringliteral}{"{}LinearEulerIntegrator"{}};}
+\DoxyCodeLine{00195\ \textcolor{preprocessor}{\ \ \#endif\ }\textcolor{comment}{//]\ NDEBUG}}
+\DoxyCodeLine{00196\ \}}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00201\ \textcolor{keywordtype}{void}\ LinearEulerIntegrator::}
+\DoxyCodeLine{00202\ write(std::ostream\ \&out,\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}})\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00203\ \textcolor{preprocessor}{\ \ \#ifndef\ NDEBUG\ }\textcolor{comment}{//[}}
+\DoxyCodeLine{00204\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}});}
+\DoxyCodeLine{00205\ \ \ out<<\textcolor{stringliteral}{"{}"{}}<<\textcolor{stringliteral}{"{}LinearEulerIntegrator:\(\backslash\)n"{}};}
+\DoxyCodeLine{00206\ \ \ \mbox{\hyperlink{classLinearIntegrator_a166b7d17bebe3b0d80d8b92358f30be0}{LinearIntegrator::write}}(out,\ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);}
+\DoxyCodeLine{00207\ \textcolor{preprocessor}{\ \ \#endif\ }\textcolor{comment}{//]\ NDEBUG}}
+\DoxyCodeLine{00208\ \}}
+
+\end{DoxyCode}

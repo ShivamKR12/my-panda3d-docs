@@ -1,0 +1,145 @@
+\doxysection{patomic.\+cxx}
+\hypertarget{patomic_8cxx_source}{}\label{patomic_8cxx_source}\index{dtool/src/dtoolbase/patomic.cxx@{dtool/src/dtoolbase/patomic.cxx}}
+\mbox{\hyperlink{patomic_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{patomic_8h}{patomic.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ <functional>}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{keyword}{static\_assert}(\textcolor{keyword}{sizeof}(\mbox{\hyperlink{classpatomic__unsigned__lock__free}{patomic\_unsigned\_lock\_free}})\ ==\ \textcolor{keyword}{sizeof}(uint32\_t),}
+\DoxyCodeLine{00019\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}expected\ atomic\ uint32\_t\ to\ have\ same\ size\ as\ uint32\_t"{}});}
+\DoxyCodeLine{00020\ \textcolor{keyword}{static\_assert}(\textcolor{keyword}{sizeof}(\mbox{\hyperlink{classpatomic__signed__lock__free}{patomic\_signed\_lock\_free}})\ ==\ \textcolor{keyword}{sizeof}(int32\_t),}
+\DoxyCodeLine{00021\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}expected\ atomic\ int32\_t\ to\ have\ same\ size\ as\ int32\_t"{}});}
+\DoxyCodeLine{00022\ \textcolor{keyword}{static\_assert}(\textcolor{keyword}{sizeof}(uint32\_t)\ ==\ \textcolor{keyword}{sizeof}(int32\_t),}
+\DoxyCodeLine{00023\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}expected\ int32\_t\ to\ have\ same\ size\ as\ uint32\_t"{}});}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#if\ !defined(CPPPARSER)\ \&\&\ defined(\_WIN32)}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \textcolor{comment}{//\ On\ Windows\ 7,\ we\ try\ to\ load\ the\ Windows\ 8\ functions\ dynamically,\ and}}
+\DoxyCodeLine{00028\ \textcolor{comment}{//\ fall\ back\ to\ a\ condition\ variable\ table\ if\ they\ aren't\ available.}}
+\DoxyCodeLine{00029\ \textcolor{keyword}{static}\ BOOL\ \_\_stdcall\ initialize\_wait(\textcolor{keyword}{volatile}\ VOID\ *addr,\ PVOID\ cmp,\ SIZE\_T\ size,\ DWORD\ timeout);}
+\DoxyCodeLine{00030\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ \_\_stdcall\ dummy\_wake(PVOID\ addr)\ \{\}}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ BOOL\ (\_\_stdcall\ *\_patomic\_wait\_func)(\textcolor{keyword}{volatile}\ VOID\ *,\ PVOID,\ SIZE\_T,\ DWORD)\ =\ \&initialize\_wait;}
+\DoxyCodeLine{00033\ void\ (\_\_stdcall\ *\_patomic\_wake\_one\_func)(PVOID)\ =\ \&dummy\_wake;}
+\DoxyCodeLine{00034\ void\ (\_\_stdcall\ *\_patomic\_wake\_all\_func)(PVOID)\ =\ \&dummy\_wake;}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \textcolor{comment}{//\ Randomly\ pick\ an\ entry\ into\ the\ wait\ table\ based\ on\ the\ hash\ of\ the\ address.}}
+\DoxyCodeLine{00037\ \textcolor{comment}{//\ It's\ possible\ to\ get\ hash\ collision,\ but\ that's\ not\ so\ bad,\ it\ just\ means}}
+\DoxyCodeLine{00038\ \textcolor{comment}{//\ that\ the\ other\ thread\ will\ get\ a\ spurious\ wakeup.}}
+\DoxyCodeLine{00039\ \textcolor{keyword}{struct\ }\textcolor{keyword}{alignas}(64)\ WaitTableEntry\ \{}
+\DoxyCodeLine{00040\ \ \ \mbox{\hyperlink{struct__RTL__SRWLOCK}{SRWLOCK}}\ \_lock\ =\ SRWLOCK\_INIT;}
+\DoxyCodeLine{00041\ \ \ \mbox{\hyperlink{struct__RTL__CONDITION__VARIABLE}{CONDITION\_VARIABLE}}\ \_cvar\ =\ CONDITION\_VARIABLE\_INIT;}
+\DoxyCodeLine{00042\ \ \ DWORD\ \_waiters\ =\ 0;}
+\DoxyCodeLine{00043\ \};}
+\DoxyCodeLine{00044\ \textcolor{keyword}{static}\ WaitTableEntry\ \_wait\_table[64]\ =\ \{\};}
+\DoxyCodeLine{00045\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ \_wait\_hash\_mask\ =\ 63;}
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00050\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ \_\_stdcall}
+\DoxyCodeLine{00051\ emulated\_wake(PVOID\ addr)\ \{}
+\DoxyCodeLine{00052\ \ \ \textcolor{keywordtype}{size\_t}\ i\ =\ std::hash<volatile\ void\ *>\{\}(addr)\ \&\ (\textcolor{keyword}{sizeof}(\_wait\_table)\ /\ \textcolor{keyword}{sizeof}(WaitTableEntry)\ -\/\ 1);}
+\DoxyCodeLine{00053\ \ \ WaitTableEntry\ \&entry\ =\ \_wait\_table[i];}
+\DoxyCodeLine{00054\ \ \ AcquireSRWLockExclusive(\&entry.\_lock);}
+\DoxyCodeLine{00055\ \ \ DWORD\ num\_waiters\ =\ entry.\_waiters;}
+\DoxyCodeLine{00056\ \ \ ReleaseSRWLockExclusive(\&entry.\_lock);}
+\DoxyCodeLine{00057\ \ \ \textcolor{keywordflow}{if}\ (num\_waiters\ >\ 0)\ \{}
+\DoxyCodeLine{00058\ \ \ \ \ \textcolor{comment}{//\ We\ have\ to\ wake\ up\ all\ the\ threads,\ even\ if\ only\ one\ of\ them\ is\ for\ this}}
+\DoxyCodeLine{00059\ \ \ \ \ \textcolor{comment}{//\ address.\ \ Some\ of\ them\ will\ get\ a\ spurious\ wakeup,\ but\ that's\ OK.}}
+\DoxyCodeLine{00060\ \ \ \ \ WakeAllConditionVariable(\&entry.\_cvar);}
+\DoxyCodeLine{00061\ \ \ \}}
+\DoxyCodeLine{00062\ \}}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00068\ \textcolor{keyword}{static}\ BOOL\ \_\_stdcall}
+\DoxyCodeLine{00069\ emulated\_wait(\textcolor{keyword}{volatile}\ VOID\ *addr,\ PVOID\ cmp,\ SIZE\_T\ size,\ DWORD\ timeout)\ \{}
+\DoxyCodeLine{00070\ \ \ assert(size\ ==\ \textcolor{keyword}{sizeof}(LONG));}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00072\ \ \ LONG\ cmpval\ =\ *(LONG\ *)cmp;}
+\DoxyCodeLine{00073\ \ \ \textcolor{keywordflow}{if}\ (*(LONG\ *)addr\ !=\ cmpval)\ \{}
+\DoxyCodeLine{00074\ \ \ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00075\ \ \ \}}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00077\ \ \ \textcolor{keywordtype}{size\_t}\ i\ =\ std::hash<volatile\ void\ *>\{\}(addr)\ \&\ \_wait\_hash\_mask;}
+\DoxyCodeLine{00078\ \ \ WaitTableEntry\ \&entry\ =\ \_wait\_table[i];}
+\DoxyCodeLine{00079\ \ \ AcquireSRWLockExclusive(\&entry.\_lock);}
+\DoxyCodeLine{00080\ \ \ ++entry.\_waiters;}
+\DoxyCodeLine{00081\ \ \ \textcolor{keywordflow}{while}\ (*(LONG\ *)addr\ ==\ cmpval)\ \{}
+\DoxyCodeLine{00082\ \ \ \ \ \textcolor{keywordflow}{if}\ (SleepConditionVariableSRW(\&entry.\_cvar,\ \&entry.\_lock,\ timeout,\ 0)\ !=\ 0)\ \{}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \textcolor{comment}{//\ Timeout.}}
+\DoxyCodeLine{00084\ \ \ \ \ \ \ -\/-\/entry.\_waiters;}
+\DoxyCodeLine{00085\ \ \ \ \ \ \ ReleaseSRWLockExclusive(\&entry.\_lock);}
+\DoxyCodeLine{00086\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ FALSE;}
+\DoxyCodeLine{00087\ \ \ \ \ \}}
+\DoxyCodeLine{00088\ \ \ \}}
+\DoxyCodeLine{00089\ \ \ -\/-\/entry.\_waiters;}
+\DoxyCodeLine{00090\ \ \ ReleaseSRWLockExclusive(\&entry.\_lock);}
+\DoxyCodeLine{00091\ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00092\ \}}
+\DoxyCodeLine{00093\ }
+\DoxyCodeLine{00098\ \textcolor{keyword}{static}\ BOOL\ \_\_stdcall}
+\DoxyCodeLine{00099\ initialize\_wait(\textcolor{keyword}{volatile}\ VOID\ *addr,\ PVOID\ cmp,\ SIZE\_T\ size,\ DWORD\ timeout)\ \{}
+\DoxyCodeLine{00100\ \ \ \textcolor{comment}{//\ There's\ a\ chance\ of\ a\ race\ here,\ with\ two\ threads\ trying\ to\ initialize\ the}}
+\DoxyCodeLine{00101\ \ \ \textcolor{comment}{//\ functions\ at\ the\ same\ time.\ \ That's\ OK,\ because\ they\ should\ all\ produce}}
+\DoxyCodeLine{00102\ \ \ \textcolor{comment}{//\ the\ same\ results,\ and\ the\ stores\ to\ the\ function\ pointers\ are\ atomic.}}
+\DoxyCodeLine{00103\ \ \ HMODULE\ lib\ =\ GetModuleHandleW(L\textcolor{stringliteral}{"{}api-\/ms-\/win-\/core-\/synch-\/l1-\/2-\/0.dll"{}});}
+\DoxyCodeLine{00104\ \ \ \textcolor{keywordflow}{if}\ (lib)\ \{}
+\DoxyCodeLine{00105\ \ \ \ \ \textcolor{keyword}{auto}\ wait\_func\ =\ (\textcolor{keyword}{decltype}(\_patomic\_wait\_func))GetProcAddress(lib,\ \textcolor{stringliteral}{"{}WaitOnAddress"{}});}
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{keyword}{auto}\ wake\_one\_func\ =\ (\textcolor{keyword}{decltype}(\_patomic\_wake\_one\_func))GetProcAddress(lib,\ \textcolor{stringliteral}{"{}WakeByAddressSingle"{}});}
+\DoxyCodeLine{00107\ \ \ \ \ \textcolor{keyword}{auto}\ wake\_all\_func\ =\ (\textcolor{keyword}{decltype}(\_patomic\_wake\_all\_func))GetProcAddress(lib,\ \textcolor{stringliteral}{"{}WakeByAddressAll"{}});}
+\DoxyCodeLine{00108\ \ \ \ \ \textcolor{keywordflow}{if}\ (wait\_func\ \&\&\ wake\_one\_func\ \&\&\ wake\_all\_func)\ \{}
+\DoxyCodeLine{00109\ \ \ \ \ \ \ \textcolor{comment}{//\ Make\ sure\ that\ the\ wake\ function\ is\ guaranteed\ to\ be\ visible\ to\ other}}
+\DoxyCodeLine{00110\ \ \ \ \ \ \ \textcolor{comment}{//\ threads\ by\ the\ time\ we\ assign\ the\ wait\ function.}}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ \_patomic\_wake\_one\_func\ =\ wake\_one\_func;}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \_patomic\_wake\_all\_func\ =\ wake\_all\_func;}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ patomic\_thread\_fence(std::memory\_order\_release);}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \_patomic\_wait\_func\ =\ wait\_func;}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ wait\_func(addr,\ cmp,\ size,\ timeout);}
+\DoxyCodeLine{00116\ \ \ \ \ \}}
+\DoxyCodeLine{00117\ \ \ \}}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ \textcolor{comment}{//\ We\ don't\ have\ Windows\ 8's\ functions,\ use\ the\ emulated\ wait\ and\ wake\ funcs.}}
+\DoxyCodeLine{00120\ \ \ \_patomic\_wake\_one\_func\ =\ \&emulated\_wake;}
+\DoxyCodeLine{00121\ \ \ \_patomic\_wake\_all\_func\ =\ \&emulated\_wake;}
+\DoxyCodeLine{00122\ \ \ patomic\_thread\_fence(std::memory\_order\_release);}
+\DoxyCodeLine{00123\ \ \ \_patomic\_wait\_func\ =\ \&emulated\_wait;}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \textcolor{keywordflow}{return}\ emulated\_wait(addr,\ cmp,\ size,\ timeout);}
+\DoxyCodeLine{00126\ \}}
+\DoxyCodeLine{00127\ }
+\DoxyCodeLine{00128\ \textcolor{preprocessor}{\#elif\ !defined(CPPPARSER)\ \&\&\ !defined(\_\_linux\_\_)\ \&\&\ !defined(\_\_APPLE\_\_)\ \&\&\ defined(HAVE\_POSIX\_THREADS)}}
+\DoxyCodeLine{00129\ }
+\DoxyCodeLine{00130\ \textcolor{comment}{//\ Same\ as\ above,\ but\ using\ pthreads.}}
+\DoxyCodeLine{00131\ \textcolor{keyword}{struct\ }\textcolor{keyword}{alignas}(64)\ WaitTableEntry\ \{}
+\DoxyCodeLine{00132\ \ \ pthread\_mutex\_t\ \_lock\ =\ PTHREAD\_MUTEX\_INITIALIZER;}
+\DoxyCodeLine{00133\ \ \ pthread\_cond\_t\ \_cvar\ =\ PTHREAD\_COND\_INITIALIZER;}
+\DoxyCodeLine{00134\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ \_waiters\ =\ 0;}
+\DoxyCodeLine{00135\ \};}
+\DoxyCodeLine{00136\ \textcolor{keyword}{static}\ WaitTableEntry\ \_wait\_table[64];}
+\DoxyCodeLine{00137\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ \_wait\_hash\_mask\ =\ 63;}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00142\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00143\ \_patomic\_wait(\textcolor{keyword}{const}\ \textcolor{keyword}{volatile}\ uint32\_t\ *value,\ uint32\_t\ old)\ \{}
+\DoxyCodeLine{00144\ \ \ WaitTableEntry\ \&entry\ =\ \_wait\_table[std::hash<const\ volatile\ void\ *>\{\}(value)\ \&\ \_wait\_hash\_mask];}
+\DoxyCodeLine{00145\ \ \ pthread\_mutex\_lock(\&entry.\_lock);}
+\DoxyCodeLine{00146\ \ \ ++entry.\_waiters;}
+\DoxyCodeLine{00147\ \ \ \textcolor{keywordflow}{while}\ (\_\_atomic\_load\_n(value,\ \_\_ATOMIC\_SEQ\_CST)\ ==\ old)\ \{}
+\DoxyCodeLine{00148\ \ \ \ \ pthread\_cond\_wait(\&entry.\_cvar,\ \&entry.\_lock);}
+\DoxyCodeLine{00149\ \ \ \}}
+\DoxyCodeLine{00150\ \ \ -\/-\/entry.\_waiters;}
+\DoxyCodeLine{00151\ \ \ pthread\_mutex\_unlock(\&entry.\_lock);}
+\DoxyCodeLine{00152\ \}}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00157\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00158\ \_patomic\_notify\_all(\textcolor{keyword}{volatile}\ uint32\_t\ *value)\ \{}
+\DoxyCodeLine{00159\ \ \ WaitTableEntry\ \&entry\ =\ \_wait\_table[std::hash<const\ volatile\ void\ *>\{\}(value)\ \&\ \_wait\_hash\_mask];}
+\DoxyCodeLine{00160\ \ \ pthread\_mutex\_lock(\&entry.\_lock);}
+\DoxyCodeLine{00161\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ num\_waiters\ =\ entry.\_waiters;}
+\DoxyCodeLine{00162\ \ \ pthread\_mutex\_unlock(\&entry.\_lock);}
+\DoxyCodeLine{00163\ \ \ \textcolor{keywordflow}{if}\ (num\_waiters\ >\ 0)\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ pthread\_cond\_broadcast(\&entry.\_cvar);}
+\DoxyCodeLine{00165\ \ \ \}}
+\DoxyCodeLine{00166\ \}}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

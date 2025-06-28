@@ -1,0 +1,2081 @@
+\doxysection{transform\+State.\+cxx}
+\hypertarget{transformState_8cxx_source}{}\label{transformState_8cxx_source}\index{panda/src/pgraph/transformState.cxx@{panda/src/pgraph/transformState.cxx}}
+\mbox{\hyperlink{transformState_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{transformState_8h}{transformState.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{compose__matrix_8h}{compose\_matrix.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamReader_8h}{bamReader.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamWriter_8h}{bamWriter.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagramIterator_8h}{datagramIterator.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{indent_8h}{indent.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{compareTo_8h}{compareTo.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimer_8h}{pStatTimer.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pgraph_8h}{config\_pgraph.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightReMutexHolder_8h}{lightReMutexHolder.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightMutexHolder_8h}{lightMutexHolder.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \mbox{\hyperlink{classLightReMutex}{LightReMutex}}\ *TransformState::\_states\_lock\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00030\ \mbox{\hyperlink{classSimpleHashMap}{TransformState::States}}\ TransformState::\_states;}
+\DoxyCodeLine{00031\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::\_identity\_state;}
+\DoxyCodeLine{00032\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::\_invalid\_state;}
+\DoxyCodeLine{00033\ \mbox{\hyperlink{classUpdateSeq}{UpdateSeq}}\ TransformState::\_last\_cycle\_detect;}
+\DoxyCodeLine{00034\ \textcolor{keywordtype}{size\_t}\ TransformState::\_garbage\_index\ =\ 0;}
+\DoxyCodeLine{00035\ \textcolor{keywordtype}{bool}\ TransformState::\_uniquify\_matrix\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ TransformState::\_cache\_update\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Update"{}});}
+\DoxyCodeLine{00038\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ TransformState::\_garbage\_collect\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Garbage\ Collect"{}});}
+\DoxyCodeLine{00039\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ TransformState::\_transform\_compose\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Compose\ Transform"{}});}
+\DoxyCodeLine{00040\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ TransformState::\_transform\_invert\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Invert\ Transform"{}});}
+\DoxyCodeLine{00041\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ TransformState::\_transform\_calc\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Calc\ Components"{}});}
+\DoxyCodeLine{00042\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ TransformState::\_transform\_break\_cycles\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Break\ Cycles"{}});}
+\DoxyCodeLine{00043\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ TransformState::\_transform\_new\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:New"{}});}
+\DoxyCodeLine{00044\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ TransformState::\_transform\_validate\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Validate"{}});}
+\DoxyCodeLine{00045\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ TransformState::\_transform\_hash\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Calc\ Hash"{}});}
+\DoxyCodeLine{00046\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ TransformState::\_node\_counter(\textcolor{stringliteral}{"{}TransformStates:On\ nodes"{}});}
+\DoxyCodeLine{00047\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ TransformState::\_cache\_counter(\textcolor{stringliteral}{"{}TransformStates:Cached"{}});}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \mbox{\hyperlink{classCacheStats}{CacheStats}}\ TransformState::\_cache\_stats;}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ TransformState::\_type\_handle;}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00056\ TransformState::}
+\DoxyCodeLine{00057\ TransformState()\ :}
+\DoxyCodeLine{00058\ \ \ \_flags(F\_is\_identity\ |\ F\_singular\_known\ |\ F\_is\_2d),}
+\DoxyCodeLine{00059\ \ \ \_lock(\textcolor{stringliteral}{"{}TransformState"{}})\ \{}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00061\ \ \ \textcolor{keywordflow}{if}\ (\_states\_lock\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00062\ \ \ \ \ init\_states();}
+\DoxyCodeLine{00063\ \ \ \}}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ \ \ \_cache\_stats.add\_num\_states(1);}
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00067\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00068\ \ \ MemoryUsage::update\_type(\textcolor{keyword}{this},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00069\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00070\ \}}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00076\ \mbox{\hyperlink{classTransformState_a4df2c0ba5c0befeadade5a8f4bd8a288}{TransformState::}}}
+\DoxyCodeLine{00077\ \mbox{\hyperlink{classTransformState_a4df2c0ba5c0befeadade5a8f4bd8a288}{\string~TransformState}}()\ \{}
+\DoxyCodeLine{00078\ \ \ \textcolor{comment}{//\ We'd\ better\ not\ call\ the\ destructor\ twice\ on\ a\ particular\ object.}}
+\DoxyCodeLine{00079\ \ \ nassertv(!is\_destructing());}
+\DoxyCodeLine{00080\ \ \ set\_destructing();}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00082\ \ \ \textcolor{comment}{//\ Free\ the\ inverse\ matrix\ computation,\ if\ it\ has\ been\ stored.}}
+\DoxyCodeLine{00083\ \ \ \textcolor{keyword}{delete}\ \_inv\_mat;}
+\DoxyCodeLine{00084\ \ \ \_inv\_mat\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00086\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00088\ \ \ \textcolor{comment}{//\ unref()\ should\ have\ cleared\ these.}}
+\DoxyCodeLine{00089\ \ \ nassertv(\_saved\_entry\ ==\ -\/1);}
+\DoxyCodeLine{00090\ \ \ nassertv(\_composition\_cache.is\_empty()\ \&\&\ \_invert\_composition\_cache.is\_empty());}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00092\ \ \ \textcolor{comment}{//\ If\ this\ was\ true\ at\ the\ beginning\ of\ the\ destructor,\ but\ is\ no\ longer}}
+\DoxyCodeLine{00093\ \ \ \textcolor{comment}{//\ true\ now,\ probably\ we've\ been\ double-\/deleted.}}
+\DoxyCodeLine{00094\ \ \ nassertv(get\_ref\_count()\ ==\ 0);}
+\DoxyCodeLine{00095\ \ \ \_cache\_stats.add\_num\_states(-\/1);}
+\DoxyCodeLine{00096\ }
+\DoxyCodeLine{00097\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00098\ \ \ \_flags\ =\ F\_is\_invalid\ |\ F\_is\_destructing;}
+\DoxyCodeLine{00099\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00100\ \}}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00113\ \textcolor{keywordtype}{int}\ TransformState::}
+\DoxyCodeLine{00114\ compare\_to(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ \&other,\ \textcolor{keywordtype}{bool}\ uniquify\_matrix)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00115\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ significant\_flags\ =}
+\DoxyCodeLine{00116\ \ \ \ \ (F\_is\_invalid\ |\ F\_is\_identity\ |\ F\_components\_given\ |\ F\_hpr\_given\ |\ F\_quat\_given\ |\ F\_is\_2d);}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \ \ \textcolor{keywordtype}{int}\ flags\ =\ (\_flags\ \&\ significant\_flags);}
+\DoxyCodeLine{00119\ \ \ \textcolor{keywordtype}{int}\ other\_flags\ =\ (other.\_flags\ \&\ significant\_flags);}
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{if}\ (flags\ !=\ other\_flags)\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ \textcolor{keywordflow}{return}\ flags\ <\ other\_flags\ ?\ -\/1\ :\ 1;}
+\DoxyCodeLine{00122\ \ \ \}}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ (F\_is\_invalid\ |\ F\_is\_identity))\ !=\ 0)\ \{}
+\DoxyCodeLine{00125\ \ \ \ \ \textcolor{comment}{//\ All\ invalid\ transforms\ are\ equivalent\ to\ each\ other,\ and\ all\ identity}}
+\DoxyCodeLine{00126\ \ \ \ \ \textcolor{comment}{//\ transforms\ are\ equivalent\ to\ each\ other.}}
+\DoxyCodeLine{00127\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00128\ \ \ \}}
+\DoxyCodeLine{00129\ }
+\DoxyCodeLine{00130\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_components\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{00131\ \ \ \ \ \textcolor{comment}{//\ If\ the\ transform\ was\ specified\ componentwise,\ compare\ them}}
+\DoxyCodeLine{00132\ \ \ \ \ \textcolor{comment}{//\ componentwise.}}
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{keywordtype}{int}\ c\ =\ \_pos.compare\_to(other.\_pos);}
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{keywordflow}{if}\ (c\ !=\ 0)\ \{}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ c;}
+\DoxyCodeLine{00136\ \ \ \ \ \}}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_hpr\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ c\ =\ \_hpr.compare\_to(other.\_hpr);}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (c\ !=\ 0)\ \{}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ c;}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00143\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_quat\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ c\ =\ \_quat.compare\_to(other.\_quat);}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (c\ !=\ 0)\ \{}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ c;}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00148\ \ \ \ \ \}}
+\DoxyCodeLine{00149\ }
+\DoxyCodeLine{00150\ \ \ \ \ c\ =\ \_scale.compare\_to(other.\_scale);}
+\DoxyCodeLine{00151\ \ \ \ \ \textcolor{keywordflow}{if}\ (c\ !=\ 0)\ \{}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ c;}
+\DoxyCodeLine{00153\ \ \ \ \ \}}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ \ \ c\ =\ \_shear.compare\_to(other.\_shear);}
+\DoxyCodeLine{00156\ \ \ \ \ \textcolor{keywordflow}{return}\ c;}
+\DoxyCodeLine{00157\ \ \ \}}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00159\ \ \ \textcolor{comment}{//\ Otherwise,\ compare\ the\ matrices\ .\ .\ .}}
+\DoxyCodeLine{00160\ \ \ \textcolor{keywordflow}{if}\ (uniquify\_matrix)\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ \textcolor{comment}{//\ .\ .\ .\ but\ only\ if\ the\ user\ thinks\ that's\ a\ worthwhile\ comparison.}}
+\DoxyCodeLine{00162\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_mat().compare\_to(other.get\_mat());}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00164\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00165\ \ \ \ \ \textcolor{comment}{//\ If\ not,\ we\ just\ compare\ the\ pointers.}}
+\DoxyCodeLine{00166\ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{this}\ !=\ \&other)\ \{}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keyword}{this}\ <\ \&other)\ ?\ -\/1\ :\ 1;}
+\DoxyCodeLine{00168\ \ \ \ \ \}}
+\DoxyCodeLine{00169\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00170\ \ \ \}}
+\DoxyCodeLine{00171\ \}}
+\DoxyCodeLine{00172\ }
+\DoxyCodeLine{00182\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classTransformState_a2a569979867b56b61fd03a81205fee00}{TransformState::}}}
+\DoxyCodeLine{00183\ \mbox{\hyperlink{classTransformState_a2a569979867b56b61fd03a81205fee00}{operator\ ==\ }}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ \&other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00184\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ significant\_flags\ =}
+\DoxyCodeLine{00185\ \ \ \ \ (F\_is\_invalid\ |\ F\_is\_identity\ |\ F\_components\_given\ |\ F\_hpr\_given\ |\ F\_quat\_given\ |\ F\_is\_2d);}
+\DoxyCodeLine{00186\ }
+\DoxyCodeLine{00187\ \ \ \textcolor{keywordtype}{int}\ flags\ =\ (\_flags\ \&\ significant\_flags);}
+\DoxyCodeLine{00188\ \ \ \textcolor{keywordtype}{int}\ other\_flags\ =\ (other.\_flags\ \&\ significant\_flags);}
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordflow}{if}\ (flags\ !=\ other\_flags)\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00191\ \ \ \}}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00193\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ (F\_is\_invalid\ |\ F\_is\_identity))\ !=\ 0)\ \{}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{comment}{//\ All\ invalid\ transforms\ are\ equivalent\ to\ each\ other,\ and\ all\ identity}}
+\DoxyCodeLine{00195\ \ \ \ \ \textcolor{comment}{//\ transforms\ are\ equivalent\ to\ each\ other.}}
+\DoxyCodeLine{00196\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00197\ \ \ \}}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00199\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_components\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{00200\ \ \ \ \ \textcolor{comment}{//\ If\ the\ transform\ was\ specified\ componentwise,\ compare\ them}}
+\DoxyCodeLine{00201\ \ \ \ \ \textcolor{comment}{//\ componentwise.}}
+\DoxyCodeLine{00202\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_pos\ !=\ other.\_pos)\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00204\ \ \ \ \ \}}
+\DoxyCodeLine{00205\ }
+\DoxyCodeLine{00206\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_hpr\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_hpr\ !=\ other.\_hpr)\ \{}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00210\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_quat\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_quat\ !=\ other.\_quat)\ \{}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00214\ \ \ \ \ \}}
+\DoxyCodeLine{00215\ }
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_scale\ !=\ other.\_scale)\ \{}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00218\ \ \ \ \ \}}
+\DoxyCodeLine{00219\ }
+\DoxyCodeLine{00220\ \ \ \ \ \textcolor{keywordflow}{return}\ (\_shear\ ==\ other.\_shear);}
+\DoxyCodeLine{00221\ \ \ \}}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00223\ \ \ \textcolor{comment}{//\ Otherwise,\ compare\ the\ matrices\ .\ .\ .}}
+\DoxyCodeLine{00224\ \ \ \textcolor{keywordflow}{if}\ (\_uniquify\_matrix)\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \textcolor{comment}{//\ .\ .\ .\ but\ only\ if\ the\ user\ thinks\ that's\ a\ worthwhile\ comparison.}}
+\DoxyCodeLine{00226\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_mat().almost\_equal(other.get\_mat());}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ \textcolor{comment}{//\ If\ not,\ we\ just\ compare\ the\ pointers.}}
+\DoxyCodeLine{00230\ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keyword}{this}\ ==\ \&other);}
+\DoxyCodeLine{00231\ \ \ \}}
+\DoxyCodeLine{00232\ \}}
+\DoxyCodeLine{00233\ }
+\DoxyCodeLine{00237\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00238\ make\_pos\_hpr\_scale\_shear(\textcolor{keyword}{const}\ LVecBase3\ \&pos,\ \textcolor{keyword}{const}\ LVecBase3\ \&hpr,}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LVecBase3\ \&scale,\ \textcolor{keyword}{const}\ LVecBase3\ \&shear)\ \{}
+\DoxyCodeLine{00240\ \ \ nassertr(!(pos.is\_nan()\ ||\ hpr.is\_nan()\ ||\ scale.is\_nan()\ ||\ shear.is\_nan()),\ make\_invalid());}
+\DoxyCodeLine{00241\ \ \ \textcolor{comment}{//\ Make\ a\ special-\/case\ check\ for\ the\ identity\ transform.}}
+\DoxyCodeLine{00242\ \ \ \textcolor{keywordflow}{if}\ (pos\ ==\ LVecBase3(0.0f,\ 0.0f,\ 0.0f)\ \&\&}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ hpr\ ==\ LVecBase3(0.0f,\ 0.0f,\ 0.0f)\ \&\&}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ scale\ ==\ LVecBase3(1.0f,\ 1.0f,\ 1.0f)\ \&\&}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ shear\ ==\ LVecBase3(0.0f,\ 0.0f,\ 0.0f))\ \{}
+\DoxyCodeLine{00246\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_identity();}
+\DoxyCodeLine{00247\ \ \ \}}
+\DoxyCodeLine{00248\ }
+\DoxyCodeLine{00249\ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTransformState}{TransformState}};}
+\DoxyCodeLine{00250\ \ \ state-\/>\_pos\ =\ pos;}
+\DoxyCodeLine{00251\ \ \ state-\/>\_hpr\ =\ hpr;}
+\DoxyCodeLine{00252\ \ \ state-\/>\_scale\ =\ scale;}
+\DoxyCodeLine{00253\ \ \ state-\/>\_shear\ =\ shear;}
+\DoxyCodeLine{00254\ \ \ state-\/>\_flags\ =\ F\_components\_given\ |\ F\_hpr\_given\ |\ F\_components\_known\ |\ F\_hpr\_known\ |\ F\_has\_components;}
+\DoxyCodeLine{00255\ \ \ state-\/>check\_uniform\_scale();}
+\DoxyCodeLine{00256\ \ \ \textcolor{keywordflow}{return}\ return\_new(state);}
+\DoxyCodeLine{00257\ \}}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00262\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00263\ make\_pos\_quat\_scale\_shear(\textcolor{keyword}{const}\ LVecBase3\ \&pos,\ \textcolor{keyword}{const}\ LQuaternion\ \&quat,}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LVecBase3\ \&scale,\ \textcolor{keyword}{const}\ LVecBase3\ \&shear)\ \{}
+\DoxyCodeLine{00265\ \ \ nassertr(!(pos.is\_nan()\ ||\ quat.is\_nan()\ ||\ scale.is\_nan()\ ||\ shear.is\_nan()),\ make\_invalid());}
+\DoxyCodeLine{00266\ \ \ \textcolor{comment}{//\ Make\ a\ special-\/case\ check\ for\ the\ identity\ transform.}}
+\DoxyCodeLine{00267\ \ \ \textcolor{keywordflow}{if}\ (pos\ ==\ LVecBase3(0.0f,\ 0.0f,\ 0.0f)\ \&\&}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ quat\ ==\ LQuaternion::ident\_quat()\ \&\&}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ scale\ ==\ LVecBase3(1.0f,\ 1.0f,\ 1.0f)\ \&\&}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ shear\ ==\ LVecBase3(0.0f,\ 0.0f,\ 0.0f))\ \{}
+\DoxyCodeLine{00271\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_identity();}
+\DoxyCodeLine{00272\ \ \ \}}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTransformState}{TransformState}};}
+\DoxyCodeLine{00275\ \ \ state-\/>\_pos\ =\ pos;}
+\DoxyCodeLine{00276\ \ \ state-\/>\_quat\ =\ quat;}
+\DoxyCodeLine{00277\ \ \ state-\/>\_scale\ =\ scale;}
+\DoxyCodeLine{00278\ \ \ state-\/>\_shear\ =\ shear;}
+\DoxyCodeLine{00279\ \ \ state-\/>\_flags\ =\ F\_components\_given\ |\ F\_quat\_given\ |\ F\_components\_known\ |\ F\_quat\_known\ |\ F\_has\_components;}
+\DoxyCodeLine{00280\ \ \ state-\/>check\_uniform\_scale();}
+\DoxyCodeLine{00281\ \ \ \textcolor{keywordflow}{return}\ return\_new(state);}
+\DoxyCodeLine{00282\ \}}
+\DoxyCodeLine{00283\ }
+\DoxyCodeLine{00287\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00288\ make\_mat(\textcolor{keyword}{const}\ LMatrix4\ \&mat)\ \{}
+\DoxyCodeLine{00289\ \ \ nassertr(!mat.is\_nan(),\ make\_invalid());}
+\DoxyCodeLine{00290\ \ \ \textcolor{comment}{//\ Make\ a\ special-\/case\ check\ for\ the\ identity\ matrix.}}
+\DoxyCodeLine{00291\ \ \ \textcolor{keywordflow}{if}\ (mat.is\_identity())\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_identity();}
+\DoxyCodeLine{00293\ \ \ \}}
+\DoxyCodeLine{00294\ }
+\DoxyCodeLine{00295\ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTransformState}{TransformState}};}
+\DoxyCodeLine{00296\ \ \ state-\/>\_mat\ =\ mat;}
+\DoxyCodeLine{00297\ \ \ state-\/>\_flags\ =\ F\_mat\_known;}
+\DoxyCodeLine{00298\ \ \ \textcolor{keywordflow}{return}\ return\_new(state);}
+\DoxyCodeLine{00299\ \}}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00304\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00305\ make\_pos\_rotate\_scale\_shear2d(\textcolor{keyword}{const}\ LVecBase2\ \&pos,\ PN\_stdfloat\ rotate,}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LVecBase2\ \&scale,}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ PN\_stdfloat\ shear)\ \{}
+\DoxyCodeLine{00308\ \ \ nassertr(!(pos.is\_nan()\ ||\ cnan(rotate)\ ||\ scale.is\_nan()\ ||\ cnan(shear)),\ make\_invalid());}
+\DoxyCodeLine{00309\ \ \ \textcolor{comment}{//\ Make\ a\ special-\/case\ check\ for\ the\ identity\ transform.}}
+\DoxyCodeLine{00310\ \ \ \textcolor{keywordflow}{if}\ (pos\ ==\ LVecBase2(0.0f,\ 0.0f)\ \&\&}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ rotate\ ==\ 0.0f\ \&\&}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ scale\ ==\ LVecBase2(1.0f,\ 1.0f)\ \&\&}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ shear\ ==\ 0.0f)\ \{}
+\DoxyCodeLine{00314\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_identity();}
+\DoxyCodeLine{00315\ \ \ \}}
+\DoxyCodeLine{00316\ }
+\DoxyCodeLine{00317\ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTransformState}{TransformState}};}
+\DoxyCodeLine{00318\ \ \ state-\/>\_pos.set(pos[0],\ pos[1],\ 0.0f);}
+\DoxyCodeLine{00319\ \ \ \textcolor{keywordflow}{switch}\ (get\_default\_coordinate\_system())\ \{}
+\DoxyCodeLine{00320\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00321\ \ \ \textcolor{keywordflow}{case}\ CS\_zup\_right:}
+\DoxyCodeLine{00322\ \ \ \ \ state-\/>\_hpr.set(rotate,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{00323\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00324\ \ \ \textcolor{keywordflow}{case}\ CS\_zup\_left:}
+\DoxyCodeLine{00325\ \ \ \ \ state-\/>\_hpr.set(-\/rotate,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{00326\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00327\ \ \ \textcolor{keywordflow}{case}\ CS\_yup\_right:}
+\DoxyCodeLine{00328\ \ \ \ \ state-\/>\_hpr.set(0.0f,\ 0.0f,\ -\/rotate);}
+\DoxyCodeLine{00329\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00330\ \ \ \textcolor{keywordflow}{case}\ CS\_yup\_left:}
+\DoxyCodeLine{00331\ \ \ \ \ state-\/>\_hpr.set(0.0,\ 0.0f,\ rotate);}
+\DoxyCodeLine{00332\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00333\ \ \ \}}
+\DoxyCodeLine{00334\ \ \ state-\/>\_scale.set(scale[0],\ scale[1],\ 1.0f);}
+\DoxyCodeLine{00335\ \ \ state-\/>\_shear.set(shear,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{00336\ \ \ state-\/>\_flags\ =\ F\_components\_given\ |\ F\_hpr\_given\ |\ F\_components\_known\ |\ F\_hpr\_known\ |\ F\_has\_components\ |\ F\_is\_2d;}
+\DoxyCodeLine{00337\ \ \ state-\/>check\_uniform\_scale2d();}
+\DoxyCodeLine{00338\ \ \ \textcolor{keywordflow}{return}\ return\_new(state);}
+\DoxyCodeLine{00339\ \}}
+\DoxyCodeLine{00340\ }
+\DoxyCodeLine{00341\ }
+\DoxyCodeLine{00346\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00347\ make\_mat3(\textcolor{keyword}{const}\ LMatrix3\ \&mat)\ \{}
+\DoxyCodeLine{00348\ \ \ nassertr(!mat.is\_nan(),\ make\_invalid());}
+\DoxyCodeLine{00349\ \ \ \textcolor{comment}{//\ Make\ a\ special-\/case\ check\ for\ the\ identity\ matrix.}}
+\DoxyCodeLine{00350\ \ \ \textcolor{keywordflow}{if}\ (mat.is\_identity())\ \{}
+\DoxyCodeLine{00351\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_identity();}
+\DoxyCodeLine{00352\ \ \ \}}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTransformState}{TransformState}};}
+\DoxyCodeLine{00355\ \ \ state-\/>\_mat.set(mat(0,\ 0),\ mat(0,\ 1),\ 0.0f,\ mat(0,\ 2),}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ mat(1,\ 0),\ mat(1,\ 1),\ 0.0f,\ mat(1,\ 2),}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 0.0f,\ 0.0f,\ 1.0f,\ 0.0f,}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ mat(2,\ 0),\ mat(2,\ 1),\ 0.0f,\ mat(2,\ 2));}
+\DoxyCodeLine{00359\ \ \ state-\/>\_flags\ =\ F\_mat\_known\ |\ F\_is\_2d;}
+\DoxyCodeLine{00360\ \ \ \textcolor{keywordflow}{return}\ return\_new(state);}
+\DoxyCodeLine{00361\ \}}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00367\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00368\ set\_pos(\textcolor{keyword}{const}\ LVecBase3\ \&pos)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00369\ \ \ nassertr(!pos.is\_nan(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00370\ \ \ nassertr(!is\_invalid(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00371\ \ \ \textcolor{keywordflow}{if}\ (is\_identity()\ ||\ components\_given())\ \{}
+\DoxyCodeLine{00372\ \ \ \ \ \textcolor{comment}{//\ If\ we\ started\ with\ a\ componentwise\ transform,\ we\ keep\ it\ that\ way.}}
+\DoxyCodeLine{00373\ \ \ \ \ \textcolor{keywordflow}{if}\ (quat\_given())\ \{}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ make\_pos\_quat\_scale\_shear(pos,\ get\_quat(),\ get\_scale(),\ get\_shear());}
+\DoxyCodeLine{00375\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ make\_pos\_hpr\_scale\_shear(pos,\ get\_hpr(),\ get\_scale(),\ get\_shear());}
+\DoxyCodeLine{00377\ \ \ \ \ \}}
+\DoxyCodeLine{00378\ }
+\DoxyCodeLine{00379\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00380\ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ we\ have\ a\ matrix\ transform,\ and\ we\ keep\ it\ that\ way.}}
+\DoxyCodeLine{00381\ \ \ \ \ LMatrix4\ mat\ =\ get\_mat();}
+\DoxyCodeLine{00382\ \ \ \ \ mat.set\_row(3,\ pos);}
+\DoxyCodeLine{00383\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_mat(mat);}
+\DoxyCodeLine{00384\ \ \ \}}
+\DoxyCodeLine{00385\ \}}
+\DoxyCodeLine{00386\ }
+\DoxyCodeLine{00392\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00393\ set\_hpr(\textcolor{keyword}{const}\ LVecBase3\ \&hpr)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00394\ \ \ nassertr(!hpr.is\_nan(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00395\ \ \ nassertr(!is\_invalid(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00396\ \ \ \textcolor{comment}{//\ nassertr(has\_components(),\ this);}}
+\DoxyCodeLine{00397\ \ \ \textcolor{keywordflow}{return}\ make\_pos\_hpr\_scale\_shear(get\_pos(),\ hpr,\ get\_scale(),\ get\_shear());}
+\DoxyCodeLine{00398\ \}}
+\DoxyCodeLine{00399\ }
+\DoxyCodeLine{00405\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00406\ set\_quat(\textcolor{keyword}{const}\ LQuaternion\ \&quat)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00407\ \ \ nassertr(!quat.is\_nan(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00408\ \ \ nassertr(!is\_invalid(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00409\ \ \ \textcolor{comment}{//\ nassertr(has\_components(),\ this);}}
+\DoxyCodeLine{00410\ \ \ \textcolor{keywordflow}{return}\ make\_pos\_quat\_scale\_shear(get\_pos(),\ quat,\ get\_scale(),\ get\_shear());}
+\DoxyCodeLine{00411\ \}}
+\DoxyCodeLine{00412\ }
+\DoxyCodeLine{00418\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00419\ set\_scale(\textcolor{keyword}{const}\ LVecBase3\ \&scale)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00420\ \ \ nassertr(!scale.is\_nan(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00421\ \ \ nassertr(!is\_invalid(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00422\ }
+\DoxyCodeLine{00423\ \ \ \textcolor{keywordflow}{if}\ (is\_2d()\ \&\&\ scale[0]\ ==\ scale[1]\ \&\&\ scale[1]\ ==\ scale[2])\ \{}
+\DoxyCodeLine{00424\ \ \ \ \ \textcolor{comment}{//\ Don't\ inflate\ from\ 2-\/d\ to\ 3-\/d\ just\ because\ we\ got\ a\ uniform\ scale.}}
+\DoxyCodeLine{00425\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_pos\_rotate\_scale\_shear2d(get\_pos2d(),\ get\_rotate2d(),}
+\DoxyCodeLine{00426\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ LVecBase2(scale[0],\ scale[0]),}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ get\_shear2d());}
+\DoxyCodeLine{00428\ \ \ \}}
+\DoxyCodeLine{00429\ }
+\DoxyCodeLine{00430\ \ \ \textcolor{comment}{//\ nassertr(has\_components(),\ this);}}
+\DoxyCodeLine{00431\ \ \ \textcolor{keywordflow}{if}\ (quat\_given())\ \{}
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_pos\_quat\_scale\_shear(get\_pos(),\ get\_quat(),\ scale,\ get\_shear());}
+\DoxyCodeLine{00433\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00434\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_pos\_hpr\_scale\_shear(get\_pos(),\ get\_hpr(),\ scale,\ get\_shear());}
+\DoxyCodeLine{00435\ \ \ \}}
+\DoxyCodeLine{00436\ \}}
+\DoxyCodeLine{00437\ }
+\DoxyCodeLine{00443\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00444\ set\_shear(\textcolor{keyword}{const}\ LVecBase3\ \&shear)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00445\ \ \ nassertr(!shear.is\_nan(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00446\ \ \ nassertr(!is\_invalid(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00447\ \ \ \textcolor{comment}{//\ nassertr(has\_components(),\ this);}}
+\DoxyCodeLine{00448\ \ \ \textcolor{keywordflow}{if}\ (quat\_given())\ \{}
+\DoxyCodeLine{00449\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_pos\_quat\_scale\_shear(get\_pos(),\ get\_quat(),\ get\_scale(),\ shear);}
+\DoxyCodeLine{00450\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00451\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_pos\_hpr\_scale\_shear(get\_pos(),\ get\_hpr(),\ get\_scale(),\ shear);}
+\DoxyCodeLine{00452\ \ \ \}}
+\DoxyCodeLine{00453\ \}}
+\DoxyCodeLine{00454\ }
+\DoxyCodeLine{00459\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00460\ set\_pos2d(\textcolor{keyword}{const}\ LVecBase2\ \&pos)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00461\ \ \ nassertr(!pos.is\_nan(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00462\ \ \ nassertr(!is\_invalid(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00463\ \ \ \textcolor{keywordflow}{if}\ (!is\_2d())\ \{}
+\DoxyCodeLine{00464\ \ \ \ \ \textcolor{keywordflow}{return}\ set\_pos(LVecBase3(pos[0],\ pos[1],\ 0.0f));}
+\DoxyCodeLine{00465\ \ \ \}}
+\DoxyCodeLine{00466\ }
+\DoxyCodeLine{00467\ \ \ \textcolor{keywordflow}{if}\ (is\_identity()\ ||\ components\_given())\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \textcolor{comment}{//\ If\ we\ started\ with\ a\ componentwise\ transform,\ we\ keep\ it\ that\ way.}}
+\DoxyCodeLine{00469\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_pos\_rotate\_scale\_shear2d(pos,\ get\_rotate2d(),\ get\_scale2d(),}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ get\_shear2d());}
+\DoxyCodeLine{00471\ }
+\DoxyCodeLine{00472\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00473\ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ we\ have\ a\ matrix\ transform,\ and\ we\ keep\ it\ that\ way.}}
+\DoxyCodeLine{00474\ \ \ \ \ LMatrix3\ mat\ =\ get\_mat3();}
+\DoxyCodeLine{00475\ \ \ \ \ mat.set\_row(2,\ pos);}
+\DoxyCodeLine{00476\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_mat3(mat);}
+\DoxyCodeLine{00477\ \ \ \}}
+\DoxyCodeLine{00478\ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00485\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00486\ set\_rotate2d(PN\_stdfloat\ rotate)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00487\ \ \ nassertr(!cnan(rotate),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00488\ \ \ nassertr(!is\_invalid(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00489\ }
+\DoxyCodeLine{00490\ \ \ \textcolor{keywordflow}{if}\ (!is\_2d())\ \{}
+\DoxyCodeLine{00491\ \ \ \ \ \textcolor{keywordflow}{switch}\ (get\_default\_coordinate\_system())\ \{}
+\DoxyCodeLine{00492\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00493\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_zup\_right:}
+\DoxyCodeLine{00494\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ set\_hpr(LVecBase3(rotate,\ 0.0f,\ 0.0f));}
+\DoxyCodeLine{00495\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_zup\_left:}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ set\_hpr(LVecBase3(-\/rotate,\ 0.0f,\ 0.0f));}
+\DoxyCodeLine{00497\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_yup\_right:}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ set\_hpr(LVecBase3(0.0f,\ 0.0f,\ -\/rotate));}
+\DoxyCodeLine{00499\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_yup\_left:}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ set\_hpr(LVecBase3(0.0f,\ 0.0f,\ rotate));}
+\DoxyCodeLine{00501\ \ \ \ \ \}}
+\DoxyCodeLine{00502\ \ \ \}}
+\DoxyCodeLine{00503\ }
+\DoxyCodeLine{00504\ \ \ \textcolor{keywordflow}{return}\ make\_pos\_rotate\_scale\_shear2d(get\_pos2d(),\ rotate,\ get\_scale2d(),}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ get\_shear2d());}
+\DoxyCodeLine{00506\ \}}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00513\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00514\ set\_scale2d(\textcolor{keyword}{const}\ LVecBase2\ \&scale)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00515\ \ \ nassertr(!scale.is\_nan(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00516\ \ \ nassertr(!is\_invalid(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00517\ }
+\DoxyCodeLine{00518\ \ \ \textcolor{keywordflow}{if}\ (!is\_2d())\ \{}
+\DoxyCodeLine{00519\ \ \ \ \ \textcolor{keywordflow}{return}\ set\_scale(LVecBase3(scale[0],\ scale[1],\ 1.0f));}
+\DoxyCodeLine{00520\ \ \ \}}
+\DoxyCodeLine{00521\ \ \ \textcolor{keywordflow}{return}\ make\_pos\_rotate\_scale\_shear2d(get\_pos2d(),\ get\_rotate2d(),}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ scale,\ get\_shear2d());}
+\DoxyCodeLine{00523\ \}}
+\DoxyCodeLine{00524\ }
+\DoxyCodeLine{00530\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00531\ set\_shear2d(PN\_stdfloat\ shear)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00532\ \ \ nassertr(!cnan(shear),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00533\ \ \ nassertr(!is\_invalid(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00534\ \ \ \textcolor{keywordflow}{if}\ (!is\_2d())\ \{}
+\DoxyCodeLine{00535\ \ \ \ \ \textcolor{keywordflow}{return}\ set\_shear(LVecBase3(shear,\ 0.0f,\ 0.0f));}
+\DoxyCodeLine{00536\ \ \ \}}
+\DoxyCodeLine{00537\ \ \ \textcolor{keywordflow}{return}\ make\_pos\_rotate\_scale\_shear2d(get\_pos2d(),\ get\_rotate2d(),}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ get\_scale2d(),\ shear);}
+\DoxyCodeLine{00539\ \}}
+\DoxyCodeLine{00540\ }
+\DoxyCodeLine{00550\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00551\ compose(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00552\ \ \ \textcolor{comment}{//\ We\ handle\ identity\ as\ a\ trivial\ special\ case.}}
+\DoxyCodeLine{00553\ \ \ \textcolor{keywordflow}{if}\ (is\_identity())\ \{}
+\DoxyCodeLine{00554\ \ \ \ \ \textcolor{keywordflow}{return}\ other;}
+\DoxyCodeLine{00555\ \ \ \}}
+\DoxyCodeLine{00556\ \ \ \textcolor{keywordflow}{if}\ (other-\/>is\_identity())\ \{}
+\DoxyCodeLine{00557\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00558\ \ \ \}}
+\DoxyCodeLine{00559\ }
+\DoxyCodeLine{00560\ \ \ \textcolor{comment}{//\ If\ either\ transform\ is\ invalid,\ the\ result\ is\ invalid.}}
+\DoxyCodeLine{00561\ \ \ \textcolor{keywordflow}{if}\ (is\_invalid())\ \{}
+\DoxyCodeLine{00562\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00563\ \ \ \}}
+\DoxyCodeLine{00564\ \ \ \textcolor{keywordflow}{if}\ (other-\/>is\_invalid())\ \{}
+\DoxyCodeLine{00565\ \ \ \ \ \textcolor{keywordflow}{return}\ other;}
+\DoxyCodeLine{00566\ \ \ \}}
+\DoxyCodeLine{00567\ }
+\DoxyCodeLine{00568\ \ \ \textcolor{keywordflow}{if}\ (!transform\_cache)\ \{}
+\DoxyCodeLine{00569\ \ \ \ \ \textcolor{keywordflow}{return}\ do\_compose(other);}
+\DoxyCodeLine{00570\ \ \ \}}
+\DoxyCodeLine{00571\ }
+\DoxyCodeLine{00572\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00573\ }
+\DoxyCodeLine{00574\ \ \ \textcolor{comment}{//\ Is\ this\ composition\ already\ cached?}}
+\DoxyCodeLine{00575\ \ \ \textcolor{keywordtype}{int}\ index\ =\ \_composition\_cache.find(other);}
+\DoxyCodeLine{00576\ \ \ \textcolor{keywordflow}{if}\ (index\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00577\ \ \ \ \ \textcolor{keyword}{const}\ Composition\ \&comp\ =\ \_composition\_cache.get\_data(index);}
+\DoxyCodeLine{00578\ \ \ \ \ \textcolor{keywordflow}{if}\ (comp.\_result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \textcolor{comment}{//\ Success!}}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ \_cache\_stats.inc\_hits();}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ comp.\_result;}
+\DoxyCodeLine{00582\ \ \ \ \ \}}
+\DoxyCodeLine{00583\ \ \ \}}
+\DoxyCodeLine{00584\ }
+\DoxyCodeLine{00585\ \ \ \textcolor{comment}{//\ Not\ in\ the\ cache.\ \ Compute\ a\ new\ result.\ \ It's\ important\ that\ we\ don't}}
+\DoxyCodeLine{00586\ \ \ \textcolor{comment}{//\ hold\ the\ lock\ while\ we\ do\ this,\ or\ we\ lose\ the\ benefit\ of}}
+\DoxyCodeLine{00587\ \ \ \textcolor{comment}{//\ parallelization.}}
+\DoxyCodeLine{00588\ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ result\ =\ do\_compose(other);}
+\DoxyCodeLine{00589\ }
+\DoxyCodeLine{00590\ \ \ \textcolor{keywordflow}{if}\ (index\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00591\ \ \ \ \ Composition\ \&comp\ =\ \_composition\_cache.modify\_data(index);}
+\DoxyCodeLine{00592\ \ \ \ \ \textcolor{comment}{//\ Well,\ it\ wasn't\ cached\ already,\ but\ we\ already\ had\ an\ entry\ (probably}}
+\DoxyCodeLine{00593\ \ \ \ \ \textcolor{comment}{//\ created\ for\ the\ reverse\ direction),\ so\ use\ the\ same\ entry\ to\ store}}
+\DoxyCodeLine{00594\ \ \ \ \ \textcolor{comment}{//\ the\ new\ result.}}
+\DoxyCodeLine{00595\ \ \ \ \ comp.\_result\ =\ result;}
+\DoxyCodeLine{00596\ }
+\DoxyCodeLine{00597\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *)\textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \textcolor{comment}{//\ See\ the\ comments\ below\ about\ the\ need\ to\ up\ the\ reference\ count}}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \textcolor{comment}{//\ only\ when\ the\ result\ is\ not\ the\ same\ as\ this.}}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ result-\/>cache\_ref();}
+\DoxyCodeLine{00601\ \ \ \ \ \}}
+\DoxyCodeLine{00602\ \ \ \ \ \textcolor{comment}{//\ Here's\ the\ cache!}}
+\DoxyCodeLine{00603\ \ \ \ \ \_cache\_stats.inc\_hits();}
+\DoxyCodeLine{00604\ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00605\ \ \ \}}
+\DoxyCodeLine{00606\ \ \ \_cache\_stats.inc\_misses();}
+\DoxyCodeLine{00607\ }
+\DoxyCodeLine{00608\ \ \ \textcolor{comment}{//\ We\ need\ to\ make\ a\ new\ cache\ entry,\ both\ in\ this\ object\ and\ in\ the\ other}}
+\DoxyCodeLine{00609\ \ \ \textcolor{comment}{//\ object.\ \ We\ make\ both\ records\ so\ the\ other\ TransformState\ object\ will}}
+\DoxyCodeLine{00610\ \ \ \textcolor{comment}{//\ know\ to\ delete\ the\ entry\ from\ this\ object\ when\ it\ destructs,\ and\ vice-\/}}
+\DoxyCodeLine{00611\ \ \ \textcolor{comment}{//\ versa.}}
+\DoxyCodeLine{00612\ }
+\DoxyCodeLine{00613\ \ \ \textcolor{comment}{//\ The\ cache\ entry\ in\ this\ object\ is\ the\ only\ one\ that\ indicates\ the\ result;}}
+\DoxyCodeLine{00614\ \ \ \textcolor{comment}{//\ the\ other\ will\ be\ NULL\ for\ now.}}
+\DoxyCodeLine{00615\ \ \ \_cache\_stats.add\_total\_size(1);}
+\DoxyCodeLine{00616\ \ \ \_cache\_stats.inc\_adds(\_composition\_cache.is\_empty());}
+\DoxyCodeLine{00617\ }
+\DoxyCodeLine{00618\ \ \ \_composition\_cache[other].\_result\ =\ result;}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00620\ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00621\ \ \ \ \ \_cache\_stats.add\_total\_size(1);}
+\DoxyCodeLine{00622\ \ \ \ \ \_cache\_stats.inc\_adds(other-\/>\_composition\_cache.is\_empty());}
+\DoxyCodeLine{00623\ \ \ \ \ other-\/>\_composition\_cache[\textcolor{keyword}{this}].\_result\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00624\ \ \ \}}
+\DoxyCodeLine{00625\ }
+\DoxyCodeLine{00626\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ (\mbox{\hyperlink{classTransformState}{TransformState}}\ *)\textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00627\ \ \ \ \ \textcolor{comment}{//\ If\ the\ result\ of\ do\_compose()\ is\ something\ other\ than\ this,\ explicitly}}
+\DoxyCodeLine{00628\ \ \ \ \ \textcolor{comment}{//\ increment\ the\ reference\ count.\ \ We\ have\ to\ be\ sure\ to\ decrement\ it}}
+\DoxyCodeLine{00629\ \ \ \ \ \textcolor{comment}{//\ again\ later,\ when\ the\ composition\ entry\ is\ removed\ from\ the\ cache.}}
+\DoxyCodeLine{00630\ \ \ \ \ result-\/>cache\_ref();}
+\DoxyCodeLine{00631\ }
+\DoxyCodeLine{00632\ \ \ \ \ \textcolor{comment}{//\ (If\ the\ result\ was\ just\ this\ again,\ we\ still\ store\ the\ result,\ but\ we}}
+\DoxyCodeLine{00633\ \ \ \ \ \textcolor{comment}{//\ don't\ increment\ the\ reference\ count,\ since\ that\ would\ be\ a\ self-\/}}
+\DoxyCodeLine{00634\ \ \ \ \ \textcolor{comment}{//\ referential\ leak.)}}
+\DoxyCodeLine{00635\ \ \ \}}
+\DoxyCodeLine{00636\ }
+\DoxyCodeLine{00637\ \ \ \_cache\_stats.maybe\_report(\textcolor{stringliteral}{"{}TransformState"{}});}
+\DoxyCodeLine{00638\ }
+\DoxyCodeLine{00639\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00640\ \}}
+\DoxyCodeLine{00641\ }
+\DoxyCodeLine{00649\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{00650\ invert\_compose(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00651\ \ \ \textcolor{comment}{//\ This\ method\ isn't\ strictly\ const,\ because\ it\ updates\ the\ cache,\ but\ we}}
+\DoxyCodeLine{00652\ \ \ \textcolor{comment}{//\ pretend\ that\ it\ is\ because\ it's\ only\ a\ cache\ which\ is\ transparent\ to\ the}}
+\DoxyCodeLine{00653\ \ \ \textcolor{comment}{//\ rest\ of\ the\ interface.}}
+\DoxyCodeLine{00654\ }
+\DoxyCodeLine{00655\ \ \ \textcolor{comment}{//\ We\ handle\ identity\ as\ a\ trivial\ special\ case.}}
+\DoxyCodeLine{00656\ \ \ \textcolor{keywordflow}{if}\ (is\_identity())\ \{}
+\DoxyCodeLine{00657\ \ \ \ \ \textcolor{keywordflow}{return}\ other;}
+\DoxyCodeLine{00658\ \ \ \}}
+\DoxyCodeLine{00659\ \ \ \textcolor{comment}{//\ Unlike\ compose(),\ the\ case\ of\ other-\/>is\_identity()\ is\ not\ quite\ as}}
+\DoxyCodeLine{00660\ \ \ \textcolor{comment}{//\ trivial\ for\ invert\_compose().}}
+\DoxyCodeLine{00661\ }
+\DoxyCodeLine{00662\ \ \ \textcolor{comment}{//\ If\ either\ transform\ is\ invalid,\ the\ result\ is\ invalid.}}
+\DoxyCodeLine{00663\ \ \ \textcolor{keywordflow}{if}\ (is\_invalid())\ \{}
+\DoxyCodeLine{00664\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00665\ \ \ \}}
+\DoxyCodeLine{00666\ \ \ \textcolor{keywordflow}{if}\ (other-\/>is\_invalid())\ \{}
+\DoxyCodeLine{00667\ \ \ \ \ \textcolor{keywordflow}{return}\ other;}
+\DoxyCodeLine{00668\ \ \ \}}
+\DoxyCodeLine{00669\ }
+\DoxyCodeLine{00670\ \ \ \textcolor{keywordflow}{if}\ (other\ ==\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00671\ \ \ \ \ \textcolor{comment}{//\ a-\/>invert\_compose(a)\ always\ produces\ identity.}}
+\DoxyCodeLine{00672\ \ \ \ \ \textcolor{keywordflow}{return}\ \_identity\_state;}
+\DoxyCodeLine{00673\ \ \ \}}
+\DoxyCodeLine{00674\ }
+\DoxyCodeLine{00675\ \ \ \textcolor{keywordflow}{if}\ (!transform\_cache)\ \{}
+\DoxyCodeLine{00676\ \ \ \ \ \textcolor{keywordflow}{return}\ do\_invert\_compose(other);}
+\DoxyCodeLine{00677\ \ \ \}}
+\DoxyCodeLine{00678\ }
+\DoxyCodeLine{00679\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00680\ }
+\DoxyCodeLine{00681\ \ \ \textcolor{keywordtype}{int}\ index\ =\ \_invert\_composition\_cache.find(other);}
+\DoxyCodeLine{00682\ \ \ \textcolor{keywordflow}{if}\ (index\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00683\ \ \ \ \ \textcolor{keyword}{const}\ Composition\ \&comp\ =\ \_invert\_composition\_cache.get\_data(index);}
+\DoxyCodeLine{00684\ \ \ \ \ \textcolor{keywordflow}{if}\ (comp.\_result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00685\ \ \ \ \ \ \ \textcolor{comment}{//\ Success!}}
+\DoxyCodeLine{00686\ \ \ \ \ \ \ \_cache\_stats.inc\_hits();}
+\DoxyCodeLine{00687\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ comp.\_result;}
+\DoxyCodeLine{00688\ \ \ \ \ \}}
+\DoxyCodeLine{00689\ \ \ \}}
+\DoxyCodeLine{00690\ }
+\DoxyCodeLine{00691\ \ \ \textcolor{comment}{//\ Not\ in\ the\ cache.\ \ Compute\ a\ new\ result.\ \ It's\ important\ that\ we\ don't}}
+\DoxyCodeLine{00692\ \ \ \textcolor{comment}{//\ hold\ the\ lock\ while\ we\ do\ this,\ or\ we\ lose\ the\ benefit\ of}}
+\DoxyCodeLine{00693\ \ \ \textcolor{comment}{//\ parallelization.}}
+\DoxyCodeLine{00694\ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ result\ =\ do\_invert\_compose(other);}
+\DoxyCodeLine{00695\ }
+\DoxyCodeLine{00696\ \ \ \textcolor{comment}{//\ Is\ this\ composition\ already\ cached?}}
+\DoxyCodeLine{00697\ \ \ \textcolor{keywordflow}{if}\ (index\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00698\ \ \ \ \ Composition\ \&comp\ =\ \_invert\_composition\_cache.modify\_data(index);}
+\DoxyCodeLine{00699\ \ \ \ \ \textcolor{comment}{//\ Well,\ it\ wasn't\ cached\ already,\ but\ we\ already\ had\ an\ entry\ (probably}}
+\DoxyCodeLine{00700\ \ \ \ \ \textcolor{comment}{//\ created\ for\ the\ reverse\ direction),\ so\ use\ the\ same\ entry\ to\ store}}
+\DoxyCodeLine{00701\ \ \ \ \ \textcolor{comment}{//\ the\ new\ result.}}
+\DoxyCodeLine{00702\ \ \ \ \ comp.\_result\ =\ result;}
+\DoxyCodeLine{00703\ }
+\DoxyCodeLine{00704\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *)\textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00705\ \ \ \ \ \ \ \textcolor{comment}{//\ See\ the\ comments\ below\ about\ the\ need\ to\ up\ the\ reference\ count}}
+\DoxyCodeLine{00706\ \ \ \ \ \ \ \textcolor{comment}{//\ only\ when\ the\ result\ is\ not\ the\ same\ as\ this.}}
+\DoxyCodeLine{00707\ \ \ \ \ \ \ result-\/>cache\_ref();}
+\DoxyCodeLine{00708\ \ \ \ \ \}}
+\DoxyCodeLine{00709\ \ \ \ \ \textcolor{comment}{//\ Here's\ the\ cache!}}
+\DoxyCodeLine{00710\ \ \ \ \ \_cache\_stats.inc\_hits();}
+\DoxyCodeLine{00711\ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00712\ \ \ \}}
+\DoxyCodeLine{00713\ \ \ \_cache\_stats.inc\_misses();}
+\DoxyCodeLine{00714\ }
+\DoxyCodeLine{00715\ \ \ \textcolor{comment}{//\ We\ need\ to\ make\ a\ new\ cache\ entry,\ both\ in\ this\ object\ and\ in\ the\ other}}
+\DoxyCodeLine{00716\ \ \ \textcolor{comment}{//\ object.\ \ We\ make\ both\ records\ so\ the\ other\ TransformState\ object\ will}}
+\DoxyCodeLine{00717\ \ \ \textcolor{comment}{//\ know\ to\ delete\ the\ entry\ from\ this\ object\ when\ it\ destructs,\ and\ vice-\/}}
+\DoxyCodeLine{00718\ \ \ \textcolor{comment}{//\ versa.}}
+\DoxyCodeLine{00719\ }
+\DoxyCodeLine{00720\ \ \ \textcolor{comment}{//\ The\ cache\ entry\ in\ this\ object\ is\ the\ only\ one\ that\ indicates\ the\ result;}}
+\DoxyCodeLine{00721\ \ \ \textcolor{comment}{//\ the\ other\ will\ be\ NULL\ for\ now.}}
+\DoxyCodeLine{00722\ \ \ \_cache\_stats.add\_total\_size(1);}
+\DoxyCodeLine{00723\ \ \ \_cache\_stats.inc\_adds(\_invert\_composition\_cache.is\_empty());}
+\DoxyCodeLine{00724\ \ \ \_invert\_composition\_cache[other].\_result\ =\ result;}
+\DoxyCodeLine{00725\ }
+\DoxyCodeLine{00726\ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00727\ \ \ \ \ \_cache\_stats.add\_total\_size(1);}
+\DoxyCodeLine{00728\ \ \ \ \ \_cache\_stats.inc\_adds(other-\/>\_invert\_composition\_cache.is\_empty());}
+\DoxyCodeLine{00729\ \ \ \ \ other-\/>\_invert\_composition\_cache[\textcolor{keyword}{this}].\_result\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00730\ \ \ \}}
+\DoxyCodeLine{00731\ }
+\DoxyCodeLine{00732\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ (\mbox{\hyperlink{classTransformState}{TransformState}}\ *)\textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00733\ \ \ \ \ \textcolor{comment}{//\ If\ the\ result\ of\ compose()\ is\ something\ other\ than\ this,\ explicitly}}
+\DoxyCodeLine{00734\ \ \ \ \ \textcolor{comment}{//\ increment\ the\ reference\ count.\ \ We\ have\ to\ be\ sure\ to\ decrement\ it}}
+\DoxyCodeLine{00735\ \ \ \ \ \textcolor{comment}{//\ again\ later,\ when\ the\ composition\ entry\ is\ removed\ from\ the\ cache.}}
+\DoxyCodeLine{00736\ \ \ \ \ result-\/>cache\_ref();}
+\DoxyCodeLine{00737\ }
+\DoxyCodeLine{00738\ \ \ \ \ \textcolor{comment}{//\ (If\ the\ result\ was\ just\ this\ again,\ we\ still\ store\ the\ result,\ but\ we}}
+\DoxyCodeLine{00739\ \ \ \ \ \textcolor{comment}{//\ don't\ increment\ the\ reference\ count,\ since\ that\ would\ be\ a\ self-\/}}
+\DoxyCodeLine{00740\ \ \ \ \ \textcolor{comment}{//\ referential\ leak.)}}
+\DoxyCodeLine{00741\ \ \ \}}
+\DoxyCodeLine{00742\ }
+\DoxyCodeLine{00743\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00744\ \}}
+\DoxyCodeLine{00745\ }
+\DoxyCodeLine{00752\ \textcolor{keywordtype}{bool}\ TransformState::}
+\DoxyCodeLine{00753\ unref()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00754\ \ \ \textcolor{keywordflow}{if}\ (garbage\_collect\_states\ ||\ !transform\_cache)\ \{}
+\DoxyCodeLine{00755\ \ \ \ \ \textcolor{comment}{//\ If\ we're\ not\ using\ the\ cache\ at\ all,\ or\ if\ we're\ relying\ on\ garbage}}
+\DoxyCodeLine{00756\ \ \ \ \ \textcolor{comment}{//\ collection,\ just\ allow\ the\ pointer\ to\ unref\ normally.}}
+\DoxyCodeLine{00757\ \ \ \ \ \textcolor{keywordflow}{return}\ ReferenceCount::unref();}
+\DoxyCodeLine{00758\ \ \ \}}
+\DoxyCodeLine{00759\ }
+\DoxyCodeLine{00760\ \ \ \textcolor{comment}{//\ Here\ is\ the\ normal\ refcounting\ case,\ with\ a\ normal\ cache,\ and\ without}}
+\DoxyCodeLine{00761\ \ \ \textcolor{comment}{//\ garbage\ collection\ in\ effect.\ \ In\ this\ case\ we\ will\ pull\ the\ object\ out}}
+\DoxyCodeLine{00762\ \ \ \textcolor{comment}{//\ of\ the\ cache\ when\ its\ reference\ count\ goes\ to\ 0.}}
+\DoxyCodeLine{00763\ }
+\DoxyCodeLine{00764\ \ \ \textcolor{comment}{//\ We\ always\ have\ to\ grab\ the\ lock,\ since\ we\ will\ definitely\ need\ to\ be}}
+\DoxyCodeLine{00765\ \ \ \textcolor{comment}{//\ holding\ it\ if\ we\ happen\ to\ drop\ the\ reference\ count\ to\ 0.\ Having\ to\ grab}}
+\DoxyCodeLine{00766\ \ \ \textcolor{comment}{//\ the\ lock\ at\ every\ call\ to\ unref()\ is\ a\ big\ limiting\ factor\ on}}
+\DoxyCodeLine{00767\ \ \ \textcolor{comment}{//\ parallelization.}}
+\DoxyCodeLine{00768\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00769\ }
+\DoxyCodeLine{00770\ \ \ \textcolor{keywordflow}{if}\ (auto\_break\_cycles\ \&\&\ uniquify\_transforms)\ \{}
+\DoxyCodeLine{00771\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_cache\_ref\_count()\ >\ 0\ \&\&}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \ \ get\_ref\_count()\ ==\ get\_cache\_ref\_count()\ +\ 1)\ \{}
+\DoxyCodeLine{00773\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ are\ about\ to\ remove\ the\ one\ reference\ that\ is\ not\ in\ the\ cache,}}
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \textcolor{comment}{//\ leaving\ only\ references\ in\ the\ cache,\ then\ we\ need\ to\ check\ for\ a}}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ \textcolor{comment}{//\ cycle\ involving\ this\ TransformState\ and\ break\ it\ if\ it\ exists.}}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ ((\mbox{\hyperlink{classTransformState}{TransformState}}\ *)\textcolor{keyword}{this})-\/>detect\_and\_break\_cycles();}
+\DoxyCodeLine{00777\ \ \ \ \ \}}
+\DoxyCodeLine{00778\ \ \ \}}
+\DoxyCodeLine{00779\ }
+\DoxyCodeLine{00780\ \ \ \textcolor{keywordflow}{if}\ (ReferenceCount::unref())\ \{}
+\DoxyCodeLine{00781\ \ \ \ \ \textcolor{comment}{//\ The\ reference\ count\ is\ still\ nonzero.}}
+\DoxyCodeLine{00782\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00783\ \ \ \}}
+\DoxyCodeLine{00784\ }
+\DoxyCodeLine{00785\ \ \ \textcolor{comment}{//\ The\ reference\ count\ has\ just\ reached\ zero.\ \ Make\ sure\ the\ object\ is}}
+\DoxyCodeLine{00786\ \ \ \textcolor{comment}{//\ removed\ from\ the\ global\ object\ pool,\ before\ anyone\ else\ finds\ it\ and}}
+\DoxyCodeLine{00787\ \ \ \textcolor{comment}{//\ tries\ to\ ref\ it.}}
+\DoxyCodeLine{00788\ \ \ ((\mbox{\hyperlink{classTransformState}{TransformState}}\ *)\textcolor{keyword}{this})-\/>release\_new();}
+\DoxyCodeLine{00789\ \ \ ((\mbox{\hyperlink{classTransformState}{TransformState}}\ *)\textcolor{keyword}{this})-\/>remove\_cache\_pointers();}
+\DoxyCodeLine{00790\ }
+\DoxyCodeLine{00791\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00792\ \}}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00798\ \textcolor{keywordtype}{bool}\ TransformState::}
+\DoxyCodeLine{00799\ validate\_composition\_cache()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00800\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00801\ }
+\DoxyCodeLine{00802\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{00803\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ size;\ ++i)\ \{}
+\DoxyCodeLine{00804\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *source\ =\ \_composition\_cache.get\_key(i);}
+\DoxyCodeLine{00805\ \ \ \ \ \textcolor{keywordflow}{if}\ (source\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00806\ \ \ \ \ \ \ \textcolor{comment}{//\ Check\ that\ the\ source\ also\ has\ a\ pointer\ back\ to\ this\ one.\ \ We\ always}}
+\DoxyCodeLine{00807\ \ \ \ \ \ \ \textcolor{comment}{//\ add\ entries\ to\ the\ composition\ cache\ in\ pairs.}}
+\DoxyCodeLine{00808\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ ri\ =\ source-\/>\_composition\_cache.find(\textcolor{keyword}{this});}
+\DoxyCodeLine{00809\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ri\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00810\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Failure!\ \ There\ is\ no\ back-\/pointer.}}
+\DoxyCodeLine{00811\ \ \ \ \ \ \ \ \ pgraph\_cat.error()}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}TransformState::composition\ cache\ is\ inconsistent!\(\backslash\)n"{}};}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ \ \ pgraph\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{00814\ \ \ \ \ \ \ \ \ \ \ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\ compose\ "{}}\ <<\ *source\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00815\ \ \ \ \ \ \ \ \ pgraph\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{00816\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}but\ no\ reverse\(\backslash\)n"{}};}
+\DoxyCodeLine{00817\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00818\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00819\ \ \ \ \ \}}
+\DoxyCodeLine{00820\ \ \ \}}
+\DoxyCodeLine{00821\ }
+\DoxyCodeLine{00822\ \ \ size\ =\ \_invert\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{00823\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ size;\ ++i)\ \{}
+\DoxyCodeLine{00824\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *source\ =\ \_invert\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{00825\ \ \ \ \ \textcolor{keywordflow}{if}\ (source\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00826\ \ \ \ \ \ \ \textcolor{comment}{//\ Check\ that\ the\ source\ also\ has\ a\ pointer\ back\ to\ this\ one.\ \ We\ always}}
+\DoxyCodeLine{00827\ \ \ \ \ \ \ \textcolor{comment}{//\ add\ entries\ to\ the\ composition\ cache\ in\ pairs.}}
+\DoxyCodeLine{00828\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ ri\ =\ source-\/>\_invert\_composition\_cache.find(\textcolor{keyword}{this});}
+\DoxyCodeLine{00829\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ri\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00830\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Failure!\ \ There\ is\ no\ back-\/pointer.}}
+\DoxyCodeLine{00831\ \ \ \ \ \ \ \ \ pgraph\_cat.error()}
+\DoxyCodeLine{00832\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}TransformState::invert\ composition\ cache\ is\ inconsistent!\(\backslash\)n"{}};}
+\DoxyCodeLine{00833\ \ \ \ \ \ \ \ \ pgraph\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{00834\ \ \ \ \ \ \ \ \ \ \ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\ invert\ compose\ "{}}\ <<\ *source\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00835\ \ \ \ \ \ \ \ \ pgraph\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{00836\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}but\ no\ reverse\(\backslash\)n"{}};}
+\DoxyCodeLine{00837\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00839\ \ \ \ \ \}}
+\DoxyCodeLine{00840\ \ \ \}}
+\DoxyCodeLine{00841\ }
+\DoxyCodeLine{00842\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00843\ \}}
+\DoxyCodeLine{00844\ }
+\DoxyCodeLine{00848\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{00849\ output(ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00850\ \ \ out\ <<\ \textcolor{stringliteral}{"{}T:"{}};}
+\DoxyCodeLine{00851\ \ \ \textcolor{keywordflow}{if}\ (is\_invalid())\ \{}
+\DoxyCodeLine{00852\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}(invalid)"{}};}
+\DoxyCodeLine{00853\ }
+\DoxyCodeLine{00854\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (is\_identity())\ \{}
+\DoxyCodeLine{00855\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}(identity)"{}};}
+\DoxyCodeLine{00856\ }
+\DoxyCodeLine{00857\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (has\_components())\ \{}
+\DoxyCodeLine{00858\ \ \ \ \ \textcolor{keywordtype}{bool}\ output\_hpr\ =\ !get\_hpr().almost\_equal(LVecBase3(0.0f,\ 0.0f,\ 0.0f));}
+\DoxyCodeLine{00859\ }
+\DoxyCodeLine{00860\ \ \ \ \ \textcolor{keywordflow}{if}\ (!components\_given())\ \{}
+\DoxyCodeLine{00861\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ leading\ "{}m"{}\ indicates\ the\ transform\ was\ described\ as\ a\ full\ matrix,}}
+\DoxyCodeLine{00862\ \ \ \ \ \ \ \textcolor{comment}{//\ and\ we\ are\ decomposing\ it\ for\ the\ benefit\ of\ the\ user.}}
+\DoxyCodeLine{00863\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}m"{}};}
+\DoxyCodeLine{00864\ }
+\DoxyCodeLine{00865\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (output\_hpr\ \&\&\ quat\_given())\ \{}
+\DoxyCodeLine{00866\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ leading\ "{}q"{}\ indicates\ that\ the\ pos,\ scale,\ and\ shear\ are\ exactly\ as}}
+\DoxyCodeLine{00867\ \ \ \ \ \ \ \textcolor{comment}{//\ specified,\ but\ the\ rotation\ was\ described\ as\ a\ quaternion,\ and\ we\ are}}
+\DoxyCodeLine{00868\ \ \ \ \ \ \ \textcolor{comment}{//\ decomposing\ that\ to\ hpr\ for\ the\ benefit\ of\ the\ user.}}
+\DoxyCodeLine{00869\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}q"{}};}
+\DoxyCodeLine{00870\ \ \ \ \ \}}
+\DoxyCodeLine{00871\ }
+\DoxyCodeLine{00872\ \ \ \ \ \textcolor{keywordtype}{char}\ lead\ =\ \textcolor{charliteral}{'('};}
+\DoxyCodeLine{00873\ \ \ \ \ \textcolor{keywordflow}{if}\ (is\_2d())\ \{}
+\DoxyCodeLine{00874\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!get\_pos2d().almost\_equal(LVecBase2(0.0f,\ 0.0f)))\ \{}
+\DoxyCodeLine{00875\ \ \ \ \ \ \ \ \ out\ <<\ lead\ <<\ \textcolor{stringliteral}{"{}pos\ "{}}\ <<\ get\_pos2d();}
+\DoxyCodeLine{00876\ \ \ \ \ \ \ \ \ lead\ =\ \textcolor{charliteral}{'\ '};}
+\DoxyCodeLine{00877\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00878\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (output\_hpr)\ \{}
+\DoxyCodeLine{00879\ \ \ \ \ \ \ \ \ out\ <<\ lead\ <<\ \textcolor{stringliteral}{"{}rotate\ "{}}\ <<\ get\_rotate2d();}
+\DoxyCodeLine{00880\ \ \ \ \ \ \ \ \ lead\ =\ \textcolor{charliteral}{'\ '};}
+\DoxyCodeLine{00881\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00882\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!get\_scale2d().almost\_equal(LVecBase2(1.0f,\ 1.0f)))\ \{}
+\DoxyCodeLine{00883\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_uniform\_scale())\ \{}
+\DoxyCodeLine{00884\ \ \ \ \ \ \ \ \ \ \ out\ <<\ lead\ <<\ \textcolor{stringliteral}{"{}scale\ "{}}\ <<\ get\_uniform\_scale();}
+\DoxyCodeLine{00885\ \ \ \ \ \ \ \ \ \ \ lead\ =\ \textcolor{charliteral}{'\ '};}
+\DoxyCodeLine{00886\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00887\ \ \ \ \ \ \ \ \ \ \ out\ <<\ lead\ <<\ \textcolor{stringliteral}{"{}scale\ "{}}\ <<\ get\_scale2d();}
+\DoxyCodeLine{00888\ \ \ \ \ \ \ \ \ \ \ lead\ =\ \textcolor{charliteral}{'\ '};}
+\DoxyCodeLine{00889\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00890\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00891\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_nonzero\_shear())\ \{}
+\DoxyCodeLine{00892\ \ \ \ \ \ \ \ \ out\ <<\ lead\ <<\ \textcolor{stringliteral}{"{}shear\ "{}}\ <<\ get\_shear2d();}
+\DoxyCodeLine{00893\ \ \ \ \ \ \ \ \ lead\ =\ \textcolor{charliteral}{'\ '};}
+\DoxyCodeLine{00894\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00895\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00896\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!get\_pos().almost\_equal(LVecBase3(0.0f,\ 0.0f,\ 0.0f)))\ \{}
+\DoxyCodeLine{00897\ \ \ \ \ \ \ \ \ out\ <<\ lead\ <<\ \textcolor{stringliteral}{"{}pos\ "{}}\ <<\ get\_pos();}
+\DoxyCodeLine{00898\ \ \ \ \ \ \ \ \ lead\ =\ \textcolor{charliteral}{'\ '};}
+\DoxyCodeLine{00899\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00900\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (output\_hpr)\ \{}
+\DoxyCodeLine{00901\ \ \ \ \ \ \ \ \ out\ <<\ lead\ <<\ \textcolor{stringliteral}{"{}hpr\ "{}}\ <<\ get\_hpr();}
+\DoxyCodeLine{00902\ \ \ \ \ \ \ \ \ lead\ =\ \textcolor{charliteral}{'\ '};}
+\DoxyCodeLine{00903\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00904\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!get\_scale().almost\_equal(LVecBase3(1.0f,\ 1.0f,\ 1.0f)))\ \{}
+\DoxyCodeLine{00905\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_uniform\_scale())\ \{}
+\DoxyCodeLine{00906\ \ \ \ \ \ \ \ \ \ \ out\ <<\ lead\ <<\ \textcolor{stringliteral}{"{}scale\ "{}}\ <<\ get\_uniform\_scale();}
+\DoxyCodeLine{00907\ \ \ \ \ \ \ \ \ \ \ lead\ =\ \textcolor{charliteral}{'\ '};}
+\DoxyCodeLine{00908\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00909\ \ \ \ \ \ \ \ \ \ \ out\ <<\ lead\ <<\ \textcolor{stringliteral}{"{}scale\ "{}}\ <<\ get\_scale();}
+\DoxyCodeLine{00910\ \ \ \ \ \ \ \ \ \ \ lead\ =\ \textcolor{charliteral}{'\ '};}
+\DoxyCodeLine{00911\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00912\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00913\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_nonzero\_shear())\ \{}
+\DoxyCodeLine{00914\ \ \ \ \ \ \ \ \ out\ <<\ lead\ <<\ \textcolor{stringliteral}{"{}shear\ "{}}\ <<\ get\_shear();}
+\DoxyCodeLine{00915\ \ \ \ \ \ \ \ \ lead\ =\ \textcolor{charliteral}{'\ '};}
+\DoxyCodeLine{00916\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00917\ \ \ \ \ \}}
+\DoxyCodeLine{00918\ \ \ \ \ \textcolor{keywordflow}{if}\ (lead\ ==\ \textcolor{charliteral}{'('})\ \{}
+\DoxyCodeLine{00919\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}(almost\ identity)"{}};}
+\DoxyCodeLine{00920\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00921\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{})"{}};}
+\DoxyCodeLine{00922\ \ \ \ \ \}}
+\DoxyCodeLine{00923\ }
+\DoxyCodeLine{00924\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00925\ \ \ \ \ \textcolor{keywordflow}{if}\ (is\_2d())\ \{}
+\DoxyCodeLine{00926\ \ \ \ \ \ \ out\ <<\ get\_mat3();}
+\DoxyCodeLine{00927\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00928\ \ \ \ \ \ \ out\ <<\ get\_mat();}
+\DoxyCodeLine{00929\ \ \ \ \ \}}
+\DoxyCodeLine{00930\ \ \ \}}
+\DoxyCodeLine{00931\ \}}
+\DoxyCodeLine{00932\ }
+\DoxyCodeLine{00936\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{00937\ write(ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00938\ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level)\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00939\ \}}
+\DoxyCodeLine{00940\ }
+\DoxyCodeLine{00946\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{00947\ write\_composition\_cache(ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00948\ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level\ +\ 2)\ <<\ \_composition\_cache\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00949\ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level\ +\ 2)\ <<\ \_invert\_composition\_cache\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00950\ \}}
+\DoxyCodeLine{00951\ }
+\DoxyCodeLine{00956\ \textcolor{keywordtype}{int}\ TransformState::}
+\DoxyCodeLine{00957\ get\_num\_states()\ \{}
+\DoxyCodeLine{00958\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00959\ \ \ \textcolor{keywordflow}{return}\ \_states.get\_num\_entries();}
+\DoxyCodeLine{00960\ \}}
+\DoxyCodeLine{00961\ }
+\DoxyCodeLine{00975\ \textcolor{keywordtype}{int}\ TransformState::}
+\DoxyCodeLine{00976\ get\_num\_unused\_states()\ \{}
+\DoxyCodeLine{00977\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00978\ }
+\DoxyCodeLine{00979\ \ \ \textcolor{comment}{//\ First,\ we\ need\ to\ count\ the\ number\ of\ times\ each\ TransformState\ object\ is}}
+\DoxyCodeLine{00980\ \ \ \textcolor{comment}{//\ recorded\ in\ the\ cache.\ \ We\ could\ just\ trust\ get\_cache\_ref\_count(),\ but}}
+\DoxyCodeLine{00981\ \ \ \textcolor{comment}{//\ we'll\ be\ extra\ cautious\ for\ now.}}
+\DoxyCodeLine{00982\ \ \ \textcolor{keyword}{typedef}\ \mbox{\hyperlink{classpmap}{pmap<const\ TransformState\ *,\ int>}}\ StateCount;}
+\DoxyCodeLine{00983\ \ \ StateCount\ state\_count;}
+\DoxyCodeLine{00984\ }
+\DoxyCodeLine{00985\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{00986\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ si\ =\ 0;\ si\ <\ size;\ ++si)\ \{}
+\DoxyCodeLine{00987\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \_states.get\_key(si);}
+\DoxyCodeLine{00988\ }
+\DoxyCodeLine{00989\ \ \ \ \ std::pair<StateCount::iterator,\ bool>\ ir\ =}
+\DoxyCodeLine{00990\ \ \ \ \ \ \ state\_count.insert(StateCount::value\_type(state,\ 1));}
+\DoxyCodeLine{00991\ \ \ \ \ \textcolor{keywordflow}{if}\ (!ir.second)\ \{}
+\DoxyCodeLine{00992\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ above\ insert\ operation\ fails,\ then\ it's\ already\ in\ the}}
+\DoxyCodeLine{00993\ \ \ \ \ \ \ \textcolor{comment}{//\ cache;\ increment\ its\ value.}}
+\DoxyCodeLine{00994\ \ \ \ \ \ \ (*(ir.first)).second++;}
+\DoxyCodeLine{00995\ \ \ \ \ \}}
+\DoxyCodeLine{00996\ }
+\DoxyCodeLine{00997\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{00998\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ cache\_size\ =\ state-\/>\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{00999\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01000\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *result\ =\ state-\/>\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{01001\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ result\ !=\ state)\ \{}
+\DoxyCodeLine{01002\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Here's\ a\ TransformState\ that's\ recorded\ in\ the\ cache.\ \ Count\ it.}}
+\DoxyCodeLine{01003\ \ \ \ \ \ \ \ \ std::pair<StateCount::iterator,\ bool>\ ir\ =}
+\DoxyCodeLine{01004\ \ \ \ \ \ \ \ \ \ \ state\_count.insert(StateCount::value\_type(result,\ 1));}
+\DoxyCodeLine{01005\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!ir.second)\ \{}
+\DoxyCodeLine{01006\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ above\ insert\ operation\ fails,\ then\ it's\ already\ in\ the}}
+\DoxyCodeLine{01007\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ cache;\ increment\ its\ value.}}
+\DoxyCodeLine{01008\ \ \ \ \ \ \ \ \ \ \ (*(ir.first)).second++;}
+\DoxyCodeLine{01009\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01010\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01011\ \ \ \ \ \}}
+\DoxyCodeLine{01012\ \ \ \ \ cache\_size\ =\ state-\/>\_invert\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{01013\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01014\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *result\ =\ state-\/>\_invert\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{01015\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ result\ !=\ state)\ \{}
+\DoxyCodeLine{01016\ \ \ \ \ \ \ \ \ std::pair<StateCount::iterator,\ bool>\ ir\ =}
+\DoxyCodeLine{01017\ \ \ \ \ \ \ \ \ \ \ state\_count.insert(StateCount::value\_type(result,\ 1));}
+\DoxyCodeLine{01018\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!ir.second)\ \{}
+\DoxyCodeLine{01019\ \ \ \ \ \ \ \ \ \ \ (*(ir.first)).second++;}
+\DoxyCodeLine{01020\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01021\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01022\ \ \ \ \ \}}
+\DoxyCodeLine{01023\ \ \ \}}
+\DoxyCodeLine{01024\ }
+\DoxyCodeLine{01025\ \ \ \textcolor{comment}{//\ Now\ that\ we\ have\ the\ appearance\ count\ of\ each\ TransformState\ object,\ we}}
+\DoxyCodeLine{01026\ \ \ \textcolor{comment}{//\ can\ tell\ which\ ones\ are\ unreferenced\ outside\ of\ the\ TransformState\ cache,}}
+\DoxyCodeLine{01027\ \ \ \textcolor{comment}{//\ by\ comparing\ these\ to\ the\ reference\ counts.}}
+\DoxyCodeLine{01028\ \ \ \textcolor{keywordtype}{int}\ num\_unused\ =\ 0;}
+\DoxyCodeLine{01029\ }
+\DoxyCodeLine{01030\ \ \ StateCount::iterator\ sci;}
+\DoxyCodeLine{01031\ \ \ \textcolor{keywordflow}{for}\ (sci\ =\ state\_count.begin();\ sci\ !=\ state\_count.end();\ ++sci)\ \{}
+\DoxyCodeLine{01032\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ (*sci).first;}
+\DoxyCodeLine{01033\ \ \ \ \ \textcolor{keywordtype}{int}\ count\ =\ (*sci).second;}
+\DoxyCodeLine{01034\ \ \ \ \ nassertr(count\ ==\ state-\/>get\_cache\_ref\_count(),\ num\_unused);}
+\DoxyCodeLine{01035\ \ \ \ \ nassertr(count\ <=\ state-\/>get\_ref\_count(),\ num\_unused);}
+\DoxyCodeLine{01036\ \ \ \ \ \textcolor{keywordflow}{if}\ (count\ ==\ state-\/>get\_ref\_count())\ \{}
+\DoxyCodeLine{01037\ \ \ \ \ \ \ num\_unused++;}
+\DoxyCodeLine{01038\ }
+\DoxyCodeLine{01039\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01040\ \ \ \ \ \ \ \ \ pgraph\_cat.debug()}
+\DoxyCodeLine{01041\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unused\ state:\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)state\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{01042\ \ \ \ \ \ \ \ \ \ \ <<\ state-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{01043\ \ \ \ \ \ \ \ \ state-\/>write(pgraph\_cat.debug(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{01044\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01045\ \ \ \ \ \}}
+\DoxyCodeLine{01046\ \ \ \}}
+\DoxyCodeLine{01047\ }
+\DoxyCodeLine{01048\ \ \ \textcolor{keywordflow}{return}\ num\_unused;}
+\DoxyCodeLine{01049\ \}}
+\DoxyCodeLine{01050\ }
+\DoxyCodeLine{01065\ \textcolor{keywordtype}{int}\ TransformState::}
+\DoxyCodeLine{01066\ clear\_cache()\ \{}
+\DoxyCodeLine{01067\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{01068\ }
+\DoxyCodeLine{01069\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_cache\_update\_pcollector);}
+\DoxyCodeLine{01070\ \ \ \textcolor{keywordtype}{int}\ orig\_size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{01071\ }
+\DoxyCodeLine{01072\ \ \ \textcolor{comment}{//\ First,\ we\ need\ to\ copy\ the\ entire\ set\ of\ states\ to\ a\ temporary\ vector,}}
+\DoxyCodeLine{01073\ \ \ \textcolor{comment}{//\ reference-\/counting\ each\ object.\ \ That\ way\ we\ can\ walk\ through\ the\ copy,}}
+\DoxyCodeLine{01074\ \ \ \textcolor{comment}{//\ without\ fear\ of\ dereferencing\ (and\ deleting)\ the\ objects\ in\ the\ map\ as\ we}}
+\DoxyCodeLine{01075\ \ \ \textcolor{comment}{//\ go.}}
+\DoxyCodeLine{01076\ \ \ \{}
+\DoxyCodeLine{01077\ \ \ \ \ \textcolor{keyword}{typedef}\ \mbox{\hyperlink{classpvector}{pvector}}<\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ >\ TempStates;}
+\DoxyCodeLine{01078\ \ \ \ \ TempStates\ temp\_states;}
+\DoxyCodeLine{01079\ \ \ \ \ temp\_states.reserve(orig\_size);}
+\DoxyCodeLine{01080\ }
+\DoxyCodeLine{01081\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{01082\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ si\ =\ 0;\ si\ <\ size;\ ++si)\ \{}
+\DoxyCodeLine{01083\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \_states.get\_key(si);}
+\DoxyCodeLine{01084\ \ \ \ \ \ \ temp\_states.push\_back(state);}
+\DoxyCodeLine{01085\ \ \ \ \ \}}
+\DoxyCodeLine{01086\ }
+\DoxyCodeLine{01087\ \ \ \ \ \textcolor{comment}{//\ Now\ it's\ safe\ to\ walk\ through\ the\ list,\ destroying\ the\ cache\ within}}
+\DoxyCodeLine{01088\ \ \ \ \ \textcolor{comment}{//\ each\ object\ as\ we\ go.\ \ Nothing\ will\ be\ destructed\ till\ we're\ done.}}
+\DoxyCodeLine{01089\ \ \ \ \ TempStates::iterator\ ti;}
+\DoxyCodeLine{01090\ \ \ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ temp\_states.begin();\ ti\ !=\ temp\_states.end();\ ++ti)\ \{}
+\DoxyCodeLine{01091\ \ \ \ \ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ (\mbox{\hyperlink{classTransformState}{TransformState}}\ *)(*ti).p();}
+\DoxyCodeLine{01092\ }
+\DoxyCodeLine{01093\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{01094\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ cache\_size\ =\ state-\/>\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{01095\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01096\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *result\ =\ state-\/>\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{01097\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ result\ !=\ state)\ \{}
+\DoxyCodeLine{01098\ \ \ \ \ \ \ \ \ \ \ result-\/>cache\_unref();}
+\DoxyCodeLine{01099\ \ \ \ \ \ \ \ \ \ \ nassertr(result-\/>get\_ref\_count()\ >\ 0,\ 0);}
+\DoxyCodeLine{01100\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01101\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01102\ \ \ \ \ \ \ \_cache\_stats.add\_total\_size(-\/(\textcolor{keywordtype}{int})state-\/>\_composition\_cache.get\_num\_entries());}
+\DoxyCodeLine{01103\ \ \ \ \ \ \ state-\/>\_composition\_cache.clear();}
+\DoxyCodeLine{01104\ }
+\DoxyCodeLine{01105\ \ \ \ \ \ \ cache\_size\ =\ state-\/>\_invert\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{01106\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01107\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *result\ =\ state-\/>\_invert\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{01108\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ result\ !=\ state)\ \{}
+\DoxyCodeLine{01109\ \ \ \ \ \ \ \ \ \ \ result-\/>cache\_unref();}
+\DoxyCodeLine{01110\ \ \ \ \ \ \ \ \ \ \ nassertr(result-\/>get\_ref\_count()\ >\ 0,\ 0);}
+\DoxyCodeLine{01111\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01112\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01113\ \ \ \ \ \ \ \_cache\_stats.add\_total\_size(-\/(\textcolor{keywordtype}{int})state-\/>\_invert\_composition\_cache.get\_num\_entries());}
+\DoxyCodeLine{01114\ \ \ \ \ \ \ state-\/>\_invert\_composition\_cache.clear();}
+\DoxyCodeLine{01115\ \ \ \ \ \}}
+\DoxyCodeLine{01116\ }
+\DoxyCodeLine{01117\ \ \ \ \ \textcolor{comment}{//\ Once\ this\ block\ closes\ and\ the\ temp\_states\ object\ goes\ away,\ all\ the}}
+\DoxyCodeLine{01118\ \ \ \ \ \textcolor{comment}{//\ destruction\ will\ begin.\ \ Anything\ whose\ reference\ was\ held\ only\ within}}
+\DoxyCodeLine{01119\ \ \ \ \ \textcolor{comment}{//\ the\ various\ objects'\ caches\ will\ go\ away.}}
+\DoxyCodeLine{01120\ \ \ \}}
+\DoxyCodeLine{01121\ }
+\DoxyCodeLine{01122\ \ \ \textcolor{keywordtype}{int}\ new\_size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{01123\ \ \ \textcolor{keywordflow}{return}\ orig\_size\ -\/\ new\_size;}
+\DoxyCodeLine{01124\ \}}
+\DoxyCodeLine{01125\ }
+\DoxyCodeLine{01132\ \textcolor{keywordtype}{int}\ TransformState::}
+\DoxyCodeLine{01133\ garbage\_collect()\ \{}
+\DoxyCodeLine{01134\ \ \ \textcolor{keywordflow}{if}\ (!garbage\_collect\_states)\ \{}
+\DoxyCodeLine{01135\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{01136\ \ \ \}}
+\DoxyCodeLine{01137\ }
+\DoxyCodeLine{01138\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{01139\ }
+\DoxyCodeLine{01140\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_garbage\_collect\_pcollector);}
+\DoxyCodeLine{01141\ \ \ \textcolor{keywordtype}{size\_t}\ orig\_size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{01142\ }
+\DoxyCodeLine{01143\ \ \ \textcolor{comment}{//\ How\ many\ elements\ to\ process\ this\ pass?}}
+\DoxyCodeLine{01144\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ orig\_size;}
+\DoxyCodeLine{01145\ \ \ \textcolor{keywordtype}{size\_t}\ num\_this\_pass\ =\ std::max(0,\ \textcolor{keywordtype}{int}(size\ *\ garbage\_collect\_states\_rate));}
+\DoxyCodeLine{01146\ \ \ \textcolor{keywordflow}{if}\ (num\_this\_pass\ <=\ 0)\ \{}
+\DoxyCodeLine{01147\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{01148\ \ \ \}}
+\DoxyCodeLine{01149\ }
+\DoxyCodeLine{01150\ \ \ \textcolor{keywordtype}{bool}\ break\_and\_uniquify\ =\ (auto\_break\_cycles\ \&\&\ uniquify\_transforms);}
+\DoxyCodeLine{01151\ }
+\DoxyCodeLine{01152\ \ \ \textcolor{keywordtype}{size\_t}\ si\ =\ \_garbage\_index;}
+\DoxyCodeLine{01153\ \ \ \textcolor{keywordflow}{if}\ (si\ >=\ size)\ \{}
+\DoxyCodeLine{01154\ \ \ \ \ si\ =\ 0;}
+\DoxyCodeLine{01155\ \ \ \}}
+\DoxyCodeLine{01156\ }
+\DoxyCodeLine{01157\ \ \ num\_this\_pass\ =\ std::min(num\_this\_pass,\ size);}
+\DoxyCodeLine{01158\ \ \ \textcolor{keywordtype}{size\_t}\ stop\_at\_element\ =\ (si\ +\ num\_this\_pass)\ \%\ size;}
+\DoxyCodeLine{01159\ }
+\DoxyCodeLine{01160\ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{01161\ \ \ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ (\mbox{\hyperlink{classTransformState}{TransformState}}\ *)\_states.get\_key(si);}
+\DoxyCodeLine{01162\ \ \ \ \ \textcolor{keywordflow}{if}\ (break\_and\_uniquify)\ \{}
+\DoxyCodeLine{01163\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (state-\/>get\_cache\_ref\_count()\ >\ 0\ \&\&}
+\DoxyCodeLine{01164\ \ \ \ \ \ \ \ \ \ \ state-\/>get\_ref\_count()\ ==\ state-\/>get\_cache\_ref\_count())\ \{}
+\DoxyCodeLine{01165\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ removed\ all\ the\ references\ to\ this\ state\ not\ in\ the}}
+\DoxyCodeLine{01166\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ cache,\ leaving\ only\ references\ in\ the\ cache,\ then\ we\ need\ to}}
+\DoxyCodeLine{01167\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ check\ for\ a\ cycle\ involving\ this\ TransformState\ and\ break\ it\ if}}
+\DoxyCodeLine{01168\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ it\ exists.}}
+\DoxyCodeLine{01169\ \ \ \ \ \ \ \ \ state-\/>detect\_and\_break\_cycles();}
+\DoxyCodeLine{01170\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01171\ \ \ \ \ \}}
+\DoxyCodeLine{01172\ }
+\DoxyCodeLine{01173\ \ \ \ \ \textcolor{keywordflow}{if}\ (!state-\/>unref\_if\_one())\ \{}
+\DoxyCodeLine{01174\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ state\ has\ recently\ been\ unreffed\ to\ 1\ (the\ one\ we\ added\ when}}
+\DoxyCodeLine{01175\ \ \ \ \ \ \ \textcolor{comment}{//\ we\ stored\ it\ in\ the\ cache).\ \ Now\ it's\ time\ to\ delete\ it.\ \ This\ is}}
+\DoxyCodeLine{01176\ \ \ \ \ \ \ \textcolor{comment}{//\ safe,\ because\ we're\ holding\ the\ \_states\_lock,\ so\ it's\ not\ possible}}
+\DoxyCodeLine{01177\ \ \ \ \ \ \ \textcolor{comment}{//\ for\ some\ other\ thread\ to\ find\ the\ state\ in\ the\ cache\ and\ ref\ it}}
+\DoxyCodeLine{01178\ \ \ \ \ \ \ \textcolor{comment}{//\ while\ we're\ doing\ this.\ \ Also,\ we've\ just\ made\ sure\ to\ unref\ it\ to\ 0,}}
+\DoxyCodeLine{01179\ \ \ \ \ \ \ \textcolor{comment}{//\ to\ ensure\ that\ another\ thread\ can't\ get\ it\ via\ a\ weak\ pointer.}}
+\DoxyCodeLine{01180\ \ \ \ \ \ \ state-\/>release\_new();}
+\DoxyCodeLine{01181\ \ \ \ \ \ \ state-\/>remove\_cache\_pointers();}
+\DoxyCodeLine{01182\ \ \ \ \ \ \ state-\/>cache\_unref\_only();}
+\DoxyCodeLine{01183\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ state;}
+\DoxyCodeLine{01184\ }
+\DoxyCodeLine{01185\ \ \ \ \ \ \ \textcolor{comment}{//\ When\ we\ removed\ it\ from\ the\ hash\ map,\ it\ swapped\ the\ last\ element}}
+\DoxyCodeLine{01186\ \ \ \ \ \ \ \textcolor{comment}{//\ with\ the\ one\ we\ just\ removed.\ \ So\ the\ current\ index\ contains\ one\ we}}
+\DoxyCodeLine{01187\ \ \ \ \ \ \ \textcolor{comment}{//\ still\ need\ to\ visit.}}
+\DoxyCodeLine{01188\ \ \ \ \ \ \ -\/-\/size;}
+\DoxyCodeLine{01189\ \ \ \ \ \ \ -\/-\/si;}
+\DoxyCodeLine{01190\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (stop\_at\_element\ >\ 0)\ \{}
+\DoxyCodeLine{01191\ \ \ \ \ \ \ \ \ -\/-\/stop\_at\_element;}
+\DoxyCodeLine{01192\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01193\ \ \ \ \ \}}
+\DoxyCodeLine{01194\ }
+\DoxyCodeLine{01195\ \ \ \ \ si\ =\ (si\ +\ 1)\ \%\ size;}
+\DoxyCodeLine{01196\ \ \ \}\ \textcolor{keywordflow}{while}\ (si\ !=\ stop\_at\_element);}
+\DoxyCodeLine{01197\ \ \ \_garbage\_index\ =\ si;}
+\DoxyCodeLine{01198\ }
+\DoxyCodeLine{01199\ \ \ nassertr(\_states.get\_num\_entries()\ ==\ size,\ 0);}
+\DoxyCodeLine{01200\ }
+\DoxyCodeLine{01201\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{01202\ \ \ nassertr(\_states.validate(),\ 0);}
+\DoxyCodeLine{01203\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01204\ }
+\DoxyCodeLine{01205\ \ \ \textcolor{comment}{//\ If\ we\ just\ cleaned\ up\ a\ lot\ of\ states,\ see\ if\ we\ can\ reduce\ the\ table\ in}}
+\DoxyCodeLine{01206\ \ \ \textcolor{comment}{//\ size.\ \ This\ will\ help\ reduce\ iteration\ overhead\ in\ the\ future.}}
+\DoxyCodeLine{01207\ \ \ \_states.consider\_shrink\_table();}
+\DoxyCodeLine{01208\ }
+\DoxyCodeLine{01209\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{int})orig\_size\ -\/\ (int)size;}
+\DoxyCodeLine{01210\ \}}
+\DoxyCodeLine{01211\ }
+\DoxyCodeLine{01225\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{01226\ list\_cycles(ostream\ \&out)\ \{}
+\DoxyCodeLine{01227\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{01228\ }
+\DoxyCodeLine{01229\ \ \ \textcolor{keyword}{typedef}\ \mbox{\hyperlink{classpset}{pset<const\ TransformState\ *>}}\ VisitedStates;}
+\DoxyCodeLine{01230\ \ \ VisitedStates\ visited;}
+\DoxyCodeLine{01231\ \ \ CompositionCycleDesc\ cycle\_desc;}
+\DoxyCodeLine{01232\ }
+\DoxyCodeLine{01233\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{01234\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ si\ =\ 0;\ si\ <\ size;\ ++si)\ \{}
+\DoxyCodeLine{01235\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \_states.get\_key(si);}
+\DoxyCodeLine{01236\ }
+\DoxyCodeLine{01237\ \ \ \ \ \textcolor{keywordtype}{bool}\ inserted\ =\ visited.insert(state).second;}
+\DoxyCodeLine{01238\ \ \ \ \ \textcolor{keywordflow}{if}\ (inserted)\ \{}
+\DoxyCodeLine{01239\ \ \ \ \ \ \ ++\_last\_cycle\_detect;}
+\DoxyCodeLine{01240\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_cycles(state,\ state,\ 1,\ \_last\_cycle\_detect,\ \&cycle\_desc))\ \{}
+\DoxyCodeLine{01241\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ state\ begins\ a\ cycle.}}
+\DoxyCodeLine{01242\ \ \ \ \ \ \ \ \ CompositionCycleDesc::reverse\_iterator\ csi;}
+\DoxyCodeLine{01243\ }
+\DoxyCodeLine{01244\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)nCycle\ detected\ of\ length\ "{}}\ <<\ cycle\_desc.size()\ +\ 1\ <<\ \textcolor{stringliteral}{"{}:\(\backslash\)n"{}}}
+\DoxyCodeLine{01245\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}state\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)state\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ state-\/>get\_ref\_count()}
+\DoxyCodeLine{01246\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{01247\ \ \ \ \ \ \ \ \ state-\/>write(out,\ 2);}
+\DoxyCodeLine{01248\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (csi\ =\ cycle\_desc.rbegin();\ csi\ !=\ cycle\_desc.rend();\ ++csi)\ \{}
+\DoxyCodeLine{01249\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ CompositionCycleDescEntry\ \&entry\ =\ (*csi);}
+\DoxyCodeLine{01250\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (entry.\_inverted)\ \{}
+\DoxyCodeLine{01251\ \ \ \ \ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}invert\ composed\ with\ "{}};}
+\DoxyCodeLine{01252\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01253\ \ \ \ \ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}composed\ with\ "{}};}
+\DoxyCodeLine{01254\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01255\ \ \ \ \ \ \ \ \ \ \ out\ <<\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{void}\ *)entry.\_obj\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ entry.\_obj-\/>get\_ref\_count()}
+\DoxyCodeLine{01256\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ *entry.\_obj\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}}}
+\DoxyCodeLine{01257\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}produces\ "{}}\ <<\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{void}\ *)entry.\_result\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{01258\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ entry.\_result-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{01259\ \ \ \ \ \ \ \ \ \ \ entry.\_result-\/>write(out,\ 2);}
+\DoxyCodeLine{01260\ \ \ \ \ \ \ \ \ \ \ visited.insert(entry.\_result);}
+\DoxyCodeLine{01261\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01262\ }
+\DoxyCodeLine{01263\ \ \ \ \ \ \ \ \ cycle\_desc.clear();}
+\DoxyCodeLine{01264\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01265\ \ \ \ \ \ \ \ \ ++\_last\_cycle\_detect;}
+\DoxyCodeLine{01266\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_reverse\_cycles(state,\ state,\ 1,\ \_last\_cycle\_detect,\ \&cycle\_desc))\ \{}
+\DoxyCodeLine{01267\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ state\ begins\ a\ cycle.}}
+\DoxyCodeLine{01268\ \ \ \ \ \ \ \ \ \ \ CompositionCycleDesc::iterator\ csi;}
+\DoxyCodeLine{01269\ }
+\DoxyCodeLine{01270\ \ \ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)nReverse\ cycle\ detected\ of\ length\ "{}}\ <<\ cycle\_desc.size()\ +\ 1\ <<\ \textcolor{stringliteral}{"{}:\(\backslash\)n"{}}}
+\DoxyCodeLine{01271\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}state\ "{}};}
+\DoxyCodeLine{01272\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (csi\ =\ cycle\_desc.begin();\ csi\ !=\ cycle\_desc.end();\ ++csi)\ \{}
+\DoxyCodeLine{01273\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ CompositionCycleDescEntry\ \&entry\ =\ (*csi);}
+\DoxyCodeLine{01274\ \ \ \ \ \ \ \ \ \ \ \ \ out\ <<\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{void}\ *)entry.\_result\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{01275\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ entry.\_result-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{01276\ \ \ \ \ \ \ \ \ \ \ \ \ entry.\_result-\/>write(out,\ 2);}
+\DoxyCodeLine{01277\ \ \ \ \ \ \ \ \ \ \ \ \ out\ <<\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{void}\ *)entry.\_obj\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{01278\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ entry.\_obj-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{01279\ \ \ \ \ \ \ \ \ \ \ \ \ entry.\_obj-\/>write(out,\ 2);}
+\DoxyCodeLine{01280\ \ \ \ \ \ \ \ \ \ \ \ \ visited.insert(entry.\_result);}
+\DoxyCodeLine{01281\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01282\ \ \ \ \ \ \ \ \ \ \ out\ <<\ (\textcolor{keywordtype}{void}\ *)state\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{01283\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ state-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{01284\ \ \ \ \ \ \ \ \ \ \ state-\/>write(out,\ 2);}
+\DoxyCodeLine{01285\ }
+\DoxyCodeLine{01286\ \ \ \ \ \ \ \ \ \ \ cycle\_desc.clear();}
+\DoxyCodeLine{01287\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01288\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01289\ \ \ \ \ \}}
+\DoxyCodeLine{01290\ \ \ \}}
+\DoxyCodeLine{01291\ \}}
+\DoxyCodeLine{01292\ }
+\DoxyCodeLine{01293\ }
+\DoxyCodeLine{01299\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{01300\ list\_states(ostream\ \&out)\ \{}
+\DoxyCodeLine{01301\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{01302\ }
+\DoxyCodeLine{01303\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{01304\ \ \ out\ <<\ size\ <<\ \textcolor{stringliteral}{"{}\ states:\(\backslash\)n"{}};}
+\DoxyCodeLine{01305\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ si\ =\ 0;\ si\ <\ size;\ ++si)\ \{}
+\DoxyCodeLine{01306\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \_states.get\_key(si);}
+\DoxyCodeLine{01307\ \ \ \ \ state-\/>write(out,\ 2);}
+\DoxyCodeLine{01308\ \ \ \}}
+\DoxyCodeLine{01309\ \}}
+\DoxyCodeLine{01310\ }
+\DoxyCodeLine{01317\ \textcolor{keywordtype}{bool}\ TransformState::}
+\DoxyCodeLine{01318\ validate\_states()\ \{}
+\DoxyCodeLine{01319\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_validate\_pcollector);}
+\DoxyCodeLine{01320\ }
+\DoxyCodeLine{01321\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{01322\ \ \ \textcolor{keywordflow}{if}\ (\_states.is\_empty())\ \{}
+\DoxyCodeLine{01323\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01324\ \ \ \}}
+\DoxyCodeLine{01325\ }
+\DoxyCodeLine{01326\ \ \ \textcolor{keywordflow}{if}\ (!\_states.validate())\ \{}
+\DoxyCodeLine{01327\ \ \ \ \ pgraph\_cat.error()}
+\DoxyCodeLine{01328\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}TransformState::\_states\ cache\ is\ invalid!\(\backslash\)n"{}};}
+\DoxyCodeLine{01329\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01330\ \ \ \}}
+\DoxyCodeLine{01331\ }
+\DoxyCodeLine{01332\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{01333\ \ \ \textcolor{keywordtype}{size\_t}\ si\ =\ 0;}
+\DoxyCodeLine{01334\ \ \ nassertr(si\ <\ size,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01335\ \ \ nassertr(\_states.get\_key(si)-\/>get\_ref\_count()\ >=\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01336\ \ \ \textcolor{keywordtype}{size\_t}\ snext\ =\ si;}
+\DoxyCodeLine{01337\ \ \ ++snext;}
+\DoxyCodeLine{01338\ \ \ \textcolor{keywordflow}{while}\ (snext\ <\ size)\ \{}
+\DoxyCodeLine{01339\ \ \ \ \ nassertr(\_states.get\_key(snext)-\/>get\_ref\_count()\ >=\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01340\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *ssi\ =\ \_states.get\_key(si);}
+\DoxyCodeLine{01341\ \ \ \ \ \textcolor{keywordflow}{if}\ (!ssi-\/>validate\_composition\_cache())\ \{}
+\DoxyCodeLine{01342\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01343\ \ \ \ \ \}}
+\DoxyCodeLine{01344\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *ssnext\ =\ \_states.get\_key(snext);}
+\DoxyCodeLine{01345\ \ \ \ \ \textcolor{keywordtype}{bool}\ c\ =\ (*ssi)\ ==\ (*ssnext);}
+\DoxyCodeLine{01346\ \ \ \ \ \textcolor{keywordtype}{bool}\ ci\ =\ (*ssnext)\ ==\ (*ssi);}
+\DoxyCodeLine{01347\ \ \ \ \ \textcolor{keywordflow}{if}\ (c\ !=\ ci)\ \{}
+\DoxyCodeLine{01348\ \ \ \ \ \ \ pgraph\_cat.error()}
+\DoxyCodeLine{01349\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}TransformState::operator\ ==\ ()\ not\ defined\ properly!\(\backslash\)n"{}};}
+\DoxyCodeLine{01350\ \ \ \ \ \ \ pgraph\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{01351\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}(a,\ b):\ "{}}\ <<\ c\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01352\ \ \ \ \ \ \ pgraph\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{01353\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}(b,\ a):\ "{}}\ <<\ ci\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01354\ \ \ \ \ \ \ ssi-\/>write(pgraph\_cat.error(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{01355\ \ \ \ \ \ \ ssnext-\/>write(pgraph\_cat.error(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{01356\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01357\ \ \ \ \ \}}
+\DoxyCodeLine{01358\ \ \ \ \ si\ =\ snext;}
+\DoxyCodeLine{01359\ \ \ \ \ ++snext;}
+\DoxyCodeLine{01360\ \ \ \}}
+\DoxyCodeLine{01361\ }
+\DoxyCodeLine{01362\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01363\ \}}
+\DoxyCodeLine{01364\ }
+\DoxyCodeLine{01372\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{01373\ init\_states()\ \{}
+\DoxyCodeLine{01374\ \ \ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}\ uniquify\_matrix}
+\DoxyCodeLine{01375\ \ \ (\textcolor{stringliteral}{"{}uniquify-\/matrix"{}},\ \textcolor{keyword}{true},}
+\DoxyCodeLine{01376\ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}Set\ this\ true\ to\ look\ up\ arbitrary\ 4x4\ transform\ matrices\ in\ "{}}}
+\DoxyCodeLine{01377\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}the\ cache,\ to\ ensure\ that\ two\ differently-\/computed\ transforms\ "{}}}
+\DoxyCodeLine{01378\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}that\ happen\ to\ encode\ the\ same\ matrix\ will\ be\ collapsed\ into\ "{}}}
+\DoxyCodeLine{01379\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}a\ single\ pointer.\ \ Nowadays,\ with\ the\ transforms\ stored\ in\ a\ "{}}}
+\DoxyCodeLine{01380\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}hashtable,\ we're\ generally\ better\ off\ with\ this\ set\ true."{}}));}
+\DoxyCodeLine{01381\ }
+\DoxyCodeLine{01382\ \ \ \textcolor{comment}{//\ Store\ this\ at\ the\ beginning,\ so\ that\ we\ don't\ have\ to\ query\ this\ every}}
+\DoxyCodeLine{01383\ \ \ \textcolor{comment}{//\ time\ that\ the\ comparison\ operator\ is\ invoked.}}
+\DoxyCodeLine{01384\ \ \ \_uniquify\_matrix\ =\ uniquify\_matrix;}
+\DoxyCodeLine{01385\ }
+\DoxyCodeLine{01386\ \ \ \textcolor{comment}{//\ TODO:\ we\ should\ have\ a\ global\ Panda\ mutex\ to\ allow\ us\ to\ safely\ create}}
+\DoxyCodeLine{01387\ \ \ \textcolor{comment}{//\ \_states\_lock\ without\ a\ startup\ race\ condition.\ \ For\ the\ meantime,\ this\ is}}
+\DoxyCodeLine{01388\ \ \ \textcolor{comment}{//\ OK\ because\ we\ guarantee\ that\ this\ method\ is\ called\ at\ static\ init\ time,}}
+\DoxyCodeLine{01389\ \ \ \textcolor{comment}{//\ presumably\ when\ there\ is\ still\ only\ one\ thread\ in\ the\ world.}}
+\DoxyCodeLine{01390\ \ \ \_states\_lock\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightReMutex}{LightReMutex}}(\textcolor{stringliteral}{"{}TransformState::\_states\_lock"{}});}
+\DoxyCodeLine{01391\ \ \ \_cache\_stats.\mbox{\hyperlink{classCacheStats_a567e98bb81a76df7dfb0f596c2587855}{init}}();}
+\DoxyCodeLine{01392\ \ \ nassertv(Thread::get\_current\_thread()\ ==\ Thread::get\_main\_thread());}
+\DoxyCodeLine{01393\ }
+\DoxyCodeLine{01394\ \ \ \textcolor{comment}{//\ The\ identity\ and\ invalid\ states\ are\ asked\ for\ so\ often,\ we\ make\ them\ a}}
+\DoxyCodeLine{01395\ \ \ \textcolor{comment}{//\ special\ case\ and\ store\ a\ pointer\ forever.}}
+\DoxyCodeLine{01396\ \ \ \{}
+\DoxyCodeLine{01397\ \ \ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTransformState}{TransformState}};}
+\DoxyCodeLine{01398\ \ \ \ \ state-\/>\_pos.set(0.0f,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{01399\ \ \ \ \ state-\/>\_scale.set(1.0f,\ 1.0f,\ 1.0f);}
+\DoxyCodeLine{01400\ \ \ \ \ state-\/>\_shear.set(0.0f,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{01401\ \ \ \ \ state-\/>\_hpr.set(0.0f,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{01402\ \ \ \ \ state-\/>\_quat.set(1.0f,\ 0.0f,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{01403\ \ \ \ \ state-\/>\_norm\_quat.set(1.0f,\ 0.0f,\ 0.0f,\ 0.0f);}
+\DoxyCodeLine{01404\ \ \ \ \ state-\/>\_mat.set(1.0f,\ 0.0f,\ 0.0f,\ 0.0f,}
+\DoxyCodeLine{01405\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 0.0f,\ 1.0f,\ 0.0f,\ 0.0f,}
+\DoxyCodeLine{01406\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 0.0f,\ 0.0f,\ 1.0f,\ 0.0f,}
+\DoxyCodeLine{01407\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 0.0f,\ 0.0f,\ 0.0f,\ 1.0f);}
+\DoxyCodeLine{01408\ \ \ \ \ state-\/>\_inv\_mat\ =\ \textcolor{keyword}{new}\ LMatrix4(state-\/>\_mat);}
+\DoxyCodeLine{01409\ \ \ \ \ state-\/>\_hash\ =\ H\_identity;}
+\DoxyCodeLine{01410\ \ \ \ \ state-\/>\_flags\ =\ F\_is\_identity\ |\ F\_singular\_known\ |\ F\_components\_known}
+\DoxyCodeLine{01411\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ F\_has\_components\ |\ F\_mat\_known\ |\ F\_quat\_known\ |\ F\_hpr\_known}
+\DoxyCodeLine{01412\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ F\_uniform\_scale\ |\ F\_identity\_scale\ |\ F\_is\_2d}
+\DoxyCodeLine{01413\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ F\_norm\_quat\_known;}
+\DoxyCodeLine{01414\ \ \ \ \ state-\/>cache\_ref();}
+\DoxyCodeLine{01415\ \ \ \ \ state-\/>\_saved\_entry\ =\ \_states.store(state,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01416\ \ \ \ \ \_identity\_state\ =\ state;}
+\DoxyCodeLine{01417\ \ \ \}}
+\DoxyCodeLine{01418\ \ \ \{}
+\DoxyCodeLine{01419\ \ \ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTransformState}{TransformState}};}
+\DoxyCodeLine{01420\ \ \ \ \ state-\/>\_hash\ =\ H\_invalid;}
+\DoxyCodeLine{01421\ \ \ \ \ state-\/>\_flags\ =\ F\_is\_singular\ |\ F\_singular\_known\ |\ F\_components\_known}
+\DoxyCodeLine{01422\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ F\_mat\_known\ |\ F\_is\_invalid;}
+\DoxyCodeLine{01423\ \ \ \ \ state-\/>cache\_ref();}
+\DoxyCodeLine{01424\ \ \ \ \ state-\/>\_saved\_entry\ =\ \_states.store(state,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01425\ \ \ \ \ \_invalid\_state\ =\ state;}
+\DoxyCodeLine{01426\ \ \ \}}
+\DoxyCodeLine{01427\ \}}
+\DoxyCodeLine{01428\ }
+\DoxyCodeLine{01436\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{01437\ return\_new(\mbox{\hyperlink{classTransformState}{TransformState}}\ *state)\ \{}
+\DoxyCodeLine{01438\ \ \ nassertr(state\ !=\ \textcolor{keyword}{nullptr},\ state);}
+\DoxyCodeLine{01439\ \ \ \textcolor{keywordflow}{if}\ (!uniquify\_transforms\ \&\&\ !state-\/>is\_identity())\ \{}
+\DoxyCodeLine{01440\ \ \ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{01441\ \ \ \}}
+\DoxyCodeLine{01442\ }
+\DoxyCodeLine{01443\ \ \ \textcolor{keywordflow}{return}\ return\_unique(state);}
+\DoxyCodeLine{01444\ \}}
+\DoxyCodeLine{01445\ }
+\DoxyCodeLine{01455\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{01456\ return\_unique(\mbox{\hyperlink{classTransformState}{TransformState}}\ *state)\ \{}
+\DoxyCodeLine{01457\ \ \ nassertr(state\ !=\ \textcolor{keyword}{nullptr},\ state);}
+\DoxyCodeLine{01458\ }
+\DoxyCodeLine{01459\ \ \ \textcolor{keywordflow}{if}\ (!transform\_cache)\ \{}
+\DoxyCodeLine{01460\ \ \ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{01461\ \ \ \}}
+\DoxyCodeLine{01462\ }
+\DoxyCodeLine{01463\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{01464\ \ \ \textcolor{keywordflow}{if}\ (paranoid\_const)\ \{}
+\DoxyCodeLine{01465\ \ \ \ \ nassertr(validate\_states(),\ state);}
+\DoxyCodeLine{01466\ \ \ \}}
+\DoxyCodeLine{01467\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01468\ }
+\DoxyCodeLine{01469\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_new\_pcollector);}
+\DoxyCodeLine{01470\ }
+\DoxyCodeLine{01471\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{01472\ }
+\DoxyCodeLine{01473\ \ \ \textcolor{keywordflow}{if}\ (state-\/>\_saved\_entry\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01474\ \ \ \ \ \textcolor{comment}{//\ This\ state\ is\ already\ in\ the\ cache.\ \ nassertr(\_states.find(state)\ ==}}
+\DoxyCodeLine{01475\ \ \ \ \ \textcolor{comment}{//\ state-\/>\_saved\_entry,\ state);}}
+\DoxyCodeLine{01476\ \ \ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{01477\ \ \ \}}
+\DoxyCodeLine{01478\ }
+\DoxyCodeLine{01479\ \ \ \textcolor{comment}{//\ Save\ the\ state\ in\ a\ local\ PointerTo\ so\ that\ it\ will\ be\ freed\ at\ the\ end}}
+\DoxyCodeLine{01480\ \ \ \textcolor{comment}{//\ of\ this\ function\ if\ no\ one\ else\ uses\ it.}}
+\DoxyCodeLine{01481\ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ pt\_state\ =\ state;}
+\DoxyCodeLine{01482\ }
+\DoxyCodeLine{01483\ \ \ \textcolor{keywordtype}{int}\ si\ =\ \_states.find(state);}
+\DoxyCodeLine{01484\ \ \ \textcolor{keywordflow}{if}\ (si\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01485\ \ \ \ \ \textcolor{comment}{//\ There's\ an\ equivalent\ state\ already\ in\ the\ set.\ \ Return\ it.}}
+\DoxyCodeLine{01486\ \ \ \ \ \textcolor{keywordflow}{return}\ \_states.get\_key(si);}
+\DoxyCodeLine{01487\ \ \ \}}
+\DoxyCodeLine{01488\ }
+\DoxyCodeLine{01489\ \ \ \textcolor{comment}{//\ Not\ already\ in\ the\ set;\ add\ it.}}
+\DoxyCodeLine{01490\ \ \ \textcolor{keywordflow}{if}\ (garbage\_collect\_states)\ \{}
+\DoxyCodeLine{01491\ \ \ \ \ \textcolor{comment}{//\ If\ we'll\ be\ garbage\ collecting\ states\ explicitly,\ we'll\ increment\ the}}
+\DoxyCodeLine{01492\ \ \ \ \ \textcolor{comment}{//\ reference\ count\ when\ we\ store\ it\ in\ the\ cache,\ so\ that\ it\ won't\ be}}
+\DoxyCodeLine{01493\ \ \ \ \ \textcolor{comment}{//\ deleted\ while\ it's\ in\ it.}}
+\DoxyCodeLine{01494\ \ \ \ \ state-\/>cache\_ref();}
+\DoxyCodeLine{01495\ \ \ \}}
+\DoxyCodeLine{01496\ \ \ si\ =\ \_states.store(state,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01497\ }
+\DoxyCodeLine{01498\ \ \ \textcolor{comment}{//\ Save\ the\ index\ and\ return\ the\ input\ state.}}
+\DoxyCodeLine{01499\ \ \ state-\/>\_saved\_entry\ =\ si;}
+\DoxyCodeLine{01500\ \ \ \textcolor{keywordflow}{return}\ pt\_state;}
+\DoxyCodeLine{01501\ \}}
+\DoxyCodeLine{01502\ }
+\DoxyCodeLine{01507\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{01508\ do\_compose(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01509\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_compose\_pcollector);}
+\DoxyCodeLine{01510\ }
+\DoxyCodeLine{01511\ \ \ nassertr((\_flags\ \&\ F\_is\_invalid)\ ==\ 0,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01512\ \ \ nassertr((other-\/>\_flags\ \&\ F\_is\_invalid)\ ==\ 0,\ other);}
+\DoxyCodeLine{01513\ }
+\DoxyCodeLine{01514\ \ \ \textcolor{keywordflow}{if}\ (compose\_componentwise\ \&\&}
+\DoxyCodeLine{01515\ \ \ \ \ \ \ has\_uniform\_scale()\ \&\&}
+\DoxyCodeLine{01516\ \ \ \ \ \ \ !has\_nonzero\_shear()\ \&\&\ !other-\/>has\_nonzero\_shear()\ \&\&}
+\DoxyCodeLine{01517\ \ \ \ \ \ \ ((components\_given()\ \&\&\ other-\/>has\_components())\ ||}
+\DoxyCodeLine{01518\ \ \ \ \ \ \ \ (other-\/>components\_given()\ \&\&\ has\_components())))\ \{}
+\DoxyCodeLine{01519\ \ \ \ \ \textcolor{comment}{//\ We\ will\ do\ this\ operation\ componentwise\ if\ *either*\ transform\ was\ given}}
+\DoxyCodeLine{01520\ \ \ \ \ \textcolor{comment}{//\ componentwise\ (and\ there\ is\ no\ non-\/uniform\ scale\ in\ the\ way).}}
+\DoxyCodeLine{01521\ }
+\DoxyCodeLine{01522\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ result;}
+\DoxyCodeLine{01523\ \ \ \ \ \textcolor{keywordflow}{if}\ (is\_2d()\ \&\&\ other-\/>is\_2d())\ \{}
+\DoxyCodeLine{01524\ \ \ \ \ \ \ \textcolor{comment}{//\ Do\ a\ 2-\/d\ compose.}}
+\DoxyCodeLine{01525\ \ \ \ \ \ \ LVecBase2\ pos\ =\ get\_pos2d();}
+\DoxyCodeLine{01526\ \ \ \ \ \ \ PN\_stdfloat\ rotate\ =\ get\_rotate2d();}
+\DoxyCodeLine{01527\ \ \ \ \ \ \ LQuaternion\ quat\ =\ get\_norm\_quat();}
+\DoxyCodeLine{01528\ \ \ \ \ \ \ PN\_stdfloat\ scale\ =\ get\_uniform\_scale();}
+\DoxyCodeLine{01529\ }
+\DoxyCodeLine{01530\ \ \ \ \ \ \ LPoint3\ op\ =\ quat.xform(other-\/>get\_pos());}
+\DoxyCodeLine{01531\ \ \ \ \ \ \ pos\ +=\ LVecBase2(op[0],\ op[1])\ *\ scale;}
+\DoxyCodeLine{01532\ }
+\DoxyCodeLine{01533\ \ \ \ \ \ \ rotate\ +=\ other-\/>get\_rotate2d();}
+\DoxyCodeLine{01534\ \ \ \ \ \ \ LVecBase2\ new\_scale\ =\ other-\/>get\_scale2d()\ *\ scale;}
+\DoxyCodeLine{01535\ }
+\DoxyCodeLine{01536\ \ \ \ \ \ \ result\ =\ make\_pos\_rotate\_scale2d(pos,\ rotate,\ new\_scale);}
+\DoxyCodeLine{01537\ }
+\DoxyCodeLine{01538\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01539\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ normal\ 3-\/d\ compose.}}
+\DoxyCodeLine{01540\ \ \ \ \ \ \ LVecBase3\ pos\ =\ get\_pos();}
+\DoxyCodeLine{01541\ \ \ \ \ \ \ LQuaternion\ quat\ =\ get\_norm\_quat();}
+\DoxyCodeLine{01542\ \ \ \ \ \ \ PN\_stdfloat\ scale\ =\ get\_uniform\_scale();}
+\DoxyCodeLine{01543\ }
+\DoxyCodeLine{01544\ \ \ \ \ \ \ pos\ +=\ quat.xform(other-\/>get\_pos())\ *\ scale;}
+\DoxyCodeLine{01545\ \ \ \ \ \ \ quat\ =\ other-\/>get\_norm\_quat()\ *\ quat;}
+\DoxyCodeLine{01546\ \ \ \ \ \ \ LVecBase3\ new\_scale\ =\ other-\/>get\_scale()\ *\ scale;}
+\DoxyCodeLine{01547\ }
+\DoxyCodeLine{01548\ \ \ \ \ \ \ result\ =\ make\_pos\_quat\_scale(pos,\ quat,\ new\_scale);}
+\DoxyCodeLine{01549\ \ \ \ \ \}}
+\DoxyCodeLine{01550\ }
+\DoxyCodeLine{01551\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{01552\ \ \ \ \ \textcolor{keywordflow}{if}\ (paranoid\_compose)\ \{}
+\DoxyCodeLine{01553\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ verify\ against\ the\ matrix.}}
+\DoxyCodeLine{01554\ \ \ \ \ \ \ LMatrix4\ new\_mat;}
+\DoxyCodeLine{01555\ \ \ \ \ \ \ new\_mat.multiply(other-\/>get\_mat(),\ get\_mat());}
+\DoxyCodeLine{01556\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!new\_mat.almost\_equal(result-\/>get\_mat(),\ 0.1))\ \{}
+\DoxyCodeLine{01557\ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ correct\ =\ make\_mat(new\_mat);}
+\DoxyCodeLine{01558\ \ \ \ \ \ \ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{01559\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Componentwise\ composition\ of\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\ and\ "{}}\ <<\ *other}
+\DoxyCodeLine{01560\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ produced:\(\backslash\)n"{}}}
+\DoxyCodeLine{01561\ \ \ \ \ \ \ \ \ \ \ <<\ *result\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n\ \ instead\ of:\(\backslash\)n"{}}\ <<\ *correct\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01562\ \ \ \ \ \ \ \ \ result\ =\ correct;}
+\DoxyCodeLine{01563\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01564\ \ \ \ \ \}}
+\DoxyCodeLine{01565\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{01566\ }
+\DoxyCodeLine{01567\ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{01568\ \ \ \}}
+\DoxyCodeLine{01569\ }
+\DoxyCodeLine{01570\ \ \ \textcolor{comment}{//\ Do\ the\ operation\ with\ matrices.}}
+\DoxyCodeLine{01571\ \ \ \textcolor{keywordflow}{if}\ (is\_2d()\ \&\&\ other-\/>is\_2d())\ \{}
+\DoxyCodeLine{01572\ \ \ \ \ LMatrix3\ new\_mat\ =\ other-\/>get\_mat3()\ *\ get\_mat3();}
+\DoxyCodeLine{01573\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_mat3(new\_mat);}
+\DoxyCodeLine{01574\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01575\ \ \ \ \ LMatrix4\ new\_mat;}
+\DoxyCodeLine{01576\ \ \ \ \ new\_mat.multiply(other-\/>get\_mat(),\ get\_mat());}
+\DoxyCodeLine{01577\ \ \ \ \ \textcolor{keywordflow}{return}\ make\_mat(new\_mat);}
+\DoxyCodeLine{01578\ \ \ \}}
+\DoxyCodeLine{01579\ \}}
+\DoxyCodeLine{01580\ }
+\DoxyCodeLine{01584\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ TransformState::}
+\DoxyCodeLine{01585\ do\_invert\_compose(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01586\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_invert\_pcollector);}
+\DoxyCodeLine{01587\ }
+\DoxyCodeLine{01588\ \ \ nassertr((\_flags\ \&\ F\_is\_invalid)\ ==\ 0,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01589\ \ \ nassertr((other-\/>\_flags\ \&\ F\_is\_invalid)\ ==\ 0,\ other);}
+\DoxyCodeLine{01590\ }
+\DoxyCodeLine{01591\ \ \ \textcolor{keywordflow}{if}\ (compose\_componentwise\ \&\&}
+\DoxyCodeLine{01592\ \ \ \ \ \ \ has\_uniform\_scale()\ \&\&}
+\DoxyCodeLine{01593\ \ \ \ \ \ \ !has\_nonzero\_shear()\ \&\&\ !other-\/>has\_nonzero\_shear()\ \&\&}
+\DoxyCodeLine{01594\ \ \ \ \ \ \ ((components\_given()\ \&\&\ other-\/>has\_components())\ ||}
+\DoxyCodeLine{01595\ \ \ \ \ \ \ \ (other-\/>components\_given()\ \&\&\ has\_components())))\ \{}
+\DoxyCodeLine{01596\ \ \ \ \ \textcolor{comment}{//\ We\ will\ do\ this\ operation\ componentwise\ if\ *either*\ transform\ was\ given}}
+\DoxyCodeLine{01597\ \ \ \ \ \textcolor{comment}{//\ componentwise\ (and\ there\ is\ no\ non-\/uniform\ scale\ in\ the\ way).}}
+\DoxyCodeLine{01598\ }
+\DoxyCodeLine{01599\ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ result;}
+\DoxyCodeLine{01600\ \ \ \ \ \textcolor{keywordflow}{if}\ (is\_2d()\ \&\&\ other-\/>is\_2d())\ \{}
+\DoxyCodeLine{01601\ \ \ \ \ \ \ \textcolor{comment}{//\ Do\ a\ 2-\/d\ invert\ compose.}}
+\DoxyCodeLine{01602\ \ \ \ \ \ \ LVecBase2\ pos\ =\ get\_pos2d();}
+\DoxyCodeLine{01603\ \ \ \ \ \ \ PN\_stdfloat\ rotate\ =\ get\_rotate2d();}
+\DoxyCodeLine{01604\ \ \ \ \ \ \ LQuaternion\ quat\ =\ get\_norm\_quat();}
+\DoxyCodeLine{01605\ \ \ \ \ \ \ PN\_stdfloat\ scale\ =\ get\_uniform\_scale();}
+\DoxyCodeLine{01606\ }
+\DoxyCodeLine{01607\ \ \ \ \ \ \ \textcolor{comment}{//\ First,\ invert\ our\ own\ transform.}}
+\DoxyCodeLine{01608\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (scale\ ==\ 0.0f)\ \{}
+\DoxyCodeLine{01609\ \ \ \ \ \ \ \ \ ((\mbox{\hyperlink{classTransformState}{TransformState}}\ *)\textcolor{keyword}{this})-\/>\_flags\ |=\ F\_is\_singular\ |\ F\_singular\_known;}
+\DoxyCodeLine{01610\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \_invalid\_state;}
+\DoxyCodeLine{01611\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01612\ \ \ \ \ \ \ scale\ =\ 1.0f\ /\ scale;}
+\DoxyCodeLine{01613\ \ \ \ \ \ \ quat.invert\_in\_place();}
+\DoxyCodeLine{01614\ \ \ \ \ \ \ rotate\ =\ -\/rotate;}
+\DoxyCodeLine{01615\ \ \ \ \ \ \ LVecBase3\ mp\ =\ quat.xform(-\/LVecBase3(pos[0],\ pos[1],\ 0.0f));}
+\DoxyCodeLine{01616\ \ \ \ \ \ \ pos\ =\ LVecBase2(mp[0],\ mp[1])\ *\ scale;}
+\DoxyCodeLine{01617\ \ \ \ \ \ \ LVecBase2\ new\_scale(scale,\ scale);}
+\DoxyCodeLine{01618\ }
+\DoxyCodeLine{01619\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ compose\ the\ inverted\ transform\ with\ the\ other\ transform.}}
+\DoxyCodeLine{01620\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!other-\/>is\_identity())\ \{}
+\DoxyCodeLine{01621\ \ \ \ \ \ \ \ \ LPoint3\ op\ =\ quat.xform(other-\/>get\_pos());}
+\DoxyCodeLine{01622\ \ \ \ \ \ \ \ \ pos\ +=\ LVecBase2(op[0],\ op[1])\ *\ scale;}
+\DoxyCodeLine{01623\ }
+\DoxyCodeLine{01624\ \ \ \ \ \ \ \ \ rotate\ +=\ other-\/>get\_rotate2d();}
+\DoxyCodeLine{01625\ \ \ \ \ \ \ \ \ new\_scale\ =\ other-\/>get\_scale2d()\ *\ scale;}
+\DoxyCodeLine{01626\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01627\ }
+\DoxyCodeLine{01628\ \ \ \ \ \ \ result\ =\ make\_pos\_rotate\_scale2d(pos,\ rotate,\ new\_scale);}
+\DoxyCodeLine{01629\ }
+\DoxyCodeLine{01630\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01631\ \ \ \ \ \ \ \textcolor{comment}{//\ Do\ a\ normal,\ 3-\/d\ invert\ compose.}}
+\DoxyCodeLine{01632\ \ \ \ \ \ \ LVecBase3\ pos\ =\ get\_pos();}
+\DoxyCodeLine{01633\ \ \ \ \ \ \ LQuaternion\ quat\ =\ get\_norm\_quat();}
+\DoxyCodeLine{01634\ \ \ \ \ \ \ PN\_stdfloat\ scale\ =\ get\_uniform\_scale();}
+\DoxyCodeLine{01635\ }
+\DoxyCodeLine{01636\ \ \ \ \ \ \ \textcolor{comment}{//\ First,\ invert\ our\ own\ transform.}}
+\DoxyCodeLine{01637\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (scale\ ==\ 0.0f)\ \{}
+\DoxyCodeLine{01638\ \ \ \ \ \ \ \ \ ((\mbox{\hyperlink{classTransformState}{TransformState}}\ *)\textcolor{keyword}{this})-\/>\_flags\ |=\ F\_is\_singular\ |\ F\_singular\_known;}
+\DoxyCodeLine{01639\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \_invalid\_state;}
+\DoxyCodeLine{01640\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01641\ \ \ \ \ \ \ scale\ =\ 1.0f\ /\ scale;}
+\DoxyCodeLine{01642\ \ \ \ \ \ \ quat.invert\_in\_place();}
+\DoxyCodeLine{01643\ \ \ \ \ \ \ pos\ =\ quat.xform(-\/pos)\ *\ scale;}
+\DoxyCodeLine{01644\ \ \ \ \ \ \ LVecBase3\ new\_scale(scale,\ scale,\ scale);}
+\DoxyCodeLine{01645\ }
+\DoxyCodeLine{01646\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ compose\ the\ inverted\ transform\ with\ the\ other\ transform.}}
+\DoxyCodeLine{01647\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!other-\/>is\_identity())\ \{}
+\DoxyCodeLine{01648\ \ \ \ \ \ \ \ \ pos\ +=\ quat.xform(other-\/>get\_pos())\ *\ scale;}
+\DoxyCodeLine{01649\ \ \ \ \ \ \ \ \ quat\ =\ other-\/>get\_norm\_quat()\ *\ quat;}
+\DoxyCodeLine{01650\ \ \ \ \ \ \ \ \ new\_scale\ =\ other-\/>get\_scale()\ *\ scale;}
+\DoxyCodeLine{01651\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01652\ }
+\DoxyCodeLine{01653\ \ \ \ \ \ \ result\ =\ make\_pos\_quat\_scale(pos,\ quat,\ new\_scale);}
+\DoxyCodeLine{01654\ \ \ \ \ \}}
+\DoxyCodeLine{01655\ }
+\DoxyCodeLine{01656\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{01657\ \ \ \ \ \textcolor{keywordflow}{if}\ (paranoid\_compose)\ \{}
+\DoxyCodeLine{01658\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ verify\ against\ the\ matrix.}}
+\DoxyCodeLine{01659\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (is\_singular())\ \{}
+\DoxyCodeLine{01660\ \ \ \ \ \ \ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{01661\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unexpected\ singular\ matrix\ found\ for\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01662\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01663\ \ \ \ \ \ \ \ \ nassertr(\_inv\_mat\ !=\ \textcolor{keyword}{nullptr},\ \_invalid\_state);}
+\DoxyCodeLine{01664\ \ \ \ \ \ \ \ \ LMatrix4\ new\_mat;}
+\DoxyCodeLine{01665\ \ \ \ \ \ \ \ \ new\_mat.multiply(other-\/>get\_mat(),\ *\_inv\_mat);}
+\DoxyCodeLine{01666\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!new\_mat.almost\_equal(result-\/>get\_mat(),\ 0.1))\ \{}
+\DoxyCodeLine{01667\ \ \ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ correct\ =\ make\_mat(new\_mat);}
+\DoxyCodeLine{01668\ \ \ \ \ \ \ \ \ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{01669\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Componentwise\ invert-\/composition\ of\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\ and\ "{}}\ <<\ *other}
+\DoxyCodeLine{01670\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ produced:\(\backslash\)n"{}}}
+\DoxyCodeLine{01671\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ *result\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n\ \ instead\ of:\(\backslash\)n"{}}\ <<\ *correct\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01672\ \ \ \ \ \ \ \ \ \ \ result\ =\ correct;}
+\DoxyCodeLine{01673\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01674\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01675\ \ \ \ \ \}}
+\DoxyCodeLine{01676\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{01677\ }
+\DoxyCodeLine{01678\ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{01679\ \ \ \}}
+\DoxyCodeLine{01680\ }
+\DoxyCodeLine{01681\ \ \ \textcolor{keywordflow}{if}\ (is\_singular())\ \{}
+\DoxyCodeLine{01682\ \ \ \ \ \textcolor{keywordflow}{return}\ \_invalid\_state;}
+\DoxyCodeLine{01683\ \ \ \}}
+\DoxyCodeLine{01684\ }
+\DoxyCodeLine{01685\ \ \ \textcolor{comment}{//\ Now\ that\ is\_singular()\ has\ returned\ false,\ we\ can\ assume\ that\ \_inv\_mat}}
+\DoxyCodeLine{01686\ \ \ \textcolor{comment}{//\ has\ been\ allocated\ and\ filled\ in.}}
+\DoxyCodeLine{01687\ \ \ nassertr(\_inv\_mat\ !=\ \textcolor{keyword}{nullptr},\ \_invalid\_state);}
+\DoxyCodeLine{01688\ }
+\DoxyCodeLine{01689\ \ \ \textcolor{keywordflow}{if}\ (is\_2d()\ \&\&\ other-\/>is\_2d())\ \{}
+\DoxyCodeLine{01690\ \ \ \ \ \textcolor{keyword}{const}\ LMatrix4\ \&i\ =\ *\_inv\_mat;}
+\DoxyCodeLine{01691\ \ \ \ \ LMatrix3\ inv3(i(0,\ 0),\ i(0,\ 1),\ i(0,\ 3),}
+\DoxyCodeLine{01692\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ i(1,\ 0),\ i(1,\ 1),\ i(1,\ 3),}
+\DoxyCodeLine{01693\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ i(3,\ 0),\ i(3,\ 1),\ i(3,\ 3));}
+\DoxyCodeLine{01694\ \ \ \ \ \textcolor{keywordflow}{if}\ (other-\/>is\_identity())\ \{}
+\DoxyCodeLine{01695\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ make\_mat3(inv3);}
+\DoxyCodeLine{01696\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01697\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ make\_mat3(other-\/>get\_mat3()\ *\ inv3);}
+\DoxyCodeLine{01698\ \ \ \ \ \}}
+\DoxyCodeLine{01699\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01700\ \ \ \ \ \textcolor{keywordflow}{if}\ (other-\/>is\_identity())\ \{}
+\DoxyCodeLine{01701\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ make\_mat(*\_inv\_mat);}
+\DoxyCodeLine{01702\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01703\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ make\_mat(other-\/>get\_mat()\ *\ (*\_inv\_mat));}
+\DoxyCodeLine{01704\ \ \ \ \ \}}
+\DoxyCodeLine{01705\ \ \ \}}
+\DoxyCodeLine{01706\ \}}
+\DoxyCodeLine{01707\ }
+\DoxyCodeLine{01712\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{01713\ detect\_and\_break\_cycles()\ \{}
+\DoxyCodeLine{01714\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_break\_cycles\_pcollector);}
+\DoxyCodeLine{01715\ }
+\DoxyCodeLine{01716\ \ \ ++\_last\_cycle\_detect;}
+\DoxyCodeLine{01717\ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_cycles(\textcolor{keyword}{this},\ \textcolor{keyword}{this},\ 1,\ \_last\_cycle\_detect,\ \textcolor{keyword}{nullptr}))\ \{}
+\DoxyCodeLine{01718\ \ \ \ \ \textcolor{comment}{//\ Ok,\ we\ have\ a\ cycle.\ \ This\ will\ be\ a\ leak\ unless\ we\ break\ the\ cycle\ by}}
+\DoxyCodeLine{01719\ \ \ \ \ \textcolor{comment}{//\ freeing\ the\ cache\ on\ this\ object.}}
+\DoxyCodeLine{01720\ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01721\ \ \ \ \ \ \ pgraph\_cat.debug()}
+\DoxyCodeLine{01722\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Breaking\ cycle\ involving\ "{}}\ <<\ (*this)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01723\ \ \ \ \ \}}
+\DoxyCodeLine{01724\ }
+\DoxyCodeLine{01725\ \ \ \ \ remove\_cache\_pointers();}
+\DoxyCodeLine{01726\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01727\ \ \ \ \ ++\_last\_cycle\_detect;}
+\DoxyCodeLine{01728\ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_reverse\_cycles(\textcolor{keyword}{this},\ \textcolor{keyword}{this},\ 1,\ \_last\_cycle\_detect,\ \textcolor{keyword}{nullptr}))\ \{}
+\DoxyCodeLine{01729\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01730\ \ \ \ \ \ \ \ \ pgraph\_cat.debug()}
+\DoxyCodeLine{01731\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Breaking\ cycle\ involving\ "{}}\ <<\ (*this)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01732\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01733\ }
+\DoxyCodeLine{01734\ \ \ \ \ \ \ remove\_cache\_pointers();}
+\DoxyCodeLine{01735\ \ \ \ \ \}}
+\DoxyCodeLine{01736\ \ \ \}}
+\DoxyCodeLine{01737\ \}}
+\DoxyCodeLine{01738\ }
+\DoxyCodeLine{01746\ \textcolor{keywordtype}{bool}\ TransformState::}
+\DoxyCodeLine{01747\ r\_detect\_cycles(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *start\_state,}
+\DoxyCodeLine{01748\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *current\_state,}
+\DoxyCodeLine{01749\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ length,\ \mbox{\hyperlink{classUpdateSeq}{UpdateSeq}}\ this\_seq,}
+\DoxyCodeLine{01750\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpvector}{TransformState::CompositionCycleDesc}}\ *cycle\_desc)\ \{}
+\DoxyCodeLine{01751\ \ \ \textcolor{keywordflow}{if}\ (current\_state-\/>\_cycle\_detect\ ==\ this\_seq)\ \{}
+\DoxyCodeLine{01752\ \ \ \ \ \textcolor{comment}{//\ We've\ already\ seen\ this\ state;\ therefore,\ we've\ found\ a\ cycle.}}
+\DoxyCodeLine{01753\ }
+\DoxyCodeLine{01754\ \ \ \ \ \textcolor{comment}{//\ However,\ we\ only\ care\ about\ cycles\ that\ return\ to\ the\ starting\ state}}
+\DoxyCodeLine{01755\ \ \ \ \ \textcolor{comment}{//\ and\ involve\ more\ than\ two\ steps.\ \ If\ only\ one\ or\ two\ nodes\ are}}
+\DoxyCodeLine{01756\ \ \ \ \ \textcolor{comment}{//\ involved,\ it\ doesn't\ represent\ a\ memory\ leak,\ so\ no\ problem\ there.}}
+\DoxyCodeLine{01757\ \ \ \ \ \textcolor{keywordflow}{return}\ (current\_state\ ==\ start\_state\ \&\&\ length\ >\ 2);}
+\DoxyCodeLine{01758\ \ \ \}}
+\DoxyCodeLine{01759\ \ \ ((\mbox{\hyperlink{classTransformState}{TransformState}}\ *)current\_state)-\/>\_cycle\_detect\ =\ this\_seq;}
+\DoxyCodeLine{01760\ }
+\DoxyCodeLine{01761\ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{01762\ \ \ \textcolor{keywordtype}{size\_t}\ cache\_size\ =\ current\_state-\/>\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{01763\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01764\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *result\ =\ current\_state-\/>\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{01765\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01766\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_cycles(start\_state,\ result,\ length\ +\ 1,}
+\DoxyCodeLine{01767\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ this\_seq,\ cycle\_desc))\ \{}
+\DoxyCodeLine{01768\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Cycle\ detected.}}
+\DoxyCodeLine{01769\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cycle\_desc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01770\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other\ =\ current\_state-\/>\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01771\ \ \ \ \ \ \ \ \ \ \ CompositionCycleDescEntry\ entry(other,\ result,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01772\ \ \ \ \ \ \ \ \ \ \ cycle\_desc-\/>push\_back(entry);}
+\DoxyCodeLine{01773\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01774\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01775\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01776\ \ \ \ \ \}}
+\DoxyCodeLine{01777\ \ \ \}}
+\DoxyCodeLine{01778\ }
+\DoxyCodeLine{01779\ \ \ cache\_size\ =\ current\_state-\/>\_invert\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{01780\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01781\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *result\ =\ current\_state-\/>\_invert\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{01782\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01783\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_cycles(start\_state,\ result,\ length\ +\ 1,}
+\DoxyCodeLine{01784\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ this\_seq,\ cycle\_desc))\ \{}
+\DoxyCodeLine{01785\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Cycle\ detected.}}
+\DoxyCodeLine{01786\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cycle\_desc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01787\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other\ =\ current\_state-\/>\_invert\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01788\ \ \ \ \ \ \ \ \ \ \ CompositionCycleDescEntry\ entry(other,\ result,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{01789\ \ \ \ \ \ \ \ \ \ \ cycle\_desc-\/>push\_back(entry);}
+\DoxyCodeLine{01790\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01791\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01792\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01793\ \ \ \ \ \}}
+\DoxyCodeLine{01794\ \ \ \}}
+\DoxyCodeLine{01795\ }
+\DoxyCodeLine{01796\ \ \ \textcolor{comment}{//\ No\ cycle\ detected.}}
+\DoxyCodeLine{01797\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01798\ \}}
+\DoxyCodeLine{01799\ }
+\DoxyCodeLine{01805\ \textcolor{keywordtype}{bool}\ TransformState::}
+\DoxyCodeLine{01806\ r\_detect\_reverse\_cycles(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *start\_state,}
+\DoxyCodeLine{01807\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *current\_state,}
+\DoxyCodeLine{01808\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ length,\ \mbox{\hyperlink{classUpdateSeq}{UpdateSeq}}\ this\_seq,}
+\DoxyCodeLine{01809\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpvector}{TransformState::CompositionCycleDesc}}\ *cycle\_desc)\ \{}
+\DoxyCodeLine{01810\ \ \ \textcolor{keywordflow}{if}\ (current\_state-\/>\_cycle\_detect\ ==\ this\_seq)\ \{}
+\DoxyCodeLine{01811\ \ \ \ \ \textcolor{comment}{//\ We've\ already\ seen\ this\ state;\ therefore,\ we've\ found\ a\ cycle.}}
+\DoxyCodeLine{01812\ }
+\DoxyCodeLine{01813\ \ \ \ \ \textcolor{comment}{//\ However,\ we\ only\ care\ about\ cycles\ that\ return\ to\ the\ starting\ state}}
+\DoxyCodeLine{01814\ \ \ \ \ \textcolor{comment}{//\ and\ involve\ more\ than\ two\ steps.\ \ If\ only\ one\ or\ two\ nodes\ are}}
+\DoxyCodeLine{01815\ \ \ \ \ \textcolor{comment}{//\ involved,\ it\ doesn't\ represent\ a\ memory\ leak,\ so\ no\ problem\ there.}}
+\DoxyCodeLine{01816\ \ \ \ \ \textcolor{keywordflow}{return}\ (current\_state\ ==\ start\_state\ \&\&\ length\ >\ 2);}
+\DoxyCodeLine{01817\ \ \ \}}
+\DoxyCodeLine{01818\ \ \ ((\mbox{\hyperlink{classTransformState}{TransformState}}\ *)current\_state)-\/>\_cycle\_detect\ =\ this\_seq;}
+\DoxyCodeLine{01819\ }
+\DoxyCodeLine{01820\ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{01821\ \ \ \textcolor{keywordtype}{size\_t}\ cache\_size\ =\ current\_state-\/>\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{01822\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01823\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other\ =\ current\_state-\/>\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01824\ \ \ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ current\_state)\ \{}
+\DoxyCodeLine{01825\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ oi\ =\ other-\/>\_composition\_cache.find(current\_state);}
+\DoxyCodeLine{01826\ \ \ \ \ \ \ nassertr(oi\ !=\ -\/1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01827\ }
+\DoxyCodeLine{01828\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *result\ =\ other-\/>\_composition\_cache.get\_data(oi).\_result;}
+\DoxyCodeLine{01829\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01830\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_reverse\_cycles(start\_state,\ result,\ length\ +\ 1,}
+\DoxyCodeLine{01831\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ this\_seq,\ cycle\_desc))\ \{}
+\DoxyCodeLine{01832\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Cycle\ detected.}}
+\DoxyCodeLine{01833\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cycle\_desc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01834\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other\ =\ current\_state-\/>\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01835\ \ \ \ \ \ \ \ \ \ \ \ \ CompositionCycleDescEntry\ entry(other,\ result,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01836\ \ \ \ \ \ \ \ \ \ \ \ \ cycle\_desc-\/>push\_back(entry);}
+\DoxyCodeLine{01837\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01838\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01839\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01840\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01841\ \ \ \ \ \}}
+\DoxyCodeLine{01842\ \ \ \}}
+\DoxyCodeLine{01843\ }
+\DoxyCodeLine{01844\ \ \ cache\_size\ =\ current\_state-\/>\_invert\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{01845\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01846\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other\ =\ current\_state-\/>\_invert\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01847\ \ \ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ current\_state)\ \{}
+\DoxyCodeLine{01848\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ oi\ =\ other-\/>\_invert\_composition\_cache.find(current\_state);}
+\DoxyCodeLine{01849\ \ \ \ \ \ \ nassertr(oi\ !=\ -\/1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01850\ }
+\DoxyCodeLine{01851\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *result\ =\ other-\/>\_invert\_composition\_cache.get\_data(oi).\_result;}
+\DoxyCodeLine{01852\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01853\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_reverse\_cycles(start\_state,\ result,\ length\ +\ 1,}
+\DoxyCodeLine{01854\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ this\_seq,\ cycle\_desc))\ \{}
+\DoxyCodeLine{01855\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Cycle\ detected.}}
+\DoxyCodeLine{01856\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cycle\_desc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01857\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other\ =\ current\_state-\/>\_invert\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01858\ \ \ \ \ \ \ \ \ \ \ \ \ CompositionCycleDescEntry\ entry(other,\ result,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01859\ \ \ \ \ \ \ \ \ \ \ \ \ cycle\_desc-\/>push\_back(entry);}
+\DoxyCodeLine{01860\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01861\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01862\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01863\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01864\ \ \ \ \ \}}
+\DoxyCodeLine{01865\ \ \ \}}
+\DoxyCodeLine{01866\ }
+\DoxyCodeLine{01867\ \ \ \textcolor{comment}{//\ No\ cycle\ detected.}}
+\DoxyCodeLine{01868\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01869\ \}}
+\DoxyCodeLine{01870\ }
+\DoxyCodeLine{01871\ }
+\DoxyCodeLine{01878\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{01879\ release\_new()\ \{}
+\DoxyCodeLine{01880\ \ \ nassertv(\_states\_lock-\/>debug\_is\_locked());}
+\DoxyCodeLine{01881\ }
+\DoxyCodeLine{01882\ \ \ \textcolor{keywordflow}{if}\ (\_saved\_entry\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01883\ \ \ \ \ \_saved\_entry\ =\ -\/1;}
+\DoxyCodeLine{01884\ \ \ \ \ nassertv\_always(\_states.remove(\textcolor{keyword}{this}));}
+\DoxyCodeLine{01885\ \ \ \}}
+\DoxyCodeLine{01886\ \}}
+\DoxyCodeLine{01887\ }
+\DoxyCodeLine{01895\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{01896\ remove\_cache\_pointers()\ \{}
+\DoxyCodeLine{01897\ \ \ nassertv(\_states\_lock-\/>debug\_is\_locked());}
+\DoxyCodeLine{01898\ }
+\DoxyCodeLine{01899\ \ \ \textcolor{comment}{//\ Fortunately,\ since\ we\ added\ CompositionCache\ records\ in\ pairs,\ we\ know}}
+\DoxyCodeLine{01900\ \ \ \textcolor{comment}{//\ exactly\ the\ set\ of\ TransformState\ objects\ that\ have\ us\ in\ their\ cache:}}
+\DoxyCodeLine{01901\ \ \ \textcolor{comment}{//\ it's\ the\ same\ set\ of\ TransformState\ objects\ that\ we\ have\ in\ our\ own}}
+\DoxyCodeLine{01902\ \ \ \textcolor{comment}{//\ cache.}}
+\DoxyCodeLine{01903\ }
+\DoxyCodeLine{01904\ \textcolor{comment}{/*}}
+\DoxyCodeLine{01905\ \textcolor{comment}{\ *\ We\ do\ need\ to\ put\ considerable\ thought\ into\ this\ loop,\ because\ as\ we\ clear}}
+\DoxyCodeLine{01906\ \textcolor{comment}{\ *\ out\ cache\ entries\ we'll\ cause\ other\ TransformState\ objects\ to\ destruct,}}
+\DoxyCodeLine{01907\ \textcolor{comment}{\ *\ which\ could\ cause\ things\ to\ get\ pulled\ out\ of\ our\ own\ \_composition\_cache}}
+\DoxyCodeLine{01908\ \textcolor{comment}{\ *\ map.\ \ We\ want\ to\ allow\ this\ (so\ that\ we\ don't\ encounter\ any\ just-\/destructed}}
+\DoxyCodeLine{01909\ \textcolor{comment}{\ *\ pointers\ in\ our\ cache),\ but\ we\ don't\ want\ to\ get\ bitten\ by\ this\ cascading}}
+\DoxyCodeLine{01910\ \textcolor{comment}{\ *\ effect.\ \ Instead\ of\ walking\ through\ the\ map\ from\ beginning\ to\ end,}}
+\DoxyCodeLine{01911\ \textcolor{comment}{\ *\ therefore,\ we\ just\ pull\ out\ the\ first\ one\ each\ time,\ and\ erase\ it.}}
+\DoxyCodeLine{01912\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{01913\ }
+\DoxyCodeLine{01914\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{01915\ \ \ \textcolor{keywordflow}{if}\ (\_composition\_cache.is\_empty()\ \&\&\ \_invert\_composition\_cache.is\_empty())\ \{}
+\DoxyCodeLine{01916\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01917\ \ \ \}}
+\DoxyCodeLine{01918\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_cache\_update\_pcollector);}
+\DoxyCodeLine{01919\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{01920\ }
+\DoxyCodeLine{01921\ \ \ \textcolor{comment}{//\ There\ are\ lots\ of\ ways\ to\ do\ this\ loop\ wrong.\ \ Be\ very\ careful\ if\ you}}
+\DoxyCodeLine{01922\ \ \ \textcolor{comment}{//\ need\ to\ modify\ it\ for\ any\ reason.}}
+\DoxyCodeLine{01923\ \ \ \textcolor{keywordtype}{size\_t}\ i\ =\ 0;}
+\DoxyCodeLine{01924\ \ \ \textcolor{keywordflow}{while}\ (!\_composition\_cache.is\_empty())\ \{}
+\DoxyCodeLine{01925\ \ \ \ \ \textcolor{comment}{//\ It\ is\ possible\ that\ the\ "{}other"{}\ TransformState\ object\ is\ currently}}
+\DoxyCodeLine{01926\ \ \ \ \ \textcolor{comment}{//\ within\ its\ own\ destructor.\ \ We\ therefore\ can't\ use\ a\ PT()\ to\ hold\ its}}
+\DoxyCodeLine{01927\ \ \ \ \ \textcolor{comment}{//\ pointer;\ that\ could\ end\ up\ calling\ its\ destructor\ twice.\ \ Fortunately,}}
+\DoxyCodeLine{01928\ \ \ \ \ \textcolor{comment}{//\ we\ don't\ need\ to\ hold\ its\ reference\ count\ to\ ensure\ it\ doesn't\ destruct}}
+\DoxyCodeLine{01929\ \ \ \ \ \textcolor{comment}{//\ while\ we\ process\ this\ loop;\ as\ long\ as\ we\ ensure\ that\ no\ *other*}}
+\DoxyCodeLine{01930\ \ \ \ \ \textcolor{comment}{//\ TransformState\ objects\ destruct,\ there\ will\ be\ no\ reason\ for\ that\ one}}
+\DoxyCodeLine{01931\ \ \ \ \ \textcolor{comment}{//\ to.}}
+\DoxyCodeLine{01932\ \ \ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other\ =\ (\mbox{\hyperlink{classTransformState}{TransformState}}\ *)\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01933\ }
+\DoxyCodeLine{01934\ \ \ \ \ \textcolor{comment}{//\ We\ hold\ a\ copy\ of\ the\ composition\ result\ so\ we\ can\ dereference\ it}}
+\DoxyCodeLine{01935\ \ \ \ \ \textcolor{comment}{//\ later.}}
+\DoxyCodeLine{01936\ \ \ \ \ Composition\ comp\ =\ \_composition\_cache.get\_data(i);}
+\DoxyCodeLine{01937\ }
+\DoxyCodeLine{01938\ \ \ \ \ \textcolor{comment}{//\ Now\ we\ can\ remove\ the\ element\ from\ our\ cache.\ \ We\ do\ this\ now,\ rather}}
+\DoxyCodeLine{01939\ \ \ \ \ \textcolor{comment}{//\ than\ later,\ before\ any\ other\ TransformState\ objects\ have\ had\ a\ chance}}
+\DoxyCodeLine{01940\ \ \ \ \ \textcolor{comment}{//\ to\ destruct,\ so\ we\ are\ confident\ that\ our\ iterator\ is\ still\ valid.}}
+\DoxyCodeLine{01941\ \ \ \ \ \_composition\_cache.remove\_element(i);}
+\DoxyCodeLine{01942\ \ \ \ \ \_cache\_stats.add\_total\_size(-\/1);}
+\DoxyCodeLine{01943\ \ \ \ \ \_cache\_stats.inc\_dels();}
+\DoxyCodeLine{01944\ }
+\DoxyCodeLine{01945\ \ \ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{01946\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ oi\ =\ other-\/>\_composition\_cache.find(\textcolor{keyword}{this});}
+\DoxyCodeLine{01947\ }
+\DoxyCodeLine{01948\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ may\ or\ may\ not\ still\ be\ listed\ in\ the\ other's\ cache\ (it\ might\ be}}
+\DoxyCodeLine{01949\ \ \ \ \ \ \ \textcolor{comment}{//\ halfway\ through\ pulling\ entries\ out,\ from\ within\ its\ own\ destructor).}}
+\DoxyCodeLine{01950\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (oi\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01951\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Hold\ a\ copy\ of\ the\ other\ composition\ result,\ too.}}
+\DoxyCodeLine{01952\ \ \ \ \ \ \ \ \ Composition\ ocomp\ =\ other-\/>\_composition\_cache.get\_data(oi);}
+\DoxyCodeLine{01953\ }
+\DoxyCodeLine{01954\ \ \ \ \ \ \ \ \ other-\/>\_composition\_cache.remove\_element(oi);}
+\DoxyCodeLine{01955\ \ \ \ \ \ \ \ \ \_cache\_stats.add\_total\_size(-\/1);}
+\DoxyCodeLine{01956\ \ \ \ \ \ \ \ \ \_cache\_stats.inc\_dels();}
+\DoxyCodeLine{01957\ }
+\DoxyCodeLine{01958\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ finally\ safe\ to\ let\ our\ held\ pointers\ go\ away.\ \ This\ may\ have}}
+\DoxyCodeLine{01959\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ cascading\ effects\ as\ other\ TransformState\ objects\ are\ destructed,}}
+\DoxyCodeLine{01960\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ but\ there\ will\ be\ no\ harm\ done\ if\ they\ destruct\ now.}}
+\DoxyCodeLine{01961\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ocomp.\_result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ ocomp.\_result\ !=\ other)\ \{}
+\DoxyCodeLine{01962\ \ \ \ \ \ \ \ \ \ \ cache\_unref\_delete(ocomp.\_result);}
+\DoxyCodeLine{01963\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01964\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01965\ \ \ \ \ \}}
+\DoxyCodeLine{01966\ }
+\DoxyCodeLine{01967\ \ \ \ \ \textcolor{comment}{//\ It's\ finally\ safe\ to\ let\ our\ held\ pointers\ go\ away.\ \ (See\ comment}}
+\DoxyCodeLine{01968\ \ \ \ \ \textcolor{comment}{//\ above.)}}
+\DoxyCodeLine{01969\ \ \ \ \ \textcolor{keywordflow}{if}\ (comp.\_result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ comp.\_result\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{01970\ \ \ \ \ \ \ cache\_unref\_delete(comp.\_result);}
+\DoxyCodeLine{01971\ \ \ \ \ \}}
+\DoxyCodeLine{01972\ \ \ \}}
+\DoxyCodeLine{01973\ }
+\DoxyCodeLine{01974\ \ \ \textcolor{comment}{//\ A\ similar\ bit\ of\ code\ for\ the\ invert\ cache.}}
+\DoxyCodeLine{01975\ \ \ i\ =\ 0;}
+\DoxyCodeLine{01976\ \ \ \textcolor{keywordflow}{while}\ (!\_invert\_composition\_cache.is\_empty())\ \{}
+\DoxyCodeLine{01977\ \ \ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *other\ =\ (\mbox{\hyperlink{classTransformState}{TransformState}}\ *)\_invert\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01978\ \ \ \ \ nassertv(other\ !=\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01979\ \ \ \ \ Composition\ comp\ =\ \_invert\_composition\_cache.get\_data(i);}
+\DoxyCodeLine{01980\ \ \ \ \ \_invert\_composition\_cache.remove\_element(i);}
+\DoxyCodeLine{01981\ \ \ \ \ \_cache\_stats.add\_total\_size(-\/1);}
+\DoxyCodeLine{01982\ \ \ \ \ \_cache\_stats.inc\_dels();}
+\DoxyCodeLine{01983\ \ \ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{01984\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ oi\ =\ other-\/>\_invert\_composition\_cache.find(\textcolor{keyword}{this});}
+\DoxyCodeLine{01985\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (oi\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01986\ \ \ \ \ \ \ \ \ Composition\ ocomp\ =\ other-\/>\_invert\_composition\_cache.get\_data(oi);}
+\DoxyCodeLine{01987\ \ \ \ \ \ \ \ \ other-\/>\_invert\_composition\_cache.remove\_element(oi);}
+\DoxyCodeLine{01988\ \ \ \ \ \ \ \ \ \_cache\_stats.add\_total\_size(-\/1);}
+\DoxyCodeLine{01989\ \ \ \ \ \ \ \ \ \_cache\_stats.inc\_dels();}
+\DoxyCodeLine{01990\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ocomp.\_result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ ocomp.\_result\ !=\ other)\ \{}
+\DoxyCodeLine{01991\ \ \ \ \ \ \ \ \ \ \ cache\_unref\_delete(ocomp.\_result);}
+\DoxyCodeLine{01992\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01993\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01994\ \ \ \ \ \}}
+\DoxyCodeLine{01995\ \ \ \ \ \textcolor{keywordflow}{if}\ (comp.\_result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ comp.\_result\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{01996\ \ \ \ \ \ \ cache\_unref\_delete(comp.\_result);}
+\DoxyCodeLine{01997\ \ \ \ \ \}}
+\DoxyCodeLine{01998\ \ \ \}}
+\DoxyCodeLine{01999\ \}}
+\DoxyCodeLine{02000\ }
+\DoxyCodeLine{02004\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{02005\ calc\_hash()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02006\ \ \ \textcolor{comment}{//\ It's\ OK\ not\ to\ grab\ the\ lock\ here,\ because\ (1)\ this\ does\ not\ depend\ on}}
+\DoxyCodeLine{02007\ \ \ \textcolor{comment}{//\ cached\ values\ (only\ given\ components\ are\ considered),\ and\ (2)\ the\ hash}}
+\DoxyCodeLine{02008\ \ \ \textcolor{comment}{//\ itself\ is\ set\ atomically.}}
+\DoxyCodeLine{02009\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_hash\_pcollector);}
+\DoxyCodeLine{02010\ \ \ AtomicAdjust::Integer\ hash\ =\ 0;}
+\DoxyCodeLine{02011\ }
+\DoxyCodeLine{02012\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ significant\_flags\ =}
+\DoxyCodeLine{02013\ \ \ \ \ (F\_is\_invalid\ |\ F\_is\_identity\ |\ F\_components\_given\ |\ F\_hpr\_given\ |\ F\_is\_2d);}
+\DoxyCodeLine{02014\ }
+\DoxyCodeLine{02015\ \ \ \textcolor{keywordtype}{int}\ flags\ =\ (\_flags\ \&\ significant\_flags);}
+\DoxyCodeLine{02016\ \ \ hash\ =\ int\_hash::add\_hash(hash,\ flags);}
+\DoxyCodeLine{02017\ }
+\DoxyCodeLine{02018\ \ \ nassertv((flags\ \&\ (F\_is\_invalid\ |\ F\_is\_identity))\ ==\ 0);}
+\DoxyCodeLine{02019\ }
+\DoxyCodeLine{02020\ \ \ \textcolor{comment}{//\ Only\ bother\ to\ put\ the\ rest\ of\ the\ stuff\ in\ the\ hash\ if\ the\ transform}}
+\DoxyCodeLine{02021\ \ \ \textcolor{comment}{//\ is\ not\ invalid\ or\ empty.}}
+\DoxyCodeLine{02022\ }
+\DoxyCodeLine{02023\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_components\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{02024\ \ \ \ \ \textcolor{comment}{//\ If\ the\ transform\ was\ specified\ componentwise,\ hash\ it\ componentwise.}}
+\DoxyCodeLine{02025\ \ \ \ \ hash\ =\ \_pos.add\_hash(hash);}
+\DoxyCodeLine{02026\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_hpr\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{02027\ \ \ \ \ \ \ hash\ =\ \_hpr.add\_hash(hash);}
+\DoxyCodeLine{02028\ \ \ \ \ \}}
+\DoxyCodeLine{02029\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_quat\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{02030\ \ \ \ \ \ \ hash\ =\ \_quat.add\_hash(hash);}
+\DoxyCodeLine{02031\ \ \ \ \ \}}
+\DoxyCodeLine{02032\ }
+\DoxyCodeLine{02033\ \ \ \ \ hash\ =\ \_scale.add\_hash(hash);}
+\DoxyCodeLine{02034\ \ \ \ \ hash\ =\ \_shear.add\_hash(hash);}
+\DoxyCodeLine{02035\ \ \ \}}
+\DoxyCodeLine{02036\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02037\ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ hash\ the\ matrix\ .\ .\ .}}
+\DoxyCodeLine{02038\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_uniquify\_matrix)\ \{}
+\DoxyCodeLine{02039\ \ \ \ \ \ \ \textcolor{comment}{//\ .\ .\ .\ but\ only\ if\ the\ user\ thinks\ that's\ worthwhile.}}
+\DoxyCodeLine{02040\ \ \ \ \ \ \ check\_mat();}
+\DoxyCodeLine{02041\ \ \ \ \ \ \ hash\ =\ \_mat.add\_hash(hash);}
+\DoxyCodeLine{02042\ \ \ \ \ \}}
+\DoxyCodeLine{02043\ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02044\ \ \ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ hash\ the\ pointer\ only-\/-\/any\ two\ different\ matrix-\/based}}
+\DoxyCodeLine{02045\ \ \ \ \ \ \ \textcolor{comment}{//\ TransformStates\ are\ considered\ to\ be\ different,\ even\ if\ their}}
+\DoxyCodeLine{02046\ \ \ \ \ \ \ \textcolor{comment}{//\ matrices\ have\ the\ same\ values.}}
+\DoxyCodeLine{02047\ }
+\DoxyCodeLine{02048\ \ \ \ \ \ \ hash\ =\ pointer\_hash::add\_hash(hash,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{02049\ \ \ \ \ \}}
+\DoxyCodeLine{02050\ \ \ \}}
+\DoxyCodeLine{02051\ }
+\DoxyCodeLine{02052\ \ \ \textcolor{keywordflow}{if}\ (hash\ ==\ H\_unknown\ ||\ hash\ ==\ H\_identity\ ||\ hash\ ==\ H\_invalid)\ \{}
+\DoxyCodeLine{02053\ \ \ \ \ \textcolor{comment}{//\ Arbitrarily\ offset\ the\ hash\ not\ to\ conflict\ with\ these\ special\ values.}}
+\DoxyCodeLine{02054\ \ \ \ \ hash\ +=\ 0x10000;}
+\DoxyCodeLine{02055\ \ \ \}}
+\DoxyCodeLine{02056\ }
+\DoxyCodeLine{02057\ \ \ \textcolor{comment}{//\ We\ don't\ care\ if\ some\ other\ thread\ set\ this\ in\ the\ meantime,\ since\ every}}
+\DoxyCodeLine{02058\ \ \ \textcolor{comment}{//\ thread\ should\ have\ computed\ the\ same\ hash.}}
+\DoxyCodeLine{02059\ \ \ AtomicAdjust::set(\_hash,\ hash);}
+\DoxyCodeLine{02060\ \}}
+\DoxyCodeLine{02061\ }
+\DoxyCodeLine{02066\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{02067\ calc\_singular()\ \{}
+\DoxyCodeLine{02068\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{02069\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_singular\_known)\ !=\ 0)\ \{}
+\DoxyCodeLine{02070\ \ \ \ \ \textcolor{comment}{//\ Someone\ else\ computed\ it\ first.}}
+\DoxyCodeLine{02071\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{02072\ \ \ \}}
+\DoxyCodeLine{02073\ }
+\DoxyCodeLine{02074\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_calc\_pcollector);}
+\DoxyCodeLine{02075\ }
+\DoxyCodeLine{02076\ \ \ nassertv((\_flags\ \&\ (F\_is\_invalid\ |\ F\_is\_identity))\ ==\ 0);}
+\DoxyCodeLine{02077\ }
+\DoxyCodeLine{02078\ \ \ \textcolor{comment}{//\ We\ determine\ if\ a\ matrix\ is\ singular\ by\ attempting\ to\ invert\ it\ (and\ we}}
+\DoxyCodeLine{02079\ \ \ \textcolor{comment}{//\ save\ the\ result\ of\ this\ invert\ operation\ for\ a\ subsequent}}
+\DoxyCodeLine{02080\ \ \ \textcolor{comment}{//\ do\_invert\_compose()\ call,\ which\ is\ almost\ certain\ to\ be\ made\ if\ someone}}
+\DoxyCodeLine{02081\ \ \ \textcolor{comment}{//\ is\ asking\ whether\ we're\ singular).}}
+\DoxyCodeLine{02082\ }
+\DoxyCodeLine{02083\ \ \ \textcolor{comment}{//\ This\ should\ be\ NULL\ if\ no\ one\ has\ called\ calc\_singular()\ yet.}}
+\DoxyCodeLine{02084\ \ \ nassertv(\_inv\_mat\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{02085\ \ \ \_inv\_mat\ =\ \textcolor{keyword}{new}\ LMatrix4;}
+\DoxyCodeLine{02086\ }
+\DoxyCodeLine{02087\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_mat\_known)\ ==\ 0)\ \{}
+\DoxyCodeLine{02088\ \ \ \ \ do\_calc\_mat();}
+\DoxyCodeLine{02089\ \ \ \}}
+\DoxyCodeLine{02090\ \ \ \textcolor{keywordtype}{bool}\ inverted\ =\ \_inv\_mat-\/>invert\_from(\_mat);}
+\DoxyCodeLine{02091\ }
+\DoxyCodeLine{02092\ \ \ \textcolor{keywordflow}{if}\ (!inverted)\ \{}
+\DoxyCodeLine{02093\ \ \ \ \ \_flags\ |=\ F\_is\_singular;}
+\DoxyCodeLine{02094\ \ \ \ \ \textcolor{keyword}{delete}\ \_inv\_mat;}
+\DoxyCodeLine{02095\ \ \ \ \ \_inv\_mat\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{02096\ \ \ \}}
+\DoxyCodeLine{02097\ \ \ \_flags\ |=\ F\_singular\_known;}
+\DoxyCodeLine{02098\ \}}
+\DoxyCodeLine{02099\ }
+\DoxyCodeLine{02104\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{02105\ do\_calc\_components()\ \{}
+\DoxyCodeLine{02106\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_components\_known)\ !=\ 0)\ \{}
+\DoxyCodeLine{02107\ \ \ \ \ \textcolor{comment}{//\ Someone\ else\ computed\ it\ first.}}
+\DoxyCodeLine{02108\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{02109\ \ \ \}}
+\DoxyCodeLine{02110\ }
+\DoxyCodeLine{02111\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_calc\_pcollector);}
+\DoxyCodeLine{02112\ }
+\DoxyCodeLine{02113\ \ \ nassertv((\_flags\ \&\ (F\_is\_invalid\ |\ F\_is\_identity))\ ==\ 0);}
+\DoxyCodeLine{02114\ }
+\DoxyCodeLine{02115\ \ \ \textcolor{comment}{//\ If\ we\ don't\ have\ components\ and\ we're\ not\ identity,\ the\ only\ other}}
+\DoxyCodeLine{02116\ \ \ \textcolor{comment}{//\ explanation\ is\ that\ we\ were\ constructed\ via\ a\ matrix.}}
+\DoxyCodeLine{02117\ \ \ nassertv((\_flags\ \&\ F\_mat\_known)\ !=\ 0);}
+\DoxyCodeLine{02118\ }
+\DoxyCodeLine{02119\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_mat\_known)\ ==\ 0)\ \{}
+\DoxyCodeLine{02120\ \ \ \ \ do\_calc\_mat();}
+\DoxyCodeLine{02121\ \ \ \}}
+\DoxyCodeLine{02122\ \ \ \textcolor{keywordtype}{bool}\ possible\ =\ \mbox{\hyperlink{compose__matrix__src_8cxx_a499c787e84555f9a09c93f526b7dbc0d}{decompose\_matrix}}(\_mat,\ \_scale,\ \_shear,\ \_hpr,\ \_pos);}
+\DoxyCodeLine{02123\ \ \ \textcolor{keywordflow}{if}\ (!possible)\ \{}
+\DoxyCodeLine{02124\ \ \ \ \ \textcolor{comment}{//\ Some\ matrices\ can't\ be\ decomposed\ into\ scale,\ hpr,\ pos.\ \ In\ this}}
+\DoxyCodeLine{02125\ \ \ \ \ \textcolor{comment}{//\ case,\ we\ now\ know\ that\ we\ cannot\ compute\ the\ components;\ but\ the}}
+\DoxyCodeLine{02126\ \ \ \ \ \textcolor{comment}{//\ closest\ approximations\ are\ stored,\ at\ least.}}
+\DoxyCodeLine{02127\ \ \ \ \ \_flags\ |=\ F\_components\_known\ |\ F\_hpr\_known;}
+\DoxyCodeLine{02128\ }
+\DoxyCodeLine{02129\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02130\ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ we\ do\ have\ the\ components,\ or\ at\ least\ the\ hpr.}}
+\DoxyCodeLine{02131\ \ \ \ \ \_flags\ |=\ F\_has\_components\ |\ F\_components\_known\ |\ F\_hpr\_known;}
+\DoxyCodeLine{02132\ \ \ \ \ check\_uniform\_scale();}
+\DoxyCodeLine{02133\ \ \ \}}
+\DoxyCodeLine{02134\ }
+\DoxyCodeLine{02135\ \ \ \textcolor{comment}{//\ However,\ we\ can\ always\ get\ at\ least\ the\ pos.}}
+\DoxyCodeLine{02136\ \ \ \_mat.get\_row3(\_pos,\ 3);}
+\DoxyCodeLine{02137\ \}}
+\DoxyCodeLine{02138\ }
+\DoxyCodeLine{02143\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{02144\ do\_calc\_hpr()\ \{}
+\DoxyCodeLine{02145\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_hpr\_known)\ !=\ 0)\ \{}
+\DoxyCodeLine{02146\ \ \ \ \ \textcolor{comment}{//\ Someone\ else\ computed\ it\ first.}}
+\DoxyCodeLine{02147\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{02148\ \ \ \}}
+\DoxyCodeLine{02149\ }
+\DoxyCodeLine{02150\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_calc\_pcollector);}
+\DoxyCodeLine{02151\ }
+\DoxyCodeLine{02152\ \ \ nassertv((\_flags\ \&\ (F\_is\_invalid\ |\ F\_is\_identity))\ ==\ 0);}
+\DoxyCodeLine{02153\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_components\_known)\ ==\ 0)\ \{}
+\DoxyCodeLine{02154\ \ \ \ \ do\_calc\_components();}
+\DoxyCodeLine{02155\ \ \ \}}
+\DoxyCodeLine{02156\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_hpr\_known)\ ==\ 0)\ \{}
+\DoxyCodeLine{02157\ \ \ \ \ \textcolor{comment}{//\ If\ we\ don't\ know\ the\ hpr\ yet,\ we\ must\ have\ been\ given\ a\ quat.}}
+\DoxyCodeLine{02158\ \ \ \ \ \textcolor{comment}{//\ Decompose\ it.}}
+\DoxyCodeLine{02159\ \ \ \ \ nassertv((\_flags\ \&\ F\_quat\_known)\ !=\ 0);}
+\DoxyCodeLine{02160\ \ \ \ \ \_hpr\ =\ \_quat.get\_hpr();}
+\DoxyCodeLine{02161\ \ \ \ \ \_flags\ |=\ F\_hpr\_known;}
+\DoxyCodeLine{02162\ \ \ \}}
+\DoxyCodeLine{02163\ \}}
+\DoxyCodeLine{02164\ }
+\DoxyCodeLine{02168\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{02169\ calc\_quat()\ \{}
+\DoxyCodeLine{02170\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{02171\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_quat\_known)\ !=\ 0)\ \{}
+\DoxyCodeLine{02172\ \ \ \ \ \textcolor{comment}{//\ Someone\ else\ computed\ it\ first.}}
+\DoxyCodeLine{02173\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{02174\ \ \ \}}
+\DoxyCodeLine{02175\ }
+\DoxyCodeLine{02176\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_calc\_pcollector);}
+\DoxyCodeLine{02177\ }
+\DoxyCodeLine{02178\ \ \ nassertv((\_flags\ \&\ (F\_is\_invalid\ |\ F\_is\_identity))\ ==\ 0);}
+\DoxyCodeLine{02179\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_components\_known)\ ==\ 0)\ \{}
+\DoxyCodeLine{02180\ \ \ \ \ do\_calc\_components();}
+\DoxyCodeLine{02181\ \ \ \}}
+\DoxyCodeLine{02182\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_quat\_known)\ ==\ 0)\ \{}
+\DoxyCodeLine{02183\ \ \ \ \ \textcolor{comment}{//\ If\ we\ don't\ know\ the\ quat\ yet,\ we\ must\ have\ been\ given\ a\ hpr.}}
+\DoxyCodeLine{02184\ \ \ \ \ \textcolor{comment}{//\ Decompose\ it.}}
+\DoxyCodeLine{02185\ \ \ \ \ nassertv((\_flags\ \&\ F\_hpr\_known)\ !=\ 0);}
+\DoxyCodeLine{02186\ \ \ \ \ \_quat.set\_hpr(\_hpr);}
+\DoxyCodeLine{02187\ \ \ \ \ \_flags\ |=\ F\_quat\_known;}
+\DoxyCodeLine{02188\ \ \ \}}
+\DoxyCodeLine{02189\ \}}
+\DoxyCodeLine{02190\ }
+\DoxyCodeLine{02194\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{02195\ calc\_norm\_quat()\ \{}
+\DoxyCodeLine{02196\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_calc\_pcollector);}
+\DoxyCodeLine{02197\ }
+\DoxyCodeLine{02198\ \ \ LQuaternion\ quat\ =\ get\_quat();}
+\DoxyCodeLine{02199\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{02200\ \ \ \_norm\_quat\ =\ quat;}
+\DoxyCodeLine{02201\ \ \ \_norm\_quat.normalize();}
+\DoxyCodeLine{02202\ \ \ \_flags\ |=\ F\_norm\_quat\_known;}
+\DoxyCodeLine{02203\ \}}
+\DoxyCodeLine{02204\ }
+\DoxyCodeLine{02209\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{02210\ do\_calc\_mat()\ \{}
+\DoxyCodeLine{02211\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_mat\_known)\ !=\ 0)\ \{}
+\DoxyCodeLine{02212\ \ \ \ \ \textcolor{comment}{//\ Someone\ else\ computed\ it\ first.}}
+\DoxyCodeLine{02213\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{02214\ \ \ \}}
+\DoxyCodeLine{02215\ }
+\DoxyCodeLine{02216\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_transform\_calc\_pcollector);}
+\DoxyCodeLine{02217\ }
+\DoxyCodeLine{02218\ \ \ nassertv((\_flags\ \&\ (F\_is\_invalid\ |\ F\_is\_identity))\ ==\ 0);}
+\DoxyCodeLine{02219\ }
+\DoxyCodeLine{02220\ \ \ \textcolor{comment}{//\ If\ we\ don't\ have\ a\ matrix\ and\ we're\ not\ identity,\ the\ only\ other}}
+\DoxyCodeLine{02221\ \ \ \textcolor{comment}{//\ explanation\ is\ that\ we\ were\ constructed\ via\ components.}}
+\DoxyCodeLine{02222\ \ \ nassertv((\_flags\ \&\ F\_components\_known)\ !=\ 0);}
+\DoxyCodeLine{02223\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_hpr\_known)\ ==\ 0)\ \{}
+\DoxyCodeLine{02224\ \ \ \ \ do\_calc\_hpr();}
+\DoxyCodeLine{02225\ \ \ \}}
+\DoxyCodeLine{02226\ }
+\DoxyCodeLine{02227\ \ \ \mbox{\hyperlink{compose__matrix__src_8cxx_aa46bdf9de1e1e04a5e2cdd7af6b39c64}{compose\_matrix}}(\_mat,\ \_scale,\ \_shear,\ get\_hpr(),\ \_pos);}
+\DoxyCodeLine{02228\ \ \ \_flags\ |=\ F\_mat\_known;}
+\DoxyCodeLine{02229\ \}}
+\DoxyCodeLine{02230\ }
+\DoxyCodeLine{02236\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{02237\ update\_pstats(\textcolor{keywordtype}{int}\ old\_referenced\_bits,\ \textcolor{keywordtype}{int}\ new\_referenced\_bits)\ \{}
+\DoxyCodeLine{02238\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{02239\ \ \ \textcolor{keywordflow}{if}\ ((old\_referenced\_bits\ \&\ R\_node)\ !=\ 0)\ \{}
+\DoxyCodeLine{02240\ \ \ \ \ \_node\_counter.sub\_level(1);}
+\DoxyCodeLine{02241\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((old\_referenced\_bits\ \&\ R\_cache)\ !=\ 0)\ \{}
+\DoxyCodeLine{02242\ \ \ \ \ \_cache\_counter.sub\_level(1);}
+\DoxyCodeLine{02243\ \ \ \}}
+\DoxyCodeLine{02244\ \ \ \textcolor{keywordflow}{if}\ ((new\_referenced\_bits\ \&\ R\_node)\ !=\ 0)\ \{}
+\DoxyCodeLine{02245\ \ \ \ \ \_node\_counter.add\_level(1);}
+\DoxyCodeLine{02246\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((new\_referenced\_bits\ \&\ R\_cache)\ !=\ 0)\ \{}
+\DoxyCodeLine{02247\ \ \ \ \ \_cache\_counter.add\_level(1);}
+\DoxyCodeLine{02248\ \ \ \}}
+\DoxyCodeLine{02249\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{02250\ \}}
+\DoxyCodeLine{02251\ }
+\DoxyCodeLine{02255\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{02256\ register\_with\_read\_factory()\ \{}
+\DoxyCodeLine{02257\ \ \ BamReader::get\_factory()-\/>register\_factory(get\_class\_type(),\ make\_from\_bam);}
+\DoxyCodeLine{02258\ \}}
+\DoxyCodeLine{02259\ }
+\DoxyCodeLine{02264\ \textcolor{keywordtype}{void}\ TransformState::}
+\DoxyCodeLine{02265\ write\_datagram(\mbox{\hyperlink{classBamWriter}{BamWriter}}\ *manager,\ \mbox{\hyperlink{classDatagram}{Datagram}}\ \&dg)\ \{}
+\DoxyCodeLine{02266\ \ \ TypedWritable::write\_datagram(manager,\ dg);}
+\DoxyCodeLine{02267\ }
+\DoxyCodeLine{02268\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_is\_identity)\ !=\ 0)\ \{}
+\DoxyCodeLine{02269\ \ \ \ \ \textcolor{comment}{//\ Identity,\ nothing\ much\ to\ that.}}
+\DoxyCodeLine{02270\ \ \ \ \ \textcolor{keywordtype}{int}\ flags\ =\ F\_is\_identity\ |\ F\_singular\_known\ |\ F\_is\_2d;}
+\DoxyCodeLine{02271\ \ \ \ \ dg.add\_uint32(flags);}
+\DoxyCodeLine{02272\ }
+\DoxyCodeLine{02273\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_is\_invalid)\ !=\ 0)\ \{}
+\DoxyCodeLine{02274\ \ \ \ \ \textcolor{comment}{//\ Invalid,\ nothing\ much\ to\ that\ either.}}
+\DoxyCodeLine{02275\ \ \ \ \ \textcolor{keywordtype}{int}\ flags\ =\ F\_is\_invalid\ |\ F\_singular\_known\ |\ F\_is\_singular\ |\ F\_components\_known\ |\ F\_mat\_known;}
+\DoxyCodeLine{02276\ \ \ \ \ dg.add\_uint32(flags);}
+\DoxyCodeLine{02277\ }
+\DoxyCodeLine{02278\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_components\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{02279\ \ \ \ \ \textcolor{comment}{//\ A\ component-\/based\ transform.}}
+\DoxyCodeLine{02280\ \ \ \ \ \textcolor{keywordtype}{int}\ flags\ =\ F\_components\_given\ |\ F\_components\_known\ |\ F\_has\_components;}
+\DoxyCodeLine{02281\ \ \ \ \ flags\ |=\ (\_flags\ \&\ F\_is\_2d);}
+\DoxyCodeLine{02282\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_quat\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{02283\ \ \ \ \ \ \ flags\ |=\ (F\_quat\_given\ |\ F\_quat\_known);}
+\DoxyCodeLine{02284\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_hpr\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{02285\ \ \ \ \ \ \ flags\ |=\ (F\_hpr\_given\ |\ F\_hpr\_known);}
+\DoxyCodeLine{02286\ \ \ \ \ \}}
+\DoxyCodeLine{02287\ }
+\DoxyCodeLine{02288\ \ \ \ \ dg.add\_uint32(flags);}
+\DoxyCodeLine{02289\ }
+\DoxyCodeLine{02290\ \ \ \ \ \_pos.write\_datagram(dg);}
+\DoxyCodeLine{02291\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_quat\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{02292\ \ \ \ \ \ \ \_quat.write\_datagram(dg);}
+\DoxyCodeLine{02293\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02294\ \ \ \ \ \ \ get\_hpr().write\_datagram(dg);}
+\DoxyCodeLine{02295\ \ \ \ \ \}}
+\DoxyCodeLine{02296\ \ \ \ \ \_scale.write\_datagram(dg);}
+\DoxyCodeLine{02297\ \ \ \ \ \_shear.write\_datagram(dg);}
+\DoxyCodeLine{02298\ }
+\DoxyCodeLine{02299\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02300\ \ \ \ \ \textcolor{comment}{//\ A\ general\ matrix.}}
+\DoxyCodeLine{02301\ \ \ \ \ nassertv((\_flags\ \&\ F\_mat\_known)\ !=\ 0);}
+\DoxyCodeLine{02302\ \ \ \ \ \textcolor{keywordtype}{int}\ flags\ =\ F\_mat\_known;}
+\DoxyCodeLine{02303\ \ \ \ \ flags\ |=\ (\_flags\ \&\ F\_is\_2d);}
+\DoxyCodeLine{02304\ \ \ \ \ dg.add\_uint32(flags);}
+\DoxyCodeLine{02305\ \ \ \ \ \_mat.write\_datagram(dg);}
+\DoxyCodeLine{02306\ \ \ \}}
+\DoxyCodeLine{02307\ \}}
+\DoxyCodeLine{02308\ }
+\DoxyCodeLine{02317\ PT(\mbox{\hyperlink{classTypedWritableReferenceCount}{TypedWritableReferenceCount}})\ TransformState::}
+\DoxyCodeLine{02318\ change\_this(\mbox{\hyperlink{classTypedWritableReferenceCount}{TypedWritableReferenceCount}}\ *old\_ptr,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{02319\ \ \ \textcolor{comment}{//\ First,\ uniquify\ the\ pointer.}}
+\DoxyCodeLine{02320\ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ DCAST(\mbox{\hyperlink{classTransformState}{TransformState}},\ old\_ptr);}
+\DoxyCodeLine{02321\ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ pointer\ =\ return\_unique(state);}
+\DoxyCodeLine{02322\ }
+\DoxyCodeLine{02323\ \ \ \textcolor{comment}{//\ We\ have\ to\ cast\ the\ pointer\ back\ to\ non-\/const,\ because\ the\ bam\ reader}}
+\DoxyCodeLine{02324\ \ \ \textcolor{comment}{//\ expects\ that.}}
+\DoxyCodeLine{02325\ \ \ \textcolor{keywordflow}{return}\ (\mbox{\hyperlink{classTransformState}{TransformState}}\ *)pointer.p();}
+\DoxyCodeLine{02326\ \}}
+\DoxyCodeLine{02327\ }
+\DoxyCodeLine{02333\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *TransformState::}
+\DoxyCodeLine{02334\ make\_from\_bam(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFactoryParams}{FactoryParams}}\ \&params)\ \{}
+\DoxyCodeLine{02335\ \ \ \mbox{\hyperlink{classTransformState}{TransformState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTransformState}{TransformState}};}
+\DoxyCodeLine{02336\ \ \ \mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ scan;}
+\DoxyCodeLine{02337\ \ \ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager;}
+\DoxyCodeLine{02338\ }
+\DoxyCodeLine{02339\ \ \ parse\_params(params,\ scan,\ manager);}
+\DoxyCodeLine{02340\ \ \ state-\/>\mbox{\hyperlink{classTransformState_af0b514bc6fb4d08c8274cbccad10f0f6}{fillin}}(scan,\ manager);}
+\DoxyCodeLine{02341\ }
+\DoxyCodeLine{02342\ \ \ \textcolor{keywordflow}{if}\ (state-\/>\_flags\ \&\ F\_is\_identity)\ \{}
+\DoxyCodeLine{02343\ \ \ \ \ \textcolor{keyword}{delete}\ state;}
+\DoxyCodeLine{02344\ \ \ \ \ \textcolor{keywordflow}{return}\ (\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *)\_identity\_state.p();}
+\DoxyCodeLine{02345\ \ \ \}}
+\DoxyCodeLine{02346\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (state-\/>\_flags\ \&\ F\_is\_invalid)\ \{}
+\DoxyCodeLine{02347\ \ \ \ \ \textcolor{keyword}{delete}\ state;}
+\DoxyCodeLine{02348\ \ \ \ \ \textcolor{keywordflow}{return}\ (\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *)\_invalid\_state.p();}
+\DoxyCodeLine{02349\ \ \ \}}
+\DoxyCodeLine{02350\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02351\ \ \ \ \ manager-\/>\mbox{\hyperlink{classBamReader_aa694b5968c0fa549f26b8919451ac230}{register\_change\_this}}(change\_this,\ state);}
+\DoxyCodeLine{02352\ \ \ \}}
+\DoxyCodeLine{02353\ }
+\DoxyCodeLine{02354\ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{02355\ \}}
+\DoxyCodeLine{02356\ }
+\DoxyCodeLine{02361\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classTransformState_af0b514bc6fb4d08c8274cbccad10f0f6}{TransformState::}}}
+\DoxyCodeLine{02362\ \mbox{\hyperlink{classTransformState_af0b514bc6fb4d08c8274cbccad10f0f6}{fillin}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{02363\ \ \ \mbox{\hyperlink{classTypedWritable_a3ad6cc1cd23bc3783d83edb3302bb43c}{TypedWritable::fillin}}(scan,\ manager);}
+\DoxyCodeLine{02364\ \ \ \_flags\ =\ scan.get\_uint32();}
+\DoxyCodeLine{02365\ }
+\DoxyCodeLine{02366\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_components\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{02367\ \ \ \ \ \textcolor{comment}{//\ Componentwise\ transform.}}
+\DoxyCodeLine{02368\ \ \ \ \ \_pos.read\_datagram(scan);}
+\DoxyCodeLine{02369\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_quat\_given)\ !=\ 0)\ \{}
+\DoxyCodeLine{02370\ \ \ \ \ \ \ \_quat.read\_datagram(scan);}
+\DoxyCodeLine{02371\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02372\ \ \ \ \ \ \ \_hpr.read\_datagram(scan);}
+\DoxyCodeLine{02373\ \ \ \ \ \}}
+\DoxyCodeLine{02374\ \ \ \ \ \_scale.read\_datagram(scan);}
+\DoxyCodeLine{02375\ \ \ \ \ \_shear.read\_datagram(scan);}
+\DoxyCodeLine{02376\ }
+\DoxyCodeLine{02377\ \ \ \ \ check\_uniform\_scale();}
+\DoxyCodeLine{02378\ \ \ \}}
+\DoxyCodeLine{02379\ }
+\DoxyCodeLine{02380\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_mat\_known)\ !=\ 0)\ \{}
+\DoxyCodeLine{02381\ \ \ \ \ \textcolor{comment}{//\ General\ matrix.}}
+\DoxyCodeLine{02382\ \ \ \ \ \_mat.read\_datagram(scan);}
+\DoxyCodeLine{02383\ \ \ \}}
+\DoxyCodeLine{02384\ \}}
+
+\end{DoxyCode}

@@ -1,0 +1,2127 @@
+\doxysection{gl\+Graphics\+Buffer\+\_\+src.\+cxx}
+\hypertarget{glGraphicsBuffer__src_8cxx_source}{}\label{glGraphicsBuffer__src_8cxx_source}\index{panda/src/glstuff/glGraphicsBuffer\_src.cxx@{panda/src/glstuff/glGraphicsBuffer\_src.cxx}}
+\mbox{\hyperlink{glGraphicsBuffer__src_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{depthWriteAttrib_8h}{depthWriteAttrib.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{keyword}{using\ }std::max;}
+\DoxyCodeLine{00017\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00024\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}}
+\DoxyCodeLine{00025\ without\_back\_buffers(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ \&fb\_prop)\ \{}
+\DoxyCodeLine{00026\ \ \ \mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ copy(fb\_prop);}
+\DoxyCodeLine{00027\ \ \ copy.set\_back\_buffers(0);}
+\DoxyCodeLine{00028\ \ \ \textcolor{keywordflow}{return}\ copy;}
+\DoxyCodeLine{00029\ \}}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::\_type\_handle;}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00036\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{00037\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})(\mbox{\hyperlink{classGraphicsEngine}{GraphicsEngine}}\ *engine,\ \mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}}\ *pipe,}
+\DoxyCodeLine{00038\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ std::string\ \&name,}
+\DoxyCodeLine{00039\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ \mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ \&fb\_prop,}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ \mbox{\hyperlink{classWindowProperties}{WindowProperties}}\ \&win\_prop,}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ int\ flags,}
+\DoxyCodeLine{00042\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}}\ *gsg,}
+\DoxyCodeLine{00043\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *host)\ :}
+\DoxyCodeLine{00044\ \ \ \mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}}(engine,\ pipe,\ name,\ without\_back\_buffers(fb\_prop),\ win\_prop,\ flags,\ gsg,\ host),}
+\DoxyCodeLine{00045\ \ \ \_requested\_multisamples(0),}
+\DoxyCodeLine{00046\ \ \ \_requested\_coverage\_samples(0),}
+\DoxyCodeLine{00047\ \ \ \_rb\_context(nullptr),}
+\DoxyCodeLine{00048\ \ \ \_bind\_texture\_pcollector(\_draw\_window\_pcollector,\ \textcolor{stringliteral}{"{}Bind\ textures"{}}),}
+\DoxyCodeLine{00049\ \ \ \_generate\_mipmap\_pcollector(\_draw\_window\_pcollector,\ \textcolor{stringliteral}{"{}Generate\ mipmaps"{}}),}
+\DoxyCodeLine{00050\ \ \ \_resolve\_multisample\_pcollector(\_draw\_window\_pcollector,\ \textcolor{stringliteral}{"{}Resolve\ multisamples"{}})}
+\DoxyCodeLine{00051\ \{}
+\DoxyCodeLine{00052\ \ \ \textcolor{comment}{//\ A\ FBO\ doesn't\ have\ a\ back\ buffer.}}
+\DoxyCodeLine{00053\ \ \ \_draw\_buffer\_type\ \ \ \ \ \ \ =\ RenderBuffer::T\_front;}
+\DoxyCodeLine{00054\ \ \ \_screenshot\_buffer\_type\ =\ RenderBuffer::T\_front;}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \ \ \textcolor{comment}{//\ Initialize\ these.}}
+\DoxyCodeLine{00057\ \ \ \_fbo\_multisample\ =\ 0;}
+\DoxyCodeLine{00058\ \ \ \_initial\_clear\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00059\ \ \ \_needs\_rebuild\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00061\ \ \ \_rb\_size\_x\ =\ 0;}
+\DoxyCodeLine{00062\ \ \ \_rb\_size\_y\ =\ 0;}
+\DoxyCodeLine{00063\ \ \ \_rb\_size\_z\ =\ 0;}
+\DoxyCodeLine{00064\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ RTP\_COUNT;\ ++i)\ \{}
+\DoxyCodeLine{00065\ \ \ \ \ \_rb[i]\ =\ 0;}
+\DoxyCodeLine{00066\ \ \ \ \ \_rbm[i]\ =\ 0;}
+\DoxyCodeLine{00067\ \ \ \}}
+\DoxyCodeLine{00068\ \ \ \_rb\_data\_size\_bytes\ =\ 0;}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ \ \ \_shared\_depth\_buffer\ =\ 0;}
+\DoxyCodeLine{00071\ \ \ \_bound\_tex\_page\ =\ -\/1;}
+\DoxyCodeLine{00072\ \}}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00077\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{00078\ \string~CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})()\ \{}
+\DoxyCodeLine{00079\ \ \ \textcolor{comment}{//\ unshare\ shared\ depth\ buffer\ if\ any}}
+\DoxyCodeLine{00080\ \ \ this-\/>unshare\_depth\_buffer();}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00082\ \ \ \textcolor{comment}{//\ unshare\ all\ buffers\ that\ are\ sharing\ this\ object's\ depth\ buffer}}
+\DoxyCodeLine{00083\ \ \ \{}
+\DoxyCodeLine{00084\ \ \ \ \ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})\ *graphics\_buffer;}
+\DoxyCodeLine{00085\ \ \ \ \ std::list\ <CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})\ *>::iterator\ graphics\_buffer\_iterator;}
+\DoxyCodeLine{00086\ }
+\DoxyCodeLine{00087\ \ \ \ \ graphics\_buffer\_iterator\ =\ \_shared\_depth\_buffer\_list.begin();}
+\DoxyCodeLine{00088\ \ \ \ \ \textcolor{keywordflow}{while}\ (graphics\_buffer\_iterator\ !=\ \_shared\_depth\_buffer\_list.end())\ \{}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ graphics\_buffer\ =\ (*graphics\_buffer\_iterator);}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (graphics\_buffer)\ \{}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ this\ call\ removes\ the\ entry\ from\ the\ list}}
+\DoxyCodeLine{00092\ \ \ \ \ \ \ \ \ graphics\_buffer-\/>unshare\_depth\_buffer();}
+\DoxyCodeLine{00093\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ graphics\_buffer\_iterator\ =\ \_shared\_depth\_buffer\_list.begin();}
+\DoxyCodeLine{00095\ \ \ \ \ \}}
+\DoxyCodeLine{00096\ \ \ \}}
+\DoxyCodeLine{00097\ \}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \textcolor{preprocessor}{\#ifndef\ OPENGLES\_1}}
+\DoxyCodeLine{00107\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{00108\ clear(\mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00109\ \ \ \textcolor{keywordflow}{if}\ (!is\_any\_clear\_active())\ \{}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00111\ \ \ \}}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00113\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \ \ \textcolor{keywordflow}{if}\ (glgsg-\/>\_glClearBufferfv\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ \textcolor{comment}{//\ We\ can't\ efficiently\ clear\ the\ buffer.\ \ Fall\ back\ to\ the\ inefficient}}
+\DoxyCodeLine{00117\ \ \ \ \ \textcolor{comment}{//\ default\ implementation\ for\ now.}}
+\DoxyCodeLine{00118\ \ \ \ \ \mbox{\hyperlink{classGraphicsOutput_aead3c39332275a61c14928bf3b63ba5c}{GraphicsOutput::clear}}(current\_thread);}
+\DoxyCodeLine{00119\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00120\ \ \ \}}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00122\ \ \ \textcolor{keywordflow}{if}\ (display\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00123\ \ \ \ \ display\_cat.spam()}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}clear():\ "{}}\ <<\ get\_type()\ <<\ \textcolor{stringliteral}{"{}\ "{}}}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ <<\ get\_name()\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00126\ \ \ \}}
+\DoxyCodeLine{00127\ }
+\DoxyCodeLine{00128\ \ \ \textcolor{comment}{//\ Disable\ the\ scissor\ test,\ so\ we\ can\ clear\ the\ whole\ buffer.}}
+\DoxyCodeLine{00129\ \ \ glDisable(GL\_SCISSOR\_TEST);}
+\DoxyCodeLine{00130\ \ \ glgsg-\/>\_scissor\_enabled\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00131\ \ \ glgsg-\/>\_scissor\_array.clear();}
+\DoxyCodeLine{00132\ \ \ glgsg-\/>\_scissor\_attrib\_active\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_spam())\ \{}
+\DoxyCodeLine{00135\ \ \ \ \ GLCAT.spam()}
+\DoxyCodeLine{00136\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}glDisable(GL\_SCISSOR\_TEST)\(\backslash\)n"{}};}
+\DoxyCodeLine{00137\ \ \ \}}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00139\ \ \ \textcolor{comment}{//\ Set\ the\ buffers\ into\ which\ we'll\ be\ indexing\ with\ glClearBuffer.}}
+\DoxyCodeLine{00140\ \ \ \textcolor{keywordtype}{int}\ draw\_buffer\_type\ =\ \_draw\_buffer\_type\ \&\ \_fb\_properties.get\_buffer\_mask();}
+\DoxyCodeLine{00141\ \ \ draw\_buffer\_type\ |=\ \_fb\_properties.get\_aux\_mask();}
+\DoxyCodeLine{00142\ \ \ glgsg-\/>\_color\_write\_mask\ =\ ColorWriteAttrib::C\_all;}
+\DoxyCodeLine{00143\ \ \ glgsg-\/>set\_draw\_buffer(draw\_buffer\_type);}
+\DoxyCodeLine{00144\ }
+\DoxyCodeLine{00145\ \ \ \textcolor{keywordtype}{int}\ index\ =\ 0;}
+\DoxyCodeLine{00146\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{00147\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.is\_stereo())\ \{}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \textcolor{comment}{//\ Clear\ both\ left\ and\ right\ attachments.}}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_clear\_active(RTP\_color))\ \{}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ LColorf\ v\ =\ LCAST(\textcolor{keywordtype}{float},\ get\_clear\_value(RTP\_color));}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ glgsg-\/>\_glClearBufferfv(GL\_COLOR,\ index,\ v.get\_data());}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ glgsg-\/>\_glClearBufferfv(GL\_COLOR,\ index\ +\ 1,\ v.get\_data());}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ index\ +=\ 2;}
+\DoxyCodeLine{00155\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_clear\_active(RTP\_color))\ \{}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ LColorf\ v\ =\ LCAST(\textcolor{keywordtype}{float},\ get\_clear\_value(RTP\_color));}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ glgsg-\/>\_glClearBufferfv(GL\_COLOR,\ index,\ v.get\_data());}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ ++index;}
+\DoxyCodeLine{00161\ \ \ \ \ \}}
+\DoxyCodeLine{00162\ \ \ \}}
+\DoxyCodeLine{00163\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ \_fb\_properties.get\_aux\_rgba();\ ++i)\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ \textcolor{keywordtype}{int}\ layerid\ =\ RTP\_aux\_rgba\_0\ +\ i;}
+\DoxyCodeLine{00165\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_clear\_active(layerid))\ \{}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ LColorf\ v\ =\ LCAST(\textcolor{keywordtype}{float},\ get\_clear\_value(layerid));}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ glgsg-\/>\_glClearBufferfv(GL\_COLOR,\ index,\ v.get\_data());}
+\DoxyCodeLine{00168\ \ \ \ \ \}}
+\DoxyCodeLine{00169\ \ \ \ \ ++index;}
+\DoxyCodeLine{00170\ \ \ \}}
+\DoxyCodeLine{00171\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ \_fb\_properties.get\_aux\_hrgba();\ ++i)\ \{}
+\DoxyCodeLine{00172\ \ \ \ \ \textcolor{keywordtype}{int}\ layerid\ =\ RTP\_aux\_hrgba\_0\ +\ i;}
+\DoxyCodeLine{00173\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_clear\_active(layerid))\ \{}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ LColorf\ v\ =\ LCAST(\textcolor{keywordtype}{float},\ get\_clear\_value(layerid));}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ glgsg-\/>\_glClearBufferfv(GL\_COLOR,\ index,\ v.get\_data());}
+\DoxyCodeLine{00176\ \ \ \ \ \}}
+\DoxyCodeLine{00177\ \ \ \ \ ++index;}
+\DoxyCodeLine{00178\ \ \ \}}
+\DoxyCodeLine{00179\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ \_fb\_properties.get\_aux\_float();\ ++i)\ \{}
+\DoxyCodeLine{00180\ \ \ \ \ \textcolor{keywordtype}{int}\ layerid\ =\ RTP\_aux\_float\_0\ +\ i;}
+\DoxyCodeLine{00181\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_clear\_active(layerid))\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ LColorf\ v\ =\ LCAST(\textcolor{keywordtype}{float},\ get\_clear\_value(layerid));}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ glgsg-\/>\_glClearBufferfv(GL\_COLOR,\ index,\ v.get\_data());}
+\DoxyCodeLine{00184\ \ \ \ \ \}}
+\DoxyCodeLine{00185\ \ \ \ \ ++index;}
+\DoxyCodeLine{00186\ \ \ \}}
+\DoxyCodeLine{00187\ }
+\DoxyCodeLine{00188\ \ \ \textcolor{keywordflow}{if}\ (get\_clear\_depth\_active())\ \{}
+\DoxyCodeLine{00189\ \ \ \ \ glDepthMask(GL\_TRUE);}
+\DoxyCodeLine{00190\ \ \ \ \ glgsg-\/>\_state\_mask.clear\_bit(DepthWriteAttrib::get\_class\_slot());}
+\DoxyCodeLine{00191\ }
+\DoxyCodeLine{00192\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_clear\_stencil\_active())\ \{}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ glStencilMask(\string~0);}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ glgsg-\/>\_glClearBufferfi(GL\_DEPTH\_STENCIL,\ 0,\ get\_clear\_depth(),\ get\_clear\_stencil());}
+\DoxyCodeLine{00195\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ GLfloat\ depth\ =\ get\_clear\_depth();}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ glgsg-\/>\_glClearBufferfv(GL\_DEPTH,\ 0,\ \&depth);}
+\DoxyCodeLine{00198\ \ \ \ \ \}}
+\DoxyCodeLine{00199\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (get\_clear\_stencil\_active())\ \{}
+\DoxyCodeLine{00200\ \ \ \ \ GLint\ stencil\ =\ get\_clear\_stencil();}
+\DoxyCodeLine{00201\ \ \ \ \ glgsg-\/>\_glClearBufferiv(GL\_STENCIL,\ 0,\ \&stencil);}
+\DoxyCodeLine{00202\ \ \ \}}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00204\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{00205\ \}}
+\DoxyCodeLine{00206\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00207\ }
+\DoxyCodeLine{00214\ \textcolor{keywordtype}{bool}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{00215\ begin\_frame(FrameMode\ mode,\ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00216\ \ \ begin\_frame\_spam(mode);}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00218\ \ \ check\_host\_valid();}
+\DoxyCodeLine{00219\ \ \ \_bound\_tex\_page\ =\ -\/1;}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00221\ \ \ \textcolor{keywordflow}{if}\ (!\_is\_valid)\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ <<\ get\_name()\ <<\ \textcolor{stringliteral}{"{}\ is\ not\ valid\(\backslash\)n"{}};}
+\DoxyCodeLine{00225\ \ \ \ \ \}}
+\DoxyCodeLine{00226\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00227\ \ \ \}}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00229\ \ \ \textcolor{keywordflow}{if}\ (\_host\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00230\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_host-\/>begin\_frame(FM\_parasite,\ current\_thread))\ \{}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ \ \ <<\ get\_name()\ <<\ \textcolor{stringliteral}{"{}'s\ host\ is\ not\ ready\(\backslash\)n"{}};}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00236\ \ \ \ \ \}}
+\DoxyCodeLine{00237\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00238\ \ \ \ \ \textcolor{comment}{//\ We\ don't\ have\ a\ host\ window,\ which\ is\ possible\ for\ CocoaGraphicsBuffer.}}
+\DoxyCodeLine{00239\ \ \ \ \ \_gsg-\/>set\_current\_properties(\&get\_fb\_properties());}
+\DoxyCodeLine{00240\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_gsg-\/>begin\_frame(current\_thread))\ \{}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00242\ \ \ \ \ \}}
+\DoxyCodeLine{00243\ \ \ \}}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00245\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{00246\ \ \ glgsg-\/>push\_group\_marker(std::string(CLASSPREFIX\_QUOTED\ \textcolor{stringliteral}{"{}GraphicsBuffer\ "{}})\ +\ get\_name());}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \ \ \textcolor{comment}{//\ Figure\ out\ the\ desired\ size\ of\ the\ \ buffer.}}
+\DoxyCodeLine{00249\ \ \ \textcolor{keywordflow}{if}\ (mode\ ==\ FM\_render)\ \{}
+\DoxyCodeLine{00250\ \ \ \ \ clear\_cube\_map\_selection();}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \ \ \ \ \{}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ set\ of\ render-\/to-\/textures\ has\ recently\ changed,\ we\ need\ to}}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \textcolor{comment}{//\ rebuild\ bitplanes.}}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ CDReader\ cdata(\_cycler);}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cdata-\/>\_textures\_seq\ !=\ \_last\_textures\_seq)\ \{}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \_last\_textures\_seq\ =\ cdata-\/>\_textures\_seq;}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \_needs\_rebuild\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00260\ \ \ \ \ \}}
+\DoxyCodeLine{00261\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_creation\_flags\ \&\ GraphicsPipe::BF\_size\_track\_host)\ \{}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_host\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ \_host-\/>get\_size()\ !=\ \_size)\ \{}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ also\ need\ to\ rebuild\ if\ we\ need\ to\ change\ size.}}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ \_needs\_rebuild\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00266\ \ \ \ \ \}}
+\DoxyCodeLine{00267\ }
+\DoxyCodeLine{00268\ \ \ \ \ rebuild\_bitplanes();}
+\DoxyCodeLine{00269\ }
+\DoxyCodeLine{00270\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_needs\_rebuild)\ \{}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ still\ need\ rebuild,\ something\ went\ wrong\ with}}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \textcolor{comment}{//\ rebuild\_bitplanes().}}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ glgsg-\/>pop\_group\_marker();}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00275\ \ \ \ \ \}}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00277\ \ \ \ \ \textcolor{comment}{//\ In\ case\ of\ multisample\ rendering,\ we\ don't\ need\ to\ issue\ the\ barrier}}
+\DoxyCodeLine{00278\ \ \ \ \ \textcolor{comment}{//\ until\ we\ call\ glBlitFramebuffer.}}
+\DoxyCodeLine{00279\ \textcolor{preprocessor}{\#ifndef\ OPENGLES\_1}}
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{keywordflow}{if}\ (gl\_enable\_memory\_barriers\ \&\&\ \_fbo\_multisample\ ==\ 0)\ \{}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (CLP(\mbox{\hyperlink{classTextureContext}{TextureContext}})\ *gtc\ :\ \_texture\_contexts)\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gtc-\/>needs\_barrier(GL\_FRAMEBUFFER\_BARRIER\_BIT,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \ \ \ \ glgsg-\/>issue\_memory\_barrier(GL\_FRAMEBUFFER\_BARRIER\_BIT);}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we've\ done\ it\ for\ one,\ we've\ done\ it\ for\ all.}}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00290\ \ \ \ \ \}}
+\DoxyCodeLine{00291\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00292\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (mode\ ==\ FM\_refresh)\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{comment}{//\ Just\ bind\ the\ FBO.}}
+\DoxyCodeLine{00294\ \ \ \ \ rebuild\_bitplanes();}
+\DoxyCodeLine{00295\ }
+\DoxyCodeLine{00296\ \ \ \ \ \textcolor{comment}{//\ Bind\ the\ non-\/multisample\ FBO,\ since\ we\ won't\ be\ rendering\ anything\ and}}
+\DoxyCodeLine{00297\ \ \ \ \ \textcolor{comment}{//\ the\ caller\ probably\ wanted\ to\ grab\ a\ screenshot.}}
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fbo\_multisample\ !=\ 0\ \&\&\ !\_fbo.empty())\ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ glgsg-\/>bind\_fbo(\_fbo[0]);}
+\DoxyCodeLine{00300\ \ \ \ \ \}}
+\DoxyCodeLine{00301\ \ \ \}}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00303\ \ \ \textcolor{comment}{//\ The\ host\ window\ may\ not\ have\ had\ sRGB\ enabled,\ so\ we\ need\ to\ do\ this.}}
+\DoxyCodeLine{00304\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordflow}{if}\ (get\_fb\_properties().get\_srgb\_color())\ \{}
+\DoxyCodeLine{00306\ \ \ \ \ glEnable(GL\_FRAMEBUFFER\_SRGB);}
+\DoxyCodeLine{00307\ \ \ \}}
+\DoxyCodeLine{00308\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ \_gsg-\/>set\_current\_properties(\&get\_fb\_properties());}
+\DoxyCodeLine{00311\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{00312\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00313\ \}}
+\DoxyCodeLine{00314\ }
+\DoxyCodeLine{00319\ \textcolor{keywordtype}{bool}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{00320\ check\_fbo()\ \{}
+\DoxyCodeLine{00321\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00323\ \ \ GLenum\ status\ =\ glgsg-\/>\_glCheckFramebufferStatus(GL\_FRAMEBUFFER\_EXT);}
+\DoxyCodeLine{00324\ \ \ \textcolor{keywordflow}{if}\ (status\ !=\ GL\_FRAMEBUFFER\_COMPLETE\_EXT)\ \{}
+\DoxyCodeLine{00325\ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}EXT\_framebuffer\_object\ reports\ non-\/framebuffer-\/completeness:\(\backslash\)n"{}};}
+\DoxyCodeLine{00326\ \ \ \ \ \textcolor{keywordflow}{switch}(status)\ \{}
+\DoxyCodeLine{00327\ \ \ \ \ \textcolor{keywordflow}{case}\ GL\_FRAMEBUFFER\_UNSUPPORTED\_EXT:}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}FRAMEBUFFER\_UNSUPPORTED"{}};\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00329\ \ \ \ \ \textcolor{keywordflow}{case}\ GL\_FRAMEBUFFER\_INCOMPLETE\_ATTACHMENT\_EXT:}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}FRAMEBUFFER\_INCOMPLETE\_ATTACHMENT"{}};\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00331\ \ \ \ \ \textcolor{keywordflow}{case}\ GL\_FRAMEBUFFER\_INCOMPLETE\_MISSING\_ATTACHMENT\_EXT:}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}FRAMEBUFFER\_INCOMPLETE\_MISSING\_ATTACHMENT"{}};\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00333\ \ \ \ \ \textcolor{keywordflow}{case}\ GL\_FRAMEBUFFER\_INCOMPLETE\_DIMENSIONS\_EXT:}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}FRAMEBUFFER\_INCOMPLETE\_DIMENSIONS"{}};\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00335\ \textcolor{preprocessor}{\#ifndef\ OPENGLES\_2}}
+\DoxyCodeLine{00336\ \ \ \ \ \textcolor{keywordflow}{case}\ GL\_FRAMEBUFFER\_INCOMPLETE\_FORMATS\_EXT:}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}FRAMEBUFFER\_INCOMPLETE\_FORMATS"{}};\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00338\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00339\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{00340\ \ \ \ \ \textcolor{keywordflow}{case}\ GL\_FRAMEBUFFER\_INCOMPLETE\_DRAW\_BUFFER\_EXT:}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}FRAMEBUFFER\_INCOMPLETE\_DRAW\_BUFFER"{}};\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00342\ \ \ \ \ \textcolor{keywordflow}{case}\ GL\_FRAMEBUFFER\_INCOMPLETE\_READ\_BUFFER\_EXT:}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}FRAMEBUFFER\_INCOMPLETE\_READ\_BUFFER"{}};\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00344\ \ \ \ \ \textcolor{keywordflow}{case}\ GL\_FRAMEBUFFER\_INCOMPLETE\_MULTISAMPLE\_EXT:}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}FRAMEBUFFER\_INCOMPLETE\_MULTISAMPLE"{}};\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00346\ \ \ \ \ \textcolor{keywordflow}{case}\ GL\_FRAMEBUFFER\_INCOMPLETE\_LAYER\_TARGETS\_ARB:}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}FRAMEBUFFER\_INCOMPLETE\_LAYER\_TARGETS"{}};\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00348\ \ \ \ \ \textcolor{keywordflow}{case}\ GL\_FRAMEBUFFER\_INCOMPLETE\_LAYER\_COUNT\_ARB:}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}FRAMEBUFFER\_INCOMPLETE\_LAYER\_COUNT"{}};\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00350\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00351\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}UNKNOWN\ PROBLEM\ "{}}\ <<\ (int)status;\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00353\ \ \ \ \ \}}
+\DoxyCodeLine{00354\ \ \ \ \ GLCAT.error(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}\ for\ "{}}\ <<\ get\_name()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00355\ }
+\DoxyCodeLine{00356\ \ \ \ \ glgsg-\/>bind\_fbo(0);}
+\DoxyCodeLine{00357\ \ \ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{00358\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00359\ \ \ \}}
+\DoxyCodeLine{00360\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{00361\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00362\ \}}
+\DoxyCodeLine{00363\ }
+\DoxyCodeLine{00369\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{00370\ rebuild\_bitplanes()\ \{}
+\DoxyCodeLine{00371\ \ \ check\_host\_valid();}
+\DoxyCodeLine{00372\ \ \ \textcolor{keywordflow}{if}\ (\_gsg\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00373\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00374\ \ \ \}}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00376\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{00377\ }
+\DoxyCodeLine{00378\ \ \ \textcolor{keywordflow}{if}\ (!\_needs\_rebuild)\ \{}
+\DoxyCodeLine{00379\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fbo\_multisample\ !=\ 0)\ \{}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ glgsg-\/>bind\_fbo(\_fbo\_multisample);}
+\DoxyCodeLine{00381\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fbo.size()\ >\ 0)\ \{}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ glgsg-\/>bind\_fbo(\_fbo[0]);}
+\DoxyCodeLine{00383\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ glgsg-\/>bind\_fbo(0);}
+\DoxyCodeLine{00385\ \ \ \ \ \}}
+\DoxyCodeLine{00386\ \ \ \ \ \_rb\_context-\/>set\_active(\textcolor{keyword}{true});}
+\DoxyCodeLine{00387\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00388\ \ \ \}}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \mbox{\hyperlink{classPStatGPUTimer}{PStatGPUTimer}}\ timer(glgsg,\ \_bind\_texture\_pcollector);}
+\DoxyCodeLine{00391\ }
+\DoxyCodeLine{00392\ \ \ \textcolor{comment}{//\ Calculate\ bitplane\ size.\ \ This\ can\ be\ larger\ than\ the\ buffer.}}
+\DoxyCodeLine{00393\ \ \ \textcolor{keywordflow}{if}\ (\_creation\_flags\ \&\ GraphicsPipe::BF\_size\_track\_host)\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_host\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ \_host-\/>get\_size()\ !=\ \_size)\ \{}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ set\_size\_and\_recalc(\_host-\/>get\_x\_size(),}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_host-\/>get\_y\_size());}
+\DoxyCodeLine{00397\ \ \ \ \ \}}
+\DoxyCodeLine{00398\ \ \ \}}
+\DoxyCodeLine{00399\ }
+\DoxyCodeLine{00400\ \ \ \textcolor{keywordtype}{int}\ bitplane\_x\ =\ get\_x\_size();}
+\DoxyCodeLine{00401\ \ \ \textcolor{keywordtype}{int}\ bitplane\_y\ =\ get\_y\_size();}
+\DoxyCodeLine{00402\ \ \ \textcolor{keywordflow}{if}\ (Texture::get\_textures\_power\_2()\ !=\ ATS\_none)\ \{}
+\DoxyCodeLine{00403\ \ \ \ \ bitplane\_x\ =\ \mbox{\hyperlink{classTexture_a9277f24691a5281de91579f1d7751391}{Texture::up\_to\_power\_2}}(bitplane\_x);}
+\DoxyCodeLine{00404\ \ \ \ \ bitplane\_y\ =\ \mbox{\hyperlink{classTexture_a9277f24691a5281de91579f1d7751391}{Texture::up\_to\_power\_2}}(bitplane\_y);}
+\DoxyCodeLine{00405\ \ \ \}}
+\DoxyCodeLine{00406\ \ \ \textcolor{keywordtype}{bool}\ rb\_resize\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00407\ \ \ \textcolor{keywordflow}{if}\ ((bitplane\_x\ !=\ \_rb\_size\_x)||}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ (bitplane\_y\ !=\ \_rb\_size\_y))\ \{}
+\DoxyCodeLine{00409\ \ \ \ \ \_rb\_size\_x\ =\ bitplane\_x;}
+\DoxyCodeLine{00410\ \ \ \ \ \_rb\_size\_y\ =\ bitplane\_y;}
+\DoxyCodeLine{00411\ \ \ \ \ rb\_resize\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00412\ \ \ \}}
+\DoxyCodeLine{00413\ \ \ \_rb\_size\_z\ =\ 1;}
+\DoxyCodeLine{00414\ \ \ \_rb\_data\_size\_bytes\ =\ 0;}
+\DoxyCodeLine{00415\ }
+\DoxyCodeLine{00416\ \ \ \textcolor{keywordtype}{size\_t}\ num\_fbos\ =\ 1;}
+\DoxyCodeLine{00417\ }
+\DoxyCodeLine{00418\ \ \ \textcolor{comment}{//\ These\ variables\ indicate\ what\ should\ be\ bound\ to\ each\ bitplane.}}
+\DoxyCodeLine{00419\ \ \ \mbox{\hyperlink{classTexture}{Texture}}\ *attach[RTP\_COUNT];}
+\DoxyCodeLine{00420\ \ \ memset(attach,\ 0,\ \textcolor{keyword}{sizeof}(\mbox{\hyperlink{classTexture}{Texture}}\ *)\ *\ RTP\_COUNT);}
+\DoxyCodeLine{00421\ \ \ \_texture\_contexts.clear();}
+\DoxyCodeLine{00422\ \ \ \_textures.clear();}
+\DoxyCodeLine{00423\ }
+\DoxyCodeLine{00424\ \ \ \textcolor{comment}{//\ Sort\ the\ textures\ list\ into\ appropriate\ slots.}}
+\DoxyCodeLine{00425\ \ \ \{}
+\DoxyCodeLine{00426\ \ \ \ \ CDReader\ cdata(\_cycler);}
+\DoxyCodeLine{00427\ }
+\DoxyCodeLine{00428\ \ \ \ \ \textcolor{comment}{//\ Determine\ whether\ this\ will\ be\ a\ layered\ or\ a\ regular\ FBO.\ If\ layered,}}
+\DoxyCodeLine{00429\ \ \ \ \ \textcolor{comment}{//\ the\ number\ of\ \_rb\_size\_z\ will\ be\ higher\ than\ 1.}}
+\DoxyCodeLine{00430\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ !=\ cdata-\/>\_textures.size();\ ++i)\ \{}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ \textcolor{keyword}{const}\ RenderTexture\ \&rt\ =\ cdata-\/>\_textures[i];}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ RenderTextureMode\ rtm\_mode\ =\ rt.\_rtm\_mode;}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \mbox{\hyperlink{classTexture}{Texture}}\ *tex\ =\ rt.\_texture;}
+\DoxyCodeLine{00434\ }
+\DoxyCodeLine{00435\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (rtm\_mode\ ==\ RTM\_bind\_layered)\ \{}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \ \ \_rb\_size\_z\ =\ max(\_rb\_size\_z,\ tex-\/>get\_z\_size());}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00438\ \ \ \ \ \}}
+\DoxyCodeLine{00439\ }
+\DoxyCodeLine{00440\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ !=\ cdata-\/>\_textures.size();\ ++i)\ \{}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \textcolor{keyword}{const}\ RenderTexture\ \&rt\ =\ cdata-\/>\_textures[i];}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ RenderTextureMode\ rtm\_mode\ =\ rt.\_rtm\_mode;}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ RenderTexturePlane\ plane\ =\ rt.\_plane;}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \mbox{\hyperlink{classTexture}{Texture}}\ *tex\ =\ rt.\_texture;}
+\DoxyCodeLine{00445\ }
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (rtm\_mode\ ==\ RTM\_bind\_layered\ \&\&\ glgsg-\/>\_supports\_geometry\_shaders)\ \{}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tex-\/>get\_z\_size()\ !=\ \_rb\_size\_z)\ \{}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \ \ \ \ GLCAT.warning()}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}All\ textures\ attached\ to\ layered\ FBO\ should\ have\ the\ same\ layer\ count!\(\backslash\)n"{}};}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00451\ }
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Assign\ the\ texture\ to\ this\ slot.}}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ \ \ attach[plane]\ =\ tex;}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00456\ }
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (rtm\_mode\ !=\ RTM\_bind\_or\_copy)\ \{}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ can't\ bind\ this\ type\ of\ texture,\ punt\ it.}}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ Texture::TextureType\ texture\_type\ =\ tex-\/>get\_texture\_type();}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (texture\_type\ !=\ Texture::TT\_2d\_texture\ \&\&}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \ \ \ \ texture\_type\ !=\ Texture::TT\_3d\_texture\ \&\&}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \ \ \ \ texture\_type\ !=\ Texture::TT\_2d\_texture\_array\ \&\&}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \ \ \ \ texture\_type\ !=\ Texture::TT\_cube\_map\ \&\&}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \ \ \ \ texture\_type\ !=\ Texture::TT\_cube\_map\_array)\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ ((CData\ *)cdata.p())-\/>\_textures[i].\_rtm\_mode\ =\ RTM\_copy\_texture;}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00471\ }
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rb\_size\_z\ >\ 1\ \&\&\ texture\_type\ ==\ Texture::TT\_2d\_texture)\ \{}
+\DoxyCodeLine{00473\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ can't\ bind\ a\ 2D\ texture\ to\ a\ layered\ FBO.\ \ If\ the\ user\ happened}}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ to\ request\ RTM\_bind\_layered\ for\ a\ 2D\ texture,\ that's\ just\ silly,}}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ and\ we\ can't\ render\ to\ anything\ but\ the\ first\ layer\ anyway.}}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \ \ ((CData\ *)cdata.p())-\/>\_textures[i].\_rtm\_mode\ =\ RTM\_copy\_texture;}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00478\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ I\ can't\ find\ an\ appropriate\ slot,\ or\ if\ there's\ already\ a\ texture}}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ \textcolor{comment}{//\ bound\ to\ this\ slot,\ then\ punt\ this\ texture.}}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (attach[plane])\ \{}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ \ \ ((CData\ *)cdata.p())-\/>\_textures[i].\_rtm\_mode\ =\ RTM\_copy\_texture;}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00487\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tex-\/>get\_z\_size()\ >\ 1)\ \{}
+\DoxyCodeLine{00488\ \ \ \ \ \ \ \ \ num\_fbos\ =\ max(num\_fbos,\ (\textcolor{keywordtype}{size\_t})tex-\/>get\_z\_size());}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \textcolor{comment}{//\ Assign\ the\ texture\ to\ this\ slot.}}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ attach[plane]\ =\ tex;}
+\DoxyCodeLine{00493\ }
+\DoxyCodeLine{00494\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (plane\ ==\ RTP\_color\ \&\&\ \_fb\_properties.is\_stereo())\ \{}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tex-\/>get\_num\_views()\ <\ 2)\ \{}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \ \ \ \ tex-\/>set\_num\_views(2);}
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00499\ \ \ \ \ \}}
+\DoxyCodeLine{00500\ \ \ \}}
+\DoxyCodeLine{00501\ }
+\DoxyCodeLine{00502\ \ \ \textcolor{comment}{//\ Decide\ whether\ we\ should\ use\ a\ depth\ stencil\ or\ just\ a\ regular\ depth}}
+\DoxyCodeLine{00503\ \ \ \textcolor{comment}{//\ attachment.\ \ If\ nothing\ was\ attached\ to\ either\ RTP\_depth\_stencil\ or}}
+\DoxyCodeLine{00504\ \ \ \textcolor{comment}{//\ RTP\_depth,\ we\ use\ a\ depth-\/stencil\ renderbuffer.}}
+\DoxyCodeLine{00505\ \ \ \_use\_depth\_stencil\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00506\ \ \ \textcolor{keywordflow}{if}\ (\_gsg-\/>get\_supports\_depth\_stencil())\ \{}
+\DoxyCodeLine{00507\ \ \ \ \ \textcolor{keywordflow}{if}\ (attach[RTP\_depth\_stencil])\ \{}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ the\ obvious\ case,\ of\ course.}}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ \_use\_depth\_stencil\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00510\ }
+\DoxyCodeLine{00511\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (attach[RTP\_depth])\ \{}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ won't\ use\ a\ depth\ stencil\ texture\ as\ the\ user\ explicitly\ bound}}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \textcolor{comment}{//\ something\ to\ RTP\_depth.}}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ \_use\_depth\_stencil\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00515\ }
+\DoxyCodeLine{00516\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_stencil\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ user\ requested\ stencil\ bits.\ \ Let's\ take\ the\ hint.}}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ \_use\_depth\_stencil\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00519\ }
+\DoxyCodeLine{00520\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 24\ ||}
+\DoxyCodeLine{00521\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_float\_depth())\ \{}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \textcolor{comment}{//\ 32-\/bit\ float\ depth\ is\ supported\ in\ conjunction\ with\ depth\ stencil,}}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \textcolor{comment}{//\ but\ it's\ a\ waste.\ \ Let's\ not\ do\ it\ unless\ the\ user\ requested\ stencil.}}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \_use\_depth\_stencil\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00526\ \textcolor{preprocessor}{\#ifdef\ \_\_APPLE\_\_}}
+\DoxyCodeLine{00527\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 0\ \&\&\ \_requested\_multisamples)\ \{}
+\DoxyCodeLine{00528\ \ \ \ \ \ \ \textcolor{comment}{//\ Apple's\ OpenGL\ driver\ doesn't\ like\ blitting\ depth-\/stencil\ targets.}}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ \textcolor{comment}{//\ See\ GitHub\ issue\ \#1719}}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ \_use\_depth\_stencil\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ <\ 24)\ \{}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Make\ sure\ we\ do\ get\ at\ least\ as\ many\ depth\ bits\ as\ we\ would\ have}}
+\DoxyCodeLine{00533\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ gotten\ if\ we\ did\ get\ a\ depth-\/stencil\ buffer.}}
+\DoxyCodeLine{00534\ \ \ \ \ \ \ \ \ \_fb\_properties.set\_depth\_bits(24);}
+\DoxyCodeLine{00535\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00536\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00537\ }
+\DoxyCodeLine{00538\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \textcolor{comment}{//\ Let's\ use\ a\ depth\ stencil\ buffer\ by\ default,\ if\ a\ depth\ buffer\ was}}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \textcolor{comment}{//\ requested.}}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \_use\_depth\_stencil\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00542\ \ \ \ \ \}}
+\DoxyCodeLine{00543\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (attach[RTP\_depth\_stencil]\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ attach[RTP\_depth]\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00544\ \ \ \ \ \textcolor{comment}{//\ The\ depth\ stencil\ slot\ was\ assigned\ a\ texture,\ but\ we\ don't\ support\ it.}}
+\DoxyCodeLine{00545\ \ \ \ \ \textcolor{comment}{//\ Downgrade\ to\ a\ regular\ depth\ texture.}}
+\DoxyCodeLine{00546\ \ \ \ \ std::swap(attach[RTP\_depth],\ attach[RTP\_depth\_stencil]);}
+\DoxyCodeLine{00547\ \ \ \}}
+\DoxyCodeLine{00548\ }
+\DoxyCodeLine{00549\ \ \ \textcolor{comment}{//\ Knowing\ this,\ we\ can\ already\ be\ a\ tiny\ bit\ more\ accurate\ about\ the}}
+\DoxyCodeLine{00550\ \ \ \textcolor{comment}{//\ framebuffer\ properties.}}
+\DoxyCodeLine{00551\ \ \ \textcolor{keywordflow}{if}\ (\_use\_depth\_stencil)\ \{}
+\DoxyCodeLine{00552\ \ \ \ \ \_fb\_properties.set\_stencil\_bits(8);}
+\DoxyCodeLine{00553\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00554\ \ \ \ \ \_fb\_properties.set\_stencil\_bits(0);}
+\DoxyCodeLine{00555\ \ \ \}}
+\DoxyCodeLine{00556\ }
+\DoxyCodeLine{00557\ \ \ \textcolor{comment}{//\ Having\ both\ a\ depth\ texture\ and\ a\ depth\_stencil\ texture\ is\ invalid:}}
+\DoxyCodeLine{00558\ \ \ \textcolor{comment}{//\ depth\_stencil\ implies\ depth,\ and\ we\ can't\ bind\ them\ both.\ \ Detect\ that}}
+\DoxyCodeLine{00559\ \ \ \textcolor{comment}{//\ case,\ normalize\ it,\ and\ complain.}}
+\DoxyCodeLine{00560\ \ \ \textcolor{keywordflow}{if}\ (\_use\_depth\_stencil\ \&\&\ attach[RTP\_depth]\ \&\&\ attach[RTP\_depth\_stencil])\ \{}
+\DoxyCodeLine{00561\ \ \ \ \ attach[RTP\_depth]\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00562\ \ \ \ \ GLCAT.warning()\ <<\ \textcolor{stringliteral}{"{}Attempt\ to\ bind\ both\ RTP\_depth\ and\ RTP\_depth\_stencil\ bitplanes.\(\backslash\)n"{}};}
+\DoxyCodeLine{00563\ \ \ \}}
+\DoxyCodeLine{00564\ }
+\DoxyCodeLine{00565\ \ \ \textcolor{comment}{//\ Now\ create\ the\ FBO's.}}
+\DoxyCodeLine{00566\ \ \ \_have\_any\_color\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00567\ \ \ \textcolor{keywordtype}{bool}\ have\_any\_depth\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00568\ }
+\DoxyCodeLine{00569\ \ \ \textcolor{keywordflow}{if}\ (num\_fbos\ >\ \_fbo.size())\ \{}
+\DoxyCodeLine{00570\ \ \ \ \ \textcolor{comment}{//\ Generate\ more\ FBO\ handles.}}
+\DoxyCodeLine{00571\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ start\ =\ \_fbo.size();}
+\DoxyCodeLine{00572\ \ \ \ \ GLuint\ zero\ =\ 0;}
+\DoxyCodeLine{00573\ \ \ \ \ \_fbo.resize(num\_fbos,\ zero);}
+\DoxyCodeLine{00574\ \ \ \ \ glgsg-\/>\_glGenFramebuffers(num\_fbos\ -\/\ start,\ \&\_fbo[start]);}
+\DoxyCodeLine{00575\ \ \ \}}
+\DoxyCodeLine{00576\ }
+\DoxyCodeLine{00577\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ layer\ =\ 0;\ layer\ <\ (int)num\_fbos;\ ++layer)\ \{}
+\DoxyCodeLine{00578\ \ \ \ \ \textcolor{comment}{//\ Bind\ the\ FBO}}
+\DoxyCodeLine{00579\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fbo[layer]\ ==\ 0)\ \{}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00582\ \ \ \ \ \}}
+\DoxyCodeLine{00583\ \ \ \ \ glgsg-\/>bind\_fbo(\_fbo[layer]);}
+\DoxyCodeLine{00584\ }
+\DoxyCodeLine{00585\ \ \ \ \ \textcolor{keywordflow}{if}\ (glgsg-\/>\_use\_object\_labels)\ \{}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \textcolor{comment}{//\ Assign\ a\ label\ for\ OpenGL\ to\ use\ when\ displaying\ debug\ messages.}}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_fbos\ >\ 1)\ \{}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ strm;}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \ \ strm\ <<\ \_name\ <<\ \textcolor{charliteral}{'['}\ <<\ layer\ <<\ \textcolor{charliteral}{']'};}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \ \ std::string\ name\ =\ strm.str();}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \ \ glgsg-\/>\_glObjectLabel(GL\_FRAMEBUFFER,\ \_fbo[layer],\ name.size(),\ name.data());}
+\DoxyCodeLine{00592\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00593\ \ \ \ \ \ \ \ \ glgsg-\/>\_glObjectLabel(GL\_FRAMEBUFFER,\ \_fbo[layer],\ \_name.size(),\ \_name.data());}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00595\ \ \ \ \ \}}
+\DoxyCodeLine{00596\ }
+\DoxyCodeLine{00597\ \ \ \ \ \textcolor{comment}{//\ For\ all\ slots,\ update\ the\ slot.}}
+\DoxyCodeLine{00598\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_use\_depth\_stencil)\ \{}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ bind\_slot(layer,\ rb\_resize,\ attach,\ RTP\_depth\_stencil,\ GL\_DEPTH\_ATTACHMENT\_EXT);}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ have\_any\_depth\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00601\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (attach[RTP\_depth]\ ||\ \_fb\_properties.get\_depth\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ bind\_slot(layer,\ rb\_resize,\ attach,\ RTP\_depth,\ GL\_DEPTH\_ATTACHMENT\_EXT);}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ have\_any\_depth\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00604\ \ \ \ \ \}}
+\DoxyCodeLine{00605\ }
+\DoxyCodeLine{00606\ \ \ \ \ \textcolor{keywordtype}{int}\ next\ =\ GL\_COLOR\_ATTACHMENT0\_EXT;}
+\DoxyCodeLine{00607\ \ \ \ \ \textcolor{keywordflow}{if}\ (attach[RTP\_color]\ ||\ \_fb\_properties.get\_color\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ bind\_slot(layer,\ rb\_resize,\ attach,\ RTP\_color,\ next++);}
+\DoxyCodeLine{00609\ }
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.is\_stereo())\ \{}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ second\ tex\ view\ has\ already\ been\ initialized,\ so\ bind\ it}}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ straight\ away.}}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (attach[RTP\_color]\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ \ \ \ \ CLP(\mbox{\hyperlink{classTextureContext}{TextureContext}})\ *gtc\ =\ \_texture\_contexts.back();}
+\DoxyCodeLine{00615\ \ \ \ \ \ \ \ \ \ \ nassertv(gtc-\/>get\_texture()\ ==\ attach[RTP\_color]);}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ \ \ \ \ attach\_tex(next++,\ gtc,\ 1,\ layer);}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ XXX\ hack:\ I\ needed\ a\ slot\ to\ use,\ and\ we\ don't\ currently\ use}}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ RTP\_stencil\ and\ it's\ treated\ as\ a\ color\ attachment\ below,\ so\ this}}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ fits\ the\ bill.\ \ Eventually,\ we\ might\ want\ to\ add\ RTP\_color\_left}}
+\DoxyCodeLine{00621\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ and\ RTP\_color\_right.}}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \ \ \ \ bind\_slot(layer,\ rb\_resize,\ attach,\ RTP\_stencil,\ next++);}
+\DoxyCodeLine{00623\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00624\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00625\ \ \ \ \ \ \ \_have\_any\_color\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00626\ \ \ \ \ \}}
+\DoxyCodeLine{00627\ }
+\DoxyCodeLine{00628\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i<\_fb\_properties.get\_aux\_rgba();\ i++)\ \{}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ bind\_slot(layer,\ rb\_resize,\ attach,\ (RenderTexturePlane)(RTP\_aux\_rgba\_0+i),\ next++);}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \_have\_any\_color\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00631\ \ \ \ \ \}}
+\DoxyCodeLine{00632\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i<\_fb\_properties.get\_aux\_hrgba();\ i++)\ \{}
+\DoxyCodeLine{00633\ \ \ \ \ \ \ bind\_slot(layer,\ rb\_resize,\ attach,\ (RenderTexturePlane)(RTP\_aux\_hrgba\_0+i),\ next++);}
+\DoxyCodeLine{00634\ \ \ \ \ \ \ \_have\_any\_color\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00635\ \ \ \ \ \}}
+\DoxyCodeLine{00636\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i<\_fb\_properties.get\_aux\_float();\ i++)\ \{}
+\DoxyCodeLine{00637\ \ \ \ \ \ \ bind\_slot(layer,\ rb\_resize,\ attach,\ (RenderTexturePlane)(RTP\_aux\_float\_0+i),\ next++);}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \_have\_any\_color\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00639\ \ \ \ \ \}}
+\DoxyCodeLine{00640\ }
+\DoxyCodeLine{00641\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_have\_any\_color\ ||\ have\_any\_depth)\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ \textcolor{comment}{//\ Clear\ if\ the\ fbo\ was\ just\ created,\ regardless\ of\ the\ clear\ settings\ per}}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \textcolor{comment}{//\ frame.\ \ However,\ we\ don't\ do\ this\ for\ textures,\ which\ may\ have\ useful}}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ \textcolor{comment}{//\ contents\ that\ need\ to\ be\ preserved.}}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_initial\_clear)\ \{}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ \ \ GLbitfield\ mask\ =\ 0;}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rb[RTP\_color])\ \{}
+\DoxyCodeLine{00648\ \ \ \ \ \ \ \ \ \ \ glClearColor(0.0f,\ 0.0f,\ 0.0f,\ 1.0f);}
+\DoxyCodeLine{00649\ \ \ \ \ \ \ \ \ \ \ mask\ |=\ GL\_COLOR\_BUFFER\_BIT;}
+\DoxyCodeLine{00650\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00651\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rb[RTP\_depth])\ \{}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \ \ \ \ mask\ |=\ GL\_DEPTH\_BUFFER\_BIT;}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rb[RTP\_depth\_stencil])\ \{}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ \ \ \ \ mask\ |=\ GL\_DEPTH\_BUFFER\_BIT\ |\ GL\_STENCIL\_BUFFER\_BIT;}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (mask\ !=\ 0)\ \{}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \ \ \ \ glClear(mask);}
+\DoxyCodeLine{00659\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00660\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00661\ \textcolor{preprocessor}{\#ifndef\ OPENGLES\_1}}
+\DoxyCodeLine{00662\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (glgsg-\/>\_supports\_empty\_framebuffer)\ \{}
+\DoxyCodeLine{00663\ \ \ \ \ \ \ \textcolor{comment}{//\ Set\ the\ "{}default"{}\ width\ and\ height,\ which\ is\ required\ to\ have\ an\ FBO}}
+\DoxyCodeLine{00664\ \ \ \ \ \ \ \textcolor{comment}{//\ without\ any\ attachments.}}
+\DoxyCodeLine{00665\ \ \ \ \ \ \ glgsg-\/>\_glFramebufferParameteri(GL\_FRAMEBUFFER,\ GL\_FRAMEBUFFER\_DEFAULT\_WIDTH,\ \_rb\_size\_x);}
+\DoxyCodeLine{00666\ \ \ \ \ \ \ glgsg-\/>\_glFramebufferParameteri(GL\_FRAMEBUFFER,\ GL\_FRAMEBUFFER\_DEFAULT\_HEIGHT,\ \_rb\_size\_y);}
+\DoxyCodeLine{00667\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00668\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00669\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ all\ else\ fails,\ just\ bind\ a\ "{}dummy"{}\ attachment.}}
+\DoxyCodeLine{00670\ \ \ \ \ \ \ bind\_slot(layer,\ rb\_resize,\ attach,\ RTP\_color,\ next++);}
+\DoxyCodeLine{00671\ \ \ \ \ \}}
+\DoxyCodeLine{00672\ \ \ \}}
+\DoxyCodeLine{00673\ }
+\DoxyCodeLine{00674\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{00675\ \ \ \textcolor{comment}{//\ Setup\ any\ required\ multisample\ buffers.\ \ Does\ not\ work\ for\ layered}}
+\DoxyCodeLine{00676\ \ \ \textcolor{comment}{//\ buffers.}}
+\DoxyCodeLine{00677\ \ \ \textcolor{keywordflow}{if}\ (\_requested\_multisamples\ \&\&\ \_rb\_size\_z\ ==\ 1)\ \{}
+\DoxyCodeLine{00678\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fbo\_multisample\ ==\ 0)\ \{}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ glgsg-\/>\_glGenFramebuffers(1,\ \&\_fbo\_multisample);}
+\DoxyCodeLine{00680\ \ \ \ \ \}}
+\DoxyCodeLine{00681\ \ \ \ \ glgsg-\/>bind\_fbo(\_fbo\_multisample);}
+\DoxyCodeLine{00682\ }
+\DoxyCodeLine{00683\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_use\_depth\_stencil\ ||\ attach[RTP\_depth]\ ||\ \_fb\_properties.get\_depth\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{00684\ \ \ \ \ \ \ bind\_slot\_multisample(rb\_resize,\ attach,\ RTP\_depth,\ GL\_DEPTH\_ATTACHMENT\_EXT);}
+\DoxyCodeLine{00685\ \ \ \ \ \}}
+\DoxyCodeLine{00686\ }
+\DoxyCodeLine{00687\ \ \ \ \ \textcolor{keywordtype}{int}\ next\ =\ GL\_COLOR\_ATTACHMENT0\_EXT;}
+\DoxyCodeLine{00688\ \ \ \ \ \textcolor{keywordflow}{if}\ (attach[RTP\_color]\ ||\ \_fb\_properties.get\_color\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{00689\ \ \ \ \ \ \ bind\_slot\_multisample(rb\_resize,\ attach,\ RTP\_color,\ next++);}
+\DoxyCodeLine{00690\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.is\_stereo())\ \{}
+\DoxyCodeLine{00691\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ TODO:\ figure\ out\ how\ multisample\ is\ supposed\ to\ work\ with\ stereo}}
+\DoxyCodeLine{00692\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ buffers.}}
+\DoxyCodeLine{00693\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00694\ \ \ \ \ \}}
+\DoxyCodeLine{00695\ }
+\DoxyCodeLine{00696\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i<\_fb\_properties.get\_aux\_rgba();\ i++)\ \{}
+\DoxyCodeLine{00697\ \ \ \ \ \ \ bind\_slot\_multisample(rb\_resize,\ attach,\ (RenderTexturePlane)(RTP\_aux\_rgba\_0+i),\ next++);}
+\DoxyCodeLine{00698\ \ \ \ \ \}}
+\DoxyCodeLine{00699\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i<\_fb\_properties.get\_aux\_hrgba();\ i++)\ \{}
+\DoxyCodeLine{00700\ \ \ \ \ \ \ bind\_slot\_multisample(rb\_resize,\ attach,\ (RenderTexturePlane)(RTP\_aux\_hrgba\_0+i),\ next++);}
+\DoxyCodeLine{00701\ \ \ \ \ \}}
+\DoxyCodeLine{00702\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i<\_fb\_properties.get\_aux\_float();\ i++)\ \{}
+\DoxyCodeLine{00703\ \ \ \ \ \ \ bind\_slot\_multisample(rb\_resize,\ attach,\ (RenderTexturePlane)(RTP\_aux\_float\_0+i),\ next++);}
+\DoxyCodeLine{00704\ \ \ \ \ \}}
+\DoxyCodeLine{00705\ \ \ \ \ glEnable(GL\_MULTISAMPLE);}
+\DoxyCodeLine{00706\ }
+\DoxyCodeLine{00707\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_initial\_clear)\ \{}
+\DoxyCodeLine{00708\ \ \ \ \ \ \ glClearColor(0.0f,\ 0.0f,\ 0.0f,\ 1.0f);}
+\DoxyCodeLine{00709\ \ \ \ \ \ \ glClear(GL\_COLOR\_BUFFER\_BIT\ |\ GL\_DEPTH\_BUFFER\_BIT\ |\ GL\_STENCIL\_BUFFER\_BIT);}
+\DoxyCodeLine{00710\ \ \ \ \ \}}
+\DoxyCodeLine{00711\ }
+\DoxyCodeLine{00712\ \ \ \ \ \textcolor{comment}{//\ Mark\ the\ GSG\ as\ supporting\ multisampling,\ so\ that\ it\ will\ respect\ an}}
+\DoxyCodeLine{00713\ \ \ \ \ \textcolor{comment}{//\ AntialiasAttrib\ with\ mode\ M\_multisample.}}
+\DoxyCodeLine{00714\ \ \ \ \ glgsg-\/>\_supports\_multisample\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00715\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00716\ \ \ \ \ glDisable(GL\_MULTISAMPLE);}
+\DoxyCodeLine{00717\ \ \ \}}
+\DoxyCodeLine{00718\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ OPENGLES}}
+\DoxyCodeLine{00719\ }
+\DoxyCodeLine{00720\ \ \ \textcolor{keywordflow}{if}\ (!\_have\_any\_color)\ \{}
+\DoxyCodeLine{00721\ \ \ \ \ \_fb\_properties.set\_rgba\_bits(0,\ 0,\ 0,\ 0);}
+\DoxyCodeLine{00722\ \ \ \}}
+\DoxyCodeLine{00723\ }
+\DoxyCodeLine{00724\ \ \ \_rb\_context-\/>set\_active(\textcolor{keyword}{true});}
+\DoxyCodeLine{00725\ \ \ \_rb\_context-\/>update\_data\_size\_bytes(\_rb\_data\_size\_bytes);}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00727\ \ \ \_initial\_clear\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00728\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{00729\ }
+\DoxyCodeLine{00730\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{00731\ \ \ \textcolor{keywordflow}{if}\ (\_have\_any\_color)\ \{}
+\DoxyCodeLine{00732\ \ \ \ \ glDrawBuffer(GL\_COLOR\_ATTACHMENT0\_EXT);}
+\DoxyCodeLine{00733\ \ \ \ \ glReadBuffer(GL\_COLOR\_ATTACHMENT0\_EXT);}
+\DoxyCodeLine{00734\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00735\ \ \ \ \ glDrawBuffer(GL\_NONE);}
+\DoxyCodeLine{00736\ \ \ \ \ glReadBuffer(GL\_NONE);}
+\DoxyCodeLine{00737\ \ \ \}}
+\DoxyCodeLine{00738\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00739\ }
+\DoxyCodeLine{00740\ \ \ \_needs\_rebuild\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00741\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{00742\ }
+\DoxyCodeLine{00743\ \ \ \textcolor{keywordflow}{if}\ (!check\_fbo())\ \{}
+\DoxyCodeLine{00744\ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ \ \ <<\ get\_name()\ <<\ \textcolor{stringliteral}{"{}\ check\_fbo()\ returns\ false\(\backslash\)n"{}};}
+\DoxyCodeLine{00747\ \ \ \ \ \}}
+\DoxyCodeLine{00748\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00749\ \ \ \}}
+\DoxyCodeLine{00750\ \}}
+\DoxyCodeLine{00751\ }
+\DoxyCodeLine{00755\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{00756\ bind\_slot(int\ layer,\ bool\ rb\_resize,\ \mbox{\hyperlink{classTexture}{Texture}}\ **attach,\ RenderTexturePlane\ slot,\ GLenum\ attachpoint)\ \{}
+\DoxyCodeLine{00757\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{00758\ }
+\DoxyCodeLine{00759\ \ \ \mbox{\hyperlink{classTexture}{Texture}}\ *tex\ =\ attach[slot];}
+\DoxyCodeLine{00760\ }
+\DoxyCodeLine{00761\ \ \ \textcolor{keywordflow}{if}\ (tex\ \&\&\ layer\ >=\ tex-\/>get\_z\_size())\ \{}
+\DoxyCodeLine{00762\ \ \ \ \ \textcolor{comment}{//\ If\ the\ requested\ layer\ index\ exceeds\ the\ number\ of\ layers\ in\ the}}
+\DoxyCodeLine{00763\ \ \ \ \ \textcolor{comment}{//\ texture,\ we\ will\ not\ bind\ this\ layer.}}
+\DoxyCodeLine{00764\ \ \ \ \ tex\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00765\ \ \ \}}
+\DoxyCodeLine{00766\ }
+\DoxyCodeLine{00767\ \ \ \textcolor{keywordflow}{if}\ (!tex\ \&\&\ \_rb\_size\_z\ >\ 1)\ \{}
+\DoxyCodeLine{00768\ \ \ \ \ \textcolor{comment}{//\ Since\ there\ is\ no\ such\ thing\ as\ a\ layered\ renderbuffer\ (to\ my}}
+\DoxyCodeLine{00769\ \ \ \ \ \textcolor{comment}{//\ knowledge),\ we\ have\ to\ create\ a\ dummy\ texture\ to\ render\ to\ if\ no}}
+\DoxyCodeLine{00770\ \ \ \ \ \textcolor{comment}{//\ texture\ was\ provided.}}
+\DoxyCodeLine{00771\ \ \ \ \ tex\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTexture}{Texture}}();}
+\DoxyCodeLine{00772\ }
+\DoxyCodeLine{00773\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rb\_size\_z\ >\ 1)\ \{}
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \textcolor{comment}{//\ Apparently,\ it\ doesn't\ make\ a\ difference\ whether\ we\ use}}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ \textcolor{comment}{//\ setup\_cube\_map\ or\ setup\_2d\_texture\_array\ here,\ since\ it's\ the\ same}}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ \textcolor{comment}{//\ internal\ storage.}}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ tex-\/>setup\_2d\_texture\_array(\_rb\_size\_z);}
+\DoxyCodeLine{00778\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00779\ \ \ \ \ \ \ tex-\/>setup\_2d\_texture();}
+\DoxyCodeLine{00780\ \ \ \ \ \}}
+\DoxyCodeLine{00781\ \ \ \}}
+\DoxyCodeLine{00782\ }
+\DoxyCodeLine{00783\ \ \ \textcolor{keywordflow}{if}\ (tex)\ \{}
+\DoxyCodeLine{00784\ \ \ \ \ \textcolor{comment}{//\ Bind\ the\ texture\ to\ the\ slot.}}
+\DoxyCodeLine{00785\ \ \ \ \ tex-\/>set\_x\_size(\_rb\_size\_x);}
+\DoxyCodeLine{00786\ \ \ \ \ tex-\/>set\_y\_size(\_rb\_size\_y);}
+\DoxyCodeLine{00787\ \ \ \ \ \textcolor{keywordflow}{if}\ (tex-\/>get\_texture\_type()\ !=\ Texture::TT\_cube\_map\ \&\&\ \_rb\_size\_z\ >\ 1)\ \{}
+\DoxyCodeLine{00788\ \ \ \ \ \ \ tex-\/>set\_z\_size(\_rb\_size\_z);}
+\DoxyCodeLine{00789\ \ \ \ \ \}}
+\DoxyCodeLine{00790\ \ \ \ \ tex-\/>set\_pad\_size(\_rb\_size\_x\ -\/\ get\_x\_size(),\ \_rb\_size\_y\ -\/\ get\_y\_size());}
+\DoxyCodeLine{00791\ }
+\DoxyCodeLine{00792\ \ \ \ \ \textcolor{comment}{//\ Adjust\ the\ texture\ format\ based\ on\ the\ requested\ framebuffer\ settings.}}
+\DoxyCodeLine{00793\ \ \ \ \ \textcolor{keywordflow}{switch}\ (slot)\ \{}
+\DoxyCodeLine{00794\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_depth:}
+\DoxyCodeLine{00795\ \ \ \ \ \ \ \_fb\_properties.setup\_depth\_texture(tex);}
+\DoxyCodeLine{00796\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00797\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_depth\_stencil:}
+\DoxyCodeLine{00798\ \ \ \ \ \ \ tex-\/>set\_format(Texture::F\_depth\_stencil);}
+\DoxyCodeLine{00799\ }
+\DoxyCodeLine{00800\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_depth())\ \{}
+\DoxyCodeLine{00801\ \ \ \ \ \ \ \ \ tex-\/>set\_component\_type(Texture::T\_float);}
+\DoxyCodeLine{00802\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00803\ \ \ \ \ \ \ \ \ tex-\/>set\_component\_type(Texture::T\_unsigned\_int\_24\_8);}
+\DoxyCodeLine{00804\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00805\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00806\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_0:}
+\DoxyCodeLine{00807\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_1:}
+\DoxyCodeLine{00808\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_2:}
+\DoxyCodeLine{00809\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_3:}
+\DoxyCodeLine{00810\ \ \ \ \ \ \ tex-\/>set\_format(Texture::F\_rgba16);}
+\DoxyCodeLine{00811\ \ \ \ \ \ \ tex-\/>set\_component\_type(Texture::T\_float);}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00813\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_0:}
+\DoxyCodeLine{00814\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_1:}
+\DoxyCodeLine{00815\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_2:}
+\DoxyCodeLine{00816\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_3:}
+\DoxyCodeLine{00817\ \ \ \ \ \ \ tex-\/>set\_format(Texture::F\_rgba32);}
+\DoxyCodeLine{00818\ \ \ \ \ \ \ tex-\/>set\_component\_type(Texture::T\_float);}
+\DoxyCodeLine{00819\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00820\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00821\ \ \ \ \ \ \ \_fb\_properties.setup\_color\_texture(tex);}
+\DoxyCodeLine{00822\ \ \ \ \ \}}
+\DoxyCodeLine{00823\ }
+\DoxyCodeLine{00824\ \ \ \ \ \textcolor{keywordflow}{if}\ (slot\ ==\ RTP\_color\ \&\&\ !tex-\/>has\_clear\_color())\ \{}
+\DoxyCodeLine{00825\ \ \ \ \ \ \ tex-\/>set\_clear\_color(LColor(0,\ 0,\ 0,\ 1));}
+\DoxyCodeLine{00826\ \ \ \ \ \}}
+\DoxyCodeLine{00827\ }
+\DoxyCodeLine{00828\ \ \ \ \ \_textures.push\_back(tex);}
+\DoxyCodeLine{00829\ }
+\DoxyCodeLine{00830\ \ \ \ \ \mbox{\hyperlink{classTextureContext}{TextureContext}}\ *tc\ =\ tex-\/>\mbox{\hyperlink{classTexture_a6b3856662e05f463811735252aaae40f}{prepare\_now}}(glgsg-\/>get\_prepared\_objects(),\ glgsg);}
+\DoxyCodeLine{00831\ \ \ \ \ nassertv(tc\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00832\ \ \ \ \ CLP(\mbox{\hyperlink{classTextureContext}{TextureContext}})\ *gtc\ =\ DCAST(CLP(\mbox{\hyperlink{classTextureContext}{TextureContext}}),\ tc);}
+\DoxyCodeLine{00833\ }
+\DoxyCodeLine{00834\ \ \ \ \ glgsg-\/>update\_texture(gtc,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00835\ \ \ \ \ gtc-\/>set\_active(\textcolor{keyword}{true});}
+\DoxyCodeLine{00836\ \ \ \ \ \_texture\_contexts.push\_back(gtc);}
+\DoxyCodeLine{00837\ }
+\DoxyCodeLine{00838\ \ \ \ \ GLenum\ target\ =\ gtc-\/>\_target;}
+\DoxyCodeLine{00839\ \ \ \ \ \textcolor{keywordflow}{if}\ (target\ ==\ GL\_TEXTURE\_CUBE\_MAP)\ \{}
+\DoxyCodeLine{00840\ \ \ \ \ \ \ target\ =\ GL\_TEXTURE\_CUBE\_MAP\_POSITIVE\_X\ +\ layer;}
+\DoxyCodeLine{00841\ \ \ \ \ \}}
+\DoxyCodeLine{00842\ }
+\DoxyCodeLine{00843\ \ \ \ \ \textcolor{keywordflow}{if}\ (attachpoint\ ==\ GL\_DEPTH\_ATTACHMENT\_EXT)\ \{}
+\DoxyCodeLine{00844\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{00845\ \ \ \ \ \ \ \ \ GLCAT.debug()\ <<\ \textcolor{stringliteral}{"{}Binding\ texture\ "{}}\ <<\ *tex\ <<\ \textcolor{stringliteral}{"{}\ to\ depth\ attachment.\(\backslash\)n"{}};}
+\DoxyCodeLine{00846\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00847\ }
+\DoxyCodeLine{00848\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (slot\ !=\ RTP\_depth\_stencil\ \&\&\ \_rb[RTP\_depth\_stencil]\ !=\ 0)\ \{}
+\DoxyCodeLine{00849\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ have\ a\ depth-\/stencil\ renderbuffer\ bound,\ delete\ it\ first.}}
+\DoxyCodeLine{00850\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ will\ automatically\ unbind\ it\ as\ well.}}
+\DoxyCodeLine{00851\ \ \ \ \ \ \ \ \ glgsg-\/>\_glDeleteRenderbuffers(1,\ \&(\_rb[RTP\_depth\_stencil]));}
+\DoxyCodeLine{00852\ \ \ \ \ \ \ \ \ \_rb[RTP\_depth\_stencil]\ =\ 0;}
+\DoxyCodeLine{00853\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00854\ }
+\DoxyCodeLine{00855\ \ \ \ \ \ \ attach\_tex(GL\_DEPTH\_ATTACHMENT\_EXT,\ gtc,\ 0,\ layer);}
+\DoxyCodeLine{00856\ }
+\DoxyCodeLine{00857\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{00858\ \ \ \ \ \ \ GLint\ depth\_size\ =\ 0;}
+\DoxyCodeLine{00859\ \ \ \ \ \ \ glGetTexLevelParameteriv(target,\ 0,\ GL\_TEXTURE\_DEPTH\_SIZE,\ \&depth\_size);}
+\DoxyCodeLine{00860\ \ \ \ \ \ \ \_fb\_properties.set\_depth\_bits(depth\_size);}
+\DoxyCodeLine{00861\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00862\ }
+\DoxyCodeLine{00863\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (slot\ ==\ RTP\_depth\_stencil)\ \{}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{00865\ \ \ \ \ \ \ \ \ \ \ GLCAT.debug()\ <<\ \textcolor{stringliteral}{"{}Binding\ texture\ "{}}\ <<\ *tex\ <<\ \textcolor{stringliteral}{"{}\ to\ stencil\ attachment.\(\backslash\)n"{}};}
+\DoxyCodeLine{00866\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00867\ }
+\DoxyCodeLine{00868\ \ \ \ \ \ \ \ \ attach\_tex(GL\_STENCIL\_ATTACHMENT\_EXT,\ gtc,\ 0,\ layer);}
+\DoxyCodeLine{00869\ }
+\DoxyCodeLine{00870\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{00871\ \ \ \ \ \ \ \ \ GLint\ stencil\_size\ =\ 0;}
+\DoxyCodeLine{00872\ \ \ \ \ \ \ \ \ glGetTexLevelParameteriv(target,\ 0,\ GL\_TEXTURE\_STENCIL\_SIZE,\ \&stencil\_size);}
+\DoxyCodeLine{00873\ \ \ \ \ \ \ \ \ \_fb\_properties.set\_stencil\_bits(stencil\_size);}
+\DoxyCodeLine{00874\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00875\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00876\ }
+\DoxyCodeLine{00877\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00878\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{00879\ \ \ \ \ \ \ \ \ GLCAT.debug()\ <<\ \textcolor{stringliteral}{"{}Binding\ texture\ "{}}\ <<\ *tex\ <<\ \textcolor{stringliteral}{"{}\ to\ color\ attachment.\(\backslash\)n"{}};}
+\DoxyCodeLine{00880\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00881\ }
+\DoxyCodeLine{00882\ \ \ \ \ \ \ attach\_tex(attachpoint,\ gtc,\ 0,\ layer);}
+\DoxyCodeLine{00883\ }
+\DoxyCodeLine{00884\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{00885\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (attachpoint\ ==\ GL\_COLOR\_ATTACHMENT0\_EXT)\ \{}
+\DoxyCodeLine{00886\ \ \ \ \ \ \ \ \ GLint\ red\_size\ =\ 0,\ green\_size\ =\ 0,\ blue\_size\ =\ 0,\ alpha\_size\ =\ 0;}
+\DoxyCodeLine{00887\ \ \ \ \ \ \ \ \ glGetTexLevelParameteriv(target,\ 0,\ GL\_TEXTURE\_RED\_SIZE,\ \&red\_size);}
+\DoxyCodeLine{00888\ \ \ \ \ \ \ \ \ glGetTexLevelParameteriv(target,\ 0,\ GL\_TEXTURE\_GREEN\_SIZE,\ \&green\_size);}
+\DoxyCodeLine{00889\ \ \ \ \ \ \ \ \ glGetTexLevelParameteriv(target,\ 0,\ GL\_TEXTURE\_BLUE\_SIZE,\ \&blue\_size);}
+\DoxyCodeLine{00890\ \ \ \ \ \ \ \ \ glGetTexLevelParameteriv(target,\ 0,\ GL\_TEXTURE\_ALPHA\_SIZE,\ \&alpha\_size);}
+\DoxyCodeLine{00891\ }
+\DoxyCodeLine{00892\ \ \ \ \ \ \ \ \ \_fb\_properties.set\_rgba\_bits(red\_size,\ green\_size,\ blue\_size,\ alpha\_size);}
+\DoxyCodeLine{00893\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00894\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00895\ \ \ \ \ \}}
+\DoxyCodeLine{00896\ }
+\DoxyCodeLine{00897\ \ \ \ \ \textcolor{comment}{//\ If\ there\ was\ a\ renderbuffer\ bound\ to\ this\ slot,\ delete\ it.}}
+\DoxyCodeLine{00898\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rb[slot]\ !=\ 0)\ \{}
+\DoxyCodeLine{00899\ \ \ \ \ \ \ glgsg-\/>\_glDeleteRenderbuffers(1,\ \&(\_rb[slot]));}
+\DoxyCodeLine{00900\ \ \ \ \ \ \ \_rb[slot]\ =\ 0;}
+\DoxyCodeLine{00901\ \ \ \ \ \}}
+\DoxyCodeLine{00902\ }
+\DoxyCodeLine{00903\ \ \ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{00904\ }
+\DoxyCodeLine{00905\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00906\ \ \ \ \ \textcolor{comment}{//\ No\ texture\ to\ bind.\ \ Instead,\ create\ a\ renderbuffer.\ \ Choose\ a\ suitable}}
+\DoxyCodeLine{00907\ \ \ \ \ \textcolor{comment}{//\ renderbuffer\ format\ based\ on\ the\ requirements.}}
+\DoxyCodeLine{00908\ \textcolor{preprocessor}{\#ifdef\ OPENGLES}}
+\DoxyCodeLine{00909\ \ \ \ \ \textcolor{comment}{//\ OpenGL\ ES\ case.}}
+\DoxyCodeLine{00910\ \ \ \ \ GLuint\ gl\_format\ =\ GL\_RGBA4;}
+\DoxyCodeLine{00911\ \ \ \ \ \textcolor{keywordflow}{switch}\ (slot)\ \{}
+\DoxyCodeLine{00912\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_depth\_stencil:}
+\DoxyCodeLine{00913\ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH24\_STENCIL8\_OES;}
+\DoxyCodeLine{00914\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00915\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_depth:}
+\DoxyCodeLine{00916\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 24\ \&\&\ glgsg-\/>\_supports\_depth32)\ \{}
+\DoxyCodeLine{00917\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH\_COMPONENT32\_OES;}
+\DoxyCodeLine{00918\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 16\ \&\&\ glgsg-\/>\_supports\_depth24)\ \{}
+\DoxyCodeLine{00919\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH\_COMPONENT24\_OES;}
+\DoxyCodeLine{00920\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00921\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH\_COMPONENT16;}
+\DoxyCodeLine{00922\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00923\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00924\ \textcolor{preprocessor}{\#ifndef\ OPENGLES\_1}}
+\DoxyCodeLine{00925\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_0:}
+\DoxyCodeLine{00926\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_1:}
+\DoxyCodeLine{00927\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_2:}
+\DoxyCodeLine{00928\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_3:}
+\DoxyCodeLine{00929\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_0:}
+\DoxyCodeLine{00930\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_1:}
+\DoxyCodeLine{00931\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_2:}
+\DoxyCodeLine{00932\ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_3:}
+\DoxyCodeLine{00933\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (glgsg-\/>has\_extension(\textcolor{stringliteral}{"{}GL\_EXT\_color\_buffer\_float"{}}))\ \{}
+\DoxyCodeLine{00934\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (slot\ >=\ RTP\_aux\_float\_0\ \&\&\ slot\ <=\ RTP\_aux\_float\_3)\ \{}
+\DoxyCodeLine{00935\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA32F;}
+\DoxyCodeLine{00936\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00937\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16F;}
+\DoxyCodeLine{00938\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00939\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00940\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (glgsg-\/>has\_extension(\textcolor{stringliteral}{"{}GL\_EXT\_color\_buffer\_half\_float"{}}))\ \{}
+\DoxyCodeLine{00941\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16F\_EXT;}
+\DoxyCodeLine{00942\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00943\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00944\ \ \ \ \ \textcolor{comment}{//\ NB:\ we\ currently\ use\ RTP\_stencil\ to\ store\ the\ right\ eye\ for\ stereo.}}
+\DoxyCodeLine{00945\ \ \ \ \ \textcolor{comment}{//\ case\ RTP\_stencil:\ gl\_format\ =\ GL\_STENCIL\_INDEX8;\ break}}
+\DoxyCodeLine{00946\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00947\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_alpha\_bits()\ ==\ 0)\ \{}
+\DoxyCodeLine{00948\ \textcolor{preprocessor}{\#ifndef\ OPENGLES\_1}}
+\DoxyCodeLine{00949\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_color()\ \&\&}
+\DoxyCodeLine{00950\ \ \ \ \ \ \ \ \ \ \ \ \ glgsg-\/>has\_extension(\textcolor{stringliteral}{"{}GL\_EXT\_color\_buffer\_float"{}}))\ \{}
+\DoxyCodeLine{00951\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ extension\ supports\ the\ full\ range\ of\ floating-\/point\ formats.}}
+\DoxyCodeLine{00952\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 16\ *\ 3\ ||}
+\DoxyCodeLine{00953\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_red\_bits()\ >\ 16\ ||}
+\DoxyCodeLine{00954\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_green\_bits()\ >\ 16\ ||}
+\DoxyCodeLine{00955\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_blue\_bits()\ >\ 16)\ \{}
+\DoxyCodeLine{00956\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 32-\/bit,\ which\ is\ always\ floating-\/point.}}
+\DoxyCodeLine{00957\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{00958\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ ==\ 1\ ||}
+\DoxyCodeLine{00959\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 32\ *\ 2)\ \{}
+\DoxyCodeLine{00960\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB32F;}
+\DoxyCodeLine{00961\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_green\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{00962\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 32)\ \{}
+\DoxyCodeLine{00963\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RG32F;}
+\DoxyCodeLine{00964\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00965\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_R32F;}
+\DoxyCodeLine{00966\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00967\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00968\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 16-\/bit\ floating-\/point.}}
+\DoxyCodeLine{00969\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 10\ ||}
+\DoxyCodeLine{00970\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ ==\ 1\ ||}
+\DoxyCodeLine{00971\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 32)\ \{}
+\DoxyCodeLine{00972\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB16F;}
+\DoxyCodeLine{00973\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{00974\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_red\_bits()\ >\ 11\ ||}
+\DoxyCodeLine{00975\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_green\_bits()\ >\ 11)\ \{}
+\DoxyCodeLine{00976\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB16F;}
+\DoxyCodeLine{00977\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00978\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_R11F\_G11F\_B10F;}
+\DoxyCodeLine{00979\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00980\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_green\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{00981\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 16)\ \{}
+\DoxyCodeLine{00982\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RG16F;}
+\DoxyCodeLine{00983\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00984\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_R16F;}
+\DoxyCodeLine{00985\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00986\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00987\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_color()\ \&\&}
+\DoxyCodeLine{00988\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ glgsg-\/>has\_extension(\textcolor{stringliteral}{"{}GL\_EXT\_color\_buffer\_half\_float"{}}))\ \{}
+\DoxyCodeLine{00989\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB16F\_EXT;}
+\DoxyCodeLine{00990\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00991\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00992\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ <=\ 16)\ \{}
+\DoxyCodeLine{00993\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB565\_OES;}
+\DoxyCodeLine{00994\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ <=\ 24)\ \{}
+\DoxyCodeLine{00995\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB8\_OES;}
+\DoxyCodeLine{00996\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00997\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB10\_EXT;}
+\DoxyCodeLine{00998\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00999\ \textcolor{preprocessor}{\#ifndef\ OPENGLES\_1}}
+\DoxyCodeLine{01000\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_color()\ \&\&}
+\DoxyCodeLine{01001\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ glgsg-\/>has\_extension(\textcolor{stringliteral}{"{}GL\_EXT\_color\_buffer\_float"{}}))\ \{}
+\DoxyCodeLine{01002\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 16\ *\ 3)\ \{}
+\DoxyCodeLine{01003\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA32F;}
+\DoxyCodeLine{01004\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01005\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16F;}
+\DoxyCodeLine{01006\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01007\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_color()\ \&\&}
+\DoxyCodeLine{01008\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ glgsg-\/>has\_extension(\textcolor{stringliteral}{"{}GL\_EXT\_color\_buffer\_half\_float"{}}))\ \{}
+\DoxyCodeLine{01009\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16F\_EXT;}
+\DoxyCodeLine{01010\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01011\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ ==\ 0)\ \{}
+\DoxyCodeLine{01012\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_ALPHA8\_EXT;}
+\DoxyCodeLine{01013\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ <=\ 12}
+\DoxyCodeLine{01014\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \&\&\ \_fb\_properties.get\_alpha\_bits()\ <=\ 4)\ \{}
+\DoxyCodeLine{01015\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA4\_OES;}
+\DoxyCodeLine{01016\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ <=\ 15}
+\DoxyCodeLine{01017\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \&\&\ \_fb\_properties.get\_alpha\_bits()\ ==\ 1)\ \{}
+\DoxyCodeLine{01018\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB5\_A1\_OES;}
+\DoxyCodeLine{01019\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ <=\ 30}
+\DoxyCodeLine{01020\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \&\&\ \_fb\_properties.get\_alpha\_bits()\ <=\ 2)\ \{}
+\DoxyCodeLine{01021\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB10\_A2\_EXT;}
+\DoxyCodeLine{01022\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01023\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA8\_OES;}
+\DoxyCodeLine{01024\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01025\ \ \ \ \ \}}
+\DoxyCodeLine{01026\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{01027\ \ \ \ \ GLuint\ gl\_format\ =\ GL\_RGBA;}
+\DoxyCodeLine{01028\ \ \ \ \ \textcolor{keywordflow}{switch}\ (slot)\ \{}
+\DoxyCodeLine{01029\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_depth\_stencil:}
+\DoxyCodeLine{01030\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 24\ ||}
+\DoxyCodeLine{01031\ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_float\_depth())\ \{}
+\DoxyCodeLine{01032\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!glgsg-\/>\_use\_remapped\_depth\_range)\ \{}
+\DoxyCodeLine{01033\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH32F\_STENCIL8;}
+\DoxyCodeLine{01034\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01035\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH32F\_STENCIL8\_NV;}
+\DoxyCodeLine{01036\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01037\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01038\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH24\_STENCIL8;}
+\DoxyCodeLine{01039\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01040\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01041\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_depth:}
+\DoxyCodeLine{01042\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_depth())\ \{}
+\DoxyCodeLine{01043\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!glgsg-\/>\_use\_remapped\_depth\_range)\ \{}
+\DoxyCodeLine{01044\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH\_COMPONENT32F;}
+\DoxyCodeLine{01045\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01046\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH\_COMPONENT32F\_NV;}
+\DoxyCodeLine{01047\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01048\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 24)\ \{}
+\DoxyCodeLine{01049\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH\_COMPONENT32;}
+\DoxyCodeLine{01050\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 16)\ \{}
+\DoxyCodeLine{01051\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH\_COMPONENT24;}
+\DoxyCodeLine{01052\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 1)\ \{}
+\DoxyCodeLine{01053\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH\_COMPONENT16;}
+\DoxyCodeLine{01054\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01055\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH\_COMPONENT;}
+\DoxyCodeLine{01056\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01057\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01058\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_rgba\_0:}
+\DoxyCodeLine{01059\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_rgba\_1:}
+\DoxyCodeLine{01060\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_rgba\_2:}
+\DoxyCodeLine{01061\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_rgba\_3:}
+\DoxyCodeLine{01062\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA;}
+\DoxyCodeLine{01063\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01064\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_0:}
+\DoxyCodeLine{01065\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_1:}
+\DoxyCodeLine{01066\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_2:}
+\DoxyCodeLine{01067\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_3:}
+\DoxyCodeLine{01068\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16F\_ARB;}
+\DoxyCodeLine{01069\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01070\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_0:}
+\DoxyCodeLine{01071\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_1:}
+\DoxyCodeLine{01072\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_2:}
+\DoxyCodeLine{01073\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_3:}
+\DoxyCodeLine{01074\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA32F\_ARB;}
+\DoxyCodeLine{01075\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01076\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{01077\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_alpha\_bits()\ ==\ 0)\ \{}
+\DoxyCodeLine{01078\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_srgb\_color())\ \{}
+\DoxyCodeLine{01079\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_SRGB8;}
+\DoxyCodeLine{01080\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 16\ *\ 3\ ||}
+\DoxyCodeLine{01081\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_red\_bits()\ >\ 16\ ||}
+\DoxyCodeLine{01082\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_green\_bits()\ >\ 16\ ||}
+\DoxyCodeLine{01083\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_blue\_bits()\ >\ 16)\ \{}
+\DoxyCodeLine{01084\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 32-\/bit,\ which\ is\ always\ floating-\/point.}}
+\DoxyCodeLine{01085\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{01086\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ ==\ 1\ ||}
+\DoxyCodeLine{01087\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 32\ *\ 2)\ \{}
+\DoxyCodeLine{01088\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB32F;}
+\DoxyCodeLine{01089\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_green\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{01090\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 32)\ \{}
+\DoxyCodeLine{01091\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RG32F;}
+\DoxyCodeLine{01092\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01093\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_R32F;}
+\DoxyCodeLine{01094\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01095\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_color())\ \{}
+\DoxyCodeLine{01096\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 16-\/bit\ floating-\/point.}}
+\DoxyCodeLine{01097\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 10\ ||}
+\DoxyCodeLine{01098\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ ==\ 1\ ||}
+\DoxyCodeLine{01099\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 32)\ \{}
+\DoxyCodeLine{01100\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB16F;}
+\DoxyCodeLine{01101\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{01102\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_red\_bits()\ >\ 11\ ||}
+\DoxyCodeLine{01103\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_green\_bits()\ >\ 11)\ \{}
+\DoxyCodeLine{01104\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB16F;}
+\DoxyCodeLine{01105\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01106\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_R11F\_G11F\_B10F;}
+\DoxyCodeLine{01107\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01108\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_green\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{01109\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 16)\ \{}
+\DoxyCodeLine{01110\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RG16F;}
+\DoxyCodeLine{01111\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01112\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_R16F;}
+\DoxyCodeLine{01113\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01114\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 10\ *\ 3\ ||}
+\DoxyCodeLine{01115\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_red\_bits()\ >\ 10\ ||}
+\DoxyCodeLine{01116\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_green\_bits()\ >\ 10\ ||}
+\DoxyCodeLine{01117\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_blue\_bits()\ >\ 10)\ \{}
+\DoxyCodeLine{01118\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 16-\/bit\ normalized.}}
+\DoxyCodeLine{01119\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{01120\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ ==\ 1\ ||}
+\DoxyCodeLine{01121\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 16\ *\ 2)\ \{}
+\DoxyCodeLine{01122\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16;}
+\DoxyCodeLine{01123\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_green\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{01124\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 16)\ \{}
+\DoxyCodeLine{01125\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RG16;}
+\DoxyCodeLine{01126\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01127\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_R16;}
+\DoxyCodeLine{01128\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01129\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 8\ *\ 3\ ||}
+\DoxyCodeLine{01130\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_red\_bits()\ >\ 8\ ||}
+\DoxyCodeLine{01131\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_green\_bits()\ >\ 8\ ||}
+\DoxyCodeLine{01132\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_blue\_bits()\ >\ 8)\ \{}
+\DoxyCodeLine{01133\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB10\_A2;}
+\DoxyCodeLine{01134\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01135\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB;}
+\DoxyCodeLine{01136\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01137\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01138\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_srgb\_color())\ \{}
+\DoxyCodeLine{01139\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_SRGB8\_ALPHA8;}
+\DoxyCodeLine{01140\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_color())\ \{}
+\DoxyCodeLine{01141\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 16\ *\ 3)\ \{}
+\DoxyCodeLine{01142\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA32F\_ARB;}
+\DoxyCodeLine{01143\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01144\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16F\_ARB;}
+\DoxyCodeLine{01145\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01146\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01147\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 16\ *\ 3)\ \{}
+\DoxyCodeLine{01148\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA32F\_ARB;}
+\DoxyCodeLine{01149\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 8\ *\ 3)\ \{}
+\DoxyCodeLine{01150\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16;}
+\DoxyCodeLine{01151\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01152\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA;}
+\DoxyCodeLine{01153\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01154\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01155\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01156\ \ \ \ \ \};}
+\DoxyCodeLine{01157\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01158\ }
+\DoxyCodeLine{01159\ \ \ \ \ \textcolor{comment}{//\ If\ there's\ no\ renderbuffer\ for\ this\ slot,\ create\ one.}}
+\DoxyCodeLine{01160\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rb[slot]\ ==\ 0)\ \{}
+\DoxyCodeLine{01161\ \ \ \ \ \ \ glgsg-\/>\_glGenRenderbuffers(1,\ \&(\_rb[slot]));}
+\DoxyCodeLine{01162\ \ \ \ \ \}}
+\DoxyCodeLine{01163\ }
+\DoxyCodeLine{01164\ \ \ \ \ \textcolor{comment}{//\ Allocate\ and\ bind\ the\ renderbuffer.}}
+\DoxyCodeLine{01165\ \ \ \ \ glgsg-\/>\_glBindRenderbuffer(GL\_RENDERBUFFER\_EXT,\ \_rb[slot]);}
+\DoxyCodeLine{01166\ }
+\DoxyCodeLine{01167\ \ \ \ \ \textcolor{keywordflow}{if}\ (slot\ ==\ RTP\_depth\_stencil)\ \{}
+\DoxyCodeLine{01168\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{01169\ \ \ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{01170\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Creating\ depth\ stencil\ renderbuffer\ with\ format\ 0x"{}}\ <<\ std::hex}
+\DoxyCodeLine{01171\ \ \ \ \ \ \ \ \ \ \ <<\ gl\_format\ <<\ std::dec\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01172\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01173\ \ \ \ \ \ \ \textcolor{comment}{//\ Allocate\ renderbuffer\ storage\ for\ depth\ stencil.}}
+\DoxyCodeLine{01174\ \ \ \ \ \ \ GLint\ depth\_size\ =\ 0,\ stencil\_size\ =\ 0;}
+\DoxyCodeLine{01175\ \ \ \ \ \ \ glgsg-\/>\_glRenderbufferStorage(GL\_RENDERBUFFER\_EXT,\ gl\_format,\ \_rb\_size\_x,\ \_rb\_size\_y);}
+\DoxyCodeLine{01176\ \ \ \ \ \ \ glgsg-\/>\_glGetRenderbufferParameteriv(GL\_RENDERBUFFER\_EXT,\ GL\_RENDERBUFFER\_DEPTH\_SIZE\_EXT,\ \&depth\_size);}
+\DoxyCodeLine{01177\ \ \ \ \ \ \ glgsg-\/>\_glGetRenderbufferParameteriv(GL\_RENDERBUFFER\_EXT,\ GL\_RENDERBUFFER\_STENCIL\_SIZE\_EXT,\ \&stencil\_size);}
+\DoxyCodeLine{01178\ \ \ \ \ \ \ \_fb\_properties.set\_depth\_bits(depth\_size);}
+\DoxyCodeLine{01179\ \ \ \ \ \ \ \_fb\_properties.set\_stencil\_bits(stencil\_size);}
+\DoxyCodeLine{01180\ \ \ \ \ \ \ \_rb\_data\_size\_bytes\ +=\ \_rb\_size\_x\ *\ \_rb\_size\_y\ *\ ((depth\_size\ +\ stencil\_size)\ /\ 8);}
+\DoxyCodeLine{01181\ }
+\DoxyCodeLine{01182\ \ \ \ \ \ \ glgsg-\/>\_glBindRenderbuffer(GL\_RENDERBUFFER\_EXT,\ 0);}
+\DoxyCodeLine{01183\ }
+\DoxyCodeLine{01184\ \ \ \ \ \ \ GLuint\ rb\ =\ \_rb[slot];}
+\DoxyCodeLine{01185\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_shared\_depth\_buffer)\ \{}
+\DoxyCodeLine{01186\ \ \ \ \ \ \ \ \ rb\ =\ \_shared\_depth\_buffer-\/>\_rb[slot];}
+\DoxyCodeLine{01187\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01188\ }
+\DoxyCodeLine{01189\ \ \ \ \ \ \ glgsg-\/>\_glFramebufferRenderbuffer(GL\_FRAMEBUFFER\_EXT,\ GL\_DEPTH\_ATTACHMENT\_EXT,}
+\DoxyCodeLine{01190\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_RENDERBUFFER\_EXT,\ rb);}
+\DoxyCodeLine{01191\ }
+\DoxyCodeLine{01192\ \ \ \ \ \ \ glgsg-\/>\_glFramebufferRenderbuffer(GL\_FRAMEBUFFER\_EXT,\ GL\_STENCIL\_ATTACHMENT\_EXT,}
+\DoxyCodeLine{01193\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_RENDERBUFFER\_EXT,\ rb);}
+\DoxyCodeLine{01194\ }
+\DoxyCodeLine{01195\ \ \ \ \ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{01196\ }
+\DoxyCodeLine{01197\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (slot\ ==\ RTP\_depth)\ \{}
+\DoxyCodeLine{01198\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{01199\ \ \ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{01200\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Creating\ depth\ renderbuffer\ with\ format\ 0x"{}}\ <<\ std::hex}
+\DoxyCodeLine{01201\ \ \ \ \ \ \ \ \ \ \ <<\ gl\_format\ <<\ std::dec\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01202\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01203\ \ \ \ \ \ \ \textcolor{comment}{//\ Allocate\ renderbuffer\ storage\ for\ regular\ depth.}}
+\DoxyCodeLine{01204\ \ \ \ \ \ \ GLint\ depth\_size\ =\ 0;}
+\DoxyCodeLine{01205\ \ \ \ \ \ \ glgsg-\/>\_glRenderbufferStorage(GL\_RENDERBUFFER\_EXT,\ gl\_format,\ \_rb\_size\_x,\ \_rb\_size\_y);}
+\DoxyCodeLine{01206\ \ \ \ \ \ \ glgsg-\/>\_glGetRenderbufferParameteriv(GL\_RENDERBUFFER\_EXT,\ GL\_RENDERBUFFER\_DEPTH\_SIZE\_EXT,\ \&depth\_size);}
+\DoxyCodeLine{01207\ }
+\DoxyCodeLine{01208\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{01209\ \ \ \ \ \ \ \textcolor{comment}{//\ Are\ we\ getting\ only\ 24\ bits\ of\ depth\ when\ we\ requested\ 32?\ \ It\ may\ be}}
+\DoxyCodeLine{01210\ \ \ \ \ \ \ \textcolor{comment}{//\ because\ GL\_DEPTH\_COMPONENT32\ is\ not\ a\ required\ format,\ while\ 32F\ is.}}
+\DoxyCodeLine{01211\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gl\_format\ ==\ GL\_DEPTH\_COMPONENT32\ \&\&\ depth\_size\ <\ 32)\ \{}
+\DoxyCodeLine{01212\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!glgsg-\/>\_use\_remapped\_depth\_range)\ \{}
+\DoxyCodeLine{01213\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH\_COMPONENT32F;}
+\DoxyCodeLine{01214\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01215\ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_DEPTH\_COMPONENT32F\_NV;}
+\DoxyCodeLine{01216\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01217\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{01218\ \ \ \ \ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{01219\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}GL\_DEPTH\_COMPONENT32\ not\ supported,\ switching\ to\ format\ 0x"{}}}
+\DoxyCodeLine{01220\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ std::hex\ <<\ gl\_format\ <<\ std::dec\ <<\ \textcolor{stringliteral}{"{}\ instead.\(\backslash\)n"{}};}
+\DoxyCodeLine{01221\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01222\ \ \ \ \ \ \ \ \ glgsg-\/>\_glRenderbufferStorage(GL\_RENDERBUFFER\_EXT,\ gl\_format,\ \_rb\_size\_x,\ \_rb\_size\_y);}
+\DoxyCodeLine{01223\ \ \ \ \ \ \ \ \ glgsg-\/>\_glGetRenderbufferParameteriv(GL\_RENDERBUFFER\_EXT,\ GL\_RENDERBUFFER\_DEPTH\_SIZE\_EXT,\ \&depth\_size);}
+\DoxyCodeLine{01224\ }
+\DoxyCodeLine{01225\ \ \ \ \ \ \ \ \ \_fb\_properties.set\_float\_depth(\textcolor{keyword}{true});}
+\DoxyCodeLine{01226\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01227\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01228\ }
+\DoxyCodeLine{01229\ \ \ \ \ \ \ \_fb\_properties.set\_depth\_bits(depth\_size);}
+\DoxyCodeLine{01230\ \ \ \ \ \ \ \_rb\_data\_size\_bytes\ +=\ \_rb\_size\_x\ *\ \_rb\_size\_y\ *\ (depth\_size\ /\ 8);}
+\DoxyCodeLine{01231\ }
+\DoxyCodeLine{01232\ \ \ \ \ \ \ glgsg-\/>\_glBindRenderbuffer(GL\_RENDERBUFFER\_EXT,\ 0);}
+\DoxyCodeLine{01233\ }
+\DoxyCodeLine{01234\ \ \ \ \ \ \ GLuint\ rb\ =\ \_rb[slot];}
+\DoxyCodeLine{01235\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_shared\_depth\_buffer)\ \{}
+\DoxyCodeLine{01236\ \ \ \ \ \ \ \ \ rb\ =\ \_shared\_depth\_buffer-\/>\_rb[slot];}
+\DoxyCodeLine{01237\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01238\ }
+\DoxyCodeLine{01239\ \ \ \ \ \ \ glgsg-\/>\_glFramebufferRenderbuffer(GL\_FRAMEBUFFER\_EXT,\ GL\_DEPTH\_ATTACHMENT\_EXT,}
+\DoxyCodeLine{01240\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_RENDERBUFFER\_EXT,\ rb);}
+\DoxyCodeLine{01241\ }
+\DoxyCodeLine{01242\ \ \ \ \ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{01243\ }
+\DoxyCodeLine{01244\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01245\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{01246\ \ \ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{01247\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Creating\ color\ renderbuffer\ with\ format\ 0x"{}}\ <<\ std::hex}
+\DoxyCodeLine{01248\ \ \ \ \ \ \ \ \ \ \ <<\ gl\_format\ <<\ std::dec\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01249\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01250\ \ \ \ \ \ \ glgsg-\/>\_glRenderbufferStorage(GL\_RENDERBUFFER\_EXT,\ gl\_format,\ \_rb\_size\_x,\ \_rb\_size\_y);}
+\DoxyCodeLine{01251\ }
+\DoxyCodeLine{01252\ \ \ \ \ \ \ GLint\ red\_size\ =\ 0,\ green\_size\ =\ 0,\ blue\_size\ =\ 0,\ alpha\_size\ =\ 0;}
+\DoxyCodeLine{01253\ \ \ \ \ \ \ glgsg-\/>\_glGetRenderbufferParameteriv(GL\_RENDERBUFFER\_EXT,\ GL\_RENDERBUFFER\_RED\_SIZE\_EXT,\ \&red\_size);}
+\DoxyCodeLine{01254\ \ \ \ \ \ \ glgsg-\/>\_glGetRenderbufferParameteriv(GL\_RENDERBUFFER\_EXT,\ GL\_RENDERBUFFER\_GREEN\_SIZE\_EXT,\ \&green\_size);}
+\DoxyCodeLine{01255\ \ \ \ \ \ \ glgsg-\/>\_glGetRenderbufferParameteriv(GL\_RENDERBUFFER\_EXT,\ GL\_RENDERBUFFER\_BLUE\_SIZE\_EXT,\ \&blue\_size);}
+\DoxyCodeLine{01256\ \ \ \ \ \ \ glgsg-\/>\_glGetRenderbufferParameteriv(GL\_RENDERBUFFER\_EXT,\ GL\_RENDERBUFFER\_ALPHA\_SIZE\_EXT,\ \&alpha\_size);}
+\DoxyCodeLine{01257\ }
+\DoxyCodeLine{01258\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (attachpoint\ ==\ GL\_COLOR\_ATTACHMENT0\_EXT)\ \{}
+\DoxyCodeLine{01259\ \ \ \ \ \ \ \ \ \_fb\_properties.set\_rgba\_bits(red\_size,\ green\_size,\ blue\_size,\ alpha\_size);}
+\DoxyCodeLine{01260\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01261\ \ \ \ \ \ \ \_rb\_data\_size\_bytes\ +=\ \_rb\_size\_x\ *\ \_rb\_size\_y\ *\ ((red\_size\ +\ green\_size\ +\ blue\_size\ +\ alpha\_size)\ /\ 8);}
+\DoxyCodeLine{01262\ }
+\DoxyCodeLine{01263\ \ \ \ \ \ \ glgsg-\/>\_glBindRenderbuffer(GL\_RENDERBUFFER\_EXT,\ 0);}
+\DoxyCodeLine{01264\ \ \ \ \ \ \ glgsg-\/>\_glFramebufferRenderbuffer(GL\_FRAMEBUFFER\_EXT,\ attachpoint,}
+\DoxyCodeLine{01265\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_RENDERBUFFER\_EXT,\ \_rb[slot]);}
+\DoxyCodeLine{01266\ }
+\DoxyCodeLine{01267\ \ \ \ \ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{01268\ \ \ \ \ \}}
+\DoxyCodeLine{01269\ \ \ \}}
+\DoxyCodeLine{01270\ \}}
+\DoxyCodeLine{01271\ }
+\DoxyCodeLine{01276\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{01277\ bind\_slot\_multisample(bool\ rb\_resize,\ \mbox{\hyperlink{classTexture}{Texture}}\ **attach,\ RenderTexturePlane\ slot,\ GLenum\ attachpoint)\ \{}
+\DoxyCodeLine{01278\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{01279\ }
+\DoxyCodeLine{01280\ \ \ \textcolor{keywordflow}{if}\ ((\_rbm[slot]\ !=\ 0)\&\&(!rb\_resize))\ \{}
+\DoxyCodeLine{01281\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01282\ \ \ \}}
+\DoxyCodeLine{01283\ \ \ \textcolor{keywordflow}{if}\ (\_rbm[slot]\ !=\ 0)\ \{}
+\DoxyCodeLine{01284\ \ \ \ \ glgsg-\/>\_glDeleteRenderbuffers(1,\ \&(\_rbm[slot]));}
+\DoxyCodeLine{01285\ \ \ \ \ \_rbm[slot]\ =\ 0;}
+\DoxyCodeLine{01286\ \ \ \}}
+\DoxyCodeLine{01287\ \ \ glgsg-\/>\_glBindFramebuffer(GL\_FRAMEBUFFER\_EXT,\ \_fbo\_multisample);}
+\DoxyCodeLine{01288\ \ \ glgsg-\/>\_glGenRenderbuffers(1,\ \&(\_rbm[slot]));}
+\DoxyCodeLine{01289\ \ \ \textcolor{comment}{//\ Allocate\ and\ bind\ the\ renderbuffer.}}
+\DoxyCodeLine{01290\ \ \ \mbox{\hyperlink{classTexture}{Texture}}\ *tex\ =\ attach[slot];\ \textcolor{comment}{//\ If\ there\ is\ a\ texture\ map,\ use\ it's\ format\ as\ needed.}}
+\DoxyCodeLine{01291\ }
+\DoxyCodeLine{01292\ \ \ \textcolor{keywordflow}{if}\ (attachpoint\ ==\ GL\_DEPTH\_ATTACHMENT\_EXT)\ \{}
+\DoxyCodeLine{01293\ \textcolor{preprocessor}{\#ifndef\ OPENGLES\_2}}
+\DoxyCodeLine{01294\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_use\_depth\_stencil)\ \{}
+\DoxyCodeLine{01295\ \ \ \ \ \ \ glgsg-\/>\_glBindRenderbuffer(GL\_RENDERBUFFER\_EXT,\ \_rbm[slot]);}
+\DoxyCodeLine{01296\ \ \ \ \ \ \ GLuint\ format;}
+\DoxyCodeLine{01297\ \textcolor{preprocessor}{\#ifdef\ OPENGLES\_1}}
+\DoxyCodeLine{01298\ \ \ \ \ \ \ format\ =\ GL\_DEPTH24\_STENCIL8\_OES;}
+\DoxyCodeLine{01299\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{01300\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 24\ ||}
+\DoxyCodeLine{01301\ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_float\_depth())\ \{}
+\DoxyCodeLine{01302\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!glgsg-\/>\_use\_remapped\_depth\_range)\ \{}
+\DoxyCodeLine{01303\ \ \ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH32F\_STENCIL8;}
+\DoxyCodeLine{01304\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01305\ \ \ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH32F\_STENCIL8\_NV;}
+\DoxyCodeLine{01306\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01307\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01308\ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH24\_STENCIL8;}
+\DoxyCodeLine{01309\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01310\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01311\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{01312\ \ \ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{01313\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Creating\ depth\ stencil\ renderbuffer\ with\ format\ 0x"{}}\ <<\ std::hex}
+\DoxyCodeLine{01314\ \ \ \ \ \ \ \ \ \ \ <<\ format\ <<\ std::dec\ <<\ \textcolor{stringliteral}{"{}\ and\ "{}}\ <<\ \_requested\_multisamples}
+\DoxyCodeLine{01315\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ multisamples.\(\backslash\)n"{}};}
+\DoxyCodeLine{01316\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01317\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_requested\_coverage\_samples)\ \{}
+\DoxyCodeLine{01318\ \ \ \ \ \ \ \ \ glgsg-\/>\_glRenderbufferStorageMultisampleCoverage(GL\_RENDERBUFFER\_EXT,\ \_requested\_coverage\_samples,}
+\DoxyCodeLine{01319\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_requested\_multisamples,\ format,}
+\DoxyCodeLine{01320\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_rb\_size\_x,\ \_rb\_size\_y);}
+\DoxyCodeLine{01321\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01322\ \ \ \ \ \ \ \ \ glgsg-\/>\_glRenderbufferStorageMultisample(GL\_RENDERBUFFER\_EXT,\ \_requested\_multisamples,\ format,}
+\DoxyCodeLine{01323\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_rb\_size\_x,\ \_rb\_size\_y);}
+\DoxyCodeLine{01324\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01325\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{01326\ \ \ \ \ \ \ GLint\ givenSamples\ =\ -\/1;}
+\DoxyCodeLine{01327\ \ \ \ \ \ \ glgsg-\/>\_glGetRenderbufferParameteriv(GL\_RENDERBUFFER\_EXT,\ GL\_RENDERBUFFER\_SAMPLES\_EXT,\ \&givenSamples);}
+\DoxyCodeLine{01328\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01329\ \ \ \ \ \ \ glgsg-\/>\_glBindRenderbuffer(GL\_RENDERBUFFER\_EXT,\ 0);}
+\DoxyCodeLine{01330\ \ \ \ \ \ \ glgsg-\/>\_glFramebufferRenderbuffer(GL\_DRAW\_FRAMEBUFFER\_EXT,\ GL\_DEPTH\_ATTACHMENT\_EXT,}
+\DoxyCodeLine{01331\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_RENDERBUFFER\_EXT,\ \_rbm[slot]);}
+\DoxyCodeLine{01332\ \ \ \ \ \ \ glgsg-\/>\_glFramebufferRenderbuffer(GL\_DRAW\_FRAMEBUFFER\_EXT,\ GL\_STENCIL\_ATTACHMENT\_EXT,}
+\DoxyCodeLine{01333\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_RENDERBUFFER\_EXT,\ \_rbm[slot]);}
+\DoxyCodeLine{01334\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01335\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01336\ \ \ \ \ \ \ glgsg-\/>\_glBindRenderbuffer(GL\_RENDERBUFFER\_EXT,\ \_rbm[slot]);}
+\DoxyCodeLine{01337\ \ \ \ \ \ \ GLuint\ format\ =\ GL\_DEPTH\_COMPONENT;}
+\DoxyCodeLine{01338\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{01339\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_depth())\ \{}
+\DoxyCodeLine{01340\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!glgsg-\/>\_use\_remapped\_depth\_range)\ \{}
+\DoxyCodeLine{01341\ \ \ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH\_COMPONENT32F;}
+\DoxyCodeLine{01342\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01343\ \ \ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH\_COMPONENT32F\_NV;}
+\DoxyCodeLine{01344\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01345\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{01346\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01347\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tex)\ \{}
+\DoxyCodeLine{01348\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (tex-\/>get\_format())\ \{}
+\DoxyCodeLine{01349\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Texture::F\_depth\_component16:}
+\DoxyCodeLine{01350\ \ \ \ \ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH\_COMPONENT16;}
+\DoxyCodeLine{01351\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01352\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Texture::F\_depth\_component24:}
+\DoxyCodeLine{01353\ \ \ \ \ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH\_COMPONENT24;}
+\DoxyCodeLine{01354\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01355\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ Texture::F\_depth\_component32:}
+\DoxyCodeLine{01356\ \ \ \ \ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH\_COMPONENT32;}
+\DoxyCodeLine{01357\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01358\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{01359\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01360\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01361\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{01362\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 24)\ \{}
+\DoxyCodeLine{01363\ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH\_COMPONENT32;}
+\DoxyCodeLine{01364\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 16)\ \{}
+\DoxyCodeLine{01365\ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH\_COMPONENT24;}
+\DoxyCodeLine{01366\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 1)\ \{}
+\DoxyCodeLine{01367\ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH\_COMPONENT16;}
+\DoxyCodeLine{01368\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01369\ \ \ \ \ \ \ \ \ format\ =\ GL\_DEPTH\_COMPONENT;}
+\DoxyCodeLine{01370\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01371\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01372\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{01373\ \ \ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{01374\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Creating\ depth\ renderbuffer\ with\ format\ 0x"{}}\ <<\ std::hex}
+\DoxyCodeLine{01375\ \ \ \ \ \ \ \ \ \ \ <<\ format\ <<\ std::dec\ <<\ \textcolor{stringliteral}{"{}\ and\ "{}}\ <<\ \_requested\_multisamples}
+\DoxyCodeLine{01376\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ multisamples.\(\backslash\)n"{}};}
+\DoxyCodeLine{01377\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01378\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_requested\_coverage\_samples)\ \{}
+\DoxyCodeLine{01379\ \ \ \ \ \ \ \ \ glgsg-\/>\_glRenderbufferStorageMultisampleCoverage(GL\_RENDERBUFFER\_EXT,\ \_requested\_coverage\_samples,}
+\DoxyCodeLine{01380\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_requested\_multisamples,\ format,}
+\DoxyCodeLine{01381\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_rb\_size\_x,\ \_rb\_size\_y);}
+\DoxyCodeLine{01382\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01383\ \ \ \ \ \ \ \ \ glgsg-\/>\_glRenderbufferStorageMultisample(GL\_RENDERBUFFER\_EXT,\ \_requested\_multisamples,\ format,}
+\DoxyCodeLine{01384\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_rb\_size\_x,\ \_rb\_size\_y);}
+\DoxyCodeLine{01385\ \textcolor{preprocessor}{\#ifndef\ OPENGLES\_2}}
+\DoxyCodeLine{01386\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01387\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01388\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{01389\ \ \ \ \ \ \ GLint\ givenSamples\ =\ -\/1;}
+\DoxyCodeLine{01390\ \ \ \ \ \ \ glgsg-\/>\_glGetRenderbufferParameteriv(GL\_RENDERBUFFER\_EXT,\ GL\_RENDERBUFFER\_SAMPLES\_EXT,\ \&givenSamples);}
+\DoxyCodeLine{01391\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01392\ \ \ \ \ \ \ glgsg-\/>\_glBindRenderbuffer(GL\_RENDERBUFFER\_EXT,\ 0);}
+\DoxyCodeLine{01393\ \ \ \ \ \ \ glgsg-\/>\_glFramebufferRenderbuffer(GL\_DRAW\_FRAMEBUFFER\_EXT,\ GL\_DEPTH\_ATTACHMENT\_EXT,}
+\DoxyCodeLine{01394\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_RENDERBUFFER\_EXT,\ \_rbm[slot]);}
+\DoxyCodeLine{01395\ \ \ \ \ \}}
+\DoxyCodeLine{01396\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01397\ \ \ \ \ GLuint\ gl\_format\ =\ GL\_RGBA;}
+\DoxyCodeLine{01398\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{01399\ \ \ \ \ \textcolor{keywordflow}{switch}\ (slot)\ \{}
+\DoxyCodeLine{01400\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_0:}
+\DoxyCodeLine{01401\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_1:}
+\DoxyCodeLine{01402\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_2:}
+\DoxyCodeLine{01403\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_hrgba\_3:}
+\DoxyCodeLine{01404\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16F\_ARB;}
+\DoxyCodeLine{01405\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01406\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_0:}
+\DoxyCodeLine{01407\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_1:}
+\DoxyCodeLine{01408\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_2:}
+\DoxyCodeLine{01409\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_float\_3:}
+\DoxyCodeLine{01410\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA32F\_ARB;}
+\DoxyCodeLine{01411\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01412\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_rgba\_0:}
+\DoxyCodeLine{01413\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_rgba\_1:}
+\DoxyCodeLine{01414\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_rgba\_2:}
+\DoxyCodeLine{01415\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ RTP\_aux\_rgba\_3:}
+\DoxyCodeLine{01416\ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA;}
+\DoxyCodeLine{01417\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01418\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{01419\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_alpha\_bits()\ ==\ 0)\ \{}
+\DoxyCodeLine{01420\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_srgb\_color())\ \{}
+\DoxyCodeLine{01421\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_SRGB8;}
+\DoxyCodeLine{01422\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 16\ *\ 3\ ||}
+\DoxyCodeLine{01423\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_red\_bits()\ >\ 16\ ||}
+\DoxyCodeLine{01424\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_green\_bits()\ >\ 16\ ||}
+\DoxyCodeLine{01425\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_blue\_bits()\ >\ 16)\ \{}
+\DoxyCodeLine{01426\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 32-\/bit,\ which\ is\ always\ floating-\/point.}}
+\DoxyCodeLine{01427\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{01428\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ ==\ 1\ ||}
+\DoxyCodeLine{01429\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 32\ *\ 2)\ \{}
+\DoxyCodeLine{01430\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB32F;}
+\DoxyCodeLine{01431\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_green\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{01432\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 32)\ \{}
+\DoxyCodeLine{01433\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RG32F;}
+\DoxyCodeLine{01434\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01435\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_R32F;}
+\DoxyCodeLine{01436\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01437\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_color())\ \{}
+\DoxyCodeLine{01438\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 16-\/bit\ floating-\/point.}}
+\DoxyCodeLine{01439\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 10\ ||}
+\DoxyCodeLine{01440\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ ==\ 1\ ||}
+\DoxyCodeLine{01441\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 32)\ \{}
+\DoxyCodeLine{01442\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB16F;}
+\DoxyCodeLine{01443\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{01444\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_red\_bits()\ >\ 11\ ||}
+\DoxyCodeLine{01445\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_green\_bits()\ >\ 11)\ \{}
+\DoxyCodeLine{01446\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB16F;}
+\DoxyCodeLine{01447\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01448\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_R11F\_G11F\_B10F;}
+\DoxyCodeLine{01449\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01450\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_green\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{01451\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 16)\ \{}
+\DoxyCodeLine{01452\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RG16F;}
+\DoxyCodeLine{01453\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01454\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_R16F;}
+\DoxyCodeLine{01455\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01456\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 10\ *\ 3\ ||}
+\DoxyCodeLine{01457\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_red\_bits()\ >\ 10\ ||}
+\DoxyCodeLine{01458\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_green\_bits()\ >\ 10\ ||}
+\DoxyCodeLine{01459\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_blue\_bits()\ >\ 10)\ \{}
+\DoxyCodeLine{01460\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 16-\/bit\ normalized.}}
+\DoxyCodeLine{01461\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{01462\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ ==\ 1\ ||}
+\DoxyCodeLine{01463\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 16\ *\ 2)\ \{}
+\DoxyCodeLine{01464\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16;}
+\DoxyCodeLine{01465\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_green\_bits()\ >\ 0\ ||}
+\DoxyCodeLine{01466\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_color\_bits()\ >\ 16)\ \{}
+\DoxyCodeLine{01467\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RG16;}
+\DoxyCodeLine{01468\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01469\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_R16;}
+\DoxyCodeLine{01470\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01471\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 8\ *\ 3\ ||}
+\DoxyCodeLine{01472\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_red\_bits()\ >\ 8\ ||}
+\DoxyCodeLine{01473\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_green\_bits()\ >\ 8\ ||}
+\DoxyCodeLine{01474\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.get\_blue\_bits()\ >\ 8)\ \{}
+\DoxyCodeLine{01475\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB10\_A2;}
+\DoxyCodeLine{01476\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01477\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGB;}
+\DoxyCodeLine{01478\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01479\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01480\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_srgb\_color())\ \{}
+\DoxyCodeLine{01481\ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_SRGB8\_ALPHA8;}
+\DoxyCodeLine{01482\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_color())\ \{}
+\DoxyCodeLine{01483\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 16\ *\ 3)\ \{}
+\DoxyCodeLine{01484\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA32F\_ARB;}
+\DoxyCodeLine{01485\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01486\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16F\_ARB;}
+\DoxyCodeLine{01487\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01488\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01489\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 16\ *\ 3)\ \{}
+\DoxyCodeLine{01490\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA32F\_ARB;}
+\DoxyCodeLine{01491\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 8\ *\ 3)\ \{}
+\DoxyCodeLine{01492\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA16;}
+\DoxyCodeLine{01493\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01494\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gl\_format\ =\ GL\_RGBA;}
+\DoxyCodeLine{01495\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01496\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01497\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01498\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01499\ \ \ \ \ \}}
+\DoxyCodeLine{01500\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01501\ \ \ \ \ \textcolor{keywordflow}{if}\ (GLCAT.is\_debug())\ \{}
+\DoxyCodeLine{01502\ \ \ \ \ \ \ GLCAT.debug()}
+\DoxyCodeLine{01503\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Creating\ color\ renderbuffer\ with\ format\ 0x"{}}\ <<\ std::hex}
+\DoxyCodeLine{01504\ \ \ \ \ \ \ \ \ <<\ gl\_format\ <<\ std::dec\ <<\ \textcolor{stringliteral}{"{}\ and\ "{}}\ <<\ \_requested\_multisamples}
+\DoxyCodeLine{01505\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ multisamples.\(\backslash\)n"{}};}
+\DoxyCodeLine{01506\ \ \ \ \ \}}
+\DoxyCodeLine{01507\ \ \ \ \ glgsg-\/>\_glBindRenderbuffer(GL\_RENDERBUFFER\_EXT,\ \_rbm[slot]);}
+\DoxyCodeLine{01508\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_requested\_coverage\_samples)\ \{}
+\DoxyCodeLine{01509\ \ \ \ \ \ \ glgsg-\/>\_glRenderbufferStorageMultisampleCoverage(GL\_RENDERBUFFER\_EXT,\ \_requested\_coverage\_samples,}
+\DoxyCodeLine{01510\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_requested\_multisamples,\ gl\_format,\ \_rb\_size\_x,\ \_rb\_size\_y);}
+\DoxyCodeLine{01511\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01512\ \ \ \ \ \ \ glgsg-\/>\_glRenderbufferStorageMultisample(GL\_RENDERBUFFER\_EXT,\ \_requested\_multisamples,\ gl\_format,}
+\DoxyCodeLine{01513\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_rb\_size\_x,\ \_rb\_size\_y);}
+\DoxyCodeLine{01514\ \ \ \ \ \}}
+\DoxyCodeLine{01515\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{01516\ \ \ \ \ GLint\ givenSamples\ =\ -\/1;}
+\DoxyCodeLine{01517\ \ \ \ \ glgsg-\/>\_glGetRenderbufferParameteriv(GL\_RENDERBUFFER\_EXT,\ GL\_RENDERBUFFER\_SAMPLES\_EXT,\ \&givenSamples);}
+\DoxyCodeLine{01518\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01519\ \ \ \ \ glgsg-\/>\_glBindRenderbuffer(GL\_RENDERBUFFER\_EXT,\ 0);}
+\DoxyCodeLine{01520\ \ \ \ \ glgsg-\/>\_glFramebufferRenderbuffer(GL\_DRAW\_FRAMEBUFFER\_EXT,\ attachpoint,}
+\DoxyCodeLine{01521\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_RENDERBUFFER\_EXT,\ \_rbm[slot]);}
+\DoxyCodeLine{01522\ \ \ \}}
+\DoxyCodeLine{01523\ \ \ glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{01524\ \}}
+\DoxyCodeLine{01525\ }
+\DoxyCodeLine{01529\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{01530\ attach\_tex(GLenum\ attachpoint,\ CLP(\mbox{\hyperlink{classTextureContext}{TextureContext}})\ *gtc,\ int\ view,\ int\ layer)\ \{}
+\DoxyCodeLine{01531\ \ \ \textcolor{comment}{//\ We\ should\ have\ created\ the\ right\ number\ of\ views\ ahead\ of\ time.}}
+\DoxyCodeLine{01532\ \ \ nassertv(view\ <\ gtc-\/>\_num\_views);}
+\DoxyCodeLine{01533\ }
+\DoxyCodeLine{01534\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{01535\ }
+\DoxyCodeLine{01536\ \ \ \textcolor{comment}{//\ It\ seems\ that\ binding\ the\ texture\ is\ necessary\ before\ binding\ to\ a}}
+\DoxyCodeLine{01537\ \ \ \textcolor{comment}{//\ framebuffer\ attachment.}}
+\DoxyCodeLine{01538\ \ \ glgsg-\/>apply\_texture(gtc,\ view);}
+\DoxyCodeLine{01539\ }
+\DoxyCodeLine{01540\ \ \ GLuint\ index\ =\ gtc-\/>get\_view\_index(view);}
+\DoxyCodeLine{01541\ }
+\DoxyCodeLine{01542\ \textcolor{preprocessor}{\#if\ !defined(OPENGLES)\ \&\&\ defined(SUPPORT\_FIXED\_FUNCTION)}}
+\DoxyCodeLine{01543\ \ \ \textcolor{keywordflow}{if}\ (glgsg-\/>has\_fixed\_function\_pipeline())\ \{}
+\DoxyCodeLine{01544\ \ \ \ \ GLclampf\ priority\ =\ 1.0f;}
+\DoxyCodeLine{01545\ \ \ \ \ glPrioritizeTextures(1,\ \&index,\ \&priority);}
+\DoxyCodeLine{01546\ \ \ \}}
+\DoxyCodeLine{01547\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01548\ }
+\DoxyCodeLine{01549\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{01550\ \ \ \textcolor{keywordflow}{if}\ (\_rb\_size\_z\ !=\ 1)\ \{}
+\DoxyCodeLine{01551\ \ \ \ \ \textcolor{comment}{//\ Bind\ all\ of\ the\ layers\ of\ the\ texture.}}
+\DoxyCodeLine{01552\ \ \ \ \ nassertv(glgsg-\/>\_glFramebufferTexture\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01553\ \ \ \ \ glgsg-\/>\_glFramebufferTexture(GL\_FRAMEBUFFER\_EXT,\ attachpoint,\ index,\ 0);}
+\DoxyCodeLine{01554\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01555\ \ \ \}}
+\DoxyCodeLine{01556\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01557\ }
+\DoxyCodeLine{01558\ \ \ GLenum\ target\ =\ gtc-\/>\_target;}
+\DoxyCodeLine{01559\ \ \ \textcolor{keywordflow}{switch}\ (target)\ \{}
+\DoxyCodeLine{01560\ \textcolor{preprocessor}{\#ifndef\ OPENGLES\_1}}
+\DoxyCodeLine{01561\ \ \ \textcolor{keywordflow}{case}\ GL\_TEXTURE\_3D:}
+\DoxyCodeLine{01562\ \ \ \ \ glgsg-\/>\_glFramebufferTexture3D(GL\_FRAMEBUFFER\_EXT,\ attachpoint,}
+\DoxyCodeLine{01563\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ target,\ index,\ 0,\ layer);}
+\DoxyCodeLine{01564\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01565\ \ \ \textcolor{keywordflow}{case}\ GL\_TEXTURE\_2D\_ARRAY:}
+\DoxyCodeLine{01566\ \ \ \textcolor{keywordflow}{case}\ GL\_TEXTURE\_CUBE\_MAP\_ARRAY:}
+\DoxyCodeLine{01567\ \ \ \ \ glgsg-\/>\_glFramebufferTextureLayer(GL\_FRAMEBUFFER\_EXT,\ attachpoint,}
+\DoxyCodeLine{01568\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ index,\ 0,\ layer);}
+\DoxyCodeLine{01569\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01570\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01571\ \ \ \textcolor{keywordflow}{case}\ GL\_TEXTURE\_CUBE\_MAP:}
+\DoxyCodeLine{01572\ \ \ \ \ target\ =\ GL\_TEXTURE\_CUBE\_MAP\_POSITIVE\_X\ +\ layer;}
+\DoxyCodeLine{01573\ \ \ \ \ \textcolor{comment}{//\ fall\ through}}
+\DoxyCodeLine{01574\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{01575\ \ \ \ \ glgsg-\/>\_glFramebufferTexture2D(GL\_FRAMEBUFFER\_EXT,\ attachpoint,}
+\DoxyCodeLine{01576\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ target,\ index,\ 0);}
+\DoxyCodeLine{01577\ \ \ \}}
+\DoxyCodeLine{01578\ \}}
+\DoxyCodeLine{01579\ }
+\DoxyCodeLine{01586\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{01587\ generate\_mipmaps()\ \{}
+\DoxyCodeLine{01588\ \ \ \textcolor{keywordflow}{if}\ (gl\_ignore\_mipmaps\ \&\&\ !gl\_force\_mipmaps)\ \{}
+\DoxyCodeLine{01589\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01590\ \ \ \}}
+\DoxyCodeLine{01591\ }
+\DoxyCodeLine{01592\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{01593\ }
+\DoxyCodeLine{01594\ \ \ \textcolor{comment}{//\ PStatGPUTimer\ timer(glgsg,\ \_generate\_mipmap\_pcollector);}}
+\DoxyCodeLine{01595\ }
+\DoxyCodeLine{01596\ \ \ \textcolor{keywordflow}{for}\ (CLP(\mbox{\hyperlink{classTextureContext}{TextureContext}})\ *gtc\ :\ \_texture\_contexts)\ \{}
+\DoxyCodeLine{01597\ \ \ \ \ \textcolor{keywordflow}{if}\ (gtc-\/>\_generate\_mipmaps)\ \{}
+\DoxyCodeLine{01598\ \ \ \ \ \ \ glgsg-\/>generate\_mipmaps(gtc);}
+\DoxyCodeLine{01599\ \ \ \ \ \}}
+\DoxyCodeLine{01600\ \ \ \}}
+\DoxyCodeLine{01601\ }
+\DoxyCodeLine{01602\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{01603\ \}}
+\DoxyCodeLine{01604\ }
+\DoxyCodeLine{01610\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{01611\ end\_frame(FrameMode\ mode,\ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{01612\ \ \ end\_frame\_spam(mode);}
+\DoxyCodeLine{01613\ \ \ nassertv(\_gsg\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01614\ }
+\DoxyCodeLine{01615\ \ \ \textcolor{comment}{//\ Resolve\ Multisample\ rendering\ if\ using\ it.}}
+\DoxyCodeLine{01616\ \ \ \textcolor{keywordflow}{if}\ (\_requested\_multisamples\ \&\&\ \_fbo\_multisample\ \&\&\ mode\ !=\ FM\_refresh)\ \{}
+\DoxyCodeLine{01617\ \ \ \ \ resolve\_multisamples();}
+\DoxyCodeLine{01618\ \ \ \}}
+\DoxyCodeLine{01619\ }
+\DoxyCodeLine{01620\ \ \ \textcolor{keywordflow}{if}\ (mode\ ==\ FM\_render)\ \{}
+\DoxyCodeLine{01621\ \ \ \ \ \textcolor{comment}{//\ Should\ happen\ *after*\ resolving\ multisamples,\ with\ the\ non-\/MS\ FBO\ bound.}}
+\DoxyCodeLine{01622\ \ \ \ \ copy\_to\_textures();}
+\DoxyCodeLine{01623\ \ \ \}}
+\DoxyCodeLine{01624\ }
+\DoxyCodeLine{01625\ \ \ \textcolor{comment}{//\ Unbind\ the\ FBO.\ \ TODO:\ calling\ bind\_fbo\ is\ slow,\ so\ we\ should\ probably}}
+\DoxyCodeLine{01626\ \ \ \textcolor{comment}{//\ move\ this\ to\ begin\_frame\ to\ prevent\ unnecessary\ calls.}}
+\DoxyCodeLine{01627\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{01628\ \ \ glgsg-\/>bind\_fbo(0);}
+\DoxyCodeLine{01629\ \ \ \_bound\_tex\_page\ =\ -\/1;}
+\DoxyCodeLine{01630\ }
+\DoxyCodeLine{01631\ \ \ \textcolor{keywordflow}{if}\ (mode\ ==\ FM\_render)\ \{}
+\DoxyCodeLine{01632\ \ \ \ \ generate\_mipmaps();}
+\DoxyCodeLine{01633\ \ \ \}}
+\DoxyCodeLine{01634\ }
+\DoxyCodeLine{01635\ \ \ \textcolor{keywordflow}{if}\ (\_host\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01636\ \ \ \ \ \_host-\/>end\_frame(FM\_parasite,\ current\_thread);}
+\DoxyCodeLine{01637\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01638\ \ \ \ \ glgsg-\/>end\_frame(current\_thread);}
+\DoxyCodeLine{01639\ \ \ \}}
+\DoxyCodeLine{01640\ }
+\DoxyCodeLine{01641\ \ \ \textcolor{keywordflow}{if}\ (mode\ ==\ FM\_render)\ \{}
+\DoxyCodeLine{01642\ \ \ \ \ trigger\_flip();}
+\DoxyCodeLine{01643\ \ \ \ \ clear\_cube\_map\_selection();}
+\DoxyCodeLine{01644\ \ \ \}}
+\DoxyCodeLine{01645\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{01646\ }
+\DoxyCodeLine{01647\ \ \ glgsg-\/>pop\_group\_marker();}
+\DoxyCodeLine{01648\ \}}
+\DoxyCodeLine{01649\ }
+\DoxyCodeLine{01653\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{01654\ set\_size(int\ x,\ int\ y)\ \{}
+\DoxyCodeLine{01655\ \ \ \textcolor{keywordflow}{if}\ (\_size.get\_x()\ !=\ x\ ||\ \_size.get\_y()\ !=\ y)\ \{}
+\DoxyCodeLine{01656\ \ \ \ \ \_needs\_rebuild\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01657\ \ \ \}}
+\DoxyCodeLine{01658\ }
+\DoxyCodeLine{01659\ \ \ set\_size\_and\_recalc(x,\ y);}
+\DoxyCodeLine{01660\ \}}
+\DoxyCodeLine{01661\ }
+\DoxyCodeLine{01668\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{01669\ select\_target\_tex\_page(int\ page)\ \{}
+\DoxyCodeLine{01670\ \ \ nassertv(page\ >=\ 0\ \&\&\ (\textcolor{keywordtype}{size\_t})page\ <\ \_fbo.size());}
+\DoxyCodeLine{01671\ }
+\DoxyCodeLine{01672\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{01673\ }
+\DoxyCodeLine{01674\ \ \ \textcolor{keywordtype}{bool}\ switched\_page\ =\ (\_bound\_tex\_page\ !=\ page);}
+\DoxyCodeLine{01675\ }
+\DoxyCodeLine{01676\ \ \ \textcolor{keywordflow}{if}\ (switched\_page)\ \{}
+\DoxyCodeLine{01677\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_bound\_tex\_page\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01678\ \ \ \ \ \ \ \textcolor{comment}{//\ Resolve\ the\ multisample\ rendering\ for\ the\ previous\ face.}}
+\DoxyCodeLine{01679\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_requested\_multisamples\ \&\&\ \_fbo\_multisample)\ \{}
+\DoxyCodeLine{01680\ \ \ \ \ \ \ \ \ resolve\_multisamples();}
+\DoxyCodeLine{01681\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01682\ \ \ \ \ \}}
+\DoxyCodeLine{01683\ }
+\DoxyCodeLine{01684\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fbo\_multisample\ !=\ 0)\ \{}
+\DoxyCodeLine{01685\ \ \ \ \ \ \ \textcolor{comment}{//\ TODO:\ re-\/issue\ clears?}}
+\DoxyCodeLine{01686\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01687\ \ \ \ \ \ \ glgsg-\/>bind\_fbo(\_fbo[page]);}
+\DoxyCodeLine{01688\ \ \ \ \ \}}
+\DoxyCodeLine{01689\ \ \ \ \ \_bound\_tex\_page\ =\ page;}
+\DoxyCodeLine{01690\ \ \ \}}
+\DoxyCodeLine{01691\ }
+\DoxyCodeLine{01692\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{01693\ \}}
+\DoxyCodeLine{01694\ }
+\DoxyCodeLine{01699\ \textcolor{keywordtype}{bool}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{01700\ open\_buffer()\ \{}
+\DoxyCodeLine{01701\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{01702\ }
+\DoxyCodeLine{01703\ \ \ \textcolor{comment}{//\ Double\ check\ that\ we\ have\ a\ valid\ gsg}}
+\DoxyCodeLine{01704\ \ \ nassertr(\_gsg\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01705\ \ \ \textcolor{keywordflow}{if}\ (!\_gsg-\/>is\_valid())\ \{}
+\DoxyCodeLine{01706\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01707\ \ \ \}}
+\DoxyCodeLine{01708\ }
+\DoxyCodeLine{01709\ \ \ \textcolor{comment}{//\ Count\ total\ color\ buffers.}}
+\DoxyCodeLine{01710\ \ \ \textcolor{keywordtype}{int}\ totalcolor\ =}
+\DoxyCodeLine{01711\ \ \ \ (\_fb\_properties.get\_stereo()\ ?\ 2\ :\ 1)\ +}
+\DoxyCodeLine{01712\ \ \ \ \ \_fb\_properties.get\_aux\_rgba()\ +}
+\DoxyCodeLine{01713\ \ \ \ \ \_fb\_properties.get\_aux\_hrgba()\ +}
+\DoxyCodeLine{01714\ \ \ \ \ \_fb\_properties.get\_aux\_float();}
+\DoxyCodeLine{01715\ }
+\DoxyCodeLine{01716\ \ \ \textcolor{comment}{//\ Check\ for\ support\ of\ relevant\ extensions.}}
+\DoxyCodeLine{01717\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg;}
+\DoxyCodeLine{01718\ \ \ DCAST\_INTO\_R(glgsg,\ \_gsg,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01719\ \ \ \textcolor{keywordflow}{if}\ (!glgsg-\/>\_supports\_framebuffer\_object)\ \{}
+\DoxyCodeLine{01720\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01721\ \ \ \}}
+\DoxyCodeLine{01722\ }
+\DoxyCodeLine{01723\ \ \ \textcolor{keywordflow}{if}\ (\_rb\_context\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01724\ \ \ \ \ \_rb\_context\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBufferContext}{BufferContext}}(\&(glgsg-\/>\_renderbuffer\_residency),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01725\ \ \ \}}
+\DoxyCodeLine{01726\ }
+\DoxyCodeLine{01727\ \textcolor{comment}{/*}}
+\DoxyCodeLine{01728\ \textcolor{comment}{\ *\ Describe\ the\ framebuffer\ properties\ of\ the\ FBO.\ Unfortunately,\ we\ can't}}
+\DoxyCodeLine{01729\ \textcolor{comment}{\ *\ currently\ predict\ which\ formats\ the\ implementation\ will\ allow\ us\ to\ use\ at}}
+\DoxyCodeLine{01730\ \textcolor{comment}{\ *\ this\ point,\ so\ we'll\ just\ have\ to\ make\ some\ guesses\ and\ parrot\ the\ rest\ of}}
+\DoxyCodeLine{01731\ \textcolor{comment}{\ *\ the\ properties\ back\ to\ the\ user.\ \ When\ we\ actually\ attach\ the\ textures,}}
+\DoxyCodeLine{01732\ \textcolor{comment}{\ *\ we'll\ update\ the\ properties\ more\ appropriately.}}
+\DoxyCodeLine{01733\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{01734\ }
+\DoxyCodeLine{01735\ \ \ \textcolor{comment}{//\ Rounding\ the\ depth\ bits\ is\ not\ spectacular,\ but\ at\ least\ we're\ telling}}
+\DoxyCodeLine{01736\ \ \ \textcolor{comment}{//\ the\ user\ *something*\ about\ what\ we're\ going\ to\ get.}}
+\DoxyCodeLine{01737\ }
+\DoxyCodeLine{01738\ \ \ \textcolor{comment}{//\ A\ lot\ of\ code\ seems\ to\ depend\ on\ being\ able\ to\ get\ a\ color\ buffer\ by\ just}}
+\DoxyCodeLine{01739\ \ \ \textcolor{comment}{//\ setting\ the\ rgb\_color\ bit.}}
+\DoxyCodeLine{01740\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ ==\ 0\ \&\&}
+\DoxyCodeLine{01741\ \ \ \ \ \ \ \_fb\_properties.get\_rgb\_color())\ \{}
+\DoxyCodeLine{01742\ \ \ \ \ \_fb\_properties.set\_color\_bits(1);}
+\DoxyCodeLine{01743\ \ \ \ \ \_fb\_properties.set\_red\_bits(1);}
+\DoxyCodeLine{01744\ \ \ \ \ \_fb\_properties.set\_green\_bits(1);}
+\DoxyCodeLine{01745\ \ \ \ \ \_fb\_properties.set\_blue\_bits(1);}
+\DoxyCodeLine{01746\ \ \ \}}
+\DoxyCodeLine{01747\ }
+\DoxyCodeLine{01748\ \ \ \textcolor{comment}{//\ Actually,\ let's\ always\ get\ a\ colour\ buffer\ for\ now\ until\ we\ figure\ out}}
+\DoxyCodeLine{01749\ \ \ \textcolor{comment}{//\ why\ Intel\ HD\ Graphics\ cards\ complain\ otherwise.}}
+\DoxyCodeLine{01750\ \ \ \textcolor{keywordflow}{if}\ (gl\_force\_fbo\_color\ \&\&\ \_fb\_properties.get\_color\_bits()\ ==\ 0)\ \{}
+\DoxyCodeLine{01751\ \ \ \ \ \_fb\_properties.set\_color\_bits(1);}
+\DoxyCodeLine{01752\ \ \ \}}
+\DoxyCodeLine{01753\ }
+\DoxyCodeLine{01754\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 24)\ \{}
+\DoxyCodeLine{01755\ \ \ \ \ \_fb\_properties.set\_depth\_bits(32);}
+\DoxyCodeLine{01756\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 16)\ \{}
+\DoxyCodeLine{01757\ \ \ \ \ \_fb\_properties.set\_depth\_bits(24);}
+\DoxyCodeLine{01758\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{01759\ \ \ \ \ \_fb\_properties.set\_depth\_bits(16);}
+\DoxyCodeLine{01760\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01761\ \ \ \ \ \_fb\_properties.set\_depth\_bits(0);}
+\DoxyCodeLine{01762\ \ \ \}}
+\DoxyCodeLine{01763\ }
+\DoxyCodeLine{01764\ \ \ \textcolor{comment}{//\ We're\ not\ going\ to\ get\ more\ than\ this,\ ever.\ \ At\ least\ not\ until\ OpenGL}}
+\DoxyCodeLine{01765\ \ \ \textcolor{comment}{//\ introduces\ 64-\/bit\ texture\ formats.}}
+\DoxyCodeLine{01766\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 96)\ \{}
+\DoxyCodeLine{01767\ \ \ \ \ \_fb\_properties.set\_color\_bits(96);}
+\DoxyCodeLine{01768\ \ \ \}}
+\DoxyCodeLine{01769\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_red\_bits()\ >\ 32)\ \{}
+\DoxyCodeLine{01770\ \ \ \ \ \_fb\_properties.set\_red\_bits(32);}
+\DoxyCodeLine{01771\ \ \ \}}
+\DoxyCodeLine{01772\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_green\_bits()\ >\ 32)\ \{}
+\DoxyCodeLine{01773\ \ \ \ \ \_fb\_properties.set\_green\_bits(32);}
+\DoxyCodeLine{01774\ \ \ \}}
+\DoxyCodeLine{01775\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_blue\_bits()\ >\ 32)\ \{}
+\DoxyCodeLine{01776\ \ \ \ \ \_fb\_properties.set\_blue\_bits(32);}
+\DoxyCodeLine{01777\ \ \ \}}
+\DoxyCodeLine{01778\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_alpha\_bits()\ >\ 32)\ \{}
+\DoxyCodeLine{01779\ \ \ \ \ \_fb\_properties.set\_alpha\_bits(32);}
+\DoxyCodeLine{01780\ \ \ \}}
+\DoxyCodeLine{01781\ }
+\DoxyCodeLine{01782\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_float\_depth())\ \{}
+\DoxyCodeLine{01783\ \ \ \ \ \textcolor{comment}{//\ GL\_DEPTH\_COMPONENT32F\ seems\ the\ only\ depth\ float\ format.}}
+\DoxyCodeLine{01784\ \ \ \ \ \_fb\_properties.set\_depth\_bits(32);}
+\DoxyCodeLine{01785\ \ \ \}}
+\DoxyCodeLine{01786\ }
+\DoxyCodeLine{01787\ \ \ \textcolor{comment}{//\ We\ currently\ only\ support\ color\ formats\ this\ big\ as\ float.}}
+\DoxyCodeLine{01788\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 16\ *\ 3)\ \{}
+\DoxyCodeLine{01789\ \ \ \ \ \_fb\_properties.set\_float\_color(\textcolor{keyword}{true});}
+\DoxyCodeLine{01790\ \ \ \}}
+\DoxyCodeLine{01791\ }
+\DoxyCodeLine{01792\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_srgb\_color())\ \{}
+\DoxyCodeLine{01793\ \ \ \ \ \textcolor{comment}{//\ This\ is\ the\ only\ sRGB\ color\ format\ OpenGL\ supports.}}
+\DoxyCodeLine{01794\ \ \ \ \ \_fb\_properties.set\_rgba\_bits(8,\ 8,\ 8,}
+\DoxyCodeLine{01795\ \ \ \ \ \ \ (\_fb\_properties.get\_alpha\_bits()\ >\ 0)\ ?\ 8\ :\ 0);}
+\DoxyCodeLine{01796\ \ \ \ \ \_fb\_properties.set\_float\_color(\textcolor{keyword}{false});}
+\DoxyCodeLine{01797\ \ \ \}}
+\DoxyCodeLine{01798\ }
+\DoxyCodeLine{01799\ \ \ \textcolor{keywordflow}{if}\ (!\_gsg-\/>get\_supports\_depth\_stencil())\ \{}
+\DoxyCodeLine{01800\ \ \ \ \ \textcolor{comment}{//\ At\ least\ we\ know\ we\ won't\ be\ getting\ stencil\ bits.}}
+\DoxyCodeLine{01801\ \ \ \ \ \_fb\_properties.set\_stencil\_bits(0);}
+\DoxyCodeLine{01802\ }
+\DoxyCodeLine{01803\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_stencil\_bits()\ >\ 0)\ \{}
+\DoxyCodeLine{01804\ \ \ \ \ \textcolor{comment}{//\ We\ don't\ currently\ support\ stencil-\/only\ targets.}}
+\DoxyCodeLine{01805\ \ \ \ \ \_fb\_properties.set\_stencil\_bits(8);}
+\DoxyCodeLine{01806\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_depth\_bits()\ <\ 24)\ \{}
+\DoxyCodeLine{01807\ \ \ \ \ \ \ \_fb\_properties.set\_depth\_bits(24);}
+\DoxyCodeLine{01808\ \ \ \ \ \}}
+\DoxyCodeLine{01809\ \ \ \}}
+\DoxyCodeLine{01810\ }
+\DoxyCodeLine{01811\ \ \ \textcolor{comment}{//\ Accumulation\ buffers\ aren't\ supported\ for\ FBOs.}}
+\DoxyCodeLine{01812\ \ \ \_fb\_properties.set\_accum\_bits(0);}
+\DoxyCodeLine{01813\ }
+\DoxyCodeLine{01814\ \ \ \textcolor{keywordflow}{if}\ (glgsg-\/>get\_supports\_framebuffer\_multisample()\ \&\&\ glgsg-\/>get\_supports\_framebuffer\_blit())\ \{}
+\DoxyCodeLine{01815\ \ \ \ \ \_requested\_multisamples\ =\ \_fb\_properties.get\_multisamples();}
+\DoxyCodeLine{01816\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01817\ \ \ \ \ \_requested\_multisamples\ =\ 0;}
+\DoxyCodeLine{01818\ \ \ \}}
+\DoxyCodeLine{01819\ }
+\DoxyCodeLine{01820\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{01821\ \ \ \textcolor{keywordflow}{if}\ (glgsg-\/>get\_supports\_framebuffer\_multisample\_coverage\_nv()\ \&\&\ glgsg-\/>get\_supports\_framebuffer\_blit())\ \{}
+\DoxyCodeLine{01822\ \ \ \ \ \_requested\_coverage\_samples\ =\ \_fb\_properties.get\_coverage\_samples();}
+\DoxyCodeLine{01823\ \ \ \ \ \textcolor{comment}{//\ Note:\ \ Only\ 4\ and\ 8\ actual\ samples\ are\ supported\ by\ the\ extension,\ with}}
+\DoxyCodeLine{01824\ \ \ \ \ \textcolor{comment}{//\ 8\ or\ 16\ coverage\ samples.}}
+\DoxyCodeLine{01825\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_requested\_coverage\_samples\ <=\ 8)\ \&\&\ (\_requested\_coverage\_samples\ >\ 0))\ \{}
+\DoxyCodeLine{01826\ \ \ \ \ \ \ \_requested\_multisamples\ =\ 4;}
+\DoxyCodeLine{01827\ \ \ \ \ \ \ \_requested\_coverage\_samples\ =\ 8;}
+\DoxyCodeLine{01828\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_requested\_coverage\_samples\ >\ 8)\ \{}
+\DoxyCodeLine{01829\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_requested\_multisamples\ <\ 8)\ \{}
+\DoxyCodeLine{01830\ \ \ \ \ \ \ \ \ \_requested\_multisamples\ =\ 4;}
+\DoxyCodeLine{01831\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01832\ \ \ \ \ \ \ \ \ \_requested\_multisamples\ =\ 8;}
+\DoxyCodeLine{01833\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01834\ \ \ \ \ \ \ \_requested\_coverage\_samples\ =\ 16;}
+\DoxyCodeLine{01835\ \ \ \ \ \}}
+\DoxyCodeLine{01836\ }
+\DoxyCodeLine{01837\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01838\ \ \ \ \ \_requested\_coverage\_samples\ =\ 0;}
+\DoxyCodeLine{01839\ \ \ \}}
+\DoxyCodeLine{01840\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01841\ }
+\DoxyCodeLine{01842\ \ \ \textcolor{keywordflow}{if}\ (\_requested\_multisamples\ >\ glgsg-\/>\_max\_fb\_samples)\ \{}
+\DoxyCodeLine{01843\ \ \ \ \ \_requested\_multisamples\ =\ glgsg-\/>\_max\_fb\_samples;}
+\DoxyCodeLine{01844\ \ \ \}}
+\DoxyCodeLine{01845\ \ \ \_fb\_properties.set\_multisamples(\_requested\_multisamples);}
+\DoxyCodeLine{01846\ \ \ \_fb\_properties.set\_coverage\_samples(\_requested\_coverage\_samples);}
+\DoxyCodeLine{01847\ }
+\DoxyCodeLine{01848\ \ \ \textcolor{comment}{//\ Update\ aux\ settings\ to\ reflect\ the\ GL\_MAX\_DRAW\_BUFFERS\ limit,\ if\ we}}
+\DoxyCodeLine{01849\ \ \ \textcolor{comment}{//\ exceed\ it,\ that\ is.}}
+\DoxyCodeLine{01850\ \ \ \textcolor{keywordtype}{int}\ availcolor\ =\ glgsg-\/>\_max\_color\_targets;}
+\DoxyCodeLine{01851\ }
+\DoxyCodeLine{01852\ \ \ \textcolor{keywordflow}{if}\ (totalcolor\ >\ availcolor)\ \{}
+\DoxyCodeLine{01853\ \ \ \ \ \textcolor{keywordtype}{int}\ aux\_rgba\ =\ \_fb\_properties.get\_aux\_rgba();}
+\DoxyCodeLine{01854\ \ \ \ \ \textcolor{keywordtype}{int}\ aux\_hrgba\ =\ \_fb\_properties.get\_aux\_hrgba();}
+\DoxyCodeLine{01855\ \ \ \ \ \textcolor{keywordtype}{int}\ aux\_float\ =\ \_fb\_properties.get\_aux\_float();}
+\DoxyCodeLine{01856\ }
+\DoxyCodeLine{01857\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.get\_color\_bits()\ >\ 0\ \&\&\ availcolor\ >\ 0)\ \{}
+\DoxyCodeLine{01858\ \ \ \ \ \ \ -\/-\/availcolor;}
+\DoxyCodeLine{01859\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.is\_stereo())\ \{}
+\DoxyCodeLine{01860\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (availcolor\ >\ 0)\ \{}
+\DoxyCodeLine{01861\ \ \ \ \ \ \ \ \ \ \ -\/-\/availcolor;}
+\DoxyCodeLine{01862\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01863\ \ \ \ \ \ \ \ \ \ \ \_fb\_properties.set\_stereo(0);}
+\DoxyCodeLine{01864\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01865\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01866\ \ \ \ \ \}}
+\DoxyCodeLine{01867\ \ \ \ \ aux\_rgba\ =\ min(aux\_rgba,\ availcolor);}
+\DoxyCodeLine{01868\ \ \ \ \ availcolor\ -\/=\ aux\_rgba;}
+\DoxyCodeLine{01869\ \ \ \ \ aux\_hrgba\ =\ min(aux\_hrgba,\ availcolor);}
+\DoxyCodeLine{01870\ \ \ \ \ availcolor\ -\/=\ aux\_hrgba;}
+\DoxyCodeLine{01871\ \ \ \ \ aux\_float\ =\ min(aux\_float,\ availcolor);}
+\DoxyCodeLine{01872\ \ \ \ \ availcolor\ -\/=\ aux\_float;}
+\DoxyCodeLine{01873\ }
+\DoxyCodeLine{01874\ \ \ \ \ \_fb\_properties.set\_aux\_rgba(aux\_rgba);}
+\DoxyCodeLine{01875\ \ \ \ \ \_fb\_properties.set\_aux\_hrgba(aux\_hrgba);}
+\DoxyCodeLine{01876\ \ \ \ \ \_fb\_properties.set\_aux\_float(aux\_float);}
+\DoxyCodeLine{01877\ \ \ \}}
+\DoxyCodeLine{01878\ }
+\DoxyCodeLine{01879\ \ \ \_fb\_properties.set\_back\_buffers(0);}
+\DoxyCodeLine{01880\ \ \ \_fb\_properties.set\_indexed\_color(0);}
+\DoxyCodeLine{01881\ \ \ \_fb\_properties.set\_rgb\_color(1);}
+\DoxyCodeLine{01882\ \ \ \textcolor{keywordflow}{if}\ (\_host\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01883\ \ \ \ \ \_fb\_properties.set\_force\_hardware(\_host-\/>get\_fb\_properties().get\_force\_hardware());}
+\DoxyCodeLine{01884\ \ \ \ \ \_fb\_properties.set\_force\_software(\_host-\/>get\_fb\_properties().get\_force\_software());}
+\DoxyCodeLine{01885\ \ \ \}}
+\DoxyCodeLine{01886\ }
+\DoxyCodeLine{01887\ \ \ \_is\_valid\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01888\ \ \ \_needs\_rebuild\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01889\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{01890\ }
+\DoxyCodeLine{01891\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01892\ \}}
+\DoxyCodeLine{01893\ }
+\DoxyCodeLine{01899\ \mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{01900\ get\_host()\ \{}
+\DoxyCodeLine{01901\ \ \ \textcolor{keywordflow}{return}\ (\_host\ !=\ \textcolor{keyword}{nullptr})\ ?\ \_host\ :\ \textcolor{keyword}{this};}
+\DoxyCodeLine{01902\ \}}
+\DoxyCodeLine{01903\ }
+\DoxyCodeLine{01907\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{01908\ close\_buffer()\ \{}
+\DoxyCodeLine{01909\ \ \ \_rb\_data\_size\_bytes\ =\ 0;}
+\DoxyCodeLine{01910\ \ \ \textcolor{keywordflow}{if}\ (\_rb\_context\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01911\ \ \ \ \ \_rb\_context-\/>update\_data\_size\_bytes(0);}
+\DoxyCodeLine{01912\ \ \ \ \ \textcolor{keyword}{delete}\ \_rb\_context;}
+\DoxyCodeLine{01913\ \ \ \ \ \_rb\_context\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01914\ \ \ \}}
+\DoxyCodeLine{01915\ }
+\DoxyCodeLine{01916\ \ \ check\_host\_valid();}
+\DoxyCodeLine{01917\ }
+\DoxyCodeLine{01918\ \ \ \textcolor{keywordflow}{if}\ (\_gsg\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01919\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01920\ \ \ \}}
+\DoxyCodeLine{01921\ }
+\DoxyCodeLine{01922\ \ \ \textcolor{comment}{//\ Get\ the\ glgsg.}}
+\DoxyCodeLine{01923\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg;}
+\DoxyCodeLine{01924\ \ \ DCAST\_INTO\_V(glgsg,\ \_gsg);}
+\DoxyCodeLine{01925\ }
+\DoxyCodeLine{01926\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{01927\ \ \ \textcolor{comment}{//\ Delete\ the\ renderbuffers.}}
+\DoxyCodeLine{01928\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i<RTP\_COUNT;\ i++)\ \{}
+\DoxyCodeLine{01929\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rb[i]\ !=\ 0)\ \{}
+\DoxyCodeLine{01930\ \ \ \ \ \ \ glgsg-\/>\_glDeleteRenderbuffers(1,\ \&(\_rb[i]));}
+\DoxyCodeLine{01931\ \ \ \ \ \ \ \_rb[i]\ =\ 0;}
+\DoxyCodeLine{01932\ \ \ \ \ \}}
+\DoxyCodeLine{01933\ \ \ \}}
+\DoxyCodeLine{01934\ \ \ \textcolor{comment}{//\ Delete\ the\ multisample\ renderbuffers.}}
+\DoxyCodeLine{01935\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i<RTP\_COUNT;\ i++)\ \{}
+\DoxyCodeLine{01936\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rbm[i]\ !=\ 0)\ \{}
+\DoxyCodeLine{01937\ \ \ \ \ \ \ glgsg-\/>\_glDeleteRenderbuffers(1,\ \&(\_rbm[i]));}
+\DoxyCodeLine{01938\ \ \ \ \ \ \ \_rb[i]\ =\ 0;}
+\DoxyCodeLine{01939\ \ \ \ \ \}}
+\DoxyCodeLine{01940\ \ \ \}}
+\DoxyCodeLine{01941\ }
+\DoxyCodeLine{01942\ \ \ \_rb\_size\_x\ =\ 0;}
+\DoxyCodeLine{01943\ \ \ \_rb\_size\_y\ =\ 0;}
+\DoxyCodeLine{01944\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{01945\ }
+\DoxyCodeLine{01946\ \ \ \textcolor{comment}{//\ Delete\ the\ FBO\ itself.}}
+\DoxyCodeLine{01947\ \ \ \textcolor{keywordflow}{if}\ (!\_fbo.empty())\ \{}
+\DoxyCodeLine{01948\ \ \ \ \ glgsg-\/>\_glDeleteFramebuffers(\_fbo.size(),\ \_fbo.data());}
+\DoxyCodeLine{01949\ \ \ \ \ \_fbo.clear();}
+\DoxyCodeLine{01950\ \ \ \}}
+\DoxyCodeLine{01951\ }
+\DoxyCodeLine{01952\ \ \ \textcolor{keywordflow}{if}\ (\_fbo\_multisample\ !=\ 0)\ \{}
+\DoxyCodeLine{01953\ \ \ \ \ glgsg-\/>\_glDeleteFramebuffers(1,\ \&\_fbo\_multisample);}
+\DoxyCodeLine{01954\ \ \ \ \ \_fbo\_multisample\ =\ 0;}
+\DoxyCodeLine{01955\ \ \ \}}
+\DoxyCodeLine{01956\ }
+\DoxyCodeLine{01957\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{01958\ }
+\DoxyCodeLine{01959\ \ \ \textcolor{comment}{//\ Release\ the\ Gsg}}
+\DoxyCodeLine{01960\ \ \ \_gsg.clear();}
+\DoxyCodeLine{01961\ }
+\DoxyCodeLine{01962\ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01963\ \}}
+\DoxyCodeLine{01964\ }
+\DoxyCodeLine{01969\ \textcolor{keywordtype}{bool}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{01970\ share\_depth\_buffer(\mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *graphics\_output)\ \{}
+\DoxyCodeLine{01971\ }
+\DoxyCodeLine{01972\ \ \ \textcolor{keywordtype}{bool}\ state;}
+\DoxyCodeLine{01973\ \ \ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})\ *input\_graphics\_output;}
+\DoxyCodeLine{01974\ }
+\DoxyCodeLine{01975\ \ \ state\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01976\ \ \ input\_graphics\_output\ =\ DCAST(CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}}),\ graphics\_output);}
+\DoxyCodeLine{01977\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{this}\ !=\ input\_graphics\_output\ \&\&\ input\_graphics\_output)\ \{}
+\DoxyCodeLine{01978\ }
+\DoxyCodeLine{01979\ \ \ \ \ state\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01980\ \ \ \ \ this-\/>unshare\_depth\_buffer();}
+\DoxyCodeLine{01981\ }
+\DoxyCodeLine{01982\ \ \ \ \ \textcolor{comment}{//\ Make\ sure\ that\ the\ buffers\ are\ both\ FBOs.}}
+\DoxyCodeLine{01983\ \ \ \ \ \textcolor{keywordflow}{if}\ (!input\_graphics\_output-\/>is\_of\_type(CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::get\_class\_type()))\ \{}
+\DoxyCodeLine{01984\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}share\_depth\_buffer:\ non-\/matching\ type\(\backslash\)n"{}};}
+\DoxyCodeLine{01985\ \ \ \ \ \ \ state\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01986\ \ \ \ \ \}}
+\DoxyCodeLine{01987\ }
+\DoxyCodeLine{01988\ \ \ \ \ \textcolor{comment}{//\ Check\ buffer\ size.}}
+\DoxyCodeLine{01989\ \ \ \ \ \textcolor{keywordflow}{if}\ (this-\/>get\_x\_size()\ !=\ input\_graphics\_output-\/>get\_x\_size())\ \{}
+\DoxyCodeLine{01990\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}share\_depth\_buffer:\ non-\/matching\ width\(\backslash\)n"{}};}
+\DoxyCodeLine{01991\ \ \ \ \ \ \ state\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01992\ \ \ \ \ \}}
+\DoxyCodeLine{01993\ }
+\DoxyCodeLine{01994\ \ \ \ \ \textcolor{keywordflow}{if}\ (this-\/>get\_y\_size()\ !=\ input\_graphics\_output-\/>get\_y\_size())\ \{}
+\DoxyCodeLine{01995\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}share\_depth\_buffer:\ non-\/matching\ height\(\backslash\)n"{}};}
+\DoxyCodeLine{01996\ \ \ \ \ \ \ state\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01997\ \ \ \ \ \}}
+\DoxyCodeLine{01998\ }
+\DoxyCodeLine{01999\ \ \ \ \ \textcolor{comment}{//\ Check\ multisample\ compatibility.}}
+\DoxyCodeLine{02000\ \ \ \ \ \textcolor{keywordflow}{if}\ (this-\/>get\_multisample\_count()\ !=\ input\_graphics\_output-\/>get\_multisample\_count())\ \{}
+\DoxyCodeLine{02001\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}share\_depth\_buffer:\ non-\/matching\ multisamples\(\backslash\)n"{}};}
+\DoxyCodeLine{02002\ \ \ \ \ \ \ state\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02003\ \ \ \ \ \}}
+\DoxyCodeLine{02004\ }
+\DoxyCodeLine{02005\ \ \ \ \ \textcolor{keywordflow}{if}\ (this-\/>get\_coverage\_sample\_count()\ !=\ input\_graphics\_output-\/>get\_coverage\_sample\_count())\ \{}
+\DoxyCodeLine{02006\ \ \ \ \ \ \ GLCAT.error()\ <<\ \textcolor{stringliteral}{"{}share\_depth\_buffer:\ non-\/matching\ coverage\ samples\(\backslash\)n"{}};}
+\DoxyCodeLine{02007\ \ \ \ \ \ \ state\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02008\ \ \ \ \ \}}
+\DoxyCodeLine{02009\ }
+\DoxyCodeLine{02010\ \ \ \ \ \textcolor{keywordflow}{if}\ (state)\ \{}
+\DoxyCodeLine{02011\ \ \ \ \ \ \ \textcolor{comment}{//\ let\ the\ input\ GraphicsOutput\ know\ that\ there\ is\ an\ object\ sharing\ its}}
+\DoxyCodeLine{02012\ \ \ \ \ \ \ \textcolor{comment}{//\ depth\ buffer}}
+\DoxyCodeLine{02013\ \ \ \ \ \ \ input\_graphics\_output-\/>register\_shared\_depth\_buffer(\textcolor{keyword}{this});}
+\DoxyCodeLine{02014\ \ \ \ \ \ \ \_shared\_depth\_buffer\ =\ input\_graphics\_output;}
+\DoxyCodeLine{02015\ \ \ \ \ \ \ state\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02016\ \ \ \ \ \}}
+\DoxyCodeLine{02017\ \ \ \ \ \_needs\_rebuild\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02018\ \ \ \}}
+\DoxyCodeLine{02019\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{02020\ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{02021\ \}}
+\DoxyCodeLine{02022\ }
+\DoxyCodeLine{02026\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{02027\ unshare\_depth\_buffer()\ \{}
+\DoxyCodeLine{02028\ \ \ \textcolor{keywordflow}{if}\ (\_shared\_depth\_buffer)\ \{}
+\DoxyCodeLine{02029\ \ \ \ \ \textcolor{comment}{//\ let\ the\ GraphicsOutput\ know\ that\ this\ object\ is\ no\ longer\ sharing\ its}}
+\DoxyCodeLine{02030\ \ \ \ \ \textcolor{comment}{//\ depth\ buffer}}
+\DoxyCodeLine{02031\ \ \ \ \ \_shared\_depth\_buffer-\/>unregister\_shared\_depth\_buffer(\textcolor{keyword}{this});}
+\DoxyCodeLine{02032\ \ \ \ \ \_shared\_depth\_buffer\ =\ 0;}
+\DoxyCodeLine{02033\ \ \ \ \ \_needs\_rebuild\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02034\ \ \ \}}
+\DoxyCodeLine{02035\ \}}
+\DoxyCodeLine{02036\ }
+\DoxyCodeLine{02042\ \textcolor{keywordtype}{bool}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{02043\ get\_supports\_render\_texture()\ const\ \{}
+\DoxyCodeLine{02044\ \ \ \textcolor{comment}{//\ FBO-\/based\ buffers,\ by\ their\ nature,\ can\ always\ bind-\/to-\/texture.}}
+\DoxyCodeLine{02045\ \ \ return\ true;}
+\DoxyCodeLine{02046\ \}}
+\DoxyCodeLine{02047\ }
+\DoxyCodeLine{02051\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{02052\ register\_shared\_depth\_buffer(\mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *graphics\_output)\ \{}
+\DoxyCodeLine{02053\ \ \ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})\ *input\_graphics\_output;}
+\DoxyCodeLine{02054\ }
+\DoxyCodeLine{02055\ \ \ input\_graphics\_output\ =\ DCAST\ (CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}}),\ graphics\_output);}
+\DoxyCodeLine{02056\ \ \ \textcolor{keywordflow}{if}\ (input\_graphics\_output)\ \{}
+\DoxyCodeLine{02057\ \ \ \ \ \textcolor{comment}{//\ add\ to\ list}}
+\DoxyCodeLine{02058\ \ \ \ \ \_shared\_depth\_buffer\_list.push\_back(input\_graphics\_output);}
+\DoxyCodeLine{02059\ \ \ \}}
+\DoxyCodeLine{02060\ \}}
+\DoxyCodeLine{02061\ }
+\DoxyCodeLine{02065\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{02066\ unregister\_shared\_depth\_buffer(\mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *graphics\_output)\ \{}
+\DoxyCodeLine{02067\ \ \ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})\ *input\_graphics\_output;}
+\DoxyCodeLine{02068\ }
+\DoxyCodeLine{02069\ \ \ input\_graphics\_output\ =\ DCAST\ (CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}}),\ graphics\_output);}
+\DoxyCodeLine{02070\ \ \ \textcolor{keywordflow}{if}\ (input\_graphics\_output)\ \{}
+\DoxyCodeLine{02071\ \ \ \ \ \textcolor{comment}{//\ remove\ from\ list}}
+\DoxyCodeLine{02072\ \ \ \ \ \_shared\_depth\_buffer\_list.remove(input\_graphics\_output);}
+\DoxyCodeLine{02073\ \ \ \}}
+\DoxyCodeLine{02074\ \}}
+\DoxyCodeLine{02075\ }
+\DoxyCodeLine{02079\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{02080\ report\_my\_errors(int\ line,\ const\ char\ *file)\ \{}
+\DoxyCodeLine{02081\ \ \ \textcolor{keywordflow}{if}\ (\_gsg\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02082\ \ \ \ \ GLenum\ error\_code\ =\ glGetError();}
+\DoxyCodeLine{02083\ \ \ \ \ \textcolor{keywordflow}{if}\ (error\_code\ !=\ GL\_NO\_ERROR)\ \{}
+\DoxyCodeLine{02084\ \ \ \ \ \ \ GLCAT.error()\ <<\ file\ <<\ \textcolor{stringliteral}{"{},\ line\ "{}}\ <<\ line\ <<\ \textcolor{stringliteral}{"{}:\ GL\ error\ "{}}\ <<\ (int)error\_code\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{02085\ \ \ \ \ \}}
+\DoxyCodeLine{02086\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02087\ \ \ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{02088\ \ \ \ \ glgsg-\/>report\_my\_errors(line,\ file);}
+\DoxyCodeLine{02089\ \ \ \}}
+\DoxyCodeLine{02090\ \}}
+\DoxyCodeLine{02091\ }
+\DoxyCodeLine{02095\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{02096\ check\_host\_valid()\ \{}
+\DoxyCodeLine{02097\ \ \ \textcolor{keywordflow}{if}\ (\_host\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ !\_host-\/>is\_valid())\ \{}
+\DoxyCodeLine{02098\ \ \ \ \ \_rb\_data\_size\_bytes\ =\ 0;}
+\DoxyCodeLine{02099\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rb\_context\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02100\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ must\ delete\ this\ object\ first,\ because\ when\ the\ GSG\ destructs,\ so}}
+\DoxyCodeLine{02101\ \ \ \ \ \ \ \textcolor{comment}{//\ will\ the\ tracker\ that\ this\ context\ is\ attached\ to.}}
+\DoxyCodeLine{02102\ \ \ \ \ \ \ \_rb\_context-\/>update\_data\_size\_bytes(0);}
+\DoxyCodeLine{02103\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_rb\_context;}
+\DoxyCodeLine{02104\ \ \ \ \ \ \ \_rb\_context\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{02105\ \ \ \ \ \}}
+\DoxyCodeLine{02106\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02107\ \ \ \ \ \_gsg.clear();}
+\DoxyCodeLine{02108\ \ \ \ \ \_host.clear();}
+\DoxyCodeLine{02109\ \ \ \}}
+\DoxyCodeLine{02110\ \}}
+\DoxyCodeLine{02111\ }
+\DoxyCodeLine{02116\ \textcolor{keywordtype}{void}\ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})::}
+\DoxyCodeLine{02117\ resolve\_multisamples()\ \{}
+\DoxyCodeLine{02118\ \ \ nassertv(\_fbo.size()\ >\ 0);}
+\DoxyCodeLine{02119\ }
+\DoxyCodeLine{02120\ \ \ CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *glgsg\ =\ (CLP(\mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}})\ *)\_gsg.p();}
+\DoxyCodeLine{02121\ }
+\DoxyCodeLine{02122\ \ \ \mbox{\hyperlink{classPStatGPUTimer}{PStatGPUTimer}}\ timer(glgsg,\ \_resolve\_multisample\_pcollector);}
+\DoxyCodeLine{02123\ }
+\DoxyCodeLine{02124\ \textcolor{preprocessor}{\#ifndef\ OPENGLES\_1}}
+\DoxyCodeLine{02125\ \ \ \textcolor{keywordflow}{if}\ (gl\_enable\_memory\_barriers)\ \{}
+\DoxyCodeLine{02126\ \ \ \ \ \textcolor{comment}{//\ Issue\ memory\ barriers\ as\ necessary\ to\ make\ sure\ that\ the\ texture\ memory}}
+\DoxyCodeLine{02127\ \ \ \ \ \textcolor{comment}{//\ is\ synchronized\ before\ we\ blit\ to\ it.}}
+\DoxyCodeLine{02128\ \ \ \ \ \textcolor{keywordflow}{for}\ (CLP(\mbox{\hyperlink{classTextureContext}{TextureContext}})\ *gtc\ :\ \_texture\_contexts)\ \{}
+\DoxyCodeLine{02129\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gtc-\/>needs\_barrier(GL\_FRAMEBUFFER\_BARRIER\_BIT,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{02130\ \ \ \ \ \ \ \ \ glgsg-\/>issue\_memory\_barrier(GL\_FRAMEBUFFER\_BARRIER\_BIT);}
+\DoxyCodeLine{02131\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we've\ done\ it\ for\ one,\ we've\ done\ it\ for\ all.}}
+\DoxyCodeLine{02132\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02133\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02134\ \ \ \ \ \}}
+\DoxyCodeLine{02135\ \ \ \}}
+\DoxyCodeLine{02136\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{02137\ }
+\DoxyCodeLine{02138\ \ \ glgsg-\/>report\_my\_gl\_errors();}
+\DoxyCodeLine{02139\ \ \ GLuint\ fbo\ =\ \_fbo[0];}
+\DoxyCodeLine{02140\ \ \ \textcolor{keywordflow}{if}\ (\_bound\_tex\_page\ !=\ -\/1)\ \{}
+\DoxyCodeLine{02141\ \ \ \ \ fbo\ =\ \_fbo[\_bound\_tex\_page];}
+\DoxyCodeLine{02142\ \ \ \}}
+\DoxyCodeLine{02143\ \ \ glgsg-\/>\_glBindFramebuffer(GL\_DRAW\_FRAMEBUFFER\_EXT,\ fbo);}
+\DoxyCodeLine{02144\ \ \ glgsg-\/>\_glBindFramebuffer(GL\_READ\_FRAMEBUFFER\_EXT,\ \_fbo\_multisample);}
+\DoxyCodeLine{02145\ \ \ glgsg-\/>\_current\_fbo\ =\ fbo;}
+\DoxyCodeLine{02146\ }
+\DoxyCodeLine{02147\ \ \ \textcolor{comment}{//\ If\ the\ depth\ buffer\ is\ shared,\ resolve\ it\ only\ on\ the\ last\ to\ render\ FBO.}}
+\DoxyCodeLine{02148\ \ \ \textcolor{keywordtype}{bool}\ do\_depth\_blit\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02149\ \ \ \textcolor{keywordflow}{if}\ (\_rbm[RTP\_depth\_stencil]\ !=\ 0\ ||\ \_rbm[RTP\_depth]\ !=\ 0)\ \{}
+\DoxyCodeLine{02150\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_shared\_depth\_buffer)\ \{}
+\DoxyCodeLine{02151\ \ \ \ \ \ \ CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})\ *graphics\_buffer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{02152\ \ \ \ \ \ \ \textcolor{comment}{//CLP(GraphicsBuffer)\ *highest\_sort\_graphics\_buffer\ =\ NULL;}}
+\DoxyCodeLine{02153\ \ \ \ \ \ \ std::list\ <CLP(\mbox{\hyperlink{classGraphicsBuffer}{GraphicsBuffer}})\ *>::iterator\ graphics\_buffer\_iterator;}
+\DoxyCodeLine{02154\ }
+\DoxyCodeLine{02155\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ max\_sort\_order\ =\ 0;}
+\DoxyCodeLine{02156\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (graphics\_buffer\_iterator\ =\ \_shared\_depth\_buffer\_list.begin();}
+\DoxyCodeLine{02157\ \ \ \ \ \ \ \ \ \ \ \ graphics\_buffer\_iterator\ !=\ \_shared\_depth\_buffer\_list.end();}
+\DoxyCodeLine{02158\ \ \ \ \ \ \ \ \ \ \ \ graphics\_buffer\_iterator++)\ \{}
+\DoxyCodeLine{02159\ \ \ \ \ \ \ \ \ graphics\_buffer\ =\ (*graphics\_buffer\_iterator);}
+\DoxyCodeLine{02160\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (graphics\_buffer)\ \{}
+\DoxyCodeLine{02161\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ this\ call\ removes\ the\ entry\ from\ the\ list}}
+\DoxyCodeLine{02162\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (graphics\_buffer-\/>get\_sort()\ >=\ max\_sort\_order)\ \{}
+\DoxyCodeLine{02163\ \ \ \ \ \ \ \ \ \ \ \ \ max\_sort\_order\ =\ graphics\_buffer-\/>get\_sort();}
+\DoxyCodeLine{02164\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//highest\_sort\_graphics\_buffer\ =\ graphics\_buffer;}}
+\DoxyCodeLine{02165\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02166\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02167\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02168\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (max\_sort\_order\ ==\ this-\/>get\_sort())\ \{}
+\DoxyCodeLine{02169\ \ \ \ \ \ \ \ \ do\_depth\_blit\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02170\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02171\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02172\ \ \ \ \ \ \ do\_depth\_blit\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02173\ \ \ \ \ \}}
+\DoxyCodeLine{02174\ \ \ \}}
+\DoxyCodeLine{02175\ }
+\DoxyCodeLine{02176\ \ \ \textcolor{comment}{//\ First\ handle\ the\ auxiliary\ buffers.}}
+\DoxyCodeLine{02177\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{02178\ \ \ \textcolor{keywordtype}{int}\ next\ =\ GL\_COLOR\_ATTACHMENT1\_EXT;}
+\DoxyCodeLine{02179\ \ \ \textcolor{keywordflow}{if}\ (\_fb\_properties.is\_stereo())\ \{}
+\DoxyCodeLine{02180\ \ \ \ \ glReadBuffer(next);}
+\DoxyCodeLine{02181\ \ \ \ \ glDrawBuffer(next);}
+\DoxyCodeLine{02182\ \ \ \ \ glgsg-\/>\_glBlitFramebuffer(0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,\ 0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,}
+\DoxyCodeLine{02183\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_COLOR\_BUFFER\_BIT,\ GL\_NEAREST);}
+\DoxyCodeLine{02184\ \ \ \ \ next\ +=\ 1;}
+\DoxyCodeLine{02185\ \ \ \}}
+\DoxyCodeLine{02186\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ \_fb\_properties.get\_aux\_rgba();\ ++i)\ \{}
+\DoxyCodeLine{02187\ \ \ \ \ glReadBuffer(next);}
+\DoxyCodeLine{02188\ \ \ \ \ glDrawBuffer(next);}
+\DoxyCodeLine{02189\ \ \ \ \ glgsg-\/>\_glBlitFramebuffer(0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,\ 0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,}
+\DoxyCodeLine{02190\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_COLOR\_BUFFER\_BIT,\ GL\_NEAREST);}
+\DoxyCodeLine{02191\ \ \ \ \ next\ +=\ 1;}
+\DoxyCodeLine{02192\ \ \ \}}
+\DoxyCodeLine{02193\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ \_fb\_properties.get\_aux\_hrgba();\ ++i)\ \{}
+\DoxyCodeLine{02194\ \ \ \ \ glReadBuffer(next);}
+\DoxyCodeLine{02195\ \ \ \ \ glDrawBuffer(next);}
+\DoxyCodeLine{02196\ \ \ \ \ glgsg-\/>\_glBlitFramebuffer(0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,\ 0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,}
+\DoxyCodeLine{02197\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_COLOR\_BUFFER\_BIT,\ GL\_NEAREST);}
+\DoxyCodeLine{02198\ \ \ \ \ next\ +=\ 1;}
+\DoxyCodeLine{02199\ \ \ \}}
+\DoxyCodeLine{02200\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ \_fb\_properties.get\_aux\_float();\ ++i)\ \{}
+\DoxyCodeLine{02201\ \ \ \ \ glReadBuffer(next);}
+\DoxyCodeLine{02202\ \ \ \ \ glDrawBuffer(next);}
+\DoxyCodeLine{02203\ \ \ \ \ glgsg-\/>\_glBlitFramebuffer(0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,\ 0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,}
+\DoxyCodeLine{02204\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_COLOR\_BUFFER\_BIT,\ GL\_NEAREST);}
+\DoxyCodeLine{02205\ \ \ \ \ next\ +=\ 1;}
+\DoxyCodeLine{02206\ \ \ \}}
+\DoxyCodeLine{02207\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{02208\ }
+\DoxyCodeLine{02209\ \ \ \textcolor{comment}{//\ Now\ blit\ the\ normal\ color\ target,\ plus\ any\ depth/stencil.}}
+\DoxyCodeLine{02210\ \ \ \textcolor{comment}{//\ We\ do\ this\ last\ because\ we\ want\ to\ leave\ attachment\ 0\ bound\ at\ the\ end.}}
+\DoxyCodeLine{02211\ \textcolor{preprocessor}{\#ifndef\ OPENGLES}}
+\DoxyCodeLine{02212\ \ \ \textcolor{keywordflow}{if}\ (\_have\_any\_color)\ \{}
+\DoxyCodeLine{02213\ \ \ \ \ glDrawBuffer(GL\_COLOR\_ATTACHMENT0\_EXT);}
+\DoxyCodeLine{02214\ \ \ \ \ glReadBuffer(GL\_COLOR\_ATTACHMENT0\_EXT);}
+\DoxyCodeLine{02215\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02216\ \ \ \ \ glDrawBuffer(GL\_NONE);}
+\DoxyCodeLine{02217\ \ \ \ \ glReadBuffer(GL\_NONE);}
+\DoxyCodeLine{02218\ \ \ \}}
+\DoxyCodeLine{02219\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{02220\ }
+\DoxyCodeLine{02221\ \ \ \textcolor{keywordflow}{if}\ (do\_depth\_blit)\ \{}
+\DoxyCodeLine{02222\ \ \ \ \ glgsg-\/>\_glBlitFramebuffer(0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,\ 0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,}
+\DoxyCodeLine{02223\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_COLOR\_BUFFER\_BIT\ |\ GL\_DEPTH\_BUFFER\_BIT\ |\ GL\_STENCIL\_BUFFER\_BIT,}
+\DoxyCodeLine{02224\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_NEAREST);}
+\DoxyCodeLine{02225\ \ \ \}}
+\DoxyCodeLine{02226\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_have\_any\_color)\ \{}
+\DoxyCodeLine{02227\ \ \ \ \ glgsg-\/>\_glBlitFramebuffer(0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,\ 0,\ 0,\ \_rb\_size\_x,\ \_rb\_size\_y,}
+\DoxyCodeLine{02228\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_COLOR\_BUFFER\_BIT,}
+\DoxyCodeLine{02229\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_NEAREST);}
+\DoxyCodeLine{02230\ \ \ \}}
+\DoxyCodeLine{02231\ }
+\DoxyCodeLine{02232\ \ \ \textcolor{comment}{//\ Bind\ the\ regular\ FBO\ as\ read\ buffer\ for\ the\ sake\ of\ copy\_to\_textures.}}
+\DoxyCodeLine{02233\ \ \ glgsg-\/>\_glBindFramebuffer(GL\_READ\_FRAMEBUFFER\_EXT,\ fbo);}
+\DoxyCodeLine{02234\ }
+\DoxyCodeLine{02235\ \ \ report\_my\_gl\_errors();}
+\DoxyCodeLine{02236\ \}}
+
+\end{DoxyCode}

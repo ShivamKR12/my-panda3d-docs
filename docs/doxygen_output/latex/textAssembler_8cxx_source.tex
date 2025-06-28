@@ -1,0 +1,2411 @@
+\doxysection{text\+Assembler.\+cxx}
+\hypertarget{textAssembler_8cxx_source}{}\label{textAssembler_8cxx_source}\index{panda/src/text/textAssembler.cxx@{panda/src/text/textAssembler.cxx}}
+\mbox{\hyperlink{textAssembler_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{textAssembler_8h}{textAssembler.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{textGlyph_8h}{textGlyph.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullFaceAttrib_8h}{cullFaceAttrib.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{colorAttrib_8h}{colorAttrib.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullBinAttrib_8h}{cullBinAttrib.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{textureAttrib_8h}{textureAttrib.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{transparencyAttrib_8h}{transparencyAttrib.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{textPropertiesManager_8h}{textPropertiesManager.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{textEncoder_8h}{textEncoder.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__text_8h}{config\_text.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomTriangles_8h}{geomTriangles.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomLines_8h}{geomLines.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomPoints_8h}{geomPoints.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexReader_8h}{geomVertexReader.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexWriter_8h}{geomVertexWriter.h}}"{}}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomLines_8h}{geomLines.h}}"{}}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexFormat_8h}{geomVertexFormat.h}}"{}}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexData_8h}{geomVertexData.h}}"{}}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geom_8h}{geom.h}}"{}}}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{modelNode_8h}{modelNode.h}}"{}}}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{dynamicTextFont_8h}{dynamicTextFont.h}}"{}}}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \textcolor{preprocessor}{\#include\ <ctype.h>}}
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\#include\ <stdio.h>}\ \ \textcolor{comment}{//\ for\ sprintf}}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \textcolor{preprocessor}{\#ifdef\ HAVE\_HARFBUZZ}}
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\#include\ <hb.h>}}
+\DoxyCodeLine{00041\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \textcolor{keyword}{using\ }std::max;}
+\DoxyCodeLine{00044\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00045\ \textcolor{keyword}{using\ }std::wstring;}
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00047\ \textcolor{keyword}{enum}\ ClusterFlags\ \{}
+\DoxyCodeLine{00048\ \ \ CF\_small\_caps\ =\ 0x200000,}
+\DoxyCodeLine{00049\ \};}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \textcolor{comment}{//\ This\ is\ the\ factor\ by\ which\ CT\_small\ scales\ the\ character\ down.}}
+\DoxyCodeLine{00052\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ PN\_stdfloat\ small\_accent\_scale\ =\ 0.6f;}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \textcolor{comment}{//\ This\ is\ the\ factor\ by\ which\ CT\_tiny\ scales\ the\ character\ down.}}
+\DoxyCodeLine{00055\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ PN\_stdfloat\ tiny\_accent\_scale\ =\ 0.4;}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00057\ \textcolor{comment}{//\ This\ is\ the\ factor\ by\ which\ CT\_squash\ scales\ the\ character\ in\ X\ and\ Y.}}
+\DoxyCodeLine{00058\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ PN\_stdfloat\ squash\_accent\_scale\_x\ =\ 0.8f;}
+\DoxyCodeLine{00059\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ PN\_stdfloat\ squash\_accent\_scale\_y\ =\ 0.5f;}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00061\ \textcolor{comment}{//\ This\ is\ the\ factor\ by\ which\ CT\_small\_squash\ scales\ the\ character\ in\ X\ and}}
+\DoxyCodeLine{00062\ \textcolor{comment}{//\ Y.}}
+\DoxyCodeLine{00063\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ PN\_stdfloat\ small\_squash\_accent\_scale\_x\ =\ 0.6f;}
+\DoxyCodeLine{00064\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ PN\_stdfloat\ small\_squash\_accent\_scale\_y\ =\ 0.3;}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \textcolor{comment}{//\ This\ is\ the\ factor\ by\ which\ the\ advance\ is\ reduced\ for\ the\ first\ character}}
+\DoxyCodeLine{00067\ \textcolor{comment}{//\ of\ a\ two-\/character\ ligature.}}
+\DoxyCodeLine{00068\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ PN\_stdfloat\ ligature\_advance\_scale\ =\ 0.6f;}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00075\ \textcolor{keyword}{static}\ INLINE\ \textcolor{keywordtype}{bool}}
+\DoxyCodeLine{00076\ isspacew(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ ch)\ \{}
+\DoxyCodeLine{00077\ \ \ \textcolor{keywordflow}{return}\ isascii(ch)\ \&\&\ isspace(ch);}
+\DoxyCodeLine{00078\ \}}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00084\ \textcolor{keyword}{static}\ INLINE\ \textcolor{keywordtype}{bool}}
+\DoxyCodeLine{00085\ isbreakpoint(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ ch)\ \{}
+\DoxyCodeLine{00086\ \ \ \textcolor{keywordflow}{return}\ (ch\ ==\ \textcolor{charliteral}{'\ '}\ ||\ ch\ ==\ \textcolor{charliteral}{'\(\backslash\)t'}\ ||}
+\DoxyCodeLine{00087\ \ \ \ \ \ \ \ \ \ \ ch\ ==\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int})text\_soft\_hyphen\_key\ ||}
+\DoxyCodeLine{00088\ \ \ \ \ \ \ \ \ \ \ ch\ ==\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int})text\_soft\_break\_key);}
+\DoxyCodeLine{00089\ \}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00095\ TextAssembler::}
+\DoxyCodeLine{00096\ TextAssembler(\mbox{\hyperlink{classTextEncoder}{TextEncoder}}\ *encoder)\ :}
+\DoxyCodeLine{00097\ \ \ \_encoder(encoder),}
+\DoxyCodeLine{00098\ \ \ \_usage\_hint(\mbox{\hyperlink{classGeom}{Geom}}::UH\_static),}
+\DoxyCodeLine{00099\ \ \ \_max\_rows(0),}
+\DoxyCodeLine{00100\ \ \ \_dynamic\_merge(text\_dynamic\_merge),}
+\DoxyCodeLine{00101\ \ \ \_multiline\_mode(true)}
+\DoxyCodeLine{00102\ \{}
+\DoxyCodeLine{00103\ \ \ \_initial\_cprops\ =\ \textcolor{keyword}{new}\ ComputedProperties(\mbox{\hyperlink{classTextProperties}{TextProperties}}());}
+\DoxyCodeLine{00104\ \ \ clear();}
+\DoxyCodeLine{00105\ \}}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00110\ TextAssembler::}
+\DoxyCodeLine{00111\ TextAssembler(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTextAssembler}{TextAssembler}}\ \&copy)\ :}
+\DoxyCodeLine{00112\ \ \ \_initial\_cprops(copy.\_initial\_cprops),}
+\DoxyCodeLine{00113\ \ \ \_text\_string(copy.\_text\_string),}
+\DoxyCodeLine{00114\ \ \ \_text\_block(copy.\_text\_block),}
+\DoxyCodeLine{00115\ \ \ \_ul(copy.\_ul),}
+\DoxyCodeLine{00116\ \ \ \_lr(copy.\_lr),}
+\DoxyCodeLine{00117\ \ \ \_next\_row\_ypos(copy.\_next\_row\_ypos),}
+\DoxyCodeLine{00118\ \ \ \_encoder(copy.\_encoder),}
+\DoxyCodeLine{00119\ \ \ \_usage\_hint(copy.\_usage\_hint),}
+\DoxyCodeLine{00120\ \ \ \_max\_rows(copy.\_max\_rows),}
+\DoxyCodeLine{00121\ \ \ \_dynamic\_merge(copy.\_dynamic\_merge),}
+\DoxyCodeLine{00122\ \ \ \_multiline\_mode(copy.\_multiline\_mode)}
+\DoxyCodeLine{00123\ \{}
+\DoxyCodeLine{00124\ \}}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00129\ \textcolor{keywordtype}{void}\ TextAssembler::}
+\DoxyCodeLine{00130\ operator\ =\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classTextAssembler}{TextAssembler}}\ \&copy)\ \{}
+\DoxyCodeLine{00131\ \ \ \_initial\_cprops\ =\ copy.\_initial\_cprops;}
+\DoxyCodeLine{00132\ \ \ \_text\_string\ =\ copy.\_text\_string;}
+\DoxyCodeLine{00133\ \ \ \_text\_block\ =\ copy.\_text\_block;}
+\DoxyCodeLine{00134\ \ \ \_ul\ =\ copy.\_ul;}
+\DoxyCodeLine{00135\ \ \ \_lr\ =\ copy.\_lr;}
+\DoxyCodeLine{00136\ \ \ \_next\_row\_ypos\ =\ copy.\_next\_row\_ypos;}
+\DoxyCodeLine{00137\ \ \ \_encoder\ =\ copy.\_encoder;}
+\DoxyCodeLine{00138\ \ \ \_usage\_hint\ =\ copy.\_usage\_hint;}
+\DoxyCodeLine{00139\ \ \ \_max\_rows\ =\ copy.\_max\_rows;}
+\DoxyCodeLine{00140\ \ \ \_dynamic\_merge\ =\ copy.\_dynamic\_merge;}
+\DoxyCodeLine{00141\ \ \ \_multiline\_mode\ =\ copy.\_multiline\_mode;}
+\DoxyCodeLine{00142\ \}}
+\DoxyCodeLine{00143\ }
+\DoxyCodeLine{00147\ TextAssembler::}
+\DoxyCodeLine{00148\ \string~TextAssembler()\ \{}
+\DoxyCodeLine{00149\ \}}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00154\ \textcolor{keywordtype}{void}\ TextAssembler::}
+\DoxyCodeLine{00155\ clear()\ \{}
+\DoxyCodeLine{00156\ \ \ \_ul.set(0.0f,\ 0.0f);}
+\DoxyCodeLine{00157\ \ \ \_lr.set(0.0f,\ 0.0f);}
+\DoxyCodeLine{00158\ \ \ \_next\_row\_ypos\ =\ 0.0f;}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \_text\_string.clear();}
+\DoxyCodeLine{00161\ \ \ \_text\_block.clear();}
+\DoxyCodeLine{00162\ \}}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00172\ \textcolor{keywordtype}{bool}\ TextAssembler::}
+\DoxyCodeLine{00173\ set\_wtext(\textcolor{keyword}{const}\ wstring\ \&wtext)\ \{}
+\DoxyCodeLine{00174\ \ \ clear();}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00176\ \ \ \textcolor{comment}{//\ First,\ expand\ all\ of\ the\ embedded\ TextProperties\ references\ within\ the}}
+\DoxyCodeLine{00177\ \ \ \textcolor{comment}{//\ string.}}
+\DoxyCodeLine{00178\ \ \ wstring::const\_iterator\ si\ =\ wtext.begin();}
+\DoxyCodeLine{00179\ \ \ scan\_wtext(\_text\_string,\ si,\ wtext.end(),\ \_initial\_cprops);}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00181\ \ \ \textcolor{keywordflow}{while}\ (si\ !=\ wtext.end())\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ \textcolor{comment}{//\ If\ we\ returned\ without\ consuming\ the\ whole\ string,\ it\ means\ there\ was}}
+\DoxyCodeLine{00183\ \ \ \ \ \textcolor{comment}{//\ an\ embedded\ text\_pop\_properties\_key\ that\ didn't\ match\ the\ push.\ \ That's}}
+\DoxyCodeLine{00184\ \ \ \ \ \textcolor{comment}{//\ worth\ a\ warning,\ and\ then\ go\ back\ and\ pick\ up\ the\ rest\ of\ the\ string.}}
+\DoxyCodeLine{00185\ \ \ \ \ text\_cat.warning()}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}pop\_properties\ encountered\ without\ preceding\ push\_properties.\(\backslash\)n"{}};}
+\DoxyCodeLine{00187\ \ \ \ \ scan\_wtext(\_text\_string,\ si,\ wtext.end(),\ \_initial\_cprops);}
+\DoxyCodeLine{00188\ \ \ \}}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00190\ \ \ \textcolor{comment}{//\ Then\ apply\ any\ wordwrap\ requirements.}}
+\DoxyCodeLine{00191\ \ \ \textcolor{keywordflow}{return}\ wordwrap\_text();}
+\DoxyCodeLine{00192\ \}}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00207\ \textcolor{keywordtype}{bool}\ TextAssembler::}
+\DoxyCodeLine{00208\ set\_wsubstr(\textcolor{keyword}{const}\ wstring\ \&wtext,\ \textcolor{keywordtype}{int}\ start,\ \textcolor{keywordtype}{int}\ count)\ \{}
+\DoxyCodeLine{00209\ \ \ nassertr(start\ >=\ 0\ \&\&\ start\ <=\ (\textcolor{keywordtype}{int})\_text\_string.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00210\ \ \ nassertr(count\ >=\ 0\ \&\&\ start\ +\ count\ <=\ (\textcolor{keywordtype}{int})\_text\_string.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00212\ \ \ \textcolor{comment}{//\ Use\ scan\_wtext\ to\ unroll\ the\ substring\ we\ wish\ to\ insert,\ as\ in}}
+\DoxyCodeLine{00213\ \ \ \textcolor{comment}{//\ set\_wtext(),\ above.}}
+\DoxyCodeLine{00214\ \ \ TextString\ substr;}
+\DoxyCodeLine{00215\ \ \ wstring::const\_iterator\ si\ =\ wtext.begin();}
+\DoxyCodeLine{00216\ \ \ scan\_wtext(substr,\ si,\ wtext.end(),\ \_initial\_cprops);}
+\DoxyCodeLine{00217\ \ \ \textcolor{keywordflow}{while}\ (si\ !=\ wtext.end())\ \{}
+\DoxyCodeLine{00218\ \ \ \ \ text\_cat.warning()}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}pop\_properties\ encountered\ without\ preceding\ push\_properties.\(\backslash\)n"{}};}
+\DoxyCodeLine{00220\ \ \ \ \ scan\_wtext(substr,\ si,\ wtext.end(),\ \_initial\_cprops);}
+\DoxyCodeLine{00221\ \ \ \}}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00223\ \ \ \_text\_string.erase(\_text\_string.begin()\ +\ start,\ \_text\_string.begin()\ +\ start\ +\ count);}
+\DoxyCodeLine{00224\ \ \ \_text\_string.insert(\_text\_string.begin()\ +\ start,\ substr.begin(),\ substr.end());}
+\DoxyCodeLine{00225\ }
+\DoxyCodeLine{00226\ \ \ \textcolor{keywordflow}{return}\ wordwrap\_text();}
+\DoxyCodeLine{00227\ \}}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00238\ wstring\ TextAssembler::}
+\DoxyCodeLine{00239\ get\_plain\_wtext()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00240\ \ \ wstring\ wtext;}
+\DoxyCodeLine{00241\ }
+\DoxyCodeLine{00242\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ TextCharacter\ \&tch\ :\ \_text\_string)\ \{}
+\DoxyCodeLine{00243\ \ \ \ \ \textcolor{keywordflow}{if}\ (tch.\_graphic\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{wchar\_t})\ >=\ 4\ ||\ (tch.\_character\ \&\ \string~0xffff)\ ==\ 0)\ \{}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)tch.\_character;}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Use\ a\ surrogate\ pair.}}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char32\_t}\ v\ =\ (char32\_t)tch.\_character\ -\/\ 0x10000u;}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)((v\ >>\ 10u)\ |\ 0xd800u);}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)((v\ \&\ 0x3ffu)\ |\ 0xdc00u);}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00252\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ wtext.push\_back(0);}
+\DoxyCodeLine{00254\ \ \ \ \ \}}
+\DoxyCodeLine{00255\ \ \ \}}
+\DoxyCodeLine{00256\ }
+\DoxyCodeLine{00257\ \ \ \textcolor{keywordflow}{return}\ wtext;}
+\DoxyCodeLine{00258\ \}}
+\DoxyCodeLine{00259\ }
+\DoxyCodeLine{00270\ wstring\ TextAssembler::}
+\DoxyCodeLine{00271\ get\_wordwrapped\_plain\_wtext()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00272\ \ \ wstring\ wtext;}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \ \ TextBlock::const\_iterator\ bi;}
+\DoxyCodeLine{00275\ \ \ \textcolor{keywordflow}{for}\ (bi\ =\ \_text\_block.begin();\ bi\ !=\ \_text\_block.end();\ ++bi)\ \{}
+\DoxyCodeLine{00276\ \ \ \ \ \textcolor{keyword}{const}\ TextRow\ \&row\ =\ (*bi);}
+\DoxyCodeLine{00277\ \ \ \ \ \textcolor{keywordflow}{if}\ (bi\ !=\ \_text\_block.begin())\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ wtext\ +=\ \textcolor{charliteral}{'\(\backslash\)n'};}
+\DoxyCodeLine{00279\ \ \ \ \ \}}
+\DoxyCodeLine{00280\ }
+\DoxyCodeLine{00281\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ TextCharacter\ \&tch\ :\ row.\_string)\ \{}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tch.\_graphic\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{wchar\_t})\ >=\ 4\ ||\ (tch.\_character\ \&\ \string~0xffff)\ ==\ 0)\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)tch.\_character;}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Use\ a\ surrogate\ pair.}}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char32\_t}\ v\ =\ (char32\_t)tch.\_character\ -\/\ 0x10000u;}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)((v\ >>\ 10u)\ |\ 0xd800u);}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)((v\ \&\ 0x3ffu)\ |\ 0xdc00u);}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \ \ wtext.push\_back(0);}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00294\ \ \ \ \ \}}
+\DoxyCodeLine{00295\ \ \ \}}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \ \ \textcolor{keywordflow}{return}\ wtext;}
+\DoxyCodeLine{00298\ \}}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00307\ wstring\ TextAssembler::}
+\DoxyCodeLine{00308\ get\_wtext()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00309\ \ \ wstring\ wtext;}
+\DoxyCodeLine{00310\ \ \ PT(ComputedProperties)\ current\_cprops\ =\ \_initial\_cprops;}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ TextCharacter\ \&tch\ :\ \_text\_string)\ \{}
+\DoxyCodeLine{00313\ \ \ \ \ current\_cprops-\/>append\_delta(wtext,\ tch.\_cprops);}
+\DoxyCodeLine{00314\ \ \ \ \ \textcolor{keywordflow}{if}\ (tch.\_graphic\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{wchar\_t})\ >=\ 4\ ||\ (tch.\_character\ \&\ \string~0xffff)\ ==\ 0)\ \{}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)tch.\_character;}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Use\ a\ surrogate\ pair.}}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char32\_t}\ v\ =\ (char32\_t)tch.\_character\ -\/\ 0x10000u;}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)((v\ >>\ 10u)\ |\ 0xd800u);}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)((v\ \&\ 0x3ffu)\ |\ 0xdc00u);}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00323\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ wtext.push\_back(text\_embed\_graphic\_key);}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ wtext\ +=\ tch.\_graphic\_wname;}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ wtext.push\_back(text\_embed\_graphic\_key);}
+\DoxyCodeLine{00327\ \ \ \ \ \}}
+\DoxyCodeLine{00328\ \ \ \ \ current\_cprops\ =\ tch.\_cprops;}
+\DoxyCodeLine{00329\ \ \ \}}
+\DoxyCodeLine{00330\ \ \ current\_cprops-\/>append\_delta(wtext,\ \_initial\_cprops);}
+\DoxyCodeLine{00331\ }
+\DoxyCodeLine{00332\ \ \ \textcolor{keywordflow}{return}\ wtext;}
+\DoxyCodeLine{00333\ \}}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00348\ wstring\ TextAssembler::}
+\DoxyCodeLine{00349\ get\_wordwrapped\_wtext()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00350\ \ \ wstring\ wtext;}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ \ \ PT(ComputedProperties)\ current\_cprops\ =\ \_initial\_cprops;}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ TextBlock::const\_iterator\ bi;}
+\DoxyCodeLine{00355\ \ \ \textcolor{keywordflow}{for}\ (bi\ =\ \_text\_block.begin();\ bi\ !=\ \_text\_block.end();\ ++bi)\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \textcolor{keyword}{const}\ TextRow\ \&row\ =\ (*bi);}
+\DoxyCodeLine{00357\ \ \ \ \ \textcolor{keywordflow}{if}\ (bi\ !=\ \_text\_block.begin())\ \{}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ current\_cprops-\/>append\_delta(wtext,\ \_initial\_cprops);}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ current\_cprops\ =\ \_initial\_cprops;}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ wtext\ +=\ \textcolor{charliteral}{'\(\backslash\)n'};}
+\DoxyCodeLine{00361\ \ \ \ \ \}}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00363\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ TextCharacter\ \&tch\ :\ row.\_string)\ \{}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ current\_cprops-\/>append\_delta(wtext,\ tch.\_cprops);}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tch.\_graphic\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{wchar\_t})\ >=\ 4\ ||\ (tch.\_character\ \&\ \string~0xffff)\ ==\ 0)\ \{}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)tch.\_character;}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Use\ a\ surrogate\ pair.}}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char32\_t}\ v\ =\ (char32\_t)tch.\_character\ -\/\ 0x10000u;}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)((v\ >>\ 10u)\ |\ 0xd800u);}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \ \ wtext\ +=\ (wchar\_t)((v\ \&\ 0x3ffu)\ |\ 0xdc00u);}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ wtext.push\_back(text\_embed\_graphic\_key);}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ wtext\ +=\ tch.\_graphic\_wname;}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ wtext.push\_back(text\_embed\_graphic\_key);}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ current\_cprops\ =\ tch.\_cprops;}
+\DoxyCodeLine{00380\ \ \ \ \ \}}
+\DoxyCodeLine{00381\ \ \ \}}
+\DoxyCodeLine{00382\ \ \ current\_cprops-\/>append\_delta(wtext,\ \_initial\_cprops);}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00384\ \ \ \textcolor{keywordflow}{return}\ wtext;}
+\DoxyCodeLine{00385\ \}}
+\DoxyCodeLine{00386\ }
+\DoxyCodeLine{00396\ \textcolor{keywordtype}{bool}\ TextAssembler::}
+\DoxyCodeLine{00397\ calc\_r\_c(\textcolor{keywordtype}{int}\ \&r,\ \textcolor{keywordtype}{int}\ \&c,\ \textcolor{keywordtype}{int}\ n)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00398\ \ \ nassertr(n\ >=\ 0\ \&\&\ n\ <=\ (\textcolor{keywordtype}{int})\_text\_string.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00399\ }
+\DoxyCodeLine{00400\ \ \ \textcolor{keywordflow}{if}\ (n\ ==\ (\textcolor{keywordtype}{int})\_text\_string.size())\ \{}
+\DoxyCodeLine{00401\ \ \ \ \ \textcolor{comment}{//\ A\ special\ case\ for\ one\ past\ the\ last\ character.}}
+\DoxyCodeLine{00402\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string.empty())\ \{}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ r\ =\ 0;}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ c\ =\ 0;}
+\DoxyCodeLine{00405\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ r\ =\ \_text\_block.size()\ -\/\ 1;}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ c\ =\ \_text\_block[r].\_string.size();}
+\DoxyCodeLine{00408\ \ \ \ \ \}}
+\DoxyCodeLine{00409\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00410\ }
+\DoxyCodeLine{00411\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (n\ ==\ 0)\ \{}
+\DoxyCodeLine{00412\ \ \ \ \ \textcolor{comment}{//\ Another\ special\ case\ for\ the\ beginning.}}
+\DoxyCodeLine{00413\ \ \ \ \ r\ =\ 0;}
+\DoxyCodeLine{00414\ \ \ \ \ c\ =\ 0;}
+\DoxyCodeLine{00415\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00416\ \ \ \}}
+\DoxyCodeLine{00417\ }
+\DoxyCodeLine{00418\ \ \ r\ =\ 0;}
+\DoxyCodeLine{00419\ \ \ \textcolor{keywordflow}{while}\ (r\ +\ 1\ <\ (\textcolor{keywordtype}{int})\_text\_block.size()\ \&\&}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \ \ \ \_text\_block[r\ +\ 1].\_row\_start\ <\ n)\ \{}
+\DoxyCodeLine{00421\ \ \ \ \ r\ +=\ 1;}
+\DoxyCodeLine{00422\ \ \ \}}
+\DoxyCodeLine{00423\ }
+\DoxyCodeLine{00424\ \ \ \textcolor{keyword}{const}\ TextRow\ \&row\ =\ \_text\_block[r];}
+\DoxyCodeLine{00425\ \ \ \textcolor{keywordtype}{bool}\ is\_real\_char\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00426\ }
+\DoxyCodeLine{00427\ \ \ nassertr(n\ >\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00428\ \ \ \textcolor{keywordflow}{if}\ (row.\_got\_soft\_hyphens)\ \{}
+\DoxyCodeLine{00429\ \ \ \ \ \textcolor{comment}{//\ If\ there\ are\ any\ soft\ hyphen\ or\ soft\ break\ keys\ in\ the\ source\ text,\ we}}
+\DoxyCodeLine{00430\ \ \ \ \ \textcolor{comment}{//\ have\ to\ scan\ past\ them\ to\ get\ c\ precisely.}}
+\DoxyCodeLine{00431\ \ \ \ \ c\ =\ 0;}
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{keywordtype}{int}\ i\ =\ row.\_row\_start;}
+\DoxyCodeLine{00433\ \ \ \ \ \textcolor{keywordflow}{while}\ (i\ <\ n\ -\/\ 1)\ \{}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string[i].\_character\ !=\ (\textcolor{keywordtype}{char32\_t})text\_soft\_hyphen\_key\ \&\&}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ \ \ \ \ \_text\_string[i].\_character\ !=\ (\textcolor{keywordtype}{char32\_t})text\_soft\_break\_key)\ \{}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \ \ ++c;}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ ++i;}
+\DoxyCodeLine{00439\ \ \ \ \ \}}
+\DoxyCodeLine{00440\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string[n\ -\/\ 1].\_character\ !=\ (\textcolor{keywordtype}{char32\_t})text\_soft\_hyphen\_key\ \&\&}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \ \ \_text\_string[n\ -\/\ 1].\_character\ !=\ (\textcolor{keywordtype}{char32\_t})text\_soft\_break\_key)\ \{}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ ++c;}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string[n\ -\/\ 1].\_character\ ==\ \textcolor{charliteral}{'\(\backslash\)n'})\ \{}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \ \ is\_real\_char\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00446\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ is\_real\_char\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00448\ \ \ \ \ \}}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00450\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00451\ \ \ \ \ \textcolor{comment}{//\ If\ there\ are\ no\ soft\ characters,\ then\ the\ string\ maps\ one-\/to-\/one.}}
+\DoxyCodeLine{00452\ \ \ \ \ c\ =\ min(n\ -\/\ row.\_row\_start,\ (\textcolor{keywordtype}{int})row.\_string.size());}
+\DoxyCodeLine{00453\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string[n\ -\/\ 1].\_character\ ==\ \textcolor{charliteral}{'\(\backslash\)n'})\ \{}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ is\_real\_char\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00455\ \ \ \ \ \}}
+\DoxyCodeLine{00456\ \ \ \}}
+\DoxyCodeLine{00457\ }
+\DoxyCodeLine{00458\ \ \ \textcolor{keywordflow}{return}\ is\_real\_char;}
+\DoxyCodeLine{00459\ \}}
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00469\ \textcolor{keywordtype}{int}\ TextAssembler::}
+\DoxyCodeLine{00470\ calc\_index(\textcolor{keywordtype}{int}\ r,\ \textcolor{keywordtype}{int}\ c)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00471\ \ \ nassertr(r\ >=\ 0\ \&\&\ r\ <=\ (\textcolor{keywordtype}{int})\_text\_block.size(),\ 0);}
+\DoxyCodeLine{00472\ \ \ \textcolor{keywordflow}{if}\ (r\ ==\ (\textcolor{keywordtype}{int})\_text\_block.size())\ \{}
+\DoxyCodeLine{00473\ \ \ \ \ nassertr(c\ ==\ 0,\ 0);}
+\DoxyCodeLine{00474\ \ \ \ \ \textcolor{keywordflow}{return}\ \_text\_string.size();}
+\DoxyCodeLine{00475\ }
+\DoxyCodeLine{00476\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00477\ \ \ \ \ nassertr(c\ >=\ 0\ \&\&\ c\ <=\ (\textcolor{keywordtype}{int})\_text\_block[r].\_string.size(),\ 0);}
+\DoxyCodeLine{00478\ \ \ \ \ \textcolor{keyword}{const}\ TextRow\ \&row\ =\ \_text\_block[r];}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ \ \ \ \ \textcolor{keywordflow}{if}\ (row.\_got\_soft\_hyphens)\ \{}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ there\ are\ any\ soft\ hyphen\ or\ soft\ break\ keys\ in\ the\ source\ text,}}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ \textcolor{comment}{//\ we\ have\ to\ scan\ past\ them\ to\ get\ n\ precisely.}}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ n\ =\ row.\_row\_start;}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (c\ >\ 0)\ \{}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string[n].\_character\ !=\ (\textcolor{keywordtype}{char32\_t})text\_soft\_hyphen\_key\ \&\&}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ \ \ \ \ \ \ \_text\_string[n].\_character\ !=\ (\textcolor{keywordtype}{char32\_t})text\_soft\_break\_key)\ \{}
+\DoxyCodeLine{00487\ \ \ \ \ \ \ \ \ \ \ -\/-\/c;}
+\DoxyCodeLine{00488\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ \ \ ++n;}
+\DoxyCodeLine{00490\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ n;}
+\DoxyCodeLine{00492\ }
+\DoxyCodeLine{00493\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00494\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ there\ are\ no\ soft\ characters,\ then\ the\ string\ maps\ one-\/to-\/one.}}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ row.\_row\_start\ +\ c;}
+\DoxyCodeLine{00496\ \ \ \ \ \}}
+\DoxyCodeLine{00497\ \ \ \}}
+\DoxyCodeLine{00498\ \}}
+\DoxyCodeLine{00499\ }
+\DoxyCodeLine{00508\ PN\_stdfloat\ TextAssembler::}
+\DoxyCodeLine{00509\ get\_xpos(\textcolor{keywordtype}{int}\ r,\ \textcolor{keywordtype}{int}\ c)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00510\ \ \ nassertr(r\ >=\ 0\ \&\&\ r\ <=\ (\textcolor{keywordtype}{int})\_text\_block.size(),\ 0.0f);}
+\DoxyCodeLine{00511\ \ \ \textcolor{keywordflow}{if}\ (r\ ==\ (\textcolor{keywordtype}{int})\_text\_block.size())\ \{}
+\DoxyCodeLine{00512\ \ \ \ \ nassertr(c\ ==\ 0,\ 0.0f);}
+\DoxyCodeLine{00513\ \ \ \ \ \textcolor{keywordflow}{return}\ 0.0f;}
+\DoxyCodeLine{00514\ }
+\DoxyCodeLine{00515\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00516\ \ \ \ \ nassertr(c\ >=\ 0\ \&\&\ c\ <=\ (\textcolor{keywordtype}{int})\_text\_block[r].\_string.size(),\ 0.0f);}
+\DoxyCodeLine{00517\ \ \ \ \ \textcolor{keyword}{const}\ TextRow\ \&row\ =\ \_text\_block[r];}
+\DoxyCodeLine{00518\ \ \ \ \ PN\_stdfloat\ xpos\ =\ row.\_xpos;}
+\DoxyCodeLine{00519\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ c;\ ++i)\ \{}
+\DoxyCodeLine{00520\ \ \ \ \ \ \ xpos\ +=\ calc\_width(row.\_string[i]);}
+\DoxyCodeLine{00521\ \ \ \ \ \}}
+\DoxyCodeLine{00522\ \ \ \ \ \textcolor{keywordflow}{return}\ xpos;}
+\DoxyCodeLine{00523\ \ \ \}}
+\DoxyCodeLine{00524\ \}}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00532\ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ TextAssembler::}
+\DoxyCodeLine{00533\ assemble\_text()\ \{}
+\DoxyCodeLine{00534\ \ \ \textcolor{comment}{//\ Now\ assemble\ the\ text\ into\ glyphs.}}
+\DoxyCodeLine{00535\ \ \ PlacedGlyphs\ placed\_glyphs;}
+\DoxyCodeLine{00536\ \ \ assemble\_paragraph(placed\_glyphs);}
+\DoxyCodeLine{00537\ }
+\DoxyCodeLine{00538\ \ \ \textcolor{comment}{//\ Now\ that\ we\ have\ a\ bunch\ of\ GlyphPlacements,\ pull\ out\ the\ Geoms\ and\ put}}
+\DoxyCodeLine{00539\ \ \ \textcolor{comment}{//\ them\ under\ a\ common\ node.}}
+\DoxyCodeLine{00540\ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ parent\_node\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classPandaNode}{PandaNode}}(\textcolor{stringliteral}{"{}common"{}});}
+\DoxyCodeLine{00541\ }
+\DoxyCodeLine{00542\ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ shadow\_node\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classPandaNode}{PandaNode}}(\textcolor{stringliteral}{"{}shadow"{}});}
+\DoxyCodeLine{00543\ \ \ PT(\mbox{\hyperlink{classGeomNode}{GeomNode}})\ shadow\_geom\_node\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomNode}{GeomNode}}(\textcolor{stringliteral}{"{}shadow\_geom"{}});}
+\DoxyCodeLine{00544\ \ \ shadow\_node-\/>add\_child(shadow\_geom\_node);}
+\DoxyCodeLine{00545\ }
+\DoxyCodeLine{00546\ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ text\_node\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classPandaNode}{PandaNode}}(\textcolor{stringliteral}{"{}text"{}});}
+\DoxyCodeLine{00547\ \ \ PT(\mbox{\hyperlink{classGeomNode}{GeomNode}})\ text\_geom\_node\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomNode}{GeomNode}}(\textcolor{stringliteral}{"{}text\_geom"{}});}
+\DoxyCodeLine{00548\ \ \ text\_node-\/>add\_child(text\_geom\_node);}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00550\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ *properties\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00551\ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ text\_state;}
+\DoxyCodeLine{00552\ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ shadow\_state;}
+\DoxyCodeLine{00553\ \ \ LVector2\ shadow(0);}
+\DoxyCodeLine{00554\ }
+\DoxyCodeLine{00555\ \ \ \textcolor{keywordtype}{bool}\ any\_shadow\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00556\ }
+\DoxyCodeLine{00557\ \ \ GeomCollectorMap\ geom\_collector\_map;}
+\DoxyCodeLine{00558\ \ \ GeomCollectorMap\ geom\_shadow\_collector\_map;}
+\DoxyCodeLine{00559\ \ \ QuadMap\ quad\_map;}
+\DoxyCodeLine{00560\ \ \ QuadMap\ quad\_shadow\_map;}
+\DoxyCodeLine{00561\ }
+\DoxyCodeLine{00562\ \ \ PlacedGlyphs::const\_iterator\ pgi;}
+\DoxyCodeLine{00563\ \ \ \textcolor{keywordflow}{for}\ (pgi\ =\ placed\_glyphs.begin();\ pgi\ !=\ placed\_glyphs.end();\ ++pgi)\ \{}
+\DoxyCodeLine{00564\ \ \ \ \ \textcolor{keyword}{const}\ GlyphPlacement\ \&placement\ =\ (*pgi);}
+\DoxyCodeLine{00565\ \ \ \ \ nassertd(placement.\_properties\ !=\ \textcolor{keyword}{nullptr})\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00566\ }
+\DoxyCodeLine{00567\ \ \ \ \ \textcolor{keywordflow}{if}\ (placement.\_properties\ !=\ properties)\ \{}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \textcolor{comment}{//\ Get\ a\ new\ set\ of\ properties\ for\ future\ glyphs.}}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ properties\ =\ placement.\_properties;}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ text\_state\ =\ properties-\/>\mbox{\hyperlink{classTextProperties_a3b58d13b5b934639e254f55d14f8e603}{get\_text\_state}}();}
+\DoxyCodeLine{00571\ }
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (properties-\/>has\_shadow())\ \{}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \ \ shadow\ =\ properties-\/>get\_shadow();}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \ \ shadow\_state\ =\ properties-\/>\mbox{\hyperlink{classTextProperties_a09aa1539445bed92eb62e49043313d1b}{get\_shadow\_state}}();}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ shadow.set(0,\ 0);}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \ \ shadow\_state.clear();}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00579\ \ \ \ \ \}}
+\DoxyCodeLine{00580\ }
+\DoxyCodeLine{00581\ \ \ \ \ \textcolor{keywordflow}{if}\ (!placement.\_glyph.is\_null())\ \{}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (properties-\/>has\_shadow())\ \{}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_dynamic\_merge)\ \{}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (placement.\_glyph-\/>has\_quad())\ \{}
+\DoxyCodeLine{00585\ \ \ \ \ \ \ \ \ \ \ \ \ placement.assign\_quad\_to(quad\_shadow\_map,\ shadow\_state,\ shadow);}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \ \ \ \ \ \ placement.assign\_append\_to(geom\_shadow\_collector\_map,\ shadow\_state,\ shadow);}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \ \ \ \ placement.assign\_to(shadow\_geom\_node,\ shadow\_state,\ shadow);}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00592\ }
+\DoxyCodeLine{00593\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Don't\ shadow\ the\ graphics.\ \ That\ can\ result\ in\ duplication\ of\ button}}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ objects,\ plus\ it\ looks\ weird.\ \ If\ you\ want\ a\ shadowed\ graphic,\ you}}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ can\ shadow\ it\ yourself\ before\ you\ add\ it.}}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ placement.copy\_graphic\_to(shadow\_node,\ shadow\_state,\ shadow);}}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ any\_shadow\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00599\ }
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_dynamic\_merge)\ \{}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (placement.\_glyph-\/>has\_quad())\ \{}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \ \ \ \ placement.assign\_quad\_to(quad\_map,\ text\_state);}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \ \ \ \ placement.assign\_append\_to(geom\_collector\_map,\ text\_state);}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ placement.assign\_to(text\_geom\_node,\ text\_state);}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00609\ \ \ \ \ \}}
+\DoxyCodeLine{00610\ \ \ \ \ placement.copy\_graphic\_to(text\_node,\ text\_state);}
+\DoxyCodeLine{00611\ \ \ \}}
+\DoxyCodeLine{00612\ \ \ placed\_glyphs.clear();}
+\DoxyCodeLine{00613\ }
+\DoxyCodeLine{00614\ \ \ \textcolor{keywordflow}{if}\ (any\_shadow)\ \{}
+\DoxyCodeLine{00615\ \ \ \ \ \textcolor{comment}{//\ The\ shadow\_geom\_node\ must\ appear\ first\ to\ guarantee\ the\ correct}}
+\DoxyCodeLine{00616\ \ \ \ \ \textcolor{comment}{//\ rendering\ order.}}
+\DoxyCodeLine{00617\ \ \ \ \ parent\_node-\/>add\_child(shadow\_node);}
+\DoxyCodeLine{00618\ \ \ \}}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00620\ \ \ GeomCollectorMap::iterator\ gc;}
+\DoxyCodeLine{00621\ \ \ \textcolor{keywordflow}{for}\ (gc\ =\ geom\_collector\_map.begin();\ gc\ !=\ geom\_collector\_map.end();\ ++gc)\ \{}
+\DoxyCodeLine{00622\ \ \ \ \ (*gc).second.append\_geom(text\_geom\_node,\ (*gc).first.\_state);}
+\DoxyCodeLine{00623\ \ \ \}}
+\DoxyCodeLine{00624\ }
+\DoxyCodeLine{00625\ \ \ generate\_quads(text\_geom\_node,\ quad\_map);}
+\DoxyCodeLine{00626\ }
+\DoxyCodeLine{00627\ \ \ \textcolor{keywordflow}{if}\ (any\_shadow)\ \{}
+\DoxyCodeLine{00628\ \ \ \ \ \textcolor{keywordflow}{for}\ (gc\ =\ geom\_shadow\_collector\_map.begin();}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ \ \ \ gc\ !=\ geom\_shadow\_collector\_map.end();}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \ \ \ ++gc)\ \{}
+\DoxyCodeLine{00631\ \ \ \ \ \ \ (*gc).second.append\_geom(shadow\_geom\_node,\ (*gc).first.\_state);}
+\DoxyCodeLine{00632\ \ \ \ \ \}}
+\DoxyCodeLine{00633\ }
+\DoxyCodeLine{00634\ \ \ \ \ generate\_quads(shadow\_geom\_node,\ quad\_shadow\_map);}
+\DoxyCodeLine{00635\ \ \ \}}
+\DoxyCodeLine{00636\ }
+\DoxyCodeLine{00637\ \ \ parent\_node-\/>add\_child(text\_node);}
+\DoxyCodeLine{00638\ }
+\DoxyCodeLine{00639\ \ \ \textcolor{keywordflow}{return}\ parent\_node;}
+\DoxyCodeLine{00640\ \}}
+\DoxyCodeLine{00641\ }
+\DoxyCodeLine{00649\ PN\_stdfloat\ TextAssembler::}
+\DoxyCodeLine{00650\ calc\_width(\textcolor{keywordtype}{wchar\_t}\ character,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ \&properties)\ \{}
+\DoxyCodeLine{00651\ \ \ \textcolor{keywordflow}{return}\ calc\_width((\textcolor{keywordtype}{char32\_t})character,\ properties);}
+\DoxyCodeLine{00652\ \}}
+\DoxyCodeLine{00653\ }
+\DoxyCodeLine{00661\ PN\_stdfloat\ TextAssembler::}
+\DoxyCodeLine{00662\ calc\_width(\textcolor{keywordtype}{char32\_t}\ character,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ \&properties)\ \{}
+\DoxyCodeLine{00663\ \ \ \textcolor{keywordflow}{if}\ (character\ ==\ \textcolor{charliteral}{'\ '})\ \{}
+\DoxyCodeLine{00664\ \ \ \ \ \textcolor{comment}{//\ A\ space\ is\ a\ special\ case.}}
+\DoxyCodeLine{00665\ \ \ \ \ \mbox{\hyperlink{classTextFont}{TextFont}}\ *font\ =\ properties.get\_font();}
+\DoxyCodeLine{00666\ \ \ \ \ nassertr(font\ !=\ \textcolor{keyword}{nullptr},\ 0.0f);}
+\DoxyCodeLine{00667\ \ \ \ \ \textcolor{keywordflow}{return}\ font-\/>get\_space\_advance()\ *\ properties.get\_glyph\_scale()\ *\ properties.get\_text\_scale();}
+\DoxyCodeLine{00668\ \ \ \}}
+\DoxyCodeLine{00669\ }
+\DoxyCodeLine{00670\ \ \ \textcolor{keywordtype}{bool}\ got\_glyph;}
+\DoxyCodeLine{00671\ \ \ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ first\_glyph;}
+\DoxyCodeLine{00672\ \ \ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ second\_glyph;}
+\DoxyCodeLine{00673\ \ \ UnicodeLatinMap::AccentType\ accent\_type;}
+\DoxyCodeLine{00674\ \ \ \textcolor{keywordtype}{int}\ additional\_flags;}
+\DoxyCodeLine{00675\ \ \ PN\_stdfloat\ glyph\_scale;}
+\DoxyCodeLine{00676\ \ \ PN\_stdfloat\ advance\_scale;}
+\DoxyCodeLine{00677\ \ \ get\_character\_glyphs(character,\ \&properties,}
+\DoxyCodeLine{00678\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ got\_glyph,\ first\_glyph,\ second\_glyph,\ accent\_type,}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ additional\_flags,\ glyph\_scale,\ advance\_scale);}
+\DoxyCodeLine{00680\ }
+\DoxyCodeLine{00681\ \ \ PN\_stdfloat\ advance\ =\ 0.0f;}
+\DoxyCodeLine{00682\ }
+\DoxyCodeLine{00683\ \ \ \textcolor{keywordflow}{if}\ (first\_glyph\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00684\ \ \ \ \ advance\ =\ first\_glyph-\/>get\_advance()\ *\ advance\_scale;}
+\DoxyCodeLine{00685\ \ \ \}}
+\DoxyCodeLine{00686\ \ \ \textcolor{keywordflow}{if}\ (second\_glyph\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00687\ \ \ \ \ advance\ +=\ second\_glyph-\/>get\_advance();}
+\DoxyCodeLine{00688\ \ \ \}}
+\DoxyCodeLine{00689\ }
+\DoxyCodeLine{00690\ \ \ glyph\_scale\ *=\ properties.get\_glyph\_scale()\ *\ properties.get\_text\_scale();}
+\DoxyCodeLine{00691\ }
+\DoxyCodeLine{00692\ \ \ \textcolor{keywordflow}{return}\ advance\ *\ glyph\_scale;}
+\DoxyCodeLine{00693\ \}}
+\DoxyCodeLine{00694\ }
+\DoxyCodeLine{00698\ PN\_stdfloat\ TextAssembler::}
+\DoxyCodeLine{00699\ calc\_width(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTextGraphic}{TextGraphic}}\ *graphic,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ \&properties)\ \{}
+\DoxyCodeLine{00700\ \ \ LVecBase4\ frame\ =\ graphic-\/>get\_frame();}
+\DoxyCodeLine{00701\ \ \ \textcolor{keywordflow}{return}\ (frame[1]\ -\/\ frame[0])\ *\ properties.get\_glyph\_scale()\ *\ properties.get\_text\_scale();}
+\DoxyCodeLine{00702\ \}}
+\DoxyCodeLine{00703\ }
+\DoxyCodeLine{00716\ \textcolor{keywordtype}{bool}\ TextAssembler::}
+\DoxyCodeLine{00717\ has\_exact\_character(\textcolor{keywordtype}{wchar\_t}\ character,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ \&properties)\ \{}
+\DoxyCodeLine{00718\ \ \ \textcolor{keywordflow}{if}\ (character\ ==\ \textcolor{charliteral}{'\ '}\ ||\ character\ ==\ \textcolor{charliteral}{'\(\backslash\)n'})\ \{}
+\DoxyCodeLine{00719\ \ \ \ \ \textcolor{comment}{//\ A\ space\ is\ a\ special\ case.\ \ Every\ font\ implicitly\ has\ a\ space.\ \ We\ also}}
+\DoxyCodeLine{00720\ \ \ \ \ \textcolor{comment}{//\ treat\ newlines\ specially.}}
+\DoxyCodeLine{00721\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00722\ \ \ \}}
+\DoxyCodeLine{00723\ }
+\DoxyCodeLine{00724\ \ \ \mbox{\hyperlink{classTextFont}{TextFont}}\ *font\ =\ properties.get\_font();}
+\DoxyCodeLine{00725\ \ \ nassertr(font\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00727\ \ \ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ glyph;}
+\DoxyCodeLine{00728\ \ \ \textcolor{keywordflow}{return}\ font-\/>get\_glyph(character,\ glyph);}
+\DoxyCodeLine{00729\ \}}
+\DoxyCodeLine{00730\ }
+\DoxyCodeLine{00740\ \textcolor{keywordtype}{bool}\ TextAssembler::}
+\DoxyCodeLine{00741\ has\_character(\textcolor{keywordtype}{wchar\_t}\ character,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ \&properties)\ \{}
+\DoxyCodeLine{00742\ \ \ \textcolor{keywordflow}{if}\ (character\ ==\ \textcolor{charliteral}{'\ '}\ ||\ character\ ==\ \textcolor{charliteral}{'\(\backslash\)n'})\ \{}
+\DoxyCodeLine{00743\ \ \ \ \ \textcolor{comment}{//\ A\ space\ is\ a\ special\ case.\ \ Every\ font\ implicitly\ has\ a\ space.\ \ We\ also}}
+\DoxyCodeLine{00744\ \ \ \ \ \textcolor{comment}{//\ treat\ newlines\ specially.}}
+\DoxyCodeLine{00745\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00746\ \ \ \}}
+\DoxyCodeLine{00747\ }
+\DoxyCodeLine{00748\ \ \ \textcolor{keywordtype}{bool}\ got\_glyph;}
+\DoxyCodeLine{00749\ \ \ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ first\_glyph;}
+\DoxyCodeLine{00750\ \ \ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ second\_glyph;}
+\DoxyCodeLine{00751\ \ \ UnicodeLatinMap::AccentType\ accent\_type;}
+\DoxyCodeLine{00752\ \ \ \textcolor{keywordtype}{int}\ additional\_flags;}
+\DoxyCodeLine{00753\ \ \ PN\_stdfloat\ glyph\_scale;}
+\DoxyCodeLine{00754\ \ \ PN\_stdfloat\ advance\_scale;}
+\DoxyCodeLine{00755\ \ \ get\_character\_glyphs(character,\ \&properties,}
+\DoxyCodeLine{00756\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ got\_glyph,\ first\_glyph,\ second\_glyph,\ accent\_type,}
+\DoxyCodeLine{00757\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ additional\_flags,\ glyph\_scale,\ advance\_scale);}
+\DoxyCodeLine{00758\ \ \ \textcolor{keywordflow}{return}\ got\_glyph;}
+\DoxyCodeLine{00759\ \}}
+\DoxyCodeLine{00760\ }
+\DoxyCodeLine{00775\ \textcolor{keywordtype}{bool}\ TextAssembler::}
+\DoxyCodeLine{00776\ is\_whitespace(\textcolor{keywordtype}{wchar\_t}\ character,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ \&properties)\ \{}
+\DoxyCodeLine{00777\ \ \ \textcolor{keywordflow}{if}\ (character\ ==\ \textcolor{charliteral}{'\ '}\ ||\ character\ ==\ \textcolor{charliteral}{'\(\backslash\)n'})\ \{}
+\DoxyCodeLine{00778\ \ \ \ \ \textcolor{comment}{//\ A\ space\ or\ a\ newline\ is\ a\ special\ case.}}
+\DoxyCodeLine{00779\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00780\ \ \ \}}
+\DoxyCodeLine{00781\ }
+\DoxyCodeLine{00782\ }
+\DoxyCodeLine{00783\ \ \ \mbox{\hyperlink{classTextFont}{TextFont}}\ *font\ =\ properties.get\_font();}
+\DoxyCodeLine{00784\ \ \ nassertr(font\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00785\ }
+\DoxyCodeLine{00786\ \ \ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ glyph;}
+\DoxyCodeLine{00787\ \ \ \textcolor{keywordflow}{if}\ (!font-\/>get\_glyph(character,\ glyph))\ \{}
+\DoxyCodeLine{00788\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00789\ \ \ \}}
+\DoxyCodeLine{00790\ }
+\DoxyCodeLine{00791\ \ \ \textcolor{keywordflow}{return}\ glyph-\/>is\_whitespace();}
+\DoxyCodeLine{00792\ \}}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00799\ \textcolor{keywordtype}{void}\ TextAssembler::}
+\DoxyCodeLine{00800\ scan\_wtext(\mbox{\hyperlink{classpvector}{TextAssembler::TextString}}\ \&output\_string,}
+\DoxyCodeLine{00801\ \ \ \ \ \ \ \ \ \ \ \ wstring::const\_iterator\ \&si,}
+\DoxyCodeLine{00802\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ wstring::const\_iterator\ \&send,}
+\DoxyCodeLine{00803\ \ \ \ \ \ \ \ \ \ \ \ TextAssembler::ComputedProperties\ *current\_cprops)\ \{}
+\DoxyCodeLine{00804\ \ \ \textcolor{keywordflow}{while}\ (si\ !=\ send)\ \{}
+\DoxyCodeLine{00805\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*si)\ ==\ (\textcolor{keywordtype}{wchar\_t})text\_push\_properties\_key)\ \{}
+\DoxyCodeLine{00806\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ indicates\ a\ nested\ properties\ structure.\ \ Pull\ off\ the\ name\ of}}
+\DoxyCodeLine{00807\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ TextProperties\ structure,\ which\ is\ everything\ until\ the\ next}}
+\DoxyCodeLine{00808\ \ \ \ \ \ \ \textcolor{comment}{//\ text\_push\_properties\_key.}}
+\DoxyCodeLine{00809\ \ \ \ \ \ \ wstring\ wname;}
+\DoxyCodeLine{00810\ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{00811\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (si\ !=\ send\ \&\&\ (*si)\ !=\ (\textcolor{keywordtype}{wchar\_t})text\_push\_properties\_key)\ \{}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ \ \ wname\ +=\ (*si);}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{00814\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00815\ }
+\DoxyCodeLine{00816\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (si\ ==\ send)\ \{}
+\DoxyCodeLine{00817\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ didn't\ close\ the\ text\_push\_properties\_key.\ \ That's\ an\ error.}}
+\DoxyCodeLine{00818\ \ \ \ \ \ \ \ \ text\_cat.warning()}
+\DoxyCodeLine{00819\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unclosed\ push\_properties\ in\ text.\(\backslash\)n"{}};}
+\DoxyCodeLine{00820\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00821\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00822\ }
+\DoxyCodeLine{00823\ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{00824\ }
+\DoxyCodeLine{00825\ \ \ \ \ \ \ \textcolor{comment}{//\ Define\ the\ new\ properties\ by\ extending\ the\ current\ properties.}}
+\DoxyCodeLine{00826\ \ \ \ \ \ \ PT(ComputedProperties)\ new\_cprops\ =}
+\DoxyCodeLine{00827\ \ \ \ \ \ \ \ \ \textcolor{keyword}{new}\ ComputedProperties(current\_cprops,\ wname,\ \_encoder);}
+\DoxyCodeLine{00828\ }
+\DoxyCodeLine{00829\ \ \ \ \ \ \ \textcolor{comment}{//\ And\ recursively\ scan\ with\ the\ nested\ properties.}}
+\DoxyCodeLine{00830\ \ \ \ \ \ \ scan\_wtext(output\_string,\ si,\ send,\ new\_cprops);}
+\DoxyCodeLine{00831\ }
+\DoxyCodeLine{00832\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (text\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00833\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (si\ ==\ send)\ \{}
+\DoxyCodeLine{00834\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ push\ was\ not\ closed\ by\ a\ pop.\ \ That's\ not\ an\ error,\ since\ we}}
+\DoxyCodeLine{00835\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ allow\ people\ to\ be\ sloppy\ about\ that;\ but\ we'll\ print\ a\ debug}}
+\DoxyCodeLine{00836\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ message\ at\ least.}}
+\DoxyCodeLine{00837\ \ \ \ \ \ \ \ \ \ \ text\_cat.debug()}
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}push\_properties\ not\ matched\ by\ pop\_properties.\(\backslash\)n"{}};}
+\DoxyCodeLine{00839\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00840\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00841\ }
+\DoxyCodeLine{00842\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((*si)\ ==\ (\textcolor{keywordtype}{wchar\_t})text\_pop\_properties\_key)\ \{}
+\DoxyCodeLine{00843\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ indicates\ the\ undoing\ of\ a\ previous\ push\_properties\_key.\ \ We}}
+\DoxyCodeLine{00844\ \ \ \ \ \ \ \textcolor{comment}{//\ simply\ return\ to\ the\ previous\ level.}}
+\DoxyCodeLine{00845\ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{00846\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00847\ }
+\DoxyCodeLine{00848\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((*si)\ ==\ (\textcolor{keywordtype}{wchar\_t})text\_embed\_graphic\_key)\ \{}
+\DoxyCodeLine{00849\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ indicates\ an\ embedded\ graphic.\ \ Pull\ off\ the\ name\ of\ the}}
+\DoxyCodeLine{00850\ \ \ \ \ \ \ \textcolor{comment}{//\ TextGraphic\ structure,\ which\ is\ everything\ until\ the\ next}}
+\DoxyCodeLine{00851\ \ \ \ \ \ \ \textcolor{comment}{//\ text\_embed\_graphic\_key.}}
+\DoxyCodeLine{00852\ }
+\DoxyCodeLine{00853\ \ \ \ \ \ \ wstring\ graphic\_wname;}
+\DoxyCodeLine{00854\ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{00855\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (si\ !=\ send\ \&\&\ (*si)\ !=\ (\textcolor{keywordtype}{wchar\_t})text\_embed\_graphic\_key)\ \{}
+\DoxyCodeLine{00856\ \ \ \ \ \ \ \ \ graphic\_wname\ +=\ (*si);}
+\DoxyCodeLine{00857\ \ \ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{00858\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00859\ }
+\DoxyCodeLine{00860\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (si\ ==\ send)\ \{}
+\DoxyCodeLine{00861\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ didn't\ close\ the\ text\_embed\_graphic\_key.\ \ That's\ an\ error.}}
+\DoxyCodeLine{00862\ \ \ \ \ \ \ \ \ text\_cat.warning()}
+\DoxyCodeLine{00863\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unclosed\ embed\_graphic\ in\ text.\(\backslash\)n"{}};}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00865\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00866\ }
+\DoxyCodeLine{00867\ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{00868\ }
+\DoxyCodeLine{00869\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ we\ have\ to\ encode\ the\ wstring\ into\ a\ string,\ for\ lookup\ in\ the}}
+\DoxyCodeLine{00870\ \ \ \ \ \ \ \textcolor{comment}{//\ TextPropertiesManager.}}
+\DoxyCodeLine{00871\ \ \ \ \ \ \ std::string\ graphic\_name\ =\ \_encoder-\/>encode\_wtext(graphic\_wname);}
+\DoxyCodeLine{00872\ }
+\DoxyCodeLine{00873\ \ \ \ \ \ \ \mbox{\hyperlink{classTextPropertiesManager}{TextPropertiesManager}}\ *manager\ =}
+\DoxyCodeLine{00874\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classTextPropertiesManager_a8bdd00b1fe1ac91baa89bae420cf5211}{TextPropertiesManager::get\_global\_ptr}}();}
+\DoxyCodeLine{00875\ }
+\DoxyCodeLine{00876\ \ \ \ \ \ \ \textcolor{comment}{//\ Get\ the\ graphic\ image.}}
+\DoxyCodeLine{00877\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextGraphic}{TextGraphic}}\ *named\_graphic\ =\ manager-\/>\mbox{\hyperlink{classTextPropertiesManager_a9da7224fc76651e9ea031244eb636f52}{get\_graphic\_ptr}}(graphic\_name);}
+\DoxyCodeLine{00878\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (named\_graphic\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00879\ \ \ \ \ \ \ \ \ output\_string.push\_back(TextCharacter(named\_graphic,\ graphic\_wname,\ current\_cprops));}
+\DoxyCodeLine{00880\ }
+\DoxyCodeLine{00881\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00882\ \ \ \ \ \ \ \ \ text\_cat.warning()}
+\DoxyCodeLine{00883\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unknown\ TextGraphic:\ "{}}\ <<\ graphic\_name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00884\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00885\ }
+\DoxyCodeLine{00886\ \textcolor{preprocessor}{\#if\ WCHAR\_MAX\ <\ 0x10FFFF}}
+\DoxyCodeLine{00887\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (*si\ >=\ 0xd800\ \&\&\ *si\ <\ 0xdc00)\ \{}
+\DoxyCodeLine{00888\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ a\ high\ surrogate.\ \ Look\ for\ a\ subsequent\ low\ surrogate.}}
+\DoxyCodeLine{00889\ \ \ \ \ \ \ \textcolor{keywordtype}{wchar\_t}\ ch\ =\ *si;}
+\DoxyCodeLine{00890\ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{00891\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (si\ ==\ send)\ \{}
+\DoxyCodeLine{00892\ \ \ \ \ \ \ \ \ text\_cat.warning()}
+\DoxyCodeLine{00893\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}High\ surrogate\ at\ end\ of\ text.\(\backslash\)n"{}};}
+\DoxyCodeLine{00894\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00895\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00896\ \ \ \ \ \ \ \textcolor{keywordtype}{wchar\_t}\ ch2\ =\ *si;}
+\DoxyCodeLine{00897\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ch2\ >=\ 0xdc00\ \&\&\ ch2\ <\ 0xe000)\ \{}
+\DoxyCodeLine{00898\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char32\_t}\ code\_point\ =\ 0x10000\ +\ ((ch\ -\/\ 0xd800)\ <<\ 10)\ +\ (ch2\ -\/\ 0xdc00);}
+\DoxyCodeLine{00899\ \ \ \ \ \ \ \ \ output\_string.push\_back(TextCharacter(code\_point,\ current\_cprops));}
+\DoxyCodeLine{00900\ \ \ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{00901\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00902\ \ \ \ \ \ \ \ \ text\_cat.warning()}
+\DoxyCodeLine{00903\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}High\ surrogate\ was\ not\ followed\ by\ low\ surrogate\ in\ text.\(\backslash\)n"{}};}
+\DoxyCodeLine{00904\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00905\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00906\ }
+\DoxyCodeLine{00907\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00908\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ normal\ character.\ \ Apply\ it.}}
+\DoxyCodeLine{00909\ \ \ \ \ \ \ output\_string.push\_back(TextCharacter(*si,\ current\_cprops));}
+\DoxyCodeLine{00910\ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{00911\ \ \ \ \ \}}
+\DoxyCodeLine{00912\ \ \ \}}
+\DoxyCodeLine{00913\ \}}
+\DoxyCodeLine{00914\ }
+\DoxyCodeLine{00927\ \textcolor{keywordtype}{bool}\ TextAssembler::}
+\DoxyCodeLine{00928\ wordwrap\_text()\ \{}
+\DoxyCodeLine{00929\ \ \ \_text\_block.clear();}
+\DoxyCodeLine{00930\ }
+\DoxyCodeLine{00931\ \ \ \textcolor{keywordflow}{if}\ (\_text\_string.empty())\ \{}
+\DoxyCodeLine{00932\ \ \ \ \ \textcolor{comment}{//\ A\ special\ case:\ empty\ text\ means\ no\ rows.}}
+\DoxyCodeLine{00933\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00934\ \ \ \}}
+\DoxyCodeLine{00935\ }
+\DoxyCodeLine{00936\ \ \ \textcolor{keywordtype}{size\_t}\ p\ =\ 0;}
+\DoxyCodeLine{00937\ }
+\DoxyCodeLine{00938\ \ \ \_text\_block.push\_back(TextRow(p));}
+\DoxyCodeLine{00939\ }
+\DoxyCodeLine{00940\ \ \ \textcolor{comment}{//\ Preserve\ any\ initial\ whitespace\ and\ newlines.}}
+\DoxyCodeLine{00941\ \ \ PN\_stdfloat\ initial\_width\ =\ 0.0f;}
+\DoxyCodeLine{00942\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ \_text\_string.size()\ \&\&\ isspacew(\_text\_string[p].\_character))\ \{}
+\DoxyCodeLine{00943\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string[p].\_character\ ==\ \textcolor{charliteral}{'\(\backslash\)n'})\ \{}
+\DoxyCodeLine{00944\ \ \ \ \ \ \ initial\_width\ =\ 0.0f;}
+\DoxyCodeLine{00945\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_max\_rows\ >\ 0\ \&\&\ (\textcolor{keywordtype}{int})\_text\_block.size()\ >=\ \_max\_rows)\ \{}
+\DoxyCodeLine{00946\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Truncate.}}
+\DoxyCodeLine{00947\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00948\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00949\ \ \ \ \ \ \ \_text\_block.back().\_eol\_cprops\ =\ \_text\_string[p].\_cprops;}
+\DoxyCodeLine{00950\ \ \ \ \ \ \ \_text\_block.push\_back(TextRow(p\ +\ 1));}
+\DoxyCodeLine{00951\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00952\ \ \ \ \ \ \ initial\_width\ +=\ calc\_width(\_text\_string[p]);}
+\DoxyCodeLine{00953\ \ \ \ \ \ \ \_text\_block.back().\_string.push\_back(\_text\_string[p]);}
+\DoxyCodeLine{00954\ \ \ \ \ \}}
+\DoxyCodeLine{00955\ \ \ \ \ p++;}
+\DoxyCodeLine{00956\ \ \ \}}
+\DoxyCodeLine{00957\ \ \ \textcolor{keywordtype}{bool}\ needs\_newline\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00958\ }
+\DoxyCodeLine{00959\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ \_text\_string.size())\ \{}
+\DoxyCodeLine{00960\ \ \ \ \ nassertr(!isspacew(\_text\_string[p].\_character),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00961\ }
+\DoxyCodeLine{00962\ \ \ \ \ \textcolor{comment}{//\ Scan\ the\ next\ n\ characters,\ until\ the\ end\ of\ the\ string\ or\ an\ embedded}}
+\DoxyCodeLine{00963\ \ \ \ \ \textcolor{comment}{//\ newline\ character,\ or\ we\ exceed\ wordwrap\_width.}}
+\DoxyCodeLine{00964\ }
+\DoxyCodeLine{00965\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ q\ =\ p;}
+\DoxyCodeLine{00966\ \ \ \ \ \textcolor{keywordtype}{bool}\ any\_spaces\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00967\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ last\_space\ =\ 0;}
+\DoxyCodeLine{00968\ \ \ \ \ PN\_stdfloat\ last\_space\_width\ =\ 0.0f;}
+\DoxyCodeLine{00969\ }
+\DoxyCodeLine{00970\ \ \ \ \ \textcolor{keywordtype}{bool}\ any\_hyphens\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00971\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ last\_hyphen\ =\ 0;}
+\DoxyCodeLine{00972\ \ \ \ \ \textcolor{keywordtype}{bool}\ output\_hyphen\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00973\ }
+\DoxyCodeLine{00974\ \ \ \ \ \textcolor{keywordtype}{bool}\ overflow\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00975\ \ \ \ \ PN\_stdfloat\ wordwrap\_width\ =\ -\/1.0f;}
+\DoxyCodeLine{00976\ }
+\DoxyCodeLine{00977\ \ \ \ \ \textcolor{keywordtype}{bool}\ last\_was\_space\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00978\ \ \ \ \ PN\_stdfloat\ width\ =\ initial\_width;}
+\DoxyCodeLine{00979\ \ \ \ \ \textcolor{keywordflow}{while}\ (q\ <\ \_text\_string.size()\ \&\&\ \_text\_string[q].\_character\ !=\ \textcolor{charliteral}{'\(\backslash\)n'})\ \{}
+\DoxyCodeLine{00980\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string[q].\_cprops-\/>\_properties.has\_wordwrap())\ \{}
+\DoxyCodeLine{00981\ \ \ \ \ \ \ \ \ wordwrap\_width\ =\ \_text\_string[q].\_cprops-\/>\_properties.get\_wordwrap();}
+\DoxyCodeLine{00982\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00983\ \ \ \ \ \ \ \ \ wordwrap\_width\ =\ -\/1.0f;}
+\DoxyCodeLine{00984\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00985\ }
+\DoxyCodeLine{00986\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (isspacew(\_text\_string[q].\_character)\ ||}
+\DoxyCodeLine{00987\ \ \ \ \ \ \ \ \ \ \ \_text\_string[q].\_character\ ==\ (\textcolor{keywordtype}{char32\_t})text\_soft\_break\_key)\ \{}
+\DoxyCodeLine{00988\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!last\_was\_space)\ \{}
+\DoxyCodeLine{00989\ \ \ \ \ \ \ \ \ \ \ any\_spaces\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00990\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ only\ care\ about\ logging\ whether\ there\ is\ a\ soft-\/hyphen}}
+\DoxyCodeLine{00991\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ character\ to\ the\ right\ of\ the\ rightmost\ space.\ \ Each\ time\ we}}
+\DoxyCodeLine{00992\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ encounter\ a\ space,\ we\ reset\ this\ counter.}}
+\DoxyCodeLine{00993\ \ \ \ \ \ \ \ \ \ \ any\_hyphens\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00994\ \ \ \ \ \ \ \ \ \ \ last\_space\ =\ q;}
+\DoxyCodeLine{00995\ \ \ \ \ \ \ \ \ \ \ last\_space\_width\ =\ width;}
+\DoxyCodeLine{00996\ \ \ \ \ \ \ \ \ \ \ last\_was\_space\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00997\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00998\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00999\ \ \ \ \ \ \ \ \ last\_was\_space\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01000\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01001\ }
+\DoxyCodeLine{01002\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ soft\ hyphen\ character\ is\ not\ printed,\ but\ marks\ a\ point\ at\ which\ we}}
+\DoxyCodeLine{01003\ \ \ \ \ \ \ \textcolor{comment}{//\ might\ hyphenate\ a\ word\ if\ we\ need\ to.}}
+\DoxyCodeLine{01004\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string[q].\_character\ ==\ (\textcolor{keywordtype}{char32\_t})text\_soft\_hyphen\_key)\ \{}
+\DoxyCodeLine{01005\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (wordwrap\_width\ >\ 0.0f)\ \{}
+\DoxyCodeLine{01006\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ only\ consider\ this\ as\ a\ possible\ hyphenation\ point\ if\ (a)\ it}}
+\DoxyCodeLine{01007\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ is\ not\ the\ very\ first\ character,\ and\ (b)\ there\ is\ enough\ room\ for}}
+\DoxyCodeLine{01008\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ a\ hyphen\ character\ to\ be\ printed\ following\ it.}}
+\DoxyCodeLine{01009\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (q\ !=\ p\ \&\&\ width\ +\ calc\_hyphen\_width(\_text\_string[q])\ <=\ wordwrap\_width)\ \{}
+\DoxyCodeLine{01010\ \ \ \ \ \ \ \ \ \ \ \ \ any\_hyphens\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01011\ \ \ \ \ \ \ \ \ \ \ \ \ last\_hyphen\ =\ q;}
+\DoxyCodeLine{01012\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01013\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01014\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01015\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Some\ normal,\ printable\ character.}}
+\DoxyCodeLine{01016\ \ \ \ \ \ \ \ \ width\ +=\ calc\_width(\_text\_string[q]);}
+\DoxyCodeLine{01017\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01018\ }
+\DoxyCodeLine{01019\ \ \ \ \ \ \ q++;}
+\DoxyCodeLine{01020\ }
+\DoxyCodeLine{01021\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (wordwrap\_width\ >\ 0.0f\ \&\&\ width\ >\ wordwrap\_width)\ \{}
+\DoxyCodeLine{01022\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Oops,\ too\ many.}}
+\DoxyCodeLine{01023\ \ \ \ \ \ \ \ \ q-\/-\/;}
+\DoxyCodeLine{01024\ \ \ \ \ \ \ \ \ overflow\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01025\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01026\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01027\ \ \ \ \ \}}
+\DoxyCodeLine{01028\ }
+\DoxyCodeLine{01029\ \ \ \ \ \textcolor{keywordflow}{if}\ (overflow)\ \{}
+\DoxyCodeLine{01030\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ stopped\ because\ we\ exceeded\ the\ wordwrap\ width,\ then\ try\ to}}
+\DoxyCodeLine{01031\ \ \ \ \ \ \ \textcolor{comment}{//\ find\ an\ appropriate\ place\ to\ wrap\ the\ line\ or\ to\ hyphenate,\ if}}
+\DoxyCodeLine{01032\ \ \ \ \ \ \ \textcolor{comment}{//\ necessary.}}
+\DoxyCodeLine{01033\ \ \ \ \ \ \ nassertr(wordwrap\_width\ >\ 0.0f,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01034\ }
+\DoxyCodeLine{01035\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (any\_spaces\ \&\&\ last\_space\_width\ /\ wordwrap\_width\ >=\ text\_hyphen\_ratio)\ \{}
+\DoxyCodeLine{01036\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ a\ space\ that\ ended\ up\ within\ our\ safety\ margin,\ don't}}
+\DoxyCodeLine{01037\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ use\ any\ soft-\/hyphen\ characters.}}
+\DoxyCodeLine{01038\ \ \ \ \ \ \ \ \ any\_hyphens\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01039\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01040\ }
+\DoxyCodeLine{01041\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (any\_hyphens)\ \{}
+\DoxyCodeLine{01042\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ still\ have\ a\ soft-\/hyphen\ character,\ use\ it.}}
+\DoxyCodeLine{01043\ \ \ \ \ \ \ \ \ q\ =\ last\_hyphen;}
+\DoxyCodeLine{01044\ \ \ \ \ \ \ \ \ output\_hyphen\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01045\ }
+\DoxyCodeLine{01046\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (any\_spaces)\ \{}
+\DoxyCodeLine{01047\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ break\ at\ a\ space\ if\ we\ can.}}
+\DoxyCodeLine{01048\ \ \ \ \ \ \ \ \ q\ =\ last\_space;}
+\DoxyCodeLine{01049\ }
+\DoxyCodeLine{01050\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01051\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ this\ is\ a\ forced\ break.\ \ Accept\ the\ longest\ line\ we\ can}}
+\DoxyCodeLine{01052\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ that\ does\ not\ leave\ the\ next\ line\ beginning\ with\ one\ of\ our}}
+\DoxyCodeLine{01053\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ forbidden\ characters.}}
+\DoxyCodeLine{01054\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ i\ =\ 0;}
+\DoxyCodeLine{01055\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ ((\textcolor{keywordtype}{int})i\ <\ text\_max\_never\_break\ \&\&\ q\ -\/\ i\ >\ p\ \&\&}
+\DoxyCodeLine{01056\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ get\_text\_never\_break\_before().find(\_text\_string[q\ -\/\ i].\_character)\ !=\ wstring::npos)\ \{}
+\DoxyCodeLine{01057\ \ \ \ \ \ \ \ \ \ \ i++;}
+\DoxyCodeLine{01058\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01059\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{int})i\ <\ text\_max\_never\_break)\ \{}
+\DoxyCodeLine{01060\ \ \ \ \ \ \ \ \ \ \ q\ -\/=\ i;}
+\DoxyCodeLine{01061\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01062\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01063\ \ \ \ \ \}}
+\DoxyCodeLine{01064\ }
+\DoxyCodeLine{01065\ \ \ \ \ \textcolor{comment}{//\ Skip\ additional\ whitespace\ between\ the\ lines.}}
+\DoxyCodeLine{01066\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ next\_start\ =\ q;}
+\DoxyCodeLine{01067\ \ \ \ \ \textcolor{keywordflow}{while}\ (next\_start\ <\ \_text\_string.size()\ \&\&}
+\DoxyCodeLine{01068\ \ \ \ \ \ \ \ \ \ \ \ isbreakpoint(\_text\_string[next\_start].\_character))\ \{}
+\DoxyCodeLine{01069\ \ \ \ \ \ \ next\_start++;}
+\DoxyCodeLine{01070\ \ \ \ \ \}}
+\DoxyCodeLine{01071\ }
+\DoxyCodeLine{01072\ \ \ \ \ \textcolor{comment}{//\ Trim\ off\ any\ more\ blanks\ on\ the\ end.}}
+\DoxyCodeLine{01073\ \ \ \ \ \textcolor{keywordflow}{while}\ (q\ >\ p\ \&\&\ isspacew(\_text\_string[q\ -\/\ 1].\_character))\ \{}
+\DoxyCodeLine{01074\ \ \ \ \ \ \ q-\/-\/;}
+\DoxyCodeLine{01075\ \ \ \ \ \}}
+\DoxyCodeLine{01076\ }
+\DoxyCodeLine{01077\ \ \ \ \ \textcolor{keywordflow}{if}\ (next\_start\ ==\ p)\ \{}
+\DoxyCodeLine{01078\ \ \ \ \ \ \ \textcolor{comment}{//\ No\ characters\ got\ in\ at\ all.\ \ This\ could\ only\ happen\ if\ the\ wordwrap}}
+\DoxyCodeLine{01079\ \ \ \ \ \ \ \textcolor{comment}{//\ width\ is\ narrower\ than\ a\ single\ character,\ or\ if\ we\ have\ a}}
+\DoxyCodeLine{01080\ \ \ \ \ \ \ \textcolor{comment}{//\ substantial\ number\ of\ leading\ spaces\ in\ a\ line.}}
+\DoxyCodeLine{01081\ }
+\DoxyCodeLine{01082\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (initial\_width\ ==\ 0.0f)\ \{}
+\DoxyCodeLine{01083\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ There\ was\ no\ leading\ whitespace\ on\ the\ line,\ so\ the\ character}}
+\DoxyCodeLine{01084\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ itself\ didn't\ fit\ within\ the\ margins.\ \ Let\ it\ in\ anyway;\ what\ else}}
+\DoxyCodeLine{01085\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ can\ we\ do?}}
+\DoxyCodeLine{01086\ \ \ \ \ \ \ \ \ q++;}
+\DoxyCodeLine{01087\ \ \ \ \ \ \ \ \ next\_start++;}
+\DoxyCodeLine{01088\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (next\_start\ <\ \_text\_string.size()\ \&\&}
+\DoxyCodeLine{01089\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ isbreakpoint(\_text\_string[next\_start].\_character))\ \{}
+\DoxyCodeLine{01090\ \ \ \ \ \ \ \ \ \ \ next\_start++;}
+\DoxyCodeLine{01091\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01092\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01093\ \ \ \ \ \}}
+\DoxyCodeLine{01094\ }
+\DoxyCodeLine{01095\ \ \ \ \ \textcolor{keywordflow}{if}\ (needs\_newline)\ \{}
+\DoxyCodeLine{01096\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_max\_rows\ >\ 0\ \&\&\ (\textcolor{keywordtype}{int})\_text\_block.size()\ >=\ \_max\_rows)\ \{}
+\DoxyCodeLine{01097\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Truncate.}}
+\DoxyCodeLine{01098\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01099\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01100\ \ \ \ \ \ \ \_text\_block.push\_back(TextRow(p));}
+\DoxyCodeLine{01101\ \ \ \ \ \}}
+\DoxyCodeLine{01102\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_multiline\_mode())\{}
+\DoxyCodeLine{01103\ \ \ \ \ \ \ \ \ needs\_newline\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01104\ \ \ \ \ \}}
+\DoxyCodeLine{01105\ }
+\DoxyCodeLine{01106\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string[next\_start\ -\/\ 1].\_cprops-\/>\_properties.get\_preserve\_trailing\_whitespace())\ \{}
+\DoxyCodeLine{01107\ \ \ \ \ \ \ q\ =\ next\_start;}
+\DoxyCodeLine{01108\ \ \ \ \ \}}
+\DoxyCodeLine{01109\ }
+\DoxyCodeLine{01110\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ pi\ =\ p;\ pi\ <\ q;\ pi++)\ \{}
+\DoxyCodeLine{01111\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string[pi].\_character\ !=\ (\textcolor{keywordtype}{char32\_t})text\_soft\_hyphen\_key\ \&\&}
+\DoxyCodeLine{01112\ \ \ \ \ \ \ \ \ \ \ \_text\_string[pi].\_character\ !=\ (\textcolor{keywordtype}{char32\_t})text\_soft\_break\_key)\ \{}
+\DoxyCodeLine{01113\ \ \ \ \ \ \ \ \ \_text\_block.back().\_string.push\_back(\_text\_string[pi]);}
+\DoxyCodeLine{01114\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01115\ \ \ \ \ \ \ \ \ \_text\_block.back().\_got\_soft\_hyphens\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01116\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01117\ \ \ \ \ \}}
+\DoxyCodeLine{01118\ \ \ \ \ \textcolor{keywordflow}{if}\ (output\_hyphen)\ \{}
+\DoxyCodeLine{01119\ \ \ \ \ \ \ wstring\ text\_soft\_hyphen\_output\ =\ get\_text\_soft\_hyphen\_output();}
+\DoxyCodeLine{01120\ \ \ \ \ \ \ wstring::const\_iterator\ wi;}
+\DoxyCodeLine{01121\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (wi\ =\ text\_soft\_hyphen\_output.begin();}
+\DoxyCodeLine{01122\ \ \ \ \ \ \ \ \ \ \ \ wi\ !=\ text\_soft\_hyphen\_output.end();}
+\DoxyCodeLine{01123\ \ \ \ \ \ \ \ \ \ \ \ ++wi)\ \{}
+\DoxyCodeLine{01124\ \ \ \ \ \ \ \ \ \_text\_block.back().\_string.push\_back(TextCharacter(*wi,\ \_text\_string[last\_hyphen].\_cprops));}
+\DoxyCodeLine{01125\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01126\ \ \ \ \ \}}
+\DoxyCodeLine{01127\ }
+\DoxyCodeLine{01128\ \ \ \ \ \textcolor{comment}{//\ Now\ prepare\ to\ wrap\ the\ next\ line.}}
+\DoxyCodeLine{01129\ }
+\DoxyCodeLine{01130\ \ \ \ \ \textcolor{keywordflow}{if}\ (next\_start\ <\ \_text\_string.size()\ \&\&\ \_text\_string[next\_start].\_character\ ==\ \textcolor{charliteral}{'\(\backslash\)n'})\ \{}
+\DoxyCodeLine{01131\ \ \ \ \ \ \ \textcolor{comment}{//\ Preserve\ a\ single\ embedded\ newline.}}
+\DoxyCodeLine{01132\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_max\_rows\ >\ 0\ \&\&\ (\textcolor{keywordtype}{int})\_text\_block.size()\ >=\ \_max\_rows)\ \{}
+\DoxyCodeLine{01133\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Truncate.}}
+\DoxyCodeLine{01134\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01135\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01136\ \ \ \ \ \ \ \_text\_block.back().\_eol\_cprops\ =\ \_text\_string[next\_start].\_cprops;}
+\DoxyCodeLine{01137\ \ \ \ \ \ \ next\_start++;}
+\DoxyCodeLine{01138\ \ \ \ \ \ \ \_text\_block.push\_back(TextRow(next\_start));}
+\DoxyCodeLine{01139\ \ \ \ \ \ \ needs\_newline\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01140\ \ \ \ \ \}}
+\DoxyCodeLine{01141\ \ \ \ \ p\ =\ next\_start;}
+\DoxyCodeLine{01142\ }
+\DoxyCodeLine{01143\ \ \ \ \ \textcolor{comment}{//\ Preserve\ any\ initial\ whitespace\ and\ newlines.}}
+\DoxyCodeLine{01144\ \ \ \ \ initial\_width\ =\ 0.0f;}
+\DoxyCodeLine{01145\ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ <\ \_text\_string.size()\ \&\&\ isspacew(\_text\_string[p].\_character))\ \{}
+\DoxyCodeLine{01146\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_text\_string[p].\_character\ ==\ \textcolor{charliteral}{'\(\backslash\)n'})\ \{}
+\DoxyCodeLine{01147\ \ \ \ \ \ \ \ \ initial\_width\ =\ 0.0f;}
+\DoxyCodeLine{01148\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_max\_rows\ >\ 0\ \&\&\ (\textcolor{keywordtype}{int})\_text\_block.size()\ >=\ \_max\_rows)\ \{}
+\DoxyCodeLine{01149\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Truncate.}}
+\DoxyCodeLine{01150\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01151\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01152\ \ \ \ \ \ \ \ \ \_text\_block.back().\_eol\_cprops\ =\ \_text\_string[p].\_cprops;}
+\DoxyCodeLine{01153\ \ \ \ \ \ \ \ \ \_text\_block.push\_back(TextRow(p\ +\ 1));}
+\DoxyCodeLine{01154\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01155\ \ \ \ \ \ \ \ \ initial\_width\ +=\ calc\_width(\_text\_string[p]);}
+\DoxyCodeLine{01156\ \ \ \ \ \ \ \ \ \_text\_block.back().\_string.push\_back(\_text\_string[p]);}
+\DoxyCodeLine{01157\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01158\ \ \ \ \ \ \ p++;}
+\DoxyCodeLine{01159\ \ \ \ \ \}}
+\DoxyCodeLine{01160\ \ \ \}}
+\DoxyCodeLine{01161\ }
+\DoxyCodeLine{01162\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01163\ \}}
+\DoxyCodeLine{01164\ }
+\DoxyCodeLine{01169\ PN\_stdfloat\ TextAssembler::}
+\DoxyCodeLine{01170\ calc\_hyphen\_width(\textcolor{keyword}{const}\ TextCharacter\ \&tch)\ \{}
+\DoxyCodeLine{01171\ \ \ \mbox{\hyperlink{classTextFont}{TextFont}}\ *font\ =\ tch.\_cprops-\/>\_properties.get\_font();}
+\DoxyCodeLine{01172\ \ \ nassertr(font\ !=\ \textcolor{keyword}{nullptr},\ 0.0f);}
+\DoxyCodeLine{01173\ }
+\DoxyCodeLine{01174\ \ \ PN\_stdfloat\ hyphen\_width\ =\ 0.0f;}
+\DoxyCodeLine{01175\ \ \ wstring\ text\_soft\_hyphen\_output\ =\ get\_text\_soft\_hyphen\_output();}
+\DoxyCodeLine{01176\ \ \ wstring::const\_iterator\ wi;}
+\DoxyCodeLine{01177\ \ \ \textcolor{keywordflow}{for}\ (wi\ =\ text\_soft\_hyphen\_output.begin();}
+\DoxyCodeLine{01178\ \ \ \ \ \ \ \ wi\ !=\ text\_soft\_hyphen\_output.end();}
+\DoxyCodeLine{01179\ \ \ \ \ \ \ \ ++wi)\ \{}
+\DoxyCodeLine{01180\ \ \ \ \ hyphen\_width\ +=\ calc\_width(*wi,\ tch.\_cprops-\/>\_properties);}
+\DoxyCodeLine{01181\ \ \ \}}
+\DoxyCodeLine{01182\ }
+\DoxyCodeLine{01183\ \ \ \textcolor{keywordflow}{return}\ hyphen\_width;}
+\DoxyCodeLine{01184\ \}}
+\DoxyCodeLine{01185\ }
+\DoxyCodeLine{01189\ \textcolor{keywordtype}{void}\ TextAssembler::}
+\DoxyCodeLine{01190\ generate\_quads(\mbox{\hyperlink{classGeomNode}{GeomNode}}\ *geom\_node,\ \textcolor{keyword}{const}\ QuadMap\ \&quad\_map)\ \{}
+\DoxyCodeLine{01191\ \ \ QuadMap::const\_iterator\ qmi;}
+\DoxyCodeLine{01192\ \ \ \textcolor{keywordflow}{for}\ (qmi\ =\ quad\_map.begin();\ qmi\ !=\ quad\_map.end();\ ++qmi)\ \{}
+\DoxyCodeLine{01193\ \ \ \ \ \textcolor{keyword}{const}\ QuadDefs\ \&quads\ =\ qmi-\/>second;}
+\DoxyCodeLine{01194\ \ \ \ \ \mbox{\hyperlink{classpvector}{GeomTextGlyph::Glyphs}}\ glyphs;}
+\DoxyCodeLine{01195\ \ \ \ \ glyphs.reserve(quads.size());}
+\DoxyCodeLine{01196\ }
+\DoxyCodeLine{01197\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}}\ *format\ =\ GeomVertexFormat::get\_v3t2();}
+\DoxyCodeLine{01198\ \ \ \ \ PT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ vdata\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}(\textcolor{stringliteral}{"{}text"{}},\ format,\ Geom::UH\_static);}
+\DoxyCodeLine{01199\ }
+\DoxyCodeLine{01200\ \ \ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{01201\ }
+\DoxyCodeLine{01202\ \ \ \ \ \textcolor{comment}{//\ This\ is\ quite\ a\ critical\ loop\ and\ GeomVertexWriter\ quickly\ becomes\ the}}
+\DoxyCodeLine{01203\ \ \ \ \ \textcolor{comment}{//\ bottleneck.\ \ So,\ I've\ written\ this\ out\ the\ hard\ way\ instead.\ \ Two}}
+\DoxyCodeLine{01204\ \ \ \ \ \textcolor{comment}{//\ versions\ of\ the\ loop:\ one\ for\ 32-\/bit\ floats,\ the\ other\ for\ 64-\/bit.}}
+\DoxyCodeLine{01205\ \ \ \ \ \{}
+\DoxyCodeLine{01206\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGeomVertexArrayDataHandle}{GeomVertexArrayDataHandle}})\ vtx\_handle\ =\ vdata-\/>modify\_array\_handle(0);}
+\DoxyCodeLine{01207\ \ \ \ \ \ \ vtx\_handle-\/>unclean\_set\_num\_rows(quads.size()\ *\ 4);}
+\DoxyCodeLine{01208\ }
+\DoxyCodeLine{01209\ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *write\_ptr\ =\ vtx\_handle-\/>get\_write\_pointer();}
+\DoxyCodeLine{01210\ }
+\DoxyCodeLine{01211\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (format-\/>get\_vertex\_column()-\/>get\_numeric\_type()\ ==\ GeomEnums::NT\_float32)\ \{}
+\DoxyCodeLine{01212\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 32-\/bit\ vertex\ case.}}
+\DoxyCodeLine{01213\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ stride\ =\ format-\/>get\_array(0)-\/>get\_stride()\ /\ \textcolor{keyword}{sizeof}(PN\_float32);}
+\DoxyCodeLine{01214\ }
+\DoxyCodeLine{01215\ \ \ \ \ \ \ \ \ PN\_float32\ *vtx\_ptr\ =\ (PN\_float32\ *)}
+\DoxyCodeLine{01216\ \ \ \ \ \ \ \ \ \ \ (write\_ptr\ +\ format-\/>get\_column(InternalName::get\_vertex())-\/>get\_start());}
+\DoxyCodeLine{01217\ \ \ \ \ \ \ \ \ PN\_float32\ *tex\_ptr\ =\ (PN\_float32\ *)}
+\DoxyCodeLine{01218\ \ \ \ \ \ \ \ \ \ \ (write\_ptr\ +\ format-\/>get\_column(InternalName::get\_texcoord())-\/>get\_start());}
+\DoxyCodeLine{01219\ }
+\DoxyCodeLine{01220\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ QuadDef\ \&quad\ :\ quads)\ \{}
+\DoxyCodeLine{01221\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[0]\ =\ quad.\_dimensions[0]\ +\ quad.\_slanth;}
+\DoxyCodeLine{01222\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[1]\ =\ 0;}
+\DoxyCodeLine{01223\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[2]\ =\ quad.\_dimensions[3];}
+\DoxyCodeLine{01224\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr\ +=\ stride;}
+\DoxyCodeLine{01225\ }
+\DoxyCodeLine{01226\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[0]\ =\ quad.\_uvs[0];}
+\DoxyCodeLine{01227\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[1]\ =\ quad.\_uvs[3];}
+\DoxyCodeLine{01228\ \ \ \ \ \ \ \ \ \ \ tex\_ptr\ +=\ stride;}
+\DoxyCodeLine{01229\ }
+\DoxyCodeLine{01230\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[0]\ =\ quad.\_dimensions[0]\ +\ quad.\_slantl;}
+\DoxyCodeLine{01231\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[1]\ =\ 0;}
+\DoxyCodeLine{01232\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[2]\ =\ quad.\_dimensions[1];}
+\DoxyCodeLine{01233\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr\ +=\ stride;}
+\DoxyCodeLine{01234\ }
+\DoxyCodeLine{01235\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[0]\ =\ quad.\_uvs[0];}
+\DoxyCodeLine{01236\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[1]\ =\ quad.\_uvs[1];}
+\DoxyCodeLine{01237\ \ \ \ \ \ \ \ \ \ \ tex\_ptr\ +=\ stride;}
+\DoxyCodeLine{01238\ }
+\DoxyCodeLine{01239\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[0]\ =\ quad.\_dimensions[2]\ +\ quad.\_slanth;}
+\DoxyCodeLine{01240\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[1]\ =\ 0;}
+\DoxyCodeLine{01241\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[2]\ =\ quad.\_dimensions[3];}
+\DoxyCodeLine{01242\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr\ +=\ stride;}
+\DoxyCodeLine{01243\ }
+\DoxyCodeLine{01244\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[0]\ =\ quad.\_uvs[2];}
+\DoxyCodeLine{01245\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[1]\ =\ quad.\_uvs[3];}
+\DoxyCodeLine{01246\ \ \ \ \ \ \ \ \ \ \ tex\_ptr\ +=\ stride;}
+\DoxyCodeLine{01247\ }
+\DoxyCodeLine{01248\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[0]\ =\ quad.\_dimensions[2]\ +\ quad.\_slantl;}
+\DoxyCodeLine{01249\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[1]\ =\ 0;}
+\DoxyCodeLine{01250\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[2]\ =\ quad.\_dimensions[1];}
+\DoxyCodeLine{01251\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr\ +=\ stride;}
+\DoxyCodeLine{01252\ }
+\DoxyCodeLine{01253\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[0]\ =\ quad.\_uvs[2];}
+\DoxyCodeLine{01254\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[1]\ =\ quad.\_uvs[1];}
+\DoxyCodeLine{01255\ \ \ \ \ \ \ \ \ \ \ tex\_ptr\ +=\ stride;}
+\DoxyCodeLine{01256\ }
+\DoxyCodeLine{01257\ \ \ \ \ \ \ \ \ \ \ glyphs.push\_back(std::move(quad.\_glyph));}
+\DoxyCodeLine{01258\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01259\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01260\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 64-\/bit\ vertex\ case.}}
+\DoxyCodeLine{01261\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ stride\ =\ format-\/>get\_array(0)-\/>get\_stride()\ /\ \textcolor{keyword}{sizeof}(PN\_float64);}
+\DoxyCodeLine{01262\ }
+\DoxyCodeLine{01263\ \ \ \ \ \ \ \ \ PN\_float64\ *vtx\_ptr\ =\ (PN\_float64\ *)}
+\DoxyCodeLine{01264\ \ \ \ \ \ \ \ \ \ \ (write\_ptr\ +\ format-\/>get\_column(InternalName::get\_vertex())-\/>get\_start());}
+\DoxyCodeLine{01265\ \ \ \ \ \ \ \ \ PN\_float64\ *tex\_ptr\ =\ (PN\_float64\ *)}
+\DoxyCodeLine{01266\ \ \ \ \ \ \ \ \ \ \ (write\_ptr\ +\ format-\/>get\_column(InternalName::get\_texcoord())-\/>get\_start());}
+\DoxyCodeLine{01267\ }
+\DoxyCodeLine{01268\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ QuadDef\ \&quad\ :\ quads)\ \{}
+\DoxyCodeLine{01269\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[0]\ =\ quad.\_dimensions[0]\ +\ quad.\_slanth;}
+\DoxyCodeLine{01270\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[1]\ =\ 0;}
+\DoxyCodeLine{01271\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[2]\ =\ quad.\_dimensions[3];}
+\DoxyCodeLine{01272\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr\ +=\ stride;}
+\DoxyCodeLine{01273\ }
+\DoxyCodeLine{01274\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[0]\ =\ quad.\_uvs[0];}
+\DoxyCodeLine{01275\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[1]\ =\ quad.\_uvs[3];}
+\DoxyCodeLine{01276\ \ \ \ \ \ \ \ \ \ \ tex\_ptr\ +=\ stride;}
+\DoxyCodeLine{01277\ }
+\DoxyCodeLine{01278\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[0]\ =\ quad.\_dimensions[0]\ +\ quad.\_slantl;}
+\DoxyCodeLine{01279\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[1]\ =\ 0;}
+\DoxyCodeLine{01280\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[2]\ =\ quad.\_dimensions[1];}
+\DoxyCodeLine{01281\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr\ +=\ stride;}
+\DoxyCodeLine{01282\ }
+\DoxyCodeLine{01283\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[0]\ =\ quad.\_uvs[0];}
+\DoxyCodeLine{01284\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[1]\ =\ quad.\_uvs[1];}
+\DoxyCodeLine{01285\ \ \ \ \ \ \ \ \ \ \ tex\_ptr\ +=\ stride;}
+\DoxyCodeLine{01286\ }
+\DoxyCodeLine{01287\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[0]\ =\ quad.\_dimensions[2]\ +\ quad.\_slanth;}
+\DoxyCodeLine{01288\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[1]\ =\ 0;}
+\DoxyCodeLine{01289\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[2]\ =\ quad.\_dimensions[3];}
+\DoxyCodeLine{01290\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr\ +=\ stride;}
+\DoxyCodeLine{01291\ }
+\DoxyCodeLine{01292\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[0]\ =\ quad.\_uvs[2];}
+\DoxyCodeLine{01293\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[1]\ =\ quad.\_uvs[3];}
+\DoxyCodeLine{01294\ \ \ \ \ \ \ \ \ \ \ tex\_ptr\ +=\ stride;}
+\DoxyCodeLine{01295\ }
+\DoxyCodeLine{01296\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[0]\ =\ quad.\_dimensions[2]\ +\ quad.\_slantl;}
+\DoxyCodeLine{01297\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[1]\ =\ 0;}
+\DoxyCodeLine{01298\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr[2]\ =\ quad.\_dimensions[1];}
+\DoxyCodeLine{01299\ \ \ \ \ \ \ \ \ \ \ vtx\_ptr\ +=\ stride;}
+\DoxyCodeLine{01300\ }
+\DoxyCodeLine{01301\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[0]\ =\ quad.\_uvs[2];}
+\DoxyCodeLine{01302\ \ \ \ \ \ \ \ \ \ \ tex\_ptr[1]\ =\ quad.\_uvs[1];}
+\DoxyCodeLine{01303\ \ \ \ \ \ \ \ \ \ \ tex\_ptr\ +=\ stride;}
+\DoxyCodeLine{01304\ }
+\DoxyCodeLine{01305\ \ \ \ \ \ \ \ \ \ \ glyphs.push\_back(std::move(quad.\_glyph));}
+\DoxyCodeLine{01306\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01307\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01308\ \ \ \ \ \}}
+\DoxyCodeLine{01309\ }
+\DoxyCodeLine{01310\ \ \ \ \ \textcolor{comment}{//\ Now\ write\ the\ indices.\ \ Two\ cases:\ 32-\/bit\ indices\ and\ 16-\/bit\ indices.}}
+\DoxyCodeLine{01311\ \ \ \ \ \textcolor{keywordtype}{int}\ vtx\_count\ =\ quads.size()\ *\ 4;}
+\DoxyCodeLine{01312\ \ \ \ \ PT(\mbox{\hyperlink{classGeomTriangles}{GeomTriangles}})\ tris\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomTriangles}{GeomTriangles}}(Geom::UH\_static);}
+\DoxyCodeLine{01313\ \ \ \ \ \textcolor{keywordflow}{if}\ (vtx\_count\ >\ 65535)\ \{}
+\DoxyCodeLine{01314\ \ \ \ \ \ \ tris-\/>set\_index\_type(GeomEnums::NT\_uint32);}
+\DoxyCodeLine{01315\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01316\ \ \ \ \ \ \ tris-\/>set\_index\_type(GeomEnums::NT\_uint16);}
+\DoxyCodeLine{01317\ \ \ \ \ \}}
+\DoxyCodeLine{01318\ \ \ \ \ \{}
+\DoxyCodeLine{01319\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGeomVertexArrayDataHandle}{GeomVertexArrayDataHandle}})\ idx\_handle\ =\ tris-\/>modify\_vertices\_handle(current\_thread);}
+\DoxyCodeLine{01320\ \ \ \ \ \ \ idx\_handle-\/>unclean\_set\_num\_rows(quads.size()\ *\ 6);}
+\DoxyCodeLine{01321\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tris-\/>get\_index\_type()\ ==\ GeomEnums::NT\_uint16)\ \{}
+\DoxyCodeLine{01322\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 16-\/bit\ index\ case.}}
+\DoxyCodeLine{01323\ \ \ \ \ \ \ \ \ uint16\_t\ *idx\_ptr\ =\ (uint16\_t\ *)idx\_handle-\/>get\_write\_pointer();}
+\DoxyCodeLine{01324\ }
+\DoxyCodeLine{01325\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ vtx\_count;\ i\ +=\ 4)\ \{}
+\DoxyCodeLine{01326\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 0;}
+\DoxyCodeLine{01327\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 1;}
+\DoxyCodeLine{01328\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 2;}
+\DoxyCodeLine{01329\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 2;}
+\DoxyCodeLine{01330\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 1;}
+\DoxyCodeLine{01331\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 3;}
+\DoxyCodeLine{01332\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01333\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01334\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 32-\/bit\ index\ case.}}
+\DoxyCodeLine{01335\ \ \ \ \ \ \ \ \ uint32\_t\ *idx\_ptr\ =\ (uint32\_t\ *)idx\_handle-\/>get\_write\_pointer();}
+\DoxyCodeLine{01336\ }
+\DoxyCodeLine{01337\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ vtx\_count;\ i\ +=\ 4)\ \{}
+\DoxyCodeLine{01338\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 0;}
+\DoxyCodeLine{01339\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 1;}
+\DoxyCodeLine{01340\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 2;}
+\DoxyCodeLine{01341\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 2;}
+\DoxyCodeLine{01342\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 1;}
+\DoxyCodeLine{01343\ \ \ \ \ \ \ \ \ \ \ *(idx\_ptr++)\ =\ i\ +\ 3;}
+\DoxyCodeLine{01344\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01345\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01346\ \ \ \ \ \}}
+\DoxyCodeLine{01347\ }
+\DoxyCodeLine{01348\ \ \ \ \ \textcolor{comment}{//\ We\ can\ compute\ this\ value\ much\ faster\ than\ GeomPrimitive\ can.}}
+\DoxyCodeLine{01349\ \ \ \ \ tris-\/>set\_minmax(0,\ vtx\_count\ -\/\ 1,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01350\ }
+\DoxyCodeLine{01351\ \ \ \ \ PT(\mbox{\hyperlink{classGeomTextGlyph}{GeomTextGlyph}})\ geom\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomTextGlyph}{GeomTextGlyph}}(vdata);}
+\DoxyCodeLine{01352\ \ \ \ \ geom-\/>\_glyphs.swap(glyphs);}
+\DoxyCodeLine{01353\ \ \ \ \ geom-\/>add\_primitive(tris);}
+\DoxyCodeLine{01354\ \ \ \ \ geom\_node-\/>\mbox{\hyperlink{classGeomNode_a18e924a32fc78e567f156bd3678a7057}{add\_geom}}(geom,\ qmi-\/>first);}
+\DoxyCodeLine{01355\ \ \ \}}
+\DoxyCodeLine{01356\ \}}
+\DoxyCodeLine{01357\ }
+\DoxyCodeLine{01362\ \textcolor{keywordtype}{void}\ TextAssembler::}
+\DoxyCodeLine{01363\ assemble\_paragraph(\mbox{\hyperlink{classpvector}{TextAssembler::PlacedGlyphs}}\ \&placed\_glyphs)\ \{}
+\DoxyCodeLine{01364\ \ \ \_ul.set(0.0f,\ 0.0f);}
+\DoxyCodeLine{01365\ \ \ \_lr.set(0.0f,\ 0.0f);}
+\DoxyCodeLine{01366\ \ \ \textcolor{keywordtype}{int}\ num\_rows\ =\ 0;}
+\DoxyCodeLine{01367\ }
+\DoxyCodeLine{01368\ \ \ PN\_stdfloat\ ypos\ =\ 0.0f;}
+\DoxyCodeLine{01369\ \ \ \_next\_row\_ypos\ =\ 0.0f;}
+\DoxyCodeLine{01370\ \ \ TextBlock::iterator\ bi;}
+\DoxyCodeLine{01371\ \ \ \textcolor{keywordflow}{for}\ (bi\ =\ \_text\_block.begin();\ bi\ !=\ \_text\_block.end();\ ++bi)\ \{}
+\DoxyCodeLine{01372\ \ \ \ \ TextRow\ \&row\ =\ (*bi);}
+\DoxyCodeLine{01373\ }
+\DoxyCodeLine{01374\ \ \ \ \ \textcolor{comment}{//\ Store\ the\ index\ of\ the\ first\ glyph\ we're\ going\ to\ place.}}
+\DoxyCodeLine{01375\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ first\_glyph\ =\ placed\_glyphs.size();}
+\DoxyCodeLine{01376\ }
+\DoxyCodeLine{01377\ \ \ \ \ \textcolor{comment}{//\ First,\ assemble\ all\ the\ glyphs\ of\ this\ row.}}
+\DoxyCodeLine{01378\ \ \ \ \ PN\_stdfloat\ row\_width,\ line\_height,\ wordwrap;}
+\DoxyCodeLine{01379\ \ \ \ \ TextProperties::Alignment\ align;}
+\DoxyCodeLine{01380\ \ \ \ \ assemble\_row(row,\ placed\_glyphs,}
+\DoxyCodeLine{01381\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ row\_width,\ line\_height,\ align,\ wordwrap);}
+\DoxyCodeLine{01382\ }
+\DoxyCodeLine{01383\ \ \ \ \ \textcolor{comment}{//\ Now\ move\ the\ row\ to\ its\ appropriate\ position.\ \ This\ might\ involve\ a}}
+\DoxyCodeLine{01384\ \ \ \ \ \textcolor{comment}{//\ horizontal\ as\ well\ as\ a\ vertical\ translation.}}
+\DoxyCodeLine{01385\ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_rows\ ==\ 0)\ \{}
+\DoxyCodeLine{01386\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ this\ is\ the\ first\ row,\ account\ for\ its\ space.}}
+\DoxyCodeLine{01387\ \ \ \ \ \ \ \_ul[1]\ =\ 0.8f\ *\ line\_height;}
+\DoxyCodeLine{01388\ }
+\DoxyCodeLine{01389\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01390\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it\ is\ not\ the\ first\ row,\ shift\ the\ text\ downward\ by\ line\_height}}
+\DoxyCodeLine{01391\ \ \ \ \ \ \ \textcolor{comment}{//\ from\ the\ previous\ row.}}
+\DoxyCodeLine{01392\ \ \ \ \ \ \ ypos\ -\/=\ line\_height;}
+\DoxyCodeLine{01393\ \ \ \ \ \}}
+\DoxyCodeLine{01394\ \ \ \ \ \_lr[1]\ =\ ypos\ -\/\ 0.2\ *\ line\_height;}
+\DoxyCodeLine{01395\ }
+\DoxyCodeLine{01396\ \ \ \ \ \textcolor{comment}{//\ Apply\ the\ requested\ horizontal\ alignment\ to\ the\ row.\ \ [fabius]\ added\ a}}
+\DoxyCodeLine{01397\ \ \ \ \ \textcolor{comment}{//\ different\ concept\ of\ text\ alignment\ based\ upon\ a\ boxed\ region\ where\ his}}
+\DoxyCodeLine{01398\ \ \ \ \ \textcolor{comment}{//\ width\ is\ defined\ by\ the\ wordwrap\ size\ with\ the\ upper\ left\ corner}}
+\DoxyCodeLine{01399\ \ \ \ \ \textcolor{comment}{//\ starting\ from\ 0,0,0\ if\ the\ wordwrap\ size\ is\ unspecified\ the\ alignment}}
+\DoxyCodeLine{01400\ \ \ \ \ \textcolor{comment}{//\ could\ eventually\ result\ wrong.}}
+\DoxyCodeLine{01401\ \ \ \ \ PN\_stdfloat\ xpos\ =\ 0;}
+\DoxyCodeLine{01402\ \ \ \ \ \textcolor{keywordflow}{switch}\ (align)\ \{}
+\DoxyCodeLine{01403\ \ \ \ \ \textcolor{keywordflow}{case}\ TextProperties::A\_left:}
+\DoxyCodeLine{01404\ \ \ \ \ \ \ \_lr[0]\ =\ max(\_lr[0],\ row\_width);}
+\DoxyCodeLine{01405\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01406\ }
+\DoxyCodeLine{01407\ \ \ \ \ \textcolor{keywordflow}{case}\ TextProperties::A\_right:}
+\DoxyCodeLine{01408\ \ \ \ \ \ \ xpos\ =\ -\/row\_width;}
+\DoxyCodeLine{01409\ \ \ \ \ \ \ \_ul[0]\ =\ min(\_ul[0],\ xpos);}
+\DoxyCodeLine{01410\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01411\ }
+\DoxyCodeLine{01412\ \ \ \ \ \textcolor{keywordflow}{case}\ TextProperties::A\_center:}
+\DoxyCodeLine{01413\ \ \ \ \ \ \ xpos\ =\ -\/0.5f\ *\ row\_width;}
+\DoxyCodeLine{01414\ \ \ \ \ \ \ \_ul[0]\ =\ min(\_ul[0],\ xpos);}
+\DoxyCodeLine{01415\ \ \ \ \ \ \ \_lr[0]\ =\ max(\_lr[0],\ -\/xpos);}
+\DoxyCodeLine{01416\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01417\ }
+\DoxyCodeLine{01418\ \ \ \ \ \textcolor{keywordflow}{case}\ TextProperties::A\_boxed\_left:}
+\DoxyCodeLine{01419\ \ \ \ \ \ \ \_lr[0]\ =\ max(\_lr[0],\ max(row\_width,\ wordwrap));}
+\DoxyCodeLine{01420\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01421\ }
+\DoxyCodeLine{01422\ \ \ \ \ \textcolor{keywordflow}{case}\ TextProperties::A\_boxed\_right:}
+\DoxyCodeLine{01423\ \ \ \ \ \ \ xpos\ =\ wordwrap\ -\/\ row\_width;}
+\DoxyCodeLine{01424\ \ \ \ \ \ \ \_ul[0]\ =\ min(\_ul[0],\ xpos);}
+\DoxyCodeLine{01425\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01426\ }
+\DoxyCodeLine{01427\ \ \ \ \ \textcolor{keywordflow}{case}\ TextProperties::A\_boxed\_center:}
+\DoxyCodeLine{01428\ \ \ \ \ \ \ xpos\ =\ -\/0.5f\ *\ row\_width;}
+\DoxyCodeLine{01429\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (wordwrap\ >\ row\_width)\ xpos\ +=\ (wordwrap\ *\ 0.5f);}
+\DoxyCodeLine{01430\ \ \ \ \ \ \ \_ul[0]\ =\ min(\_ul[0],\ max(xpos,(wordwrap\ *\ 0.5f)));}
+\DoxyCodeLine{01431\ \ \ \ \ \ \ \_lr[0]\ =\ max(\_lr[0],\ min(-\/xpos,-\/(wordwrap\ *\ 0.5f)));}
+\DoxyCodeLine{01432\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01433\ \ \ \ \ \}}
+\DoxyCodeLine{01434\ }
+\DoxyCodeLine{01435\ \ \ \ \ row.\_xpos\ =\ xpos;}
+\DoxyCodeLine{01436\ \ \ \ \ row.\_ypos\ =\ ypos;}
+\DoxyCodeLine{01437\ }
+\DoxyCodeLine{01438\ \ \ \ \ \textcolor{comment}{//\ Now\ adjust\ the\ geoms\ we've\ assembled.}}
+\DoxyCodeLine{01439\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ first\_glyph;\ i\ <\ placed\_glyphs.size();\ ++i)\ \{}
+\DoxyCodeLine{01440\ \ \ \ \ \ \ placed\_glyphs[i].\_xpos\ +=\ xpos;}
+\DoxyCodeLine{01441\ \ \ \ \ \ \ placed\_glyphs[i].\_ypos\ +=\ ypos;}
+\DoxyCodeLine{01442\ \ \ \ \ \}}
+\DoxyCodeLine{01443\ }
+\DoxyCodeLine{01444\ \ \ \ \ \textcolor{comment}{//\ Advance\ to\ the\ next\ line.}}
+\DoxyCodeLine{01445\ \ \ \ \ num\_rows++;}
+\DoxyCodeLine{01446\ \ \ \ \ \_next\_row\_ypos\ =\ ypos\ -\/\ line\_height;}
+\DoxyCodeLine{01447\ \ \ \}}
+\DoxyCodeLine{01448\ }
+\DoxyCodeLine{01449\ \ \ \textcolor{comment}{//\ num\_rows\ may\ be\ smaller\ than\ \_text\_block.size(),\ if\ there\ are\ trailing}}
+\DoxyCodeLine{01450\ \ \ \textcolor{comment}{//\ newlines\ on\ the\ string.}}
+\DoxyCodeLine{01451\ \}}
+\DoxyCodeLine{01452\ }
+\DoxyCodeLine{01460\ \textcolor{keywordtype}{void}\ TextAssembler::}
+\DoxyCodeLine{01461\ assemble\_row(TextAssembler::TextRow\ \&row,}
+\DoxyCodeLine{01462\ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpvector}{TextAssembler::PlacedGlyphs}}\ \&placed\_glyphs,}
+\DoxyCodeLine{01463\ \ \ \ \ \ \ \ \ \ \ \ \ \ PN\_stdfloat\ \&row\_width,\ PN\_stdfloat\ \&line\_height,}
+\DoxyCodeLine{01464\ \ \ \ \ \ \ \ \ \ \ \ \ \ TextProperties::Alignment\ \&align,\ PN\_stdfloat\ \&wordwrap)\ \{}
+\DoxyCodeLine{01465\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{01466\ }
+\DoxyCodeLine{01467\ \ \ line\_height\ =\ 0.0f;}
+\DoxyCodeLine{01468\ \ \ PN\_stdfloat\ xpos\ =\ 0.0f;}
+\DoxyCodeLine{01469\ \ \ align\ =\ TextProperties::A\_left;}
+\DoxyCodeLine{01470\ }
+\DoxyCodeLine{01471\ \ \ TextProperties::Direction\ dir\ =\ TextProperties::D\_ltr;}
+\DoxyCodeLine{01472\ \ \ \textcolor{keywordtype}{size\_t}\ rtl\_begin\ =\ 0;}
+\DoxyCodeLine{01473\ \ \ PN\_stdfloat\ rtl\_begin\_xpos\ =\ 0.0f;}
+\DoxyCodeLine{01474\ }
+\DoxyCodeLine{01475\ \ \ \textcolor{comment}{//\ Remember\ previous\ character,\ for\ kerning.}}
+\DoxyCodeLine{01476\ \ \ \textcolor{keywordtype}{int}\ prev\_char\ =\ -\/1;}
+\DoxyCodeLine{01477\ }
+\DoxyCodeLine{01478\ \ \ \textcolor{keywordtype}{bool}\ underscore\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01479\ \ \ PN\_stdfloat\ underscore\_start\ =\ 0.0f;}
+\DoxyCodeLine{01480\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ *underscore\_properties\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01481\ }
+\DoxyCodeLine{01482\ \textcolor{preprocessor}{\#if\ defined(HAVE\_HARFBUZZ)\ \&\&\ defined(HAVE\_FREETYPE)}}
+\DoxyCodeLine{01483\ \ \ \textcolor{keyword}{const}\ ComputedProperties\ *prev\_cprops\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01484\ \ \ hb\_buffer\_t\ *harfbuff\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01485\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01486\ }
+\DoxyCodeLine{01487\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ TextCharacter\ \&tch\ :\ row.\_string)\ \{}
+\DoxyCodeLine{01488\ \ \ \ \ \textcolor{keywordtype}{char32\_t}\ character\ =\ tch.\_character;}
+\DoxyCodeLine{01489\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextGraphic}{TextGraphic}}\ *graphic\ =\ tch.\_graphic;}
+\DoxyCodeLine{01490\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ *properties\ =\ \&(tch.\_cprops-\/>\_properties);}
+\DoxyCodeLine{01491\ }
+\DoxyCodeLine{01492\ \ \ \ \ \textcolor{keywordflow}{if}\ (properties-\/>get\_underscore()\ !=\ underscore\ ||}
+\DoxyCodeLine{01493\ \ \ \ \ \ \ \ \ (underscore\ \&\&\ (properties-\/>get\_text\_color()\ !=\ underscore\_properties-\/>get\_text\_color()\ ||}
+\DoxyCodeLine{01494\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties-\/>get\_underscore\_height()\ !=\ underscore\_properties-\/>get\_underscore\_height())))\ \{}
+\DoxyCodeLine{01495\ \ \ \ \ \ \ \textcolor{comment}{//\ Change\ the\ underscore\ status.}}
+\DoxyCodeLine{01496\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (underscore\ \&\&\ underscore\_start\ !=\ xpos)\ \{}
+\DoxyCodeLine{01497\ \ \ \ \ \ \ \ \ draw\_underscore(placed\_glyphs,\ underscore\_start,\ xpos,}
+\DoxyCodeLine{01498\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ underscore\_properties);}
+\DoxyCodeLine{01499\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01500\ \ \ \ \ \ \ underscore\ =\ properties-\/>get\_underscore();}
+\DoxyCodeLine{01501\ \ \ \ \ \ \ underscore\_start\ =\ xpos;}
+\DoxyCodeLine{01502\ \ \ \ \ \ \ underscore\_properties\ =\ properties;}
+\DoxyCodeLine{01503\ \ \ \ \ \}}
+\DoxyCodeLine{01504\ }
+\DoxyCodeLine{01505\ \ \ \ \ \mbox{\hyperlink{classTextFont}{TextFont}}\ *font\ =\ properties-\/>get\_font();}
+\DoxyCodeLine{01506\ \ \ \ \ nassertv(font\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01507\ }
+\DoxyCodeLine{01508\ \ \ \ \ \textcolor{comment}{//\ We\ get\ the\ row's\ alignment\ property\ from\ the\ first\ character\ of\ the\ row}}
+\DoxyCodeLine{01509\ \ \ \ \ \textcolor{keywordflow}{if}\ ((align\ ==\ TextProperties::A\_left)\ \&\&}
+\DoxyCodeLine{01510\ \ \ \ \ \ \ \ \ (properties-\/>get\_align()\ !=\ TextProperties::A\_left))\ \{}
+\DoxyCodeLine{01511\ \ \ \ \ \ \ align\ =\ properties-\/>get\_align();}
+\DoxyCodeLine{01512\ \ \ \ \ \}}
+\DoxyCodeLine{01513\ }
+\DoxyCodeLine{01514\ \ \ \ \ \textcolor{comment}{//\ [fabius]\ a\ good\ place\ to\ take\ wordwrap\ size}}
+\DoxyCodeLine{01515\ \ \ \ \ \textcolor{keywordflow}{if}\ (properties-\/>get\_wordwrap()\ >\ 0.0f)\ \{}
+\DoxyCodeLine{01516\ \ \ \ \ \ \ wordwrap\ =\ properties-\/>get\_wordwrap();}
+\DoxyCodeLine{01517\ \ \ \ \ \}}
+\DoxyCodeLine{01518\ }
+\DoxyCodeLine{01519\ \ \ \ \ \textcolor{comment}{//\ And\ the\ height\ of\ the\ row\ is\ the\ maximum\ of\ all\ the\ fonts\ used\ within}}
+\DoxyCodeLine{01520\ \ \ \ \ \textcolor{comment}{//\ the\ row.}}
+\DoxyCodeLine{01521\ \ \ \ \ \textcolor{keywordflow}{if}\ (graphic\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01522\ \ \ \ \ \ \ LVecBase4\ frame\ =\ graphic-\/>get\_frame();}
+\DoxyCodeLine{01523\ \ \ \ \ \ \ line\_height\ =\ max(line\_height,\ frame[3]\ -\/\ frame[2]);}
+\DoxyCodeLine{01524\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01525\ \ \ \ \ \ \ line\_height\ =\ max(line\_height,\ font-\/>get\_line\_height()\ *\ properties-\/>get\_glyph\_scale()\ *\ properties-\/>get\_text\_scale());}
+\DoxyCodeLine{01526\ \ \ \ \ \}}
+\DoxyCodeLine{01527\ }
+\DoxyCodeLine{01528\ \textcolor{preprocessor}{\#if\ defined(HAVE\_HARFBUZZ)\ \&\&\ defined(HAVE\_FREETYPE)}}
+\DoxyCodeLine{01529\ \ \ \ \ \textcolor{keywordflow}{if}\ (tch.\_cprops\ !=\ prev\_cprops\ ||\ graphic\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01530\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (harfbuff\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ hb\_buffer\_get\_length(harfbuff)\ >\ 0)\ \{}
+\DoxyCodeLine{01531\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Shape\ the\ buffer\ accumulated\ so\ far.}}
+\DoxyCodeLine{01532\ \ \ \ \ \ \ \ \ shape\_buffer(harfbuff,\ placed\_glyphs,\ xpos,\ prev\_cprops-\/>\_properties);}
+\DoxyCodeLine{01533\ \ \ \ \ \ \ \ \ hb\_buffer\_reset(harfbuff);}
+\DoxyCodeLine{01534\ \ \ \ \ \ \ \ \ rtl\_begin\ =\ placed\_glyphs.size();}
+\DoxyCodeLine{01535\ \ \ \ \ \ \ \ \ rtl\_begin\_xpos\ =\ xpos;}
+\DoxyCodeLine{01536\ }
+\DoxyCodeLine{01537\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (harfbuff\ ==\ \textcolor{keyword}{nullptr}\ \&\&\ text\_use\_harfbuzz\ \&\&}
+\DoxyCodeLine{01538\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ font-\/>is\_of\_type(DynamicTextFont::get\_class\_type()))\ \{}
+\DoxyCodeLine{01539\ \ \ \ \ \ \ \ \ harfbuff\ =\ hb\_buffer\_create();}
+\DoxyCodeLine{01540\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01541\ \ \ \ \ \ \ prev\_cprops\ =\ tch.\_cprops;}
+\DoxyCodeLine{01542\ \ \ \ \ \}}
+\DoxyCodeLine{01543\ }
+\DoxyCodeLine{01544\ \ \ \ \ \textcolor{keywordflow}{if}\ (graphic\ ==\ \textcolor{keyword}{nullptr}\ \&\&\ harfbuff\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01545\ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ cluster\ =\ character;}
+\DoxyCodeLine{01546\ }
+\DoxyCodeLine{01547\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (properties-\/>get\_small\_caps())\ \{}
+\DoxyCodeLine{01548\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classUnicodeLatinMap_1_1Entry}{UnicodeLatinMap::Entry}}\ *map\_entry\ =}
+\DoxyCodeLine{01549\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classUnicodeLatinMap_a4ffd050ea2daac1619647b3cdddc2833}{UnicodeLatinMap::look\_up}}((\textcolor{keywordtype}{char32\_t})character);}
+\DoxyCodeLine{01550\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (map\_entry\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{01551\ \ \ \ \ \ \ \ \ \ \ \ \ map\_entry-\/>\_toupper\_character\ !=\ (\textcolor{keywordtype}{char32\_t})character)\ \{}
+\DoxyCodeLine{01552\ \ \ \ \ \ \ \ \ \ \ character\ =\ map\_entry-\/>\_toupper\_character;}
+\DoxyCodeLine{01553\ }
+\DoxyCodeLine{01554\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Set\ a\ high\ bit\ on\ the\ cluster\ to\ flag\ this\ as\ needing\ a\ scale.}}
+\DoxyCodeLine{01555\ \ \ \ \ \ \ \ \ \ \ cluster\ |=\ CF\_small\_caps;}
+\DoxyCodeLine{01556\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01557\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01558\ \ \ \ \ \ \ hb\_buffer\_add(harfbuff,\ character,\ cluster);}
+\DoxyCodeLine{01559\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01560\ \ \ \ \ \}}
+\DoxyCodeLine{01561\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01562\ }
+\DoxyCodeLine{01563\ \ \ \ \ \textcolor{comment}{//\ When\ not\ using\ harfbuzz,\ check\ if\ the\ direction\ was\ set\ explicitly.}}
+\DoxyCodeLine{01564\ \ \ \ \ \textcolor{keywordflow}{if}\ (properties-\/>has\_direction()\ \&\&\ properties-\/>get\_direction()\ !=\ dir)\ \{}
+\DoxyCodeLine{01565\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dir\ ==\ TextProperties::D\_rtl)\ \{}
+\DoxyCodeLine{01566\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Flip\ the\ preceding\ characters.}}
+\DoxyCodeLine{01567\ \ \ \ \ \ \ \ \ PN\_stdfloat\ xpos2\ =\ xpos;}
+\DoxyCodeLine{01568\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ i\ =\ placed\_glyphs.size();}
+\DoxyCodeLine{01569\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (i\ >\ rtl\_begin)\ \{}
+\DoxyCodeLine{01570\ \ \ \ \ \ \ \ \ \ \ -\/-\/i;}
+\DoxyCodeLine{01571\ \ \ \ \ \ \ \ \ \ \ PN\_stdfloat\ new\_xpos\ =\ rtl\_begin\_xpos\ +\ (xpos\ -\/\ xpos2);}
+\DoxyCodeLine{01572\ \ \ \ \ \ \ \ \ \ \ xpos2\ =\ placed\_glyphs[i].\_xpos;}
+\DoxyCodeLine{01573\ \ \ \ \ \ \ \ \ \ \ placed\_glyphs[i].\_xpos\ =\ new\_xpos;}
+\DoxyCodeLine{01574\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01575\ \ \ \ \ \ \ \ \ dir\ =\ TextProperties::D\_ltr;}
+\DoxyCodeLine{01576\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01577\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (dir\ ==\ TextProperties::D\_ltr)\ \{}
+\DoxyCodeLine{01578\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ When\ switching\ to\ right-\/to-\/left,\ keep\ track\ of\ the\ first\ glyph\ that}}
+\DoxyCodeLine{01579\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ was\ RTL\ so\ that\ we\ can\ later\ offset\ the\ X\ positions.}}
+\DoxyCodeLine{01580\ \ \ \ \ \ \ \ \ dir\ =\ TextProperties::D\_rtl;}
+\DoxyCodeLine{01581\ \ \ \ \ \ \ \ \ rtl\_begin\ =\ placed\_glyphs.size();}
+\DoxyCodeLine{01582\ \ \ \ \ \ \ \ \ rtl\_begin\_xpos\ =\ xpos;}
+\DoxyCodeLine{01583\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01584\ \ \ \ \ \}}
+\DoxyCodeLine{01585\ }
+\DoxyCodeLine{01586\ \ \ \ \ \textcolor{keywordflow}{if}\ (character\ ==\ \textcolor{charliteral}{'\ '})\ \{}
+\DoxyCodeLine{01587\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ space\ is\ a\ special\ case.}}
+\DoxyCodeLine{01588\ \ \ \ \ \ \ xpos\ +=\ properties-\/>get\_glyph\_scale()\ *\ properties-\/>get\_text\_scale()\ *\ font-\/>get\_space\_advance();}
+\DoxyCodeLine{01589\ \ \ \ \ \ \ prev\_char\ =\ -\/1;}
+\DoxyCodeLine{01590\ }
+\DoxyCodeLine{01591\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (character\ ==\ \textcolor{charliteral}{'\(\backslash\)t'})\ \{}
+\DoxyCodeLine{01592\ \ \ \ \ \ \ \textcolor{comment}{//\ So\ is\ a\ tab\ character.}}
+\DoxyCodeLine{01593\ \ \ \ \ \ \ PN\_stdfloat\ tab\_width\ =\ properties-\/>get\_tab\_width();}
+\DoxyCodeLine{01594\ \ \ \ \ \ \ xpos\ =\ (floor(xpos\ /\ tab\_width)\ +\ 1.0f)\ *\ tab\_width;}
+\DoxyCodeLine{01595\ \ \ \ \ \ \ prev\_char\ =\ -\/1;}
+\DoxyCodeLine{01596\ }
+\DoxyCodeLine{01597\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (character\ ==\ (\textcolor{keywordtype}{char32\_t})text\_soft\_hyphen\_key)\ \{}
+\DoxyCodeLine{01598\ \ \ \ \ \ \ \textcolor{comment}{//\ And\ so\ is\ the\ 'soft-\/hyphen'\ key\ character.}}
+\DoxyCodeLine{01599\ }
+\DoxyCodeLine{01600\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (graphic\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01601\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ special\ embedded\ graphic.}}
+\DoxyCodeLine{01602\ \ \ \ \ \ \ GlyphPlacement\ placement;}
+\DoxyCodeLine{01603\ }
+\DoxyCodeLine{01604\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ model\ =\ graphic-\/>get\_model().node();}
+\DoxyCodeLine{01605\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (graphic-\/>get\_instance\_flag())\ \{}
+\DoxyCodeLine{01606\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Instance\ the\ model\ in.\ \ Create\ a\ ModelNode\ so\ it\ doesn't\ get}}
+\DoxyCodeLine{01607\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ flattened.}}
+\DoxyCodeLine{01608\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classModelNode}{ModelNode}})\ model\_node\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classModelNode}{ModelNode}}(\textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{01609\ \ \ \ \ \ \ \ \ model\_node-\/>set\_preserve\_transform(ModelNode::PT\_no\_touch);}
+\DoxyCodeLine{01610\ \ \ \ \ \ \ \ \ model\_node-\/>add\_child(model);}
+\DoxyCodeLine{01611\ \ \ \ \ \ \ \ \ placement.\_graphic\_model\ =\ model\_node.p();}
+\DoxyCodeLine{01612\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01613\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Copy\ the\ model\ in.\ \ This\ the\ preferred\ way;\ it's\ a\ little\ cheaper}}
+\DoxyCodeLine{01614\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ to\ render\ than\ instancing\ (because\ flattening\ is\ more\ effective).}}
+\DoxyCodeLine{01615\ \ \ \ \ \ \ \ \ placement.\_graphic\_model\ =\ model-\/>copy\_subgraph();}
+\DoxyCodeLine{01616\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01617\ }
+\DoxyCodeLine{01618\ \ \ \ \ \ \ LVecBase4\ frame\ =\ graphic-\/>get\_frame();}
+\DoxyCodeLine{01619\ \ \ \ \ \ \ PN\_stdfloat\ glyph\_scale\ =\ properties-\/>get\_glyph\_scale()\ *\ properties-\/>get\_text\_scale();}
+\DoxyCodeLine{01620\ }
+\DoxyCodeLine{01621\ \ \ \ \ \ \ PN\_stdfloat\ advance\ =\ (frame[1]\ -\/\ frame[0]);}
+\DoxyCodeLine{01622\ }
+\DoxyCodeLine{01623\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ compute\ the\ matrix\ that\ will\ transform\ the\ glyph\ (or\ glyphs)\ into}}
+\DoxyCodeLine{01624\ \ \ \ \ \ \ \textcolor{comment}{//\ position.}}
+\DoxyCodeLine{01625\ \ \ \ \ \ \ placement.\_scale\ =\ properties-\/>get\_glyph\_scale();}
+\DoxyCodeLine{01626\ \ \ \ \ \ \ placement.\_xpos\ =\ (xpos\ -\/\ frame[0]);}
+\DoxyCodeLine{01627\ \ \ \ \ \ \ placement.\_ypos\ =\ (properties-\/>get\_glyph\_shift()\ -\/\ frame[2]);}
+\DoxyCodeLine{01628\ \ \ \ \ \ \ placement.\_slant\ =\ properties-\/>get\_slant();}
+\DoxyCodeLine{01629\ \ \ \ \ \ \ placement.\_properties\ =\ properties;}
+\DoxyCodeLine{01630\ }
+\DoxyCodeLine{01631\ \ \ \ \ \ \ placed\_glyphs.push\_back(placement);}
+\DoxyCodeLine{01632\ }
+\DoxyCodeLine{01633\ \ \ \ \ \ \ xpos\ +=\ advance\ *\ glyph\_scale;}
+\DoxyCodeLine{01634\ \ \ \ \ \ \ prev\_char\ =\ -\/1;}
+\DoxyCodeLine{01635\ }
+\DoxyCodeLine{01636\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01637\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ printable\ character.}}
+\DoxyCodeLine{01638\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ got\_glyph;}
+\DoxyCodeLine{01639\ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ first\_glyph;}
+\DoxyCodeLine{01640\ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ second\_glyph;}
+\DoxyCodeLine{01641\ \ \ \ \ \ \ UnicodeLatinMap::AccentType\ accent\_type;}
+\DoxyCodeLine{01642\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ additional\_flags;}
+\DoxyCodeLine{01643\ \ \ \ \ \ \ PN\_stdfloat\ glyph\_scale;}
+\DoxyCodeLine{01644\ \ \ \ \ \ \ PN\_stdfloat\ advance\_scale;}
+\DoxyCodeLine{01645\ \ \ \ \ \ \ get\_character\_glyphs(character,\ properties,}
+\DoxyCodeLine{01646\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ got\_glyph,\ first\_glyph,\ second\_glyph,\ accent\_type,}
+\DoxyCodeLine{01647\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ additional\_flags,\ glyph\_scale,\ advance\_scale);}
+\DoxyCodeLine{01648\ }
+\DoxyCodeLine{01649\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!got\_glyph)\ \{}
+\DoxyCodeLine{01650\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[512];}
+\DoxyCodeLine{01651\ \ \ \ \ \ \ \ \ sprintf(buffer,\ \textcolor{stringliteral}{"{}U+\%04x"{}},\ character);}
+\DoxyCodeLine{01652\ \ \ \ \ \ \ \ \ text\_cat.warning()}
+\DoxyCodeLine{01653\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ definition\ in\ "{}}\ <<\ font-\/>get\_name()}
+\DoxyCodeLine{01654\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ for\ character\ "{}}\ <<\ buffer;}
+\DoxyCodeLine{01655\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (character\ <\ 128\ \&\&\ isprint((\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int})character))\ \{}
+\DoxyCodeLine{01656\ \ \ \ \ \ \ \ \ \ \ text\_cat.warning(\textcolor{keyword}{false})}
+\DoxyCodeLine{01657\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ ('"{}}\ <<\ (char)character\ <<\ \textcolor{stringliteral}{"{}')"{}};}
+\DoxyCodeLine{01658\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01659\ \ \ \ \ \ \ \ \ text\_cat.warning(\textcolor{keyword}{false})}
+\DoxyCodeLine{01660\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01661\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01662\ }
+\DoxyCodeLine{01663\ \ \ \ \ \ \ glyph\_scale\ *=\ properties-\/>get\_glyph\_scale()\ *\ properties-\/>get\_text\_scale();}
+\DoxyCodeLine{01664\ }
+\DoxyCodeLine{01665\ \ \ \ \ \ \ \textcolor{comment}{//\ Add\ the\ kerning\ delta.}}
+\DoxyCodeLine{01666\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (text\_kerning)\ \{}
+\DoxyCodeLine{01667\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (prev\_char\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01668\ \ \ \ \ \ \ \ \ \ \ xpos\ +=\ font-\/>\mbox{\hyperlink{classTextFont_a55d6b36c5e861a81d04bb0d4483a73ab}{get\_kerning}}(prev\_char,\ character)\ *\ glyph\_scale;}
+\DoxyCodeLine{01669\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01670\ \ \ \ \ \ \ \ \ prev\_char\ =\ character;}
+\DoxyCodeLine{01671\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01672\ }
+\DoxyCodeLine{01673\ \ \ \ \ \ \ \textcolor{comment}{//\ Build\ up\ a\ GlyphPlacement,\ indicating\ all\ of\ the\ Geoms\ that\ go\ into}}
+\DoxyCodeLine{01674\ \ \ \ \ \ \ \textcolor{comment}{//\ this\ character.\ \ Normally,\ there\ is\ only\ one\ Geom\ per\ character,\ but}}
+\DoxyCodeLine{01675\ \ \ \ \ \ \ \textcolor{comment}{//\ it\ may\ involve\ multiple\ Geoms\ if\ we\ need\ to\ add\ cheesy\ accents\ or}}
+\DoxyCodeLine{01676\ \ \ \ \ \ \ \textcolor{comment}{//\ ligatures.}}
+\DoxyCodeLine{01677\ \ \ \ \ \ \ GlyphPlacement\ placement;}
+\DoxyCodeLine{01678\ }
+\DoxyCodeLine{01679\ \ \ \ \ \ \ placement.\_glyph\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01680\ \ \ \ \ \ \ placement.\_scale\ =\ glyph\_scale;}
+\DoxyCodeLine{01681\ \ \ \ \ \ \ placement.\_xpos\ =\ xpos;}
+\DoxyCodeLine{01682\ \ \ \ \ \ \ placement.\_ypos\ =\ properties-\/>get\_glyph\_shift();}
+\DoxyCodeLine{01683\ \ \ \ \ \ \ placement.\_slant\ =\ properties-\/>get\_slant();}
+\DoxyCodeLine{01684\ \ \ \ \ \ \ placement.\_properties\ =\ properties;}
+\DoxyCodeLine{01685\ }
+\DoxyCodeLine{01686\ \ \ \ \ \ \ PN\_stdfloat\ advance\ =\ 0.0f;}
+\DoxyCodeLine{01687\ }
+\DoxyCodeLine{01688\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (accent\_type\ !=\ UnicodeLatinMap::AT\_none\ ||\ additional\_flags\ !=\ 0)\ \{}
+\DoxyCodeLine{01689\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ some\ special\ handling\ to\ perform,\ do\ so\ now.\ \ This\ will}}
+\DoxyCodeLine{01690\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ probably\ require\ the\ bounding\ volume\ of\ the\ glyph,\ so\ go\ get\ that.}}
+\DoxyCodeLine{01691\ \ \ \ \ \ \ \ \ LPoint3\ min\_vert,\ max\_vert;}
+\DoxyCodeLine{01692\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ found\_any\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01693\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (first\_glyph\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01694\ \ \ \ \ \ \ \ \ \ \ first\_glyph-\/>calc\_tight\_bounds(min\_vert,\ max\_vert,\ found\_any,}
+\DoxyCodeLine{01695\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ current\_thread);}
+\DoxyCodeLine{01696\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01697\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (second\_glyph\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01698\ \ \ \ \ \ \ \ \ \ \ second\_glyph-\/>calc\_tight\_bounds(min\_vert,\ max\_vert,\ found\_any,}
+\DoxyCodeLine{01699\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ current\_thread);}
+\DoxyCodeLine{01700\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01701\ }
+\DoxyCodeLine{01702\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (found\_any)\ \{}
+\DoxyCodeLine{01703\ \ \ \ \ \ \ \ \ \ \ LPoint3\ centroid\ =\ (min\_vert\ +\ max\_vert)\ /\ 2.0f;}
+\DoxyCodeLine{01704\ }
+\DoxyCodeLine{01705\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((additional\_flags\ \&\ UnicodeLatinMap::AF\_turned)\ !=\ 0)\ \{}
+\DoxyCodeLine{01706\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Invert\ the\ character.\ \ Should\ we\ also\ invert\ the\ accent\ mark,}}
+\DoxyCodeLine{01707\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ so\ that\ an\ accent\ that\ would\ have\ been\ above\ the\ glyph\ will\ now}}
+\DoxyCodeLine{01708\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ be\ below\ it?\ \ That's\ what\ we\ do\ here,\ which\ is\ probably\ the}}
+\DoxyCodeLine{01709\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ right\ thing\ to\ do\ for\ n-\/tilde,\ but\ not\ for\ most\ of\ the\ rest\ of}}
+\DoxyCodeLine{01710\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ accent\ marks.\ \ For\ now\ we'll\ assume\ there\ are\ no\ characters}}
+\DoxyCodeLine{01711\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ with\ accent\ marks\ that\ also\ have\ the\ turned\ flag.}}
+\DoxyCodeLine{01712\ }
+\DoxyCodeLine{01713\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ rotate\ the\ character\ around\ its\ centroid,\ which\ may\ not}}
+\DoxyCodeLine{01714\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ always\ be\ the\ right\ point,\ but\ it's\ the\ best\ we've\ got\ and\ it's}}
+\DoxyCodeLine{01715\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ probably\ pretty\ close.}}
+\DoxyCodeLine{01716\ \ \ \ \ \ \ \ \ \ \ \ \ placement.\_scale\ *=\ -\/1;}
+\DoxyCodeLine{01717\ \ \ \ \ \ \ \ \ \ \ \ \ placement.\_xpos\ +=\ centroid[0]\ *\ 2;}
+\DoxyCodeLine{01718\ \ \ \ \ \ \ \ \ \ \ \ \ placement.\_ypos\ +=\ centroid[2]\ *\ 2;}
+\DoxyCodeLine{01719\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01720\ }
+\DoxyCodeLine{01721\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (accent\_type\ !=\ UnicodeLatinMap::AT\_none)\ \{}
+\DoxyCodeLine{01722\ \ \ \ \ \ \ \ \ \ \ \ \ GlyphPlacement\ accent\_placement(placement);}
+\DoxyCodeLine{01723\ \ \ \ \ \ \ \ \ \ \ \ \ tack\_on\_accent(accent\_type,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{01724\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ accent\_placement);}
+\DoxyCodeLine{01725\ \ \ \ \ \ \ \ \ \ \ \ \ placed\_glyphs.push\_back(accent\_placement);}
+\DoxyCodeLine{01726\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01727\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01728\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01729\ }
+\DoxyCodeLine{01730\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (first\_glyph\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01731\ \ \ \ \ \ \ \ \ advance\ =\ first\_glyph-\/>get\_advance()\ *\ advance\_scale;}
+\DoxyCodeLine{01732\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!first\_glyph-\/>is\_whitespace())\ \{}
+\DoxyCodeLine{01733\ \ \ \ \ \ \ \ \ \ \ std::swap(placement.\_glyph,\ first\_glyph);}
+\DoxyCodeLine{01734\ \ \ \ \ \ \ \ \ \ \ placed\_glyphs.push\_back(placement);}
+\DoxyCodeLine{01735\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01736\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01737\ }
+\DoxyCodeLine{01738\ \ \ \ \ \ \ \textcolor{comment}{//\ Check\ if\ there\ is\ a\ second\ glyph\ to\ create\ a\ hacky\ ligature\ or\ some}}
+\DoxyCodeLine{01739\ \ \ \ \ \ \ \textcolor{comment}{//\ such\ nonsense.}}
+\DoxyCodeLine{01740\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (second\_glyph\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01741\ \ \ \ \ \ \ \ \ placement.\_xpos\ +=\ advance\ *\ glyph\_scale;}
+\DoxyCodeLine{01742\ \ \ \ \ \ \ \ \ advance\ +=\ second\_glyph-\/>get\_advance();}
+\DoxyCodeLine{01743\ \ \ \ \ \ \ \ \ std::swap(placement.\_glyph,\ second\_glyph);}
+\DoxyCodeLine{01744\ \ \ \ \ \ \ \ \ placed\_glyphs.push\_back(placement);}
+\DoxyCodeLine{01745\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01746\ }
+\DoxyCodeLine{01747\ \ \ \ \ \ \ xpos\ +=\ advance\ *\ glyph\_scale;}
+\DoxyCodeLine{01748\ \ \ \ \ \}}
+\DoxyCodeLine{01749\ \ \ \}}
+\DoxyCodeLine{01750\ }
+\DoxyCodeLine{01751\ \ \ \textcolor{keywordflow}{if}\ (dir\ ==\ TextProperties::D\_rtl)\ \{}
+\DoxyCodeLine{01752\ \ \ \ \ \textcolor{comment}{//\ Flip\ the\ preceding\ characters.}}
+\DoxyCodeLine{01753\ \ \ \ \ PN\_stdfloat\ xpos2\ =\ xpos;}
+\DoxyCodeLine{01754\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ i\ =\ placed\_glyphs.size();}
+\DoxyCodeLine{01755\ \ \ \ \ \textcolor{keywordflow}{while}\ (i\ >\ rtl\_begin)\ \{}
+\DoxyCodeLine{01756\ \ \ \ \ \ \ -\/-\/i;}
+\DoxyCodeLine{01757\ \ \ \ \ \ \ PN\_stdfloat\ new\_xpos\ =\ rtl\_begin\_xpos\ +\ (xpos\ -\/\ xpos2);}
+\DoxyCodeLine{01758\ \ \ \ \ \ \ xpos2\ =\ placed\_glyphs[i].\_xpos;}
+\DoxyCodeLine{01759\ \ \ \ \ \ \ placed\_glyphs[i].\_xpos\ =\ new\_xpos;}
+\DoxyCodeLine{01760\ \ \ \ \ \}}
+\DoxyCodeLine{01761\ \ \ \}}
+\DoxyCodeLine{01762\ }
+\DoxyCodeLine{01763\ \textcolor{preprocessor}{\#if\ defined(HAVE\_HARFBUZZ)\ \&\&\ defined(HAVE\_FREETYPE)}}
+\DoxyCodeLine{01764\ \ \ \textcolor{keywordflow}{if}\ (harfbuff\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ hb\_buffer\_get\_length(harfbuff)\ >\ 0)\ \{}
+\DoxyCodeLine{01765\ \ \ \ \ shape\_buffer(harfbuff,\ placed\_glyphs,\ xpos,\ prev\_cprops-\/>\_properties);}
+\DoxyCodeLine{01766\ \ \ \}}
+\DoxyCodeLine{01767\ \ \ hb\_buffer\_destroy(harfbuff);}
+\DoxyCodeLine{01768\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01769\ }
+\DoxyCodeLine{01770\ \ \ \textcolor{keywordflow}{if}\ (underscore\ \&\&\ underscore\_start\ !=\ xpos)\ \{}
+\DoxyCodeLine{01771\ \ \ \ \ draw\_underscore(placed\_glyphs,\ underscore\_start,\ xpos,}
+\DoxyCodeLine{01772\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ underscore\_properties);}
+\DoxyCodeLine{01773\ \ \ \}}
+\DoxyCodeLine{01774\ }
+\DoxyCodeLine{01775\ \ \ row\_width\ =\ xpos;}
+\DoxyCodeLine{01776\ }
+\DoxyCodeLine{01777\ \ \ \textcolor{keywordflow}{if}\ (row.\_eol\_cprops\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01778\ \ \ \ \ \textcolor{comment}{//\ If\ there's\ an\ \_eol\_cprops,\ it\ represents\ the\ cprops\ of\ the\ newline}}
+\DoxyCodeLine{01779\ \ \ \ \ \textcolor{comment}{//\ character\ that\ ended\ the\ line,\ which\ should\ also\ contribute\ towards\ the}}
+\DoxyCodeLine{01780\ \ \ \ \ \textcolor{comment}{//\ line\_height.}}
+\DoxyCodeLine{01781\ }
+\DoxyCodeLine{01782\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ *properties\ =\ \&(row.\_eol\_cprops-\/>\_properties);}
+\DoxyCodeLine{01783\ \ \ \ \ \mbox{\hyperlink{classTextFont}{TextFont}}\ *font\ =\ properties-\/>get\_font();}
+\DoxyCodeLine{01784\ \ \ \ \ nassertv(font\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01785\ }
+\DoxyCodeLine{01786\ \ \ \ \ \textcolor{keywordflow}{if}\ (line\_height\ ==\ 0.0f)\ \{}
+\DoxyCodeLine{01787\ \ \ \ \ \ \ PN\_stdfloat\ glyph\_scale\ =\ properties-\/>get\_glyph\_scale()\ *\ properties-\/>get\_text\_scale();}
+\DoxyCodeLine{01788\ \ \ \ \ \ \ line\_height\ =\ max(line\_height,\ font-\/>get\_line\_height()\ *\ glyph\_scale);}
+\DoxyCodeLine{01789\ \ \ \ \ \}}
+\DoxyCodeLine{01790\ \ \ \}}
+\DoxyCodeLine{01791\ \}}
+\DoxyCodeLine{01792\ }
+\DoxyCodeLine{01796\ \textcolor{keywordtype}{void}\ TextAssembler::}
+\DoxyCodeLine{01797\ shape\_buffer(hb\_buffer\_t\ *buf,\ PlacedGlyphs\ \&placed\_glyphs,\ PN\_stdfloat\ \&xpos,}
+\DoxyCodeLine{01798\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ \&properties)\ \{}
+\DoxyCodeLine{01799\ }
+\DoxyCodeLine{01800\ \textcolor{preprocessor}{\#if\ defined(HAVE\_HARFBUZZ)\ \&\&\ defined(HAVE\_FREETYPE)}}
+\DoxyCodeLine{01801\ \ \ \textcolor{comment}{//\ If\ we\ did\ not\ specify\ a\ text\ direction,\ harfbuzz\ will\ guess\ it\ based\ on}}
+\DoxyCodeLine{01802\ \ \ \textcolor{comment}{//\ the\ script\ we\ are\ using.}}
+\DoxyCodeLine{01803\ \ \ hb\_direction\_t\ direction\ =\ HB\_DIRECTION\_INVALID;}
+\DoxyCodeLine{01804\ \ \ \textcolor{keywordflow}{if}\ (properties.has\_direction())\ \{}
+\DoxyCodeLine{01805\ \ \ \ \ \textcolor{keywordflow}{switch}\ (properties.get\_direction())\ \{}
+\DoxyCodeLine{01806\ \ \ \ \ \textcolor{keywordflow}{case}\ TextProperties::D\_ltr:}
+\DoxyCodeLine{01807\ \ \ \ \ \ \ direction\ =\ HB\_DIRECTION\_LTR;}
+\DoxyCodeLine{01808\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01809\ \ \ \ \ \textcolor{keywordflow}{case}\ TextProperties::D\_rtl:}
+\DoxyCodeLine{01810\ \ \ \ \ \ \ direction\ =\ HB\_DIRECTION\_RTL;}
+\DoxyCodeLine{01811\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01812\ \ \ \ \ \}}
+\DoxyCodeLine{01813\ \ \ \}}
+\DoxyCodeLine{01814\ \ \ hb\_buffer\_set\_content\_type(buf,\ HB\_BUFFER\_CONTENT\_TYPE\_UNICODE);}
+\DoxyCodeLine{01815\ \ \ hb\_buffer\_set\_direction(buf,\ direction);}
+\DoxyCodeLine{01816\ \ \ hb\_buffer\_guess\_segment\_properties(buf);}
+\DoxyCodeLine{01817\ }
+\DoxyCodeLine{01818\ \ \ DynamicTextFont\ *font\ =\ DCAST(DynamicTextFont,\ properties.get\_font());}
+\DoxyCodeLine{01819\ \ \ hb\_font\_t\ *hb\_font\ =\ font-\/>get\_hb\_font();}
+\DoxyCodeLine{01820\ \ \ hb\_shape(hb\_font,\ buf,\ \textcolor{keyword}{nullptr},\ 0);}
+\DoxyCodeLine{01821\ }
+\DoxyCodeLine{01822\ \ \ PN\_stdfloat\ glyph\_scale\ =\ properties.get\_glyph\_scale()\ *\ properties.get\_text\_scale();}
+\DoxyCodeLine{01823\ \ \ PN\_stdfloat\ scale\ =\ glyph\_scale\ /\ (font-\/>get\_pixels\_per\_unit()\ *\ font-\/>get\_scale\_factor()\ *\ 64.0);}
+\DoxyCodeLine{01824\ }
+\DoxyCodeLine{01825\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ glyph\_count;}
+\DoxyCodeLine{01826\ \ \ hb\_glyph\_info\_t\ *glyph\_info\ =\ hb\_buffer\_get\_glyph\_infos(buf,\ \&glyph\_count);}
+\DoxyCodeLine{01827\ \ \ hb\_glyph\_position\_t\ *glyph\_pos\ =\ hb\_buffer\_get\_glyph\_positions(buf,\ \&glyph\_count);}
+\DoxyCodeLine{01828\ }
+\DoxyCodeLine{01829\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ glyph\_count;\ ++i)\ \{}
+\DoxyCodeLine{01830\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ cluster\ =\ glyph\_info[i].cluster;}
+\DoxyCodeLine{01831\ \ \ \ \ \textcolor{keywordtype}{int}\ character\ =\ cluster\ \&\ 0x1fffff;}
+\DoxyCodeLine{01832\ \ \ \ \ \textcolor{keywordtype}{int}\ glyph\_index\ =\ glyph\_info[i].codepoint;}
+\DoxyCodeLine{01833\ }
+\DoxyCodeLine{01834\ \ \ \ \ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ glyph;}
+\DoxyCodeLine{01835\ \ \ \ \ \textcolor{keywordflow}{if}\ (!font-\/>get\_glyph\_by\_index(character,\ glyph\_index,\ glyph))\ \{}
+\DoxyCodeLine{01836\ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[512];}
+\DoxyCodeLine{01837\ \ \ \ \ \ \ sprintf(buffer,\ \textcolor{stringliteral}{"{}U+\%04x"{}},\ character);}
+\DoxyCodeLine{01838\ \ \ \ \ \ \ text\_cat.warning()}
+\DoxyCodeLine{01839\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ definition\ in\ "{}}\ <<\ font-\/>get\_name()}
+\DoxyCodeLine{01840\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ for\ character\ "{}}\ <<\ buffer;}
+\DoxyCodeLine{01841\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (character\ <\ 128\ \&\&\ isprint((\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int})character))\ \{}
+\DoxyCodeLine{01842\ \ \ \ \ \ \ \ \ text\_cat.warning(\textcolor{keyword}{false})}
+\DoxyCodeLine{01843\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ ('"{}}\ <<\ (char)character\ <<\ \textcolor{stringliteral}{"{}')"{}};}
+\DoxyCodeLine{01844\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01845\ \ \ \ \ \ \ text\_cat.warning(\textcolor{keyword}{false})}
+\DoxyCodeLine{01846\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01847\ \ \ \ \ \}}
+\DoxyCodeLine{01848\ }
+\DoxyCodeLine{01849\ \ \ \ \ PN\_stdfloat\ advance\ =\ glyph\_pos[i].x\_advance\ *\ scale;}
+\DoxyCodeLine{01850\ \ \ \ \ \textcolor{keywordflow}{if}\ (glyph-\/>is\_whitespace())\ \{}
+\DoxyCodeLine{01851\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ space\ is\ a\ special\ case.}}
+\DoxyCodeLine{01852\ \ \ \ \ \ \ xpos\ +=\ advance;}
+\DoxyCodeLine{01853\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01854\ \ \ \ \ \}}
+\DoxyCodeLine{01855\ }
+\DoxyCodeLine{01856\ \ \ \ \ PN\_stdfloat\ x\_offset\ =\ glyph\_pos[i].x\_offset\ *\ scale;}
+\DoxyCodeLine{01857\ \ \ \ \ PN\_stdfloat\ y\_offset\ =\ glyph\_pos[i].y\_offset\ *\ scale;}
+\DoxyCodeLine{01858\ }
+\DoxyCodeLine{01859\ \ \ \ \ \textcolor{comment}{//\ Build\ up\ a\ GlyphPlacement,\ indicating\ all\ of\ the\ Geoms\ that\ go\ into}}
+\DoxyCodeLine{01860\ \ \ \ \ \textcolor{comment}{//\ this\ character.\ \ Normally,\ there\ is\ only\ one\ Geom\ per\ character,\ but}}
+\DoxyCodeLine{01861\ \ \ \ \ \textcolor{comment}{//\ it\ may\ involve\ multiple\ Geoms\ if\ we\ need\ to\ add\ cheesy\ accents\ or}}
+\DoxyCodeLine{01862\ \ \ \ \ \textcolor{comment}{//\ ligatures.}}
+\DoxyCodeLine{01863\ \ \ \ \ GlyphPlacement\ placement;}
+\DoxyCodeLine{01864\ \ \ \ \ placement.\_glyph\ =\ std::move(glyph);}
+\DoxyCodeLine{01865\ \ \ \ \ placement.\_scale\ =\ glyph\_scale;}
+\DoxyCodeLine{01866\ \ \ \ \ placement.\_xpos\ =\ xpos\ +\ x\_offset;}
+\DoxyCodeLine{01867\ \ \ \ \ placement.\_ypos\ =\ properties.get\_glyph\_shift()\ +\ y\_offset;}
+\DoxyCodeLine{01868\ \ \ \ \ placement.\_slant\ =\ properties.get\_slant();}
+\DoxyCodeLine{01869\ \ \ \ \ placement.\_properties\ =\ \&properties;}
+\DoxyCodeLine{01870\ }
+\DoxyCodeLine{01871\ \ \ \ \ \textcolor{keywordflow}{if}\ (cluster\ \&\ CF\_small\_caps)\ \{}
+\DoxyCodeLine{01872\ \ \ \ \ \ \ advance\ *=\ properties.get\_small\_caps\_scale();}
+\DoxyCodeLine{01873\ \ \ \ \ \ \ placement.\_scale\ *=\ properties.get\_small\_caps\_scale();}
+\DoxyCodeLine{01874\ \ \ \ \ \}}
+\DoxyCodeLine{01875\ }
+\DoxyCodeLine{01876\ \ \ \ \ placed\_glyphs.push\_back(placement);}
+\DoxyCodeLine{01877\ }
+\DoxyCodeLine{01878\ \ \ \ \ xpos\ +=\ advance;}
+\DoxyCodeLine{01879\ \ \ \}}
+\DoxyCodeLine{01880\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01881\ \}}
+\DoxyCodeLine{01882\ }
+\DoxyCodeLine{01887\ \textcolor{keywordtype}{void}\ TextAssembler::}
+\DoxyCodeLine{01888\ draw\_underscore(\mbox{\hyperlink{classpvector}{TextAssembler::PlacedGlyphs}}\ \&placed\_glyphs,}
+\DoxyCodeLine{01889\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ PN\_stdfloat\ underscore\_start,\ PN\_stdfloat\ underscore\_end,}
+\DoxyCodeLine{01890\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ *underscore\_properties)\ \{}
+\DoxyCodeLine{01891\ }
+\DoxyCodeLine{01892\ \ \ CPT(\mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}})\ format\ =\ GeomVertexFormat::get\_v3c();}
+\DoxyCodeLine{01893\ \ \ PT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ vdata\ =}
+\DoxyCodeLine{01894\ \ \ \ \ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}(\textcolor{stringliteral}{"{}underscore"{}},\ format,\ Geom::UH\_static);}
+\DoxyCodeLine{01895\ \ \ vdata-\/>unclean\_set\_num\_rows(2);}
+\DoxyCodeLine{01896\ \ \ \mbox{\hyperlink{classGeomVertexWriter}{GeomVertexWriter}}\ vertex(vdata,\ InternalName::get\_vertex());}
+\DoxyCodeLine{01897\ \ \ \mbox{\hyperlink{classGeomVertexWriter}{GeomVertexWriter}}\ \mbox{\hyperlink{structcolor}{color}}(vdata,\ InternalName::get\_color());}
+\DoxyCodeLine{01898\ }
+\DoxyCodeLine{01899\ \ \ PN\_stdfloat\ y\ =\ underscore\_properties-\/>get\_underscore\_height();}
+\DoxyCodeLine{01900\ \ \ vertex.set\_data3(underscore\_start,\ 0.0f,\ y);}
+\DoxyCodeLine{01901\ \ \ \mbox{\hyperlink{structcolor}{color}}.set\_data4(underscore\_properties-\/>get\_text\_color());}
+\DoxyCodeLine{01902\ \ \ vertex.set\_data3(underscore\_end,\ 0.0f,\ y);}
+\DoxyCodeLine{01903\ \ \ \mbox{\hyperlink{structcolor}{color}}.set\_data4(underscore\_properties-\/>get\_text\_color());}
+\DoxyCodeLine{01904\ }
+\DoxyCodeLine{01905\ \ \ PT(\mbox{\hyperlink{classGeomLines}{GeomLines}})\ lines\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomLines}{GeomLines}}(Geom::UH\_static);}
+\DoxyCodeLine{01906\ \ \ lines-\/>add\_next\_vertices(2);}
+\DoxyCodeLine{01907\ \ \ lines-\/>close\_primitive();}
+\DoxyCodeLine{01908\ }
+\DoxyCodeLine{01909\ \ \ PT(\mbox{\hyperlink{classGeom}{Geom}})\ geom\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeom}{Geom}}(vdata);}
+\DoxyCodeLine{01910\ \ \ geom-\/>add\_primitive(lines);}
+\DoxyCodeLine{01911\ }
+\DoxyCodeLine{01912\ \ \ PT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ glyph\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTextGlyph}{TextGlyph}}(0,\ geom,\ RenderState::make\_empty(),\ 0);}
+\DoxyCodeLine{01913\ }
+\DoxyCodeLine{01914\ \ \ \textcolor{comment}{//\ Eventually\ we\ should\ probably\ replace\ this\ with\ the\ set\_quad\ approach,\ or}}
+\DoxyCodeLine{01915\ \ \ \textcolor{comment}{//\ better,\ for\ improved\ performance.}}
+\DoxyCodeLine{01916\ \ \ \textcolor{comment}{//\ glyph-\/>set\_quad(LVecBase4(underscore\_start,\ y,\ underscore\_end,\ y+0.1),}}
+\DoxyCodeLine{01917\ \ \ \textcolor{comment}{//\ LVecBase4(0),\ RenderState::make\_empty());}}
+\DoxyCodeLine{01918\ }
+\DoxyCodeLine{01919\ \ \ GlyphPlacement\ placement;}
+\DoxyCodeLine{01920\ \ \ placement.\_glyph\ =\ std::move(glyph);}
+\DoxyCodeLine{01921\ \ \ placement.\_xpos\ =\ 0;}
+\DoxyCodeLine{01922\ \ \ placement.\_ypos\ =\ 0;}
+\DoxyCodeLine{01923\ \ \ placement.\_scale\ =\ 1;}
+\DoxyCodeLine{01924\ \ \ placement.\_slant\ =\ 0;}
+\DoxyCodeLine{01925\ \ \ placement.\_properties\ =\ underscore\_properties;}
+\DoxyCodeLine{01926\ \ \ placed\_glyphs.push\_back(placement);}
+\DoxyCodeLine{01927\ \}}
+\DoxyCodeLine{01928\ }
+\DoxyCodeLine{01941\ \textcolor{keywordtype}{void}\ TextAssembler::}
+\DoxyCodeLine{01942\ get\_character\_glyphs(\textcolor{keywordtype}{int}\ character,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ *properties,}
+\DoxyCodeLine{01943\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ \&got\_glyph,\ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ \&glyph,}
+\DoxyCodeLine{01944\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ \&second\_glyph,}
+\DoxyCodeLine{01945\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ UnicodeLatinMap::AccentType\ \&accent\_type,}
+\DoxyCodeLine{01946\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \&additional\_flags,}
+\DoxyCodeLine{01947\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ PN\_stdfloat\ \&glyph\_scale,\ PN\_stdfloat\ \&advance\_scale)\ \{}
+\DoxyCodeLine{01948\ \ \ \mbox{\hyperlink{classTextFont}{TextFont}}\ *font\ =\ properties-\/>get\_font();}
+\DoxyCodeLine{01949\ \ \ nassertv\_always(font\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01950\ }
+\DoxyCodeLine{01951\ \ \ got\_glyph\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01952\ \ \ glyph\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01953\ \ \ second\_glyph\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01954\ \ \ accent\_type\ =\ UnicodeLatinMap::AT\_none;}
+\DoxyCodeLine{01955\ \ \ additional\_flags\ =\ 0;}
+\DoxyCodeLine{01956\ \ \ glyph\_scale\ =\ 1.0f;}
+\DoxyCodeLine{01957\ \ \ advance\_scale\ =\ 1.0f;}
+\DoxyCodeLine{01958\ }
+\DoxyCodeLine{01959\ \ \ \textcolor{comment}{//\ Maybe\ we\ should\ remap\ the\ character\ to\ something\ else-\/-\/e.g.\ \ a\ small}}
+\DoxyCodeLine{01960\ \ \ \textcolor{comment}{//\ capital.}}
+\DoxyCodeLine{01961\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classUnicodeLatinMap_1_1Entry}{UnicodeLatinMap::Entry}}\ *map\_entry\ =}
+\DoxyCodeLine{01962\ \ \ \ \ \mbox{\hyperlink{classUnicodeLatinMap_a4ffd050ea2daac1619647b3cdddc2833}{UnicodeLatinMap::look\_up}}((\textcolor{keywordtype}{char32\_t})character);}
+\DoxyCodeLine{01963\ \ \ \textcolor{keywordflow}{if}\ (map\_entry\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01964\ \ \ \ \ \textcolor{keywordflow}{if}\ (properties-\/>get\_small\_caps()\ \&\&}
+\DoxyCodeLine{01965\ \ \ \ \ \ \ \ \ map\_entry-\/>\_toupper\_character\ !=\ (\textcolor{keywordtype}{char32\_t})character)\ \{}
+\DoxyCodeLine{01966\ \ \ \ \ \ \ character\ =\ map\_entry-\/>\_toupper\_character;}
+\DoxyCodeLine{01967\ \ \ \ \ \ \ map\_entry\ =\ \mbox{\hyperlink{classUnicodeLatinMap_a4ffd050ea2daac1619647b3cdddc2833}{UnicodeLatinMap::look\_up}}(character);}
+\DoxyCodeLine{01968\ \ \ \ \ \ \ glyph\_scale\ =\ properties-\/>get\_small\_caps\_scale();}
+\DoxyCodeLine{01969\ \ \ \ \ \}}
+\DoxyCodeLine{01970\ \ \ \}}
+\DoxyCodeLine{01971\ }
+\DoxyCodeLine{01972\ \ \ got\_glyph\ =\ font-\/>get\_glyph(character,\ glyph);}
+\DoxyCodeLine{01973\ \ \ \textcolor{keywordflow}{if}\ (!got\_glyph\ \&\&\ map\_entry\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ map\_entry-\/>\_ascii\_equiv\ !=\ 0)\ \{}
+\DoxyCodeLine{01974\ \ \ \ \ \textcolor{comment}{//\ If\ we\ couldn't\ find\ the\ Unicode\ glyph,\ try\ the\ ASCII\ equivalent}}
+\DoxyCodeLine{01975\ \ \ \ \ \textcolor{comment}{//\ (without\ the\ accent\ marks).}}
+\DoxyCodeLine{01976\ \ \ \ \ \textcolor{keywordflow}{if}\ (map\_entry-\/>\_ascii\_equiv\ ==\ \textcolor{charliteral}{'i'})\ \{}
+\DoxyCodeLine{01977\ \ \ \ \ \ \ \textcolor{comment}{//\ Special\ case\ for\ the\ i:\ we\ want\ to\ try\ the\ dotless\ variant\ first.}}
+\DoxyCodeLine{01978\ \ \ \ \ \ \ got\_glyph\ =\ font-\/>get\_glyph(0x0131,\ glyph)\ ||}
+\DoxyCodeLine{01979\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ font-\/>get\_glyph(\textcolor{charliteral}{'i'},\ glyph);}
+\DoxyCodeLine{01980\ }
+\DoxyCodeLine{01981\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (map\_entry-\/>\_ascii\_equiv\ ==\ \textcolor{charliteral}{'j'})\ \{}
+\DoxyCodeLine{01982\ \ \ \ \ \ \ \textcolor{comment}{//\ And\ the\ dotless\ j\ as\ well.}}
+\DoxyCodeLine{01983\ \ \ \ \ \ \ got\_glyph\ =\ font-\/>get\_glyph(0x0237,\ glyph)\ ||}
+\DoxyCodeLine{01984\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ font-\/>get\_glyph(\textcolor{charliteral}{'j'},\ glyph);}
+\DoxyCodeLine{01985\ }
+\DoxyCodeLine{01986\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01987\ \ \ \ \ \ \ got\_glyph\ =\ font-\/>get\_glyph(map\_entry-\/>\_ascii\_equiv,\ glyph);}
+\DoxyCodeLine{01988\ \ \ \ \ \}}
+\DoxyCodeLine{01989\ }
+\DoxyCodeLine{01990\ \ \ \ \ \textcolor{keywordflow}{if}\ (!got\_glyph\ \&\&\ map\_entry-\/>\_toupper\_character\ !=\ (\textcolor{keywordtype}{char32\_t})character)\ \{}
+\DoxyCodeLine{01991\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ still\ couldn't\ find\ it,\ try\ the\ uppercase\ equivalent.}}
+\DoxyCodeLine{01992\ \ \ \ \ \ \ character\ =\ map\_entry-\/>\_toupper\_character;}
+\DoxyCodeLine{01993\ \ \ \ \ \ \ map\_entry\ =\ \mbox{\hyperlink{classUnicodeLatinMap_a4ffd050ea2daac1619647b3cdddc2833}{UnicodeLatinMap::look\_up}}(character);}
+\DoxyCodeLine{01994\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (map\_entry\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01995\ \ \ \ \ \ \ \ \ got\_glyph\ =\ font-\/>get\_glyph(map\_entry-\/>\_ascii\_equiv,\ glyph);}
+\DoxyCodeLine{01996\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01997\ \ \ \ \ \}}
+\DoxyCodeLine{01998\ }
+\DoxyCodeLine{01999\ \ \ \ \ \textcolor{keywordflow}{if}\ (got\_glyph)\ \{}
+\DoxyCodeLine{02000\ \ \ \ \ \ \ accent\_type\ =\ map\_entry-\/>\_accent\_type;}
+\DoxyCodeLine{02001\ \ \ \ \ \ \ additional\_flags\ =\ map\_entry-\/>\_additional\_flags;}
+\DoxyCodeLine{02002\ }
+\DoxyCodeLine{02003\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ got\_second\_glyph\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02004\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (map\_entry-\/>\_ascii\_additional\ !=\ 0)\ \{}
+\DoxyCodeLine{02005\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ There's\ another\ character,\ too-\/-\/probably\ a\ ligature.}}
+\DoxyCodeLine{02006\ \ \ \ \ \ \ \ \ got\_second\_glyph\ =}
+\DoxyCodeLine{02007\ \ \ \ \ \ \ \ \ \ \ font-\/>get\_glyph(map\_entry-\/>\_ascii\_additional,\ second\_glyph);}
+\DoxyCodeLine{02008\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02009\ }
+\DoxyCodeLine{02010\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((additional\_flags\ \&\ UnicodeLatinMap::AF\_ligature)\ !=\ 0\ \&\&}
+\DoxyCodeLine{02011\ \ \ \ \ \ \ \ \ \ \ got\_second\_glyph)\ \{}
+\DoxyCodeLine{02012\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ two\ letters\ that\ are\ supposed\ to\ be\ in\ a\ ligature,\ just}}
+\DoxyCodeLine{02013\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ jam\ them\ together.}}
+\DoxyCodeLine{02014\ \ \ \ \ \ \ \ \ additional\_flags\ \&=\ \mbox{\hyperlink{classUnicodeLatinMap}{\string~UnicodeLatinMap}}::AF\_ligature;}
+\DoxyCodeLine{02015\ \ \ \ \ \ \ \ \ advance\_scale\ =\ ligature\_advance\_scale;}
+\DoxyCodeLine{02016\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02017\ }
+\DoxyCodeLine{02018\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((additional\_flags\ \&\ UnicodeLatinMap::AF\_smallcap)\ !=\ 0)\ \{}
+\DoxyCodeLine{02019\ \ \ \ \ \ \ \ \ additional\_flags\ \&=\ \mbox{\hyperlink{classUnicodeLatinMap}{\string~UnicodeLatinMap}}::AF\_smallcap;}
+\DoxyCodeLine{02020\ \ \ \ \ \ \ \ \ glyph\_scale\ =\ properties-\/>get\_small\_caps\_scale();}
+\DoxyCodeLine{02021\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02022\ \ \ \ \ \}}
+\DoxyCodeLine{02023\ \ \ \}}
+\DoxyCodeLine{02024\ \}}
+\DoxyCodeLine{02025\ }
+\DoxyCodeLine{02030\ \textcolor{keywordtype}{void}\ TextAssembler::}
+\DoxyCodeLine{02031\ tack\_on\_accent(UnicodeLatinMap::AccentType\ accent\_type,}
+\DoxyCodeLine{02032\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LPoint3\ \&min\_vert,\ \textcolor{keyword}{const}\ LPoint3\ \&max\_vert,}
+\DoxyCodeLine{02033\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LPoint3\ \&centroid,}
+\DoxyCodeLine{02034\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ *properties,}
+\DoxyCodeLine{02035\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ TextAssembler::GlyphPlacement\ \&placement)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02036\ }
+\DoxyCodeLine{02037\ \ \ \textcolor{comment}{//\ Look\ for\ a\ combining\ accent\ mark\ character.}}
+\DoxyCodeLine{02038\ \ \ \textcolor{keywordtype}{wchar\_t}\ combine\_char\ =\ \mbox{\hyperlink{classUnicodeLatinMap_a49fe2d30d259e3d1b85cc4d250a1ed1a}{UnicodeLatinMap::get\_combining\_accent}}(accent\_type);}
+\DoxyCodeLine{02039\ \ \ \textcolor{keywordflow}{if}\ (combine\_char\ !=\ 0\ \&\&}
+\DoxyCodeLine{02040\ \ \ \ \ \ \ tack\_on\_accent(combine\_char,\ CP\_above,\ CT\_none,\ min\_vert,\ max\_vert,}
+\DoxyCodeLine{02041\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ centroid,\ properties,\ placement))\ \{}
+\DoxyCodeLine{02042\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{02043\ \ \ \}}
+\DoxyCodeLine{02044\ }
+\DoxyCodeLine{02045\ }
+\DoxyCodeLine{02046\ \ \ \textcolor{keywordflow}{switch}\ (accent\_type)\ \{}
+\DoxyCodeLine{02047\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_grave:}
+\DoxyCodeLine{02048\ \ \ \ \ \textcolor{comment}{//\ We\ use\ the\ slash\ as\ the\ grave\ and\ acute\ accents.\ \ ASCII\ does\ have\ a}}
+\DoxyCodeLine{02049\ \ \ \ \ \textcolor{comment}{//\ grave\ accent\ character,\ but\ a\ lot\ of\ fonts\ put\ the\ reverse\ apostrophe}}
+\DoxyCodeLine{02050\ \ \ \ \ \textcolor{comment}{//\ there\ instead.\ \ And\ some\ fonts\ (particularly\ fonts\ from\ mf)\ don't\ even}}
+\DoxyCodeLine{02051\ \ \ \ \ \textcolor{comment}{//\ do\ backslash.}}
+\DoxyCodeLine{02052\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'/'},\ CP\_above,\ CT\_small\_squash\_mirror\_y,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02053\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02054\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02055\ }
+\DoxyCodeLine{02056\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_acute:}
+\DoxyCodeLine{02057\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'/'},\ CP\_above,\ CT\_small\_squash,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02058\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02059\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02060\ }
+\DoxyCodeLine{02061\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_breve:}
+\DoxyCodeLine{02062\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{')'},\ CP\_above,\ CT\_tiny\_rotate\_270,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02063\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02064\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02065\ }
+\DoxyCodeLine{02066\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_inverted\_breve:}
+\DoxyCodeLine{02067\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'('},\ CP\_above,\ CT\_tiny\_rotate\_270,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02068\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02069\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02070\ }
+\DoxyCodeLine{02071\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_circumflex:}
+\DoxyCodeLine{02072\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'\string^'},\ CP\_above,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02073\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement)\ ||}
+\DoxyCodeLine{02074\ \ \ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'v'},\ CP\_above,\ CT\_squash\_mirror\_y,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02075\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02076\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02077\ }
+\DoxyCodeLine{02078\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_circumflex\_below:}
+\DoxyCodeLine{02079\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'\string^'},\ CP\_below,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02080\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement)\ ||}
+\DoxyCodeLine{02081\ \ \ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'v'},\ CP\_below,\ CT\_squash\_mirror\_y,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02082\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02083\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02084\ }
+\DoxyCodeLine{02085\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_caron:}
+\DoxyCodeLine{02086\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'\string^'},\ CP\_above,\ CT\_mirror\_y,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02087\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement)\ ||}
+\DoxyCodeLine{02088\ \ \ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'v'},\ CP\_above,\ CT\_squash,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02089\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02090\ }
+\DoxyCodeLine{02091\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02092\ }
+\DoxyCodeLine{02093\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_tilde:}
+\DoxyCodeLine{02094\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'\string~'},\ CP\_above,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02095\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement)\ ||}
+\DoxyCodeLine{02096\ \ \ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'s'},\ CP\_above,\ CT\_squash\_mirror\_diag,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02097\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02098\ }
+\DoxyCodeLine{02099\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02100\ }
+\DoxyCodeLine{02101\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_tilde\_below:}
+\DoxyCodeLine{02102\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'\string~'},\ CP\_below,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02103\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement)\ ||}
+\DoxyCodeLine{02104\ \ \ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'s'},\ CP\_below,\ CT\_squash\_mirror\_diag,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02105\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02106\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02107\ }
+\DoxyCodeLine{02108\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_diaeresis:}
+\DoxyCodeLine{02109\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{':'},\ CP\_above,\ CT\_small\_rotate\_270,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02110\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02111\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02112\ }
+\DoxyCodeLine{02113\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_diaeresis\_below:}
+\DoxyCodeLine{02114\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{':'},\ CP\_below,\ CT\_small\_rotate\_270,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02115\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02116\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02117\ }
+\DoxyCodeLine{02118\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_dot\_above:}
+\DoxyCodeLine{02119\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'.'},\ CP\_above,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02120\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02121\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02122\ }
+\DoxyCodeLine{02123\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_dot\_below:}
+\DoxyCodeLine{02124\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'.'},\ CP\_below,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02125\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02126\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02127\ }
+\DoxyCodeLine{02128\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_macron:}
+\DoxyCodeLine{02129\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'-\/'},\ CP\_above,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02130\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02131\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02132\ }
+\DoxyCodeLine{02133\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_line\_below:}
+\DoxyCodeLine{02134\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'-\/'},\ CP\_below,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02135\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02136\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02137\ }
+\DoxyCodeLine{02138\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_ring\_above:}
+\DoxyCodeLine{02139\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'o'},\ CP\_top,\ CT\_tiny,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02140\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02141\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02142\ }
+\DoxyCodeLine{02143\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_ring\_below:}
+\DoxyCodeLine{02144\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'o'},\ CP\_bottom,\ CT\_tiny,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02145\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02146\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02147\ }
+\DoxyCodeLine{02148\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_cedilla:}
+\DoxyCodeLine{02149\ \ \ \ tack\_on\_accent(0xb8,\ CP\_below,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02150\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement)\ ||}
+\DoxyCodeLine{02151\ \ \ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'c'},\ CP\_bottom,\ CT\_tiny\_mirror\_x,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02152\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02153\ \ \ \ \ \textcolor{comment}{//\ tack\_on\_accent(',',\ CP\_bottom,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}}
+\DoxyCodeLine{02154\ \ \ \ \ \textcolor{comment}{//\ properties,\ placement);}}
+\DoxyCodeLine{02155\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02156\ }
+\DoxyCodeLine{02157\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_comma\_below:}
+\DoxyCodeLine{02158\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{','},\ CP\_below,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02159\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02160\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02161\ }
+\DoxyCodeLine{02162\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_ogonek:}
+\DoxyCodeLine{02163\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{','},\ CP\_bottom,\ CT\_mirror\_x,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02164\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02165\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02166\ }
+\DoxyCodeLine{02167\ \ \ \textcolor{keywordflow}{case}\ UnicodeLatinMap::AT\_stroke:}
+\DoxyCodeLine{02168\ \ \ \ \ tack\_on\_accent(\textcolor{charliteral}{'/'},\ CP\_within,\ CT\_none,\ min\_vert,\ max\_vert,\ centroid,}
+\DoxyCodeLine{02169\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ properties,\ placement);}
+\DoxyCodeLine{02170\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02171\ }
+\DoxyCodeLine{02172\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{02173\ \ \ \ \ \textcolor{comment}{//\ There\ are\ lots\ of\ other\ crazy\ kinds\ of\ accents.\ \ Forget\ 'em.}}
+\DoxyCodeLine{02174\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02175\ \ \ \}}
+\DoxyCodeLine{02176\ \}}
+\DoxyCodeLine{02177\ }
+\DoxyCodeLine{02183\ \textcolor{keywordtype}{bool}\ TextAssembler::}
+\DoxyCodeLine{02184\ tack\_on\_accent(\textcolor{keywordtype}{wchar\_t}\ accent\_mark,\ TextAssembler::CheesyPosition\ position,}
+\DoxyCodeLine{02185\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ TextAssembler::CheesyTransform\ transform,}
+\DoxyCodeLine{02186\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LPoint3\ \&min\_vert,\ \textcolor{keyword}{const}\ LPoint3\ \&max\_vert,}
+\DoxyCodeLine{02187\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LPoint3\ \&centroid,}
+\DoxyCodeLine{02188\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTextProperties}{TextProperties}}\ *properties,}
+\DoxyCodeLine{02189\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ TextAssembler::GlyphPlacement\ \&placement)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02190\ \ \ \mbox{\hyperlink{classTextFont}{TextFont}}\ *font\ =\ properties-\/>get\_font();}
+\DoxyCodeLine{02191\ \ \ nassertr(font\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02192\ }
+\DoxyCodeLine{02193\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{02194\ }
+\DoxyCodeLine{02195\ \ \ CPT(\mbox{\hyperlink{classTextGlyph}{TextGlyph}})\ accent\_glyph;}
+\DoxyCodeLine{02196\ \ \ \textcolor{keywordflow}{if}\ (font-\/>get\_glyph(accent\_mark,\ accent\_glyph)\ ||}
+\DoxyCodeLine{02197\ \ \ \ \ \ \ font-\/>get\_glyph(toupper(accent\_mark),\ accent\_glyph))\ \{}
+\DoxyCodeLine{02198\ \ \ \ \ \textcolor{keywordflow}{if}\ (!accent\_glyph-\/>is\_whitespace())\ \{}
+\DoxyCodeLine{02199\ \ \ \ \ \ \ LPoint3\ min\_accent,\ max\_accent;}
+\DoxyCodeLine{02200\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ found\_any\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02201\ \ \ \ \ \ \ accent\_glyph-\/>calc\_tight\_bounds(min\_accent,\ max\_accent,\ found\_any,}
+\DoxyCodeLine{02202\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ current\_thread);}
+\DoxyCodeLine{02203\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (found\_any)\ \{}
+\DoxyCodeLine{02204\ \ \ \ \ \ \ \ \ PN\_stdfloat\ t,\ u;}
+\DoxyCodeLine{02205\ \ \ \ \ \ \ \ \ LMatrix4\ accent\_mat;}
+\DoxyCodeLine{02206\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ has\_mat\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02207\ }
+\DoxyCodeLine{02208\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (transform)\ \{}
+\DoxyCodeLine{02209\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_none:}
+\DoxyCodeLine{02210\ \ \ \ \ \ \ \ \ \ \ has\_mat\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02211\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02212\ }
+\DoxyCodeLine{02213\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_mirror\_x:}
+\DoxyCodeLine{02214\ \ \ \ \ \ \ \ \ \ \ accent\_mat\ =\ LMatrix4::scale\_mat(-\/1.0f,\ -\/1.0f,\ 1.0f);}
+\DoxyCodeLine{02215\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[0];}
+\DoxyCodeLine{02216\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ =\ -\/max\_accent[0];}
+\DoxyCodeLine{02217\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ =\ -\/t;}
+\DoxyCodeLine{02218\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02219\ }
+\DoxyCodeLine{02220\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_mirror\_y:}
+\DoxyCodeLine{02221\ \ \ \ \ \ \ \ \ \ \ accent\_mat\ =\ LMatrix4::scale\_mat(1.0f,\ -\/1.0f,\ -\/1.0f);}
+\DoxyCodeLine{02222\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[2];}
+\DoxyCodeLine{02223\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ =\ -\/max\_accent[2];}
+\DoxyCodeLine{02224\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ =\ -\/t;}
+\DoxyCodeLine{02225\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02226\ }
+\DoxyCodeLine{02227\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_rotate\_90:}
+\DoxyCodeLine{02228\ \ \ \ \ \ \ \ \ \ \ accent\_mat.set\_rotate\_mat\_normaxis(90.0f,\ LVecBase3(0.0f,\ -\/1.0f,\ 0.0f));}
+\DoxyCodeLine{02229\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ rotate\ min,\ max}}
+\DoxyCodeLine{02230\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[0];}
+\DoxyCodeLine{02231\ \ \ \ \ \ \ \ \ \ \ u\ =\ max\_accent[0];}
+\DoxyCodeLine{02232\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ =\ -\/min\_accent[2];}
+\DoxyCodeLine{02233\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ =\ -\/max\_accent[2];}
+\DoxyCodeLine{02234\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ =\ u;}
+\DoxyCodeLine{02235\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ =\ t;}
+\DoxyCodeLine{02236\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02237\ }
+\DoxyCodeLine{02238\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_rotate\_180:}
+\DoxyCodeLine{02239\ \ \ \ \ \ \ \ \ \ \ has\_mat\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02240\ \ \ \ \ \ \ \ \ \ \ placement.\_scale\ *=\ -\/1;}
+\DoxyCodeLine{02241\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[0];}
+\DoxyCodeLine{02242\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ =\ -\/max\_accent[0];}
+\DoxyCodeLine{02243\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ =\ -\/t;}
+\DoxyCodeLine{02244\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[2];}
+\DoxyCodeLine{02245\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ =\ -\/max\_accent[2];}
+\DoxyCodeLine{02246\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ =\ -\/t;}
+\DoxyCodeLine{02247\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02248\ }
+\DoxyCodeLine{02249\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_rotate\_270:}
+\DoxyCodeLine{02250\ \ \ \ \ \ \ \ \ \ \ accent\_mat.set\_rotate\_mat\_normaxis(270.0f,\ LVecBase3(0.0f,\ -\/1.0f,\ 0.0f));}
+\DoxyCodeLine{02251\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ rotate\ min,\ max}}
+\DoxyCodeLine{02252\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[0];}
+\DoxyCodeLine{02253\ \ \ \ \ \ \ \ \ \ \ u\ =\ max\_accent[0];}
+\DoxyCodeLine{02254\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ =\ min\_accent[2];}
+\DoxyCodeLine{02255\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ =\ max\_accent[2];}
+\DoxyCodeLine{02256\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ =\ -\/u;}
+\DoxyCodeLine{02257\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ =\ -\/t;}
+\DoxyCodeLine{02258\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02259\ }
+\DoxyCodeLine{02260\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_squash:}
+\DoxyCodeLine{02261\ \ \ \ \ \ \ \ \ \ \ accent\_mat\ =\ LMatrix4::scale\_mat(squash\_accent\_scale\_x,\ 1.0f,\ squash\_accent\_scale\_y);}
+\DoxyCodeLine{02262\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ *=\ squash\_accent\_scale\_x;}
+\DoxyCodeLine{02263\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ *=\ squash\_accent\_scale\_x;}
+\DoxyCodeLine{02264\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ *=\ squash\_accent\_scale\_y;}
+\DoxyCodeLine{02265\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ *=\ squash\_accent\_scale\_y;}
+\DoxyCodeLine{02266\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02267\ }
+\DoxyCodeLine{02268\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_squash\_mirror\_y:}
+\DoxyCodeLine{02269\ \ \ \ \ \ \ \ \ \ \ accent\_mat\ =\ LMatrix4::scale\_mat(squash\_accent\_scale\_x,\ -\/1.0f,\ -\/squash\_accent\_scale\_y);}
+\DoxyCodeLine{02270\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ *=\ squash\_accent\_scale\_x;}
+\DoxyCodeLine{02271\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ *=\ squash\_accent\_scale\_x;}
+\DoxyCodeLine{02272\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[2];}
+\DoxyCodeLine{02273\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ =\ -\/max\_accent[2]\ *\ squash\_accent\_scale\_y;}
+\DoxyCodeLine{02274\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ =\ -\/t\ *\ squash\_accent\_scale\_y;}
+\DoxyCodeLine{02275\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02276\ }
+\DoxyCodeLine{02277\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_squash\_mirror\_diag:}
+\DoxyCodeLine{02278\ \ \ \ \ \ \ \ \ \ \ accent\_mat\ =}
+\DoxyCodeLine{02279\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix4::rotate\_mat\_normaxis(270.0f,\ LVecBase3(0.0f,\ -\/1.0f,\ 0.0f))\ *}
+\DoxyCodeLine{02280\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix4::scale\_mat(-\/squash\_accent\_scale\_x,\ -\/1.0f,\ squash\_accent\_scale\_y);}
+\DoxyCodeLine{02281\ }
+\DoxyCodeLine{02282\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ rotate\ min,\ max}}
+\DoxyCodeLine{02283\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[0];}
+\DoxyCodeLine{02284\ \ \ \ \ \ \ \ \ \ \ u\ =\ max\_accent[0];}
+\DoxyCodeLine{02285\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ =\ min\_accent[2]\ *\ -\/squash\_accent\_scale\_x;}
+\DoxyCodeLine{02286\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ =\ max\_accent[2]\ *\ -\/squash\_accent\_scale\_x;}
+\DoxyCodeLine{02287\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ =\ -\/u\ *\ squash\_accent\_scale\_y;}
+\DoxyCodeLine{02288\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ =\ -\/t\ *\ squash\_accent\_scale\_y;}
+\DoxyCodeLine{02289\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02290\ }
+\DoxyCodeLine{02291\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_small\_squash:}
+\DoxyCodeLine{02292\ \ \ \ \ \ \ \ \ \ \ accent\_mat\ =\ LMatrix4::scale\_mat(small\_squash\_accent\_scale\_x,\ 1.0f,\ small\_squash\_accent\_scale\_y);}
+\DoxyCodeLine{02293\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ *=\ small\_squash\_accent\_scale\_x;}
+\DoxyCodeLine{02294\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ *=\ small\_squash\_accent\_scale\_x;}
+\DoxyCodeLine{02295\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ *=\ small\_squash\_accent\_scale\_y;}
+\DoxyCodeLine{02296\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ *=\ small\_squash\_accent\_scale\_y;}
+\DoxyCodeLine{02297\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02298\ }
+\DoxyCodeLine{02299\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_small\_squash\_mirror\_y:}
+\DoxyCodeLine{02300\ \ \ \ \ \ \ \ \ \ \ accent\_mat\ =\ LMatrix4::scale\_mat(small\_squash\_accent\_scale\_x,\ -\/1.0f,\ -\/small\_squash\_accent\_scale\_y);}
+\DoxyCodeLine{02301\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ *=\ small\_squash\_accent\_scale\_x;}
+\DoxyCodeLine{02302\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ *=\ small\_squash\_accent\_scale\_x;}
+\DoxyCodeLine{02303\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[2];}
+\DoxyCodeLine{02304\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ =\ -\/max\_accent[2]\ *\ small\_squash\_accent\_scale\_y;}
+\DoxyCodeLine{02305\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ =\ -\/t\ *\ small\_squash\_accent\_scale\_y;}
+\DoxyCodeLine{02306\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02307\ }
+\DoxyCodeLine{02308\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_small\_squash\_mirror\_diag:}
+\DoxyCodeLine{02309\ \ \ \ \ \ \ \ \ \ \ accent\_mat\ =}
+\DoxyCodeLine{02310\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix4::rotate\_mat\_normaxis(270.0f,\ LVecBase3(0.0f,\ -\/1.0f,\ 0.0f))\ *}
+\DoxyCodeLine{02311\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix4::scale\_mat(-\/small\_squash\_accent\_scale\_x,\ -\/1.0f,\ small\_squash\_accent\_scale\_y);}
+\DoxyCodeLine{02312\ }
+\DoxyCodeLine{02313\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ rotate\ min,\ max}}
+\DoxyCodeLine{02314\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[0];}
+\DoxyCodeLine{02315\ \ \ \ \ \ \ \ \ \ \ u\ =\ max\_accent[0];}
+\DoxyCodeLine{02316\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ =\ min\_accent[2]\ *\ -\/small\_squash\_accent\_scale\_x;}
+\DoxyCodeLine{02317\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ =\ max\_accent[2]\ *\ -\/small\_squash\_accent\_scale\_x;}
+\DoxyCodeLine{02318\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ =\ -\/u\ *\ small\_squash\_accent\_scale\_y;}
+\DoxyCodeLine{02319\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ =\ -\/t\ *\ small\_squash\_accent\_scale\_y;}
+\DoxyCodeLine{02320\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02321\ }
+\DoxyCodeLine{02322\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_small:}
+\DoxyCodeLine{02323\ \ \ \ \ \ \ \ \ \ \ has\_mat\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02324\ \ \ \ \ \ \ \ \ \ \ placement.\_scale\ *=\ small\_accent\_scale;}
+\DoxyCodeLine{02325\ \ \ \ \ \ \ \ \ \ \ min\_accent\ *=\ small\_accent\_scale;}
+\DoxyCodeLine{02326\ \ \ \ \ \ \ \ \ \ \ max\_accent\ *=\ small\_accent\_scale;}
+\DoxyCodeLine{02327\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02328\ }
+\DoxyCodeLine{02329\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_small\_rotate\_270:}
+\DoxyCodeLine{02330\ \ \ \ \ \ \ \ \ \ \ accent\_mat\ =}
+\DoxyCodeLine{02331\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix4::rotate\_mat\_normaxis(270.0f,\ LVecBase3(0.0f,\ -\/1.0f,\ 0.0f))\ *}
+\DoxyCodeLine{02332\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix4::scale\_mat(small\_accent\_scale);}
+\DoxyCodeLine{02333\ }
+\DoxyCodeLine{02334\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ rotate\ min,\ max}}
+\DoxyCodeLine{02335\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[0];}
+\DoxyCodeLine{02336\ \ \ \ \ \ \ \ \ \ \ u\ =\ max\_accent[0];}
+\DoxyCodeLine{02337\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ =\ min\_accent[2]\ *\ small\_accent\_scale;}
+\DoxyCodeLine{02338\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ =\ max\_accent[2]\ *\ small\_accent\_scale;}
+\DoxyCodeLine{02339\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ =\ -\/u\ *\ small\_accent\_scale;}
+\DoxyCodeLine{02340\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ =\ -\/t\ *\ small\_accent\_scale;}
+\DoxyCodeLine{02341\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02342\ }
+\DoxyCodeLine{02343\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_tiny:}
+\DoxyCodeLine{02344\ \ \ \ \ \ \ \ \ \ \ has\_mat\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02345\ \ \ \ \ \ \ \ \ \ \ placement.\_scale\ *=\ tiny\_accent\_scale;}
+\DoxyCodeLine{02346\ \ \ \ \ \ \ \ \ \ \ min\_accent\ *=\ tiny\_accent\_scale;}
+\DoxyCodeLine{02347\ \ \ \ \ \ \ \ \ \ \ max\_accent\ *=\ tiny\_accent\_scale;}
+\DoxyCodeLine{02348\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02349\ }
+\DoxyCodeLine{02350\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_tiny\_mirror\_x:}
+\DoxyCodeLine{02351\ \ \ \ \ \ \ \ \ \ \ accent\_mat\ =\ LMatrix4::scale\_mat(-\/tiny\_accent\_scale,\ -\/1.0f,\ tiny\_accent\_scale);}
+\DoxyCodeLine{02352\ }
+\DoxyCodeLine{02353\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[0];}
+\DoxyCodeLine{02354\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ =\ -\/max\_accent[0]\ *\ tiny\_accent\_scale;}
+\DoxyCodeLine{02355\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ =\ -\/t\ *\ tiny\_accent\_scale;}
+\DoxyCodeLine{02356\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ *=\ tiny\_accent\_scale;}
+\DoxyCodeLine{02357\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ *=\ tiny\_accent\_scale;}
+\DoxyCodeLine{02358\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02359\ }
+\DoxyCodeLine{02360\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CT\_tiny\_rotate\_270:}
+\DoxyCodeLine{02361\ \ \ \ \ \ \ \ \ \ \ accent\_mat\ =}
+\DoxyCodeLine{02362\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix4::rotate\_mat\_normaxis(270.0f,\ LVecBase3(0.0f,\ -\/1.0f,\ 0.0f))\ *}
+\DoxyCodeLine{02363\ \ \ \ \ \ \ \ \ \ \ \ \ LMatrix4::scale\_mat(tiny\_accent\_scale);}
+\DoxyCodeLine{02364\ }
+\DoxyCodeLine{02365\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ rotate\ min,\ max}}
+\DoxyCodeLine{02366\ \ \ \ \ \ \ \ \ \ \ t\ =\ min\_accent[0];}
+\DoxyCodeLine{02367\ \ \ \ \ \ \ \ \ \ \ u\ =\ max\_accent[0];}
+\DoxyCodeLine{02368\ \ \ \ \ \ \ \ \ \ \ min\_accent[0]\ =\ min\_accent[2]\ *\ tiny\_accent\_scale;}
+\DoxyCodeLine{02369\ \ \ \ \ \ \ \ \ \ \ max\_accent[0]\ =\ max\_accent[2]\ *\ tiny\_accent\_scale;}
+\DoxyCodeLine{02370\ \ \ \ \ \ \ \ \ \ \ min\_accent[2]\ =\ -\/u\ *\ tiny\_accent\_scale;}
+\DoxyCodeLine{02371\ \ \ \ \ \ \ \ \ \ \ max\_accent[2]\ =\ -\/t\ *\ tiny\_accent\_scale;}
+\DoxyCodeLine{02372\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02373\ }
+\DoxyCodeLine{02374\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{02375\ \ \ \ \ \ \ \ \ \ \ has\_mat\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02376\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02377\ }
+\DoxyCodeLine{02378\ \ \ \ \ \ \ \ \ PN\_stdfloat\ total\_margin\ =\ font-\/>get\_total\_poly\_margin();}
+\DoxyCodeLine{02379\ }
+\DoxyCodeLine{02380\ \ \ \ \ \ \ \ \ LPoint3\ accent\_centroid\ =\ (min\_accent\ +\ max\_accent)\ /\ 2.0f;}
+\DoxyCodeLine{02381\ \ \ \ \ \ \ \ \ PN\_stdfloat\ accent\_height\ =\ max\_accent[2]\ -\/\ min\_accent[2]\ -\/\ total\_margin\ *\ 2;}
+\DoxyCodeLine{02382\ \ \ \ \ \ \ \ \ PN\_stdfloat\ accent\_x\ =\ centroid[0]\ -\/\ accent\_centroid[0];}
+\DoxyCodeLine{02383\ \ \ \ \ \ \ \ \ PN\_stdfloat\ accent\_y\ =\ 0;}
+\DoxyCodeLine{02384\ \ \ \ \ \ \ \ \ PN\_stdfloat\ min\_y\ =\ min\_vert[2]\ +\ total\_margin;}
+\DoxyCodeLine{02385\ \ \ \ \ \ \ \ \ PN\_stdfloat\ max\_y\ =\ max\_vert[2]\ -\/\ total\_margin;}
+\DoxyCodeLine{02386\ }
+\DoxyCodeLine{02387\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (position)\ \{}
+\DoxyCodeLine{02388\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CP\_above:}
+\DoxyCodeLine{02389\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ A\ little\ above\ the\ character.}}
+\DoxyCodeLine{02390\ \ \ \ \ \ \ \ \ \ \ accent\_y\ =\ max\_y\ -\/\ accent\_centroid[2]\ +\ accent\_height\ *\ 0.75f;}
+\DoxyCodeLine{02391\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02392\ }
+\DoxyCodeLine{02393\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CP\_below:}
+\DoxyCodeLine{02394\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ A\ little\ below\ the\ character.}}
+\DoxyCodeLine{02395\ \ \ \ \ \ \ \ \ \ \ accent\_y\ =\ min\_y\ -\/\ accent\_centroid[2]\ -\/\ accent\_height\ *\ 0.75f;}
+\DoxyCodeLine{02396\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02397\ }
+\DoxyCodeLine{02398\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CP\_top:}
+\DoxyCodeLine{02399\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Touching\ the\ top\ of\ the\ character.}}
+\DoxyCodeLine{02400\ \ \ \ \ \ \ \ \ \ \ accent\_y\ =\ max\_y\ -\/\ accent\_centroid[2];}
+\DoxyCodeLine{02401\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02402\ }
+\DoxyCodeLine{02403\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CP\_bottom:}
+\DoxyCodeLine{02404\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Touching\ the\ bottom\ of\ the\ character.}}
+\DoxyCodeLine{02405\ \ \ \ \ \ \ \ \ \ \ accent\_y\ =\ min\_y\ -\/\ accent\_centroid[2];}
+\DoxyCodeLine{02406\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02407\ }
+\DoxyCodeLine{02408\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ CP\_within:}
+\DoxyCodeLine{02409\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Centered\ within\ the\ character.}}
+\DoxyCodeLine{02410\ \ \ \ \ \ \ \ \ \ \ accent\_y\ =\ centroid[2]\ -\/\ accent\_centroid[2];}
+\DoxyCodeLine{02411\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02412\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02413\ }
+\DoxyCodeLine{02414\ \ \ \ \ \ \ \ \ placement.\_xpos\ +=\ placement.\_scale\ *\ (accent\_x\ +\ placement.\_slant\ *\ accent\_y);}
+\DoxyCodeLine{02415\ \ \ \ \ \ \ \ \ placement.\_ypos\ +=\ placement.\_scale\ *\ accent\_y;}
+\DoxyCodeLine{02416\ }
+\DoxyCodeLine{02417\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_mat)\ \{}
+\DoxyCodeLine{02418\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Some\ non-\/trivial\ transformation.\ \ Apply\ it\ to\ the\ Geom.}}
+\DoxyCodeLine{02419\ \ \ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGeom}{Geom}})\ accent\_geom\ =\ accent\_glyph-\/>get\_geom(\_usage\_hint);}
+\DoxyCodeLine{02420\ \ \ \ \ \ \ \ \ \ \ accent\_geom-\/>transform\_vertices(accent\_mat);}
+\DoxyCodeLine{02421\ \ \ \ \ \ \ \ \ \ \ placement.\_glyph\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTextGlyph}{TextGlyph}}(0,\ accent\_geom,\ accent\_glyph-\/>get\_state(),\ 0);}
+\DoxyCodeLine{02422\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02423\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ A\ trivial\ transformation.}}
+\DoxyCodeLine{02424\ \ \ \ \ \ \ \ \ \ \ placement.\_glyph\ =\ accent\_glyph;}
+\DoxyCodeLine{02425\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02426\ }
+\DoxyCodeLine{02427\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02428\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02429\ \ \ \ \ \}}
+\DoxyCodeLine{02430\ \ \ \}}
+\DoxyCodeLine{02431\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02432\ \}}
+\DoxyCodeLine{02433\ }
+\DoxyCodeLine{02438\ \textcolor{keywordtype}{void}\ TextAssembler::ComputedProperties::}
+\DoxyCodeLine{02439\ append\_delta(wstring\ \&wtext,\ TextAssembler::ComputedProperties\ *other)\ \{}
+\DoxyCodeLine{02440\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{this}\ !=\ other)\ \{}
+\DoxyCodeLine{02441\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_depth\ >\ other-\/>\_depth)\ \{}
+\DoxyCodeLine{02442\ \ \ \ \ \ \ \textcolor{comment}{//\ Back\ up\ a\ level\ from\ this\ properties.}}
+\DoxyCodeLine{02443\ \ \ \ \ \ \ nassertv(\_based\_on\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{02444\ }
+\DoxyCodeLine{02445\ \ \ \ \ \ \ wtext.push\_back(text\_pop\_properties\_key);}
+\DoxyCodeLine{02446\ \ \ \ \ \ \ \_based\_on-\/>append\_delta(wtext,\ other);}
+\DoxyCodeLine{02447\ }
+\DoxyCodeLine{02448\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (other-\/>\_depth\ >\ \_depth)\ \{}
+\DoxyCodeLine{02449\ \ \ \ \ \ \ \textcolor{comment}{//\ Back\ up\ a\ level\ from\ the\ other\ properties.}}
+\DoxyCodeLine{02450\ \ \ \ \ \ \ nassertv(other-\/>\_based\_on\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{02451\ }
+\DoxyCodeLine{02452\ \ \ \ \ \ \ append\_delta(wtext,\ other-\/>\_based\_on);}
+\DoxyCodeLine{02453\ \ \ \ \ \ \ wtext.push\_back(text\_push\_properties\_key);}
+\DoxyCodeLine{02454\ \ \ \ \ \ \ wtext\ +=\ other-\/>\_wname;}
+\DoxyCodeLine{02455\ \ \ \ \ \ \ wtext.push\_back(text\_push\_properties\_key);}
+\DoxyCodeLine{02456\ }
+\DoxyCodeLine{02457\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_depth\ !=\ 0)\ \{}
+\DoxyCodeLine{02458\ \ \ \ \ \ \ \textcolor{comment}{//\ Back\ up\ a\ level\ from\ both\ properties.}}
+\DoxyCodeLine{02459\ \ \ \ \ \ \ nassertv(\_based\_on\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ other-\/>\_based\_on\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{02460\ }
+\DoxyCodeLine{02461\ \ \ \ \ \ \ wtext.push\_back(text\_pop\_properties\_key);}
+\DoxyCodeLine{02462\ \ \ \ \ \ \ \_based\_on-\/>append\_delta(wtext,\ other-\/>\_based\_on);}
+\DoxyCodeLine{02463\ \ \ \ \ \ \ wtext.push\_back(text\_push\_properties\_key);}
+\DoxyCodeLine{02464\ \ \ \ \ \ \ wtext\ +=\ other-\/>\_wname;}
+\DoxyCodeLine{02465\ \ \ \ \ \ \ wtext.push\_back(text\_push\_properties\_key);}
+\DoxyCodeLine{02466\ \ \ \ \ \}}
+\DoxyCodeLine{02467\ \ \ \}}
+\DoxyCodeLine{02468\ \}}
+\DoxyCodeLine{02469\ }
+\DoxyCodeLine{02474\ \textcolor{keywordtype}{void}\ TextAssembler::GlyphPlacement::}
+\DoxyCodeLine{02475\ assign\_to(\mbox{\hyperlink{classGeomNode}{GeomNode}}\ *geom\_node,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state,}
+\DoxyCodeLine{02476\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LVector2\ \&offset)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02477\ }
+\DoxyCodeLine{02478\ \ \ LMatrix4\ xform(\_scale,\ 0.0f,\ 0.0f,\ 0.0f,}
+\DoxyCodeLine{02479\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 0.0f,\ 1.0f,\ 0.0f,\ 0.0f,}
+\DoxyCodeLine{02480\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_slant\ *\ \_scale,\ 0.0f,\ \_scale,\ 0.0f,}
+\DoxyCodeLine{02481\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_xpos\ +\ offset[0],\ 0.0f,\ \_ypos\ -\/\ offset[1],\ 1.0f);}
+\DoxyCodeLine{02482\ }
+\DoxyCodeLine{02483\ \ \ PT(\mbox{\hyperlink{classGeom}{Geom}})\ geom\ =\ \_glyph-\/>get\_geom(GeomEnums::UH\_static);}
+\DoxyCodeLine{02484\ \ \ geom-\/>transform\_vertices(xform);}
+\DoxyCodeLine{02485\ \ \ geom\_node-\/>\mbox{\hyperlink{classGeomNode_a18e924a32fc78e567f156bd3678a7057}{add\_geom}}(geom,\ state-\/>compose(\_glyph-\/>get\_state()));}
+\DoxyCodeLine{02486\ \}}
+\DoxyCodeLine{02487\ }
+\DoxyCodeLine{02493\ \textcolor{keywordtype}{void}\ TextAssembler::GlyphPlacement::}
+\DoxyCodeLine{02494\ assign\_append\_to(GeomCollectorMap\ \&geom\_collector\_map,}
+\DoxyCodeLine{02495\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state,}
+\DoxyCodeLine{02496\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LVector2\ \&offset)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02497\ }
+\DoxyCodeLine{02498\ \ \ LMatrix4\ xform(\_scale,\ 0.0f,\ 0.0f,\ 0.0f,}
+\DoxyCodeLine{02499\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 0.0f,\ 1.0f,\ 0.0f,\ 0.0f,}
+\DoxyCodeLine{02500\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_slant\ *\ \_scale,\ 0.0f,\ \_scale,\ 0.0f,}
+\DoxyCodeLine{02501\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_xpos\ +\ offset[0],\ 0.0f,\ \_ypos\ -\/\ offset[1],\ 1.0f);}
+\DoxyCodeLine{02502\ }
+\DoxyCodeLine{02503\ \ \ PT(\mbox{\hyperlink{classGeom}{Geom}})\ geom\ =\ \_glyph-\/>get\_geom(GeomEnums::UH\_static);}
+\DoxyCodeLine{02504\ }
+\DoxyCodeLine{02505\ \ \ \textcolor{keywordtype}{int}\ sp,\ s,\ e,\ i;}
+\DoxyCodeLine{02506\ }
+\DoxyCodeLine{02507\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}\ *vdata\ =\ geom-\/>get\_vertex\_data();}
+\DoxyCodeLine{02508\ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ rs\ =\ \_glyph-\/>get\_state()-\/>compose(state);}
+\DoxyCodeLine{02509\ \ \ GeomCollectorKey\ key(rs,\ vdata-\/>get\_format());}
+\DoxyCodeLine{02510\ }
+\DoxyCodeLine{02511\ \ \ GeomCollectorMap::iterator\ mi\ =\ geom\_collector\_map.find(key);}
+\DoxyCodeLine{02512\ \ \ \textcolor{keywordflow}{if}\ (mi\ ==\ geom\_collector\_map.end())\ \{}
+\DoxyCodeLine{02513\ \ \ \ \ mi\ =\ geom\_collector\_map.insert(GeomCollectorMap::value\_type(key,\ GeomCollector(vdata-\/>get\_format()))).first;}
+\DoxyCodeLine{02514\ \ \ \}}
+\DoxyCodeLine{02515\ \ \ GeomCollector\ \&geom\_collector\ =\ (*mi).second;}
+\DoxyCodeLine{02516\ \ \ geom\_collector.count\_geom(geom);}
+\DoxyCodeLine{02517\ }
+\DoxyCodeLine{02518\ \ \ \textcolor{comment}{//\ We\ use\ this\ map\ to\ keep\ track\ of\ vertex\ indices\ we\ have\ already\ added,\ so}}
+\DoxyCodeLine{02519\ \ \ \textcolor{comment}{//\ that\ we\ don't\ needlessly\ duplicate\ vertices\ into\ our\ output\ vertex\ data.}}
+\DoxyCodeLine{02520\ \ \ VertexIndexMap\ vimap;}
+\DoxyCodeLine{02521\ }
+\DoxyCodeLine{02522\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ p\ =\ 0;\ p\ <\ geom-\/>get\_num\_primitives();\ ++p)\ \{}
+\DoxyCodeLine{02523\ \ \ \ \ CPT(\mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}})\ primitive\ =\ geom-\/>get\_primitive(p)-\/>decompose();}
+\DoxyCodeLine{02524\ }
+\DoxyCodeLine{02525\ \ \ \ \ \textcolor{comment}{//\ Get\ a\ new\ GeomPrimitive\ of\ the\ corresponding\ type.}}
+\DoxyCodeLine{02526\ \ \ \ \ \mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}}\ *new\_prim\ =\ geom\_collector.get\_primitive(primitive-\/>get\_type());}
+\DoxyCodeLine{02527\ }
+\DoxyCodeLine{02528\ \ \ \ \ \textcolor{comment}{//\ Walk\ through\ all\ of\ the\ components\ (e.g.\ \ triangles)\ of\ the\ primitive.}}
+\DoxyCodeLine{02529\ \ \ \ \ \textcolor{keywordflow}{for}\ (sp\ =\ 0;\ sp\ <\ primitive-\/>get\_num\_primitives();\ sp++)\ \{}
+\DoxyCodeLine{02530\ \ \ \ \ \ \ s\ =\ primitive-\/>\mbox{\hyperlink{classGeomPrimitive_ab71a890bc238957f616e0791a13be50e}{get\_primitive\_start}}(sp);}
+\DoxyCodeLine{02531\ \ \ \ \ \ \ e\ =\ primitive-\/>get\_primitive\_end(sp);}
+\DoxyCodeLine{02532\ }
+\DoxyCodeLine{02533\ \ \ \ \ \ \ \textcolor{comment}{//\ Walk\ through\ all\ of\ the\ vertices\ in\ the\ component.}}
+\DoxyCodeLine{02534\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ s;\ i\ <\ e;\ i++)\ \{}
+\DoxyCodeLine{02535\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ vi\ =\ primitive-\/>get\_vertex(i);}
+\DoxyCodeLine{02536\ }
+\DoxyCodeLine{02537\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Attempt\ to\ insert\ number\ "{}vi"{}\ into\ the\ map.}}
+\DoxyCodeLine{02538\ \ \ \ \ \ \ \ \ std::pair<VertexIndexMap::iterator,\ bool>\ added\ =\ vimap.insert(VertexIndexMap::value\_type(vi,\ 0));}
+\DoxyCodeLine{02539\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ new\_vertex;}
+\DoxyCodeLine{02540\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (added.second)\ \{}
+\DoxyCodeLine{02541\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ insert\ succeeded.\ \ That\ means\ this\ is\ the\ first\ time\ we\ have}}
+\DoxyCodeLine{02542\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ encountered\ this\ vertex.}}
+\DoxyCodeLine{02543\ \ \ \ \ \ \ \ \ \ \ new\_vertex\ =\ geom\_collector.append\_vertex(vdata,\ vi,\ xform);}
+\DoxyCodeLine{02544\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Update\ the\ map\ with\ the\ newly-\/created\ target\ vertex\ index.}}
+\DoxyCodeLine{02545\ \ \ \ \ \ \ \ \ \ \ (*(added.first)).second\ =\ new\_vertex;}
+\DoxyCodeLine{02546\ }
+\DoxyCodeLine{02547\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02548\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ insert\ failed.\ \ This\ means\ we\ have\ previously\ encountered}}
+\DoxyCodeLine{02549\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ this\ vertex,\ and\ we\ have\ already\ entered\ its\ target\ vertex\ index}}
+\DoxyCodeLine{02550\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ into\ the\ vimap.\ \ Extract\ that\ vertex\ index,\ so\ we\ can\ reuse\ it.}}
+\DoxyCodeLine{02551\ \ \ \ \ \ \ \ \ \ \ new\_vertex\ =\ (*(added.first)).second;}
+\DoxyCodeLine{02552\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02553\ \ \ \ \ \ \ \ \ new\_prim-\/>\mbox{\hyperlink{classGeomPrimitive_ae2cb2dbda2a22c9384e6642f8c0fcac7}{add\_vertex}}(new\_vertex);}
+\DoxyCodeLine{02554\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02555\ \ \ \ \ \ \ new\_prim-\/>\mbox{\hyperlink{classGeomPrimitive_a675228ed10a81a5adde5919a1b39a4c8}{close\_primitive}}();}
+\DoxyCodeLine{02556\ \ \ \ \ \}}
+\DoxyCodeLine{02557\ \ \ \}}
+\DoxyCodeLine{02558\ \}}
+\DoxyCodeLine{02559\ }
+\DoxyCodeLine{02564\ \textcolor{keywordtype}{void}\ TextAssembler::GlyphPlacement::}
+\DoxyCodeLine{02565\ assign\_quad\_to(QuadMap\ \&quad\_map,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state,}
+\DoxyCodeLine{02566\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LVector2\ \&offset)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02567\ }
+\DoxyCodeLine{02568\ \ \ QuadDef\ quad;}
+\DoxyCodeLine{02569\ \ \ \textcolor{keywordflow}{if}\ (\_glyph-\/>get\_quad(quad.\_dimensions,\ quad.\_uvs))\ \{}
+\DoxyCodeLine{02570\ \ \ \ \ quad.\_dimensions\ *=\ \_scale;}
+\DoxyCodeLine{02571\ \ \ \ \ quad.\_slantl\ =\ quad.\_dimensions[1]\ *\ \_slant;}
+\DoxyCodeLine{02572\ \ \ \ \ quad.\_slanth\ =\ quad.\_dimensions[3]\ *\ \_slant;}
+\DoxyCodeLine{02573\ \ \ \ \ quad.\_dimensions\ +=\ LVecBase4(\_xpos,\ \_ypos,\ \_xpos,\ \_ypos);}
+\DoxyCodeLine{02574\ \ \ \ \ quad.\_dimensions\ +=\ LVecBase4(offset[0],\ -\/offset[1],\ offset[0],\ -\/offset[1]);}
+\DoxyCodeLine{02575\ \ \ \ \ quad.\_glyph\ =\ \_glyph;}
+\DoxyCodeLine{02576\ }
+\DoxyCodeLine{02577\ \ \ \ \ quad\_map[state-\/>compose(\_glyph-\/>get\_state())].push\_back(std::move(quad));}
+\DoxyCodeLine{02578\ \ \ \}}
+\DoxyCodeLine{02579\ \}}
+\DoxyCodeLine{02580\ }
+\DoxyCodeLine{02585\ \textcolor{keywordtype}{void}\ TextAssembler::GlyphPlacement::}
+\DoxyCodeLine{02586\ copy\_graphic\_to(\mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02587\ \ \ \textcolor{keywordflow}{if}\ (\_graphic\_model\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02588\ \ \ \ \ \textcolor{comment}{//\ We\ need\ an\ intermediate\ node\ to\ hold\ the\ transform\ and\ state.}}
+\DoxyCodeLine{02589\ \ \ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ intermediate\_node\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classPandaNode}{PandaNode}}(\textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{02590\ \ \ \ \ node-\/>add\_child(intermediate\_node);}
+\DoxyCodeLine{02591\ }
+\DoxyCodeLine{02592\ \ \ \ \ intermediate\_node-\/>set\_transform(}
+\DoxyCodeLine{02593\ \ \ \ \ \ \ TransformState::make\_pos\_hpr\_scale\_shear(}
+\DoxyCodeLine{02594\ \ \ \ \ \ \ \ \ LVecBase3(\_xpos,\ 0,\ \_ypos),}
+\DoxyCodeLine{02595\ \ \ \ \ \ \ \ \ LVecBase3::zero(),}
+\DoxyCodeLine{02596\ \ \ \ \ \ \ \ \ LVecBase3(\_scale,\ 1,\ \_scale),}
+\DoxyCodeLine{02597\ \ \ \ \ \ \ \ \ LVecBase3(0,\ \_slant,\ 0)}
+\DoxyCodeLine{02598\ \ \ \ \ \ \ )}
+\DoxyCodeLine{02599\ \ \ \ \ );}
+\DoxyCodeLine{02600\ \ \ \ \ intermediate\_node-\/>set\_state(state);}
+\DoxyCodeLine{02601\ \ \ \ \ intermediate\_node-\/>add\_child(\_graphic\_model);}
+\DoxyCodeLine{02602\ \ \ \}}
+\DoxyCodeLine{02603\ \}}
+\DoxyCodeLine{02604\ }
+\DoxyCodeLine{02609\ TextAssembler::GeomCollector::}
+\DoxyCodeLine{02610\ GeomCollector(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}}\ *format)\ :}
+\DoxyCodeLine{02611\ \ \ \_vdata(new\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}(\textcolor{stringliteral}{"{}merged\_geom"{}},\ format,\ \mbox{\hyperlink{classGeom}{Geom}}::UH\_static)),}
+\DoxyCodeLine{02612\ \ \ \_geom(new\ \mbox{\hyperlink{classGeomTextGlyph}{GeomTextGlyph}}(\_vdata))}
+\DoxyCodeLine{02613\ \{}
+\DoxyCodeLine{02614\ \}}
+\DoxyCodeLine{02615\ }
+\DoxyCodeLine{02619\ TextAssembler::GeomCollector::}
+\DoxyCodeLine{02620\ GeomCollector(\textcolor{keyword}{const}\ TextAssembler::GeomCollector\ \&copy)\ :}
+\DoxyCodeLine{02621\ \ \ \_vdata(copy.\_vdata),}
+\DoxyCodeLine{02622\ \ \ \_geom(copy.\_geom)}
+\DoxyCodeLine{02623\ \{}
+\DoxyCodeLine{02624\ \}}
+\DoxyCodeLine{02625\ }
+\DoxyCodeLine{02631\ \mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}}\ *TextAssembler::GeomCollector::}
+\DoxyCodeLine{02632\ get\_primitive(\mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ prim\_type)\ \{}
+\DoxyCodeLine{02633\ \ \ \textcolor{keywordflow}{if}\ (prim\_type\ ==\ GeomTriangles::get\_class\_type())\ \{}
+\DoxyCodeLine{02634\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_triangles\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02635\ \ \ \ \ \ \ \_triangles\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomTriangles}{GeomTriangles}}(Geom::UH\_static);}
+\DoxyCodeLine{02636\ \ \ \ \ \ \ \_geom-\/>add\_primitive(\_triangles);}
+\DoxyCodeLine{02637\ \ \ \ \ \}}
+\DoxyCodeLine{02638\ \ \ \ \ \textcolor{keywordflow}{return}\ \_triangles;}
+\DoxyCodeLine{02639\ }
+\DoxyCodeLine{02640\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (prim\_type\ ==\ GeomLines::get\_class\_type())\ \{}
+\DoxyCodeLine{02641\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_lines\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02642\ \ \ \ \ \ \ \_lines\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomLines}{GeomLines}}(Geom::UH\_static);}
+\DoxyCodeLine{02643\ \ \ \ \ \ \ \_geom-\/>add\_primitive(\_lines);}
+\DoxyCodeLine{02644\ \ \ \ \ \}}
+\DoxyCodeLine{02645\ \ \ \ \ \textcolor{keywordflow}{return}\ \_lines;}
+\DoxyCodeLine{02646\ }
+\DoxyCodeLine{02647\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (prim\_type\ ==\ GeomPoints::get\_class\_type())\ \{}
+\DoxyCodeLine{02648\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_points\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02649\ \ \ \ \ \ \ \_points\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomPoints}{GeomPoints}}(Geom::UH\_static);}
+\DoxyCodeLine{02650\ \ \ \ \ \ \ \_geom-\/>add\_primitive(\_points);}
+\DoxyCodeLine{02651\ \ \ \ \ \}}
+\DoxyCodeLine{02652\ \ \ \ \ \textcolor{keywordflow}{return}\ \_points;}
+\DoxyCodeLine{02653\ \ \ \}}
+\DoxyCodeLine{02654\ }
+\DoxyCodeLine{02655\ \ \ nassert\_raise(\textcolor{stringliteral}{"{}unexpected\ primitive\ type"{}});}
+\DoxyCodeLine{02656\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{02657\ \}}
+\DoxyCodeLine{02658\ }
+\DoxyCodeLine{02663\ \textcolor{keywordtype}{int}\ TextAssembler::GeomCollector::}
+\DoxyCodeLine{02664\ append\_vertex(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}\ *orig\_vdata,\ \textcolor{keywordtype}{int}\ orig\_row,}
+\DoxyCodeLine{02665\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LMatrix4\ \&xform)\ \{}
+\DoxyCodeLine{02666\ \ \ \textcolor{keywordtype}{int}\ new\_row\ =\ \_vdata-\/>get\_num\_rows();}
+\DoxyCodeLine{02667\ \ \ \_vdata-\/>copy\_row\_from(new\_row,\ orig\_vdata,\ orig\_row,\ Thread::get\_current\_thread());}
+\DoxyCodeLine{02668\ }
+\DoxyCodeLine{02669\ \ \ \mbox{\hyperlink{classGeomVertexRewriter}{GeomVertexRewriter}}\ vertex\_rewriter(\_vdata,\ InternalName::get\_vertex());}
+\DoxyCodeLine{02670\ \ \ vertex\_rewriter.set\_row\_unsafe(new\_row);}
+\DoxyCodeLine{02671\ \ \ LPoint3\ point\ =\ vertex\_rewriter.get\_data3();}
+\DoxyCodeLine{02672\ \ \ vertex\_rewriter.set\_data3(point\ *\ xform);}
+\DoxyCodeLine{02673\ }
+\DoxyCodeLine{02674\ \ \ \textcolor{keywordflow}{return}\ new\_row;}
+\DoxyCodeLine{02675\ \}}
+\DoxyCodeLine{02676\ }
+\DoxyCodeLine{02677\ }
+\DoxyCodeLine{02681\ \textcolor{keywordtype}{void}\ TextAssembler::GeomCollector::}
+\DoxyCodeLine{02682\ append\_geom(\mbox{\hyperlink{classGeomNode}{GeomNode}}\ *geom\_node,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state)\ \{}
+\DoxyCodeLine{02683\ \ \ \textcolor{keywordflow}{if}\ (\_geom-\/>get\_num\_primitives()\ >\ 0)\ \{}
+\DoxyCodeLine{02684\ \ \ \ \ geom\_node-\/>\mbox{\hyperlink{classGeomNode_a18e924a32fc78e567f156bd3678a7057}{add\_geom}}(\_geom,\ state);}
+\DoxyCodeLine{02685\ \ \ \}}
+\DoxyCodeLine{02686\ \}}
+
+\end{DoxyCode}

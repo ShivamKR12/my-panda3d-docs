@@ -1,0 +1,249 @@
+\doxysection{collision\+Handler\+Fluid\+Pusher.\+cxx}
+\hypertarget{collisionHandlerFluidPusher_8cxx_source}{}\label{collisionHandlerFluidPusher_8cxx_source}\index{panda/src/collide/collisionHandlerFluidPusher.cxx@{panda/src/collide/collisionHandlerFluidPusher.cxx}}
+\mbox{\hyperlink{collisionHandlerFluidPusher_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionHandlerFluidPusher_8h}{collisionHandlerFluidPusher.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionNode_8h}{collisionNode.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionEntry_8h}{collisionEntry.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionPolygon_8h}{collisionPolygon.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionSphere_8h}{collisionSphere.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__collide_8h}{config\_collide.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{dcast_8h}{dcast.h}}"{}}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ CollisionHandlerFluidPusher::\_type\_handle;}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00027\ CollisionHandlerFluidPusher::}
+\DoxyCodeLine{00028\ CollisionHandlerFluidPusher()\ \{}
+\DoxyCodeLine{00029\ \ \ \_wants\_all\_potential\_collidees\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00030\ \}}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00036\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classCollisionHandlerFluidPusher_ab22a53eb027131e3e3453a8ff2f687d5}{CollisionHandlerFluidPusher::}}}
+\DoxyCodeLine{00037\ \mbox{\hyperlink{classCollisionHandlerFluidPusher_ab22a53eb027131e3e3453a8ff2f687d5}{add\_entry}}(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ *entry)\ \{}
+\DoxyCodeLine{00038\ \ \ nassertv(entry\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00039\ \ \ \textcolor{comment}{//\ skip\ over\ CollisionHandlerPhysical::add\_entry,\ since\ it\ filters\ out}}
+\DoxyCodeLine{00040\ \ \ \textcolor{comment}{//\ collidees\ by\ orientation;\ our\ collider\ can\ change\ direction\ mid-\/frame,\ so}}
+\DoxyCodeLine{00041\ \ \ \textcolor{comment}{//\ it\ may\ collide\ with\ something\ that\ would\ have\ been\ filtered\ out}}
+\DoxyCodeLine{00042\ \ \ \mbox{\hyperlink{classCollisionHandlerEvent_aa459b00c988ac152e93b8e1ebac00a6f}{CollisionHandlerEvent::add\_entry}}(entry);}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00044\ \ \ \textcolor{comment}{//\ filter\ out\ non-\/tangibles}}
+\DoxyCodeLine{00045\ \ \ \textcolor{keywordflow}{if}\ (entry-\/>get\_from()-\/>is\_tangible()\ \&\&}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ (!entry-\/>has\_into()\ ||\ entry-\/>get\_into()-\/>is\_tangible()))\ \{}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00048\ \ \ \ \ \_from\_entries[entry-\/>get\_from\_node\_path()].push\_back(entry);}
+\DoxyCodeLine{00049\ \ \ \ \ \textcolor{keywordflow}{if}\ (entry-\/>collided())\ \{}
+\DoxyCodeLine{00050\ \ \ \ \ \ \ \_has\_contact\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00051\ \ \ \ \ \}}
+\DoxyCodeLine{00052\ \ \ \}}
+\DoxyCodeLine{00053\ \}}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00059\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classCollisionHandlerFluidPusher_acab7b4dfef964effeabe031d760fa59a}{CollisionHandlerFluidPusher::}}}
+\DoxyCodeLine{00060\ \mbox{\hyperlink{classCollisionHandlerFluidPusher_acab7b4dfef964effeabe031d760fa59a}{handle\_entries}}()\ \{}
+\DoxyCodeLine{00061\ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00062\ \textcolor{comment}{\ \ \ \ This\ pusher\ repeatedly\ calculates\ the\ first\ collision,\ calculates\ a\ new}}
+\DoxyCodeLine{00063\ \textcolor{comment}{\ \ \ \ trajectory\ based\ on\ that\ collision,\ and\ repeats\ until\ the\ original\ motion\ is}}
+\DoxyCodeLine{00064\ \textcolor{comment}{\ \ \ \ exhausted\ or\ the\ collider\ becomes\ "{}stuck"{}.\ This\ solves\ the\ "{}acute\ collisions"{}}}
+\DoxyCodeLine{00065\ \textcolor{comment}{\ \ \ \ problem\ where\ colliders\ could\ bounce\ their\ way\ through\ to\ the\ other\ side}}
+\DoxyCodeLine{00066\ \textcolor{comment}{\ \ \ \ of\ a\ wall.}}
+\DoxyCodeLine{00067\ \textcolor{comment}{}}
+\DoxyCodeLine{00068\ \textcolor{comment}{\ \ \ \ Pseudocode:}}
+\DoxyCodeLine{00069\ \textcolor{comment}{}}
+\DoxyCodeLine{00070\ \textcolor{comment}{\ \ \ \ INPUTS}}
+\DoxyCodeLine{00071\ \textcolor{comment}{\ \ \ \ PosA\ =\ collider's\ previous\ position}}
+\DoxyCodeLine{00072\ \textcolor{comment}{\ \ \ \ PosB\ =\ collider's\ current\ position}}
+\DoxyCodeLine{00073\ \textcolor{comment}{\ \ \ \ M\ =\ movement\ vector\ (PosB\ -\/\ PosA)}}
+\DoxyCodeLine{00074\ \textcolor{comment}{\ \ \ \ BV\ =\ bounding\ sphere\ that\ includes\ collider\ at\ PosA\ and\ PosB}}
+\DoxyCodeLine{00075\ \textcolor{comment}{\ \ \ \ CS\ =\ 'collision\ set',\ all\ 'collidables'\ within\ BV\ (collision\ polys,\ capsules,\ etc)}}
+\DoxyCodeLine{00076\ \textcolor{comment}{}}
+\DoxyCodeLine{00077\ \textcolor{comment}{\ \ \ \ VARIABLES}}
+\DoxyCodeLine{00078\ \textcolor{comment}{\ \ \ \ N\ =\ movement\ vector\ since\ most\ recent\ collision\ (or\ start\ of\ frame)}}
+\DoxyCodeLine{00079\ \textcolor{comment}{\ \ \ \ SCS\ =\ 'sub\ collision\ set',\ all\ collidables\ that\ could\ still\ be\ collided\ with}}
+\DoxyCodeLine{00080\ \textcolor{comment}{\ \ \ \ C\ =\ single\ collider\ currently\ being\ collided\ with}}
+\DoxyCodeLine{00081\ \textcolor{comment}{\ \ \ \ PosX\ =\ new\ position\ given\ movement\ along\ N\ interrupted\ by\ collision\ with\ C}}
+\DoxyCodeLine{00082\ \textcolor{comment}{}}
+\DoxyCodeLine{00083\ \textcolor{comment}{\ \ \ \ OUTPUTS}}
+\DoxyCodeLine{00084\ \textcolor{comment}{\ \ \ \ final\ position\ is\ PosX}}
+\DoxyCodeLine{00085\ \textcolor{comment}{}}
+\DoxyCodeLine{00086\ \textcolor{comment}{\ \ \ \ 1.\ N\ =\ M,\ SCS\ =\ CS,\ PosX\ =\ PosB}}
+\DoxyCodeLine{00087\ \textcolor{comment}{\ \ \ \ 2.\ compute,\ using\ SCS\ and\ N,\ which\ collidable\ C\ is\ the\ first\ collision}}
+\DoxyCodeLine{00088\ \textcolor{comment}{\ \ \ \ 3.\ if\ no\ collision\ found,\ DONE}}
+\DoxyCodeLine{00089\ \textcolor{comment}{\ \ \ \ 4.\ if\ movement\ in\ direction\ M\ is\ now\ blocked,\ then}}
+\DoxyCodeLine{00090\ \textcolor{comment}{\ \ \ \ \ \ \ PosX\ =\ initial\ point\ of\ contact\ with\ C\ along\ N,\ DONE}}
+\DoxyCodeLine{00091\ \textcolor{comment}{\ \ \ \ 5.\ calculate\ PosX\ (and\ new\ N)\ assuming\ that\ there\ will\ be\ no\ more\ collisions}}
+\DoxyCodeLine{00092\ \textcolor{comment}{\ \ \ \ 6.\ remove\ C\ from\ SCS\ (assumes\ that\ you\ can't\ collide\ against\ a\ solid\ more\ than\ once\ per\ frame)}}
+\DoxyCodeLine{00093\ \textcolor{comment}{\ \ \ \ 7.\ go\ to\ 2}}
+\DoxyCodeLine{00094\ \textcolor{comment}{\ \ */}}
+\DoxyCodeLine{00095\ \ \ \textcolor{keywordtype}{bool}\ okflag\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00096\ }
+\DoxyCodeLine{00097\ \ \ \textcolor{comment}{//\ if\ all\ we\ got\ was\ potential\ collisions,\ don't\ bother}}
+\DoxyCodeLine{00098\ \ \ \textcolor{keywordflow}{if}\ (!\_has\_contact)\ \{}
+\DoxyCodeLine{00099\ \ \ \ \ \textcolor{keywordflow}{return}\ okflag;}
+\DoxyCodeLine{00100\ \ \ \}}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \ \ \textcolor{comment}{//\ for\ every\ fluid\ mover\ being\ pushed...}}
+\DoxyCodeLine{00103\ \ \ FromEntries::iterator\ fei;}
+\DoxyCodeLine{00104\ \ \ \textcolor{keywordflow}{for}\ (fei\ =\ \_from\_entries.begin();\ fei\ !=\ \_from\_entries.end();\ ++fei)\ \{}
+\DoxyCodeLine{00105\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ from\_node\_path\ =\ fei-\/>first;}
+\DoxyCodeLine{00106\ \ \ \ \ \mbox{\hyperlink{classpvector}{Entries}}\ *orig\_entries\ =\ \&fei-\/>second;}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00108\ \ \ \ \ Colliders::iterator\ ci;}
+\DoxyCodeLine{00109\ \ \ \ \ ci\ =\ \_colliders.find(from\_node\_path);}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{keywordflow}{if}\ (ci\ ==\ \_colliders.end())\ \{}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ \textcolor{comment}{//\ Hmm,\ someone\ added\ a\ CollisionNode\ to\ a\ traverser\ and\ gave\ it\ this}}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \textcolor{comment}{//\ CollisionHandler\ pointer-\/-\/but\ they\ didn't\ tell\ us\ about\ the\ node.}}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ collide\_cat.error()}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}CollisionHandlerFluidPusher\ doesn't\ know\ about\ "{}}}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ <<\ from\_node\_path\ <<\ \textcolor{stringliteral}{"{},\ disabling.\(\backslash\)n"{}};}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ okflag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00117\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionHandlerPhysical_1_1ColliderDef}{ColliderDef}}\ \&def\ =\ (*ci).second;}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \textcolor{comment}{//\ we\ do\ our\ math\ in\ this\ node's\ space}}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ wrt\_node(*\_root);}
+\DoxyCodeLine{00122\ }
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \textcolor{comment}{//\ extract\ the\ collision\ entries\ into\ a\ vector\ that\ we\ can\ safely\ modify}}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \mbox{\hyperlink{classpvector}{Entries}}\ entries(*orig\_entries);}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \textcolor{comment}{//\ this\ is\ the\ original\ position\ delta\ for\ the\ entire\ frame,\ before}}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \textcolor{comment}{//\ collision\ response}}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ LVector3\ M(from\_node\_path.get\_pos\_delta(wrt\_node));}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \textcolor{comment}{//\ this\ is\ used\ to\ track\ position\ deltas\ every\ time\ we\ collide\ against\ a}}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \textcolor{comment}{//\ solid}}
+\DoxyCodeLine{00131\ \ \ \ \ \ \ LVector3\ N(M);}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \ \ \ \ \ \ \textcolor{keyword}{const}\ LPoint3\ orig\_pos(from\_node\_path.get\_pos(wrt\_node));}
+\DoxyCodeLine{00134\ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ prev\_trans(from\_node\_path.get\_prev\_transform(wrt\_node));}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \textcolor{keyword}{const}\ LPoint3\ orig\_prev\_pos(prev\_trans-\/>get\_pos());}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \textcolor{comment}{//\ currently\ we\ only\ support\ spheres\ as\ the\ collider}}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionSphere}{CollisionSphere}}\ *sphere;}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ DCAST\_INTO\_R(sphere,\ entries.front()-\/>get\_from(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00140\ }
+\DoxyCodeLine{00141\ \ \ \ \ \ \ from\_node\_path.set\_pos(wrt\_node,\ 0,0,0);}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ LPoint3\ sphere\_offset\ =\ (sphere-\/>get\_center()\ *}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ from\_node\_path.get\_transform(wrt\_node)-\/>get\_mat());}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ from\_node\_path.set\_pos(wrt\_node,\ orig\_pos);}
+\DoxyCodeLine{00145\ }
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \textcolor{comment}{//\ this\ will\ hold\ the\ final\ calculated\ position\ at\ each\ iteration}}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ LPoint3\ candidate\_final\_pos(orig\_pos);}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \textcolor{comment}{//\ this\ holds\ the\ position\ before\ reacting\ to\ collisions}}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ LPoint3\ uncollided\_pos(candidate\_final\_pos);}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \textcolor{comment}{//\ unit\ vector\ facing\ back\ into\ original\ direction\ of\ motion}}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ LVector3\ reverse\_vec(-\/M);}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ reverse\_vec.normalize();}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \textcolor{comment}{//\ unit\ vector\ pointing\ out\ to\ the\ right\ relative\ to\ the\ direction\ of}}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \textcolor{comment}{//\ motion,\ looking\ into\ the\ direction\ of\ motion}}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \textcolor{comment}{//const\ LVector3\ right\_unit(LVector3::up().cross(reverse\_vec));}}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \textcolor{comment}{//\ iterate\ until\ the\ mover\ runs\ out\ of\ movement\ or\ gets\ stuck}}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ *C\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ find\ the\ first\ (earliest)\ collision}}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ Entries::const\_iterator\ cei;}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (cei\ =\ entries.begin();\ cei\ !=\ entries.end();\ ++cei)\ \{}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ *entry\ =\ (*cei);}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ \ \ nassertr(entry\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (entry-\/>collided()\ \&\&\ ((C\ ==\ \textcolor{keyword}{nullptr})\ ||\ (entry-\/>get\_t()\ <\ C-\/>get\_t())))\ \{}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \ \ \ \ nassertr(from\_node\_path\ ==\ entry-\/>get\_from\_node\_path(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ \ \ \ \ C\ =\ entry;}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00172\ }
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ if\ no\ collisions,\ we're\ done}}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (C\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00177\ }
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ move\ back\ to\ initial\ contact\ position}}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ LPoint3\ contact\_pos;}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ LVector3\ contact\_normal;}
+\DoxyCodeLine{00181\ }
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!C-\/>\mbox{\hyperlink{classCollisionEntry_aa3f9abf5808d23052384f5cac27fd3c1}{get\_all\_contact\_info}}(wrt\_node,\ contact\_pos,\ contact\_normal))\ \{}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ \ \ collide\_cat.warning()}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cannot\ shove\ on\ "{}}\ <<\ from\_node\_path\ <<\ \textcolor{stringliteral}{"{}\ for\ collision\ into\ "{}}}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ C-\/>get\_into\_node\_path()\ <<\ \textcolor{stringliteral}{"{};\ no\ contact\ pos/normal\ information.\(\backslash\)n"{}};}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ calculate\ the\ position\ of\ the\ target\ node\ at\ the\ point\ of\ contact}}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ contact\_pos\ -\/=\ sphere\_offset;}
+\DoxyCodeLine{00190\ }
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ uncollided\_pos\ =\ candidate\_final\_pos;}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ candidate\_final\_pos\ =\ contact\_pos;}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ LVector3\ proj\_surface\_normal(contact\_normal);}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ LVector3\ norm\_proj\_surface\_normal(proj\_surface\_normal);}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \ \ norm\_proj\_surface\_normal.normalize();}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \ \ LVector3\ blocked\_movement(uncollided\_pos\ -\/\ contact\_pos);}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ PN\_stdfloat\ push\_magnitude(-\/blocked\_movement.dot(proj\_surface\_normal));}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (push\_magnitude\ <\ 0.0f)\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ don't\ ever\ push\ into\ plane}}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ \ \ candidate\_final\_pos\ =\ contact\_pos;}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ calculate\ new\ position\ given\ that\ you\ collided\ with\ this\ thing}}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ project\ the\ final\ position\ onto\ the\ plane\ of\ the\ obstruction}}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \ \ candidate\_final\_pos\ =\ uncollided\_pos\ +\ (norm\_proj\_surface\_normal\ *\ push\_magnitude);}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00210\ }
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ from\_node\_path.set\_pos(wrt\_node,\ candidate\_final\_pos);}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ prev\_trans(from\_node\_path.get\_prev\_transform(wrt\_node));}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ prev\_trans\ =\ prev\_trans-\/>set\_pos(contact\_pos);}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \ \ from\_node\_path.set\_prev\_transform(wrt\_node,\ prev\_trans);}
+\DoxyCodeLine{00215\ }
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \textcolor{comment}{/*\{}}
+\DoxyCodeLine{00217\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ const\ LPoint3\ new\_pos(from\_node\_path.get\_pos(wrt\_node));}}
+\DoxyCodeLine{00218\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ CPT(TransformState)\ new\_prev\_trans(from\_node\_path.get\_prev\_transform(wrt\_node));}}
+\DoxyCodeLine{00219\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ const\ LPoint3\ new\_prev\_pos(new\_prev\_trans-\/>get\_pos());}}
+\DoxyCodeLine{00220\ \textcolor{comment}{\ \ \ \ \ \ \ \ \}*/}}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ recalculate\ the\ position\ delta}}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ N\ =\ from\_node\_path.get\_pos\_delta(wrt\_node);}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ calculate\ new\ collisions\ given\ new\ movement\ vector}}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ Entries::iterator\ ei;}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpvector}{Entries}}\ new\_entries;}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (ei\ =\ entries.begin();\ ei\ !=\ entries.end();\ ++ei)\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ *entry\ =\ (*ei);}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ \ \ nassertr(entry\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ skip\ the\ one\ we\ just\ collided\ against}}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (entry\ !=\ C)\ \{}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ \ \ \ \ entry-\/>\_from\_node\_path\ =\ from\_node\_path;}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ \ \ \ \ entry-\/>reset\_collided();}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}})\ result\ =\ entry-\/>get\_from()-\/>test\_intersection(**ei);}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ new\_entries.push\_back(result);}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ entries.swap(new\_entries);}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \textcolor{comment}{//\ put\ things\ back\ where\ they\ were}}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ from\_node\_path.set\_pos(wrt\_node,\ orig\_pos);}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \textcolor{comment}{//\ restore\ the\ appropriate\ previous\ position}}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ prev\_trans\ =\ from\_node\_path.get\_prev\_transform(wrt\_node);}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ prev\_trans\ =\ prev\_trans-\/>set\_pos(orig\_prev\_pos);}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ from\_node\_path.set\_prev\_transform(wrt\_node,\ prev\_trans);}
+\DoxyCodeLine{00250\ }
+\DoxyCodeLine{00251\ \ \ \ \ \ \ LVector3\ net\_shove(candidate\_final\_pos\ -\/\ orig\_pos);}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ LVector3\ force\_normal(net\_shove);}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ force\_normal.normalize();}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ the\ part\ where\ the\ node\ actually\ gets\ moved:}}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ def.\_target.set\_pos(wrt\_node,\ candidate\_final\_pos);}
+\DoxyCodeLine{00257\ }
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ call\ this\ to\ allow\ derived\ classes\ to\ do\ other\ fix-\/ups\ as\ they\ see}}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \textcolor{comment}{//\ fit:}}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionHandlerPusher_ae19fd2308b204bb1e042443f3e615784}{apply\_net\_shove}}(def,\ net\_shove,\ force\_normal);}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionHandlerPusher_a9eae3b8efa71f348da456721a99b2d06}{apply\_linear\_force}}(def,\ force\_normal);}
+\DoxyCodeLine{00262\ \ \ \ \ \}}
+\DoxyCodeLine{00263\ \ \ \}}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00265\ \ \ \textcolor{keywordflow}{return}\ okflag;}
+\DoxyCodeLine{00266\ \}}
+
+\end{DoxyCode}

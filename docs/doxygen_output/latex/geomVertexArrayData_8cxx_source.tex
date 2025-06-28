@@ -1,0 +1,721 @@
+\doxysection{geom\+Vertex\+Array\+Data.\+cxx}
+\hypertarget{geomVertexArrayData_8cxx_source}{}\label{geomVertexArrayData_8cxx_source}\index{panda/src/gobj/geomVertexArrayData.cxx@{panda/src/gobj/geomVertexArrayData.cxx}}
+\mbox{\hyperlink{geomVertexArrayData_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexArrayData_8h}{geomVertexArrayData.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geom_8h}{geom.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{preparedGraphicsObjects_8h}{preparedGraphicsObjects.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{reversedNumericData_8h}{reversedNumericData.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamReader_8h}{bamReader.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamWriter_8h}{bamWriter.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pset_8h}{pset.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__gobj_8h}{config\_gobj.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimer_8h}{pStatTimer.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableInt_8h}{configVariableInt.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{simpleAllocator_8h}{simpleAllocator.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{vertexDataBuffer_8h}{vertexDataBuffer.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pbitops_8h}{pbitops.h}}"{}}}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{keyword}{using\ }std::max;}
+\DoxyCodeLine{00029\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ max\_independent\_vertex\_data}
+\DoxyCodeLine{00032\ (\textcolor{stringliteral}{"{}max-\/independent-\/vertex-\/data"{}},\ -\/1,}
+\DoxyCodeLine{00033\ \ PRC\_DESC(\textcolor{stringliteral}{"{}Specifies\ the\ maximum\ number\ of\ bytes\ of\ all\ vertex\ data\ "{}}}
+\DoxyCodeLine{00034\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}that\ is\ independent\ of\ the\ paging\ system.\ \ This\ is\ an\ "{}}}
+\DoxyCodeLine{00035\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}initial\ buffer\ before\ max-\/ram-\/vertex-\/data,\ specifically\ "{}}}
+\DoxyCodeLine{00036\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}designed\ for\ vertex\ datas\ that\ are\ dynamic\ in\ nature\ and\ "{}}}
+\DoxyCodeLine{00037\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}may\ change\ size\ or\ be\ created\ and\ destroyed\ frequently."{}}));}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ vertex\_data\_page\_size}
+\DoxyCodeLine{00040\ (\textcolor{stringliteral}{"{}vertex-\/data-\/page-\/size"{}},\ 262144,}
+\DoxyCodeLine{00041\ \ PRC\_DESC(\textcolor{stringliteral}{"{}The\ number\ of\ bytes\ to\ allocate\ at\ a\ time\ for\ vertex\ data.\ \ "{}}}
+\DoxyCodeLine{00042\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}This\ also\ controls\ the\ page\ size\ that\ is\ compressed\ or\ written\ "{}}}
+\DoxyCodeLine{00043\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}to\ disk\ when\ vertex\ data\ pages\ are\ evicted\ from\ memory."{}}));}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \mbox{\hyperlink{classSimpleLru}{SimpleLru}}\ GeomVertexArrayData::\_independent\_lru(\textcolor{stringliteral}{"{}independent"{}},\ max\_independent\_vertex\_data);}
+\DoxyCodeLine{00046\ \mbox{\hyperlink{classSimpleLru}{SimpleLru}}\ GeomVertexArrayData::\_small\_lru(\textcolor{stringliteral}{"{}small"{}},\ max\_independent\_vertex\_data);}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00048\ \mbox{\hyperlink{classVertexDataBook}{VertexDataBook}}\ GeomVertexArrayData::\_book(vertex\_data\_page\_size);}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ GeomVertexArrayData::\_type\_handle;}
+\DoxyCodeLine{00052\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ GeomVertexArrayData::CData::\_type\_handle;}
+\DoxyCodeLine{00053\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ GeomVertexArrayDataHandle::\_type\_handle;}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00055\ ALLOC\_DELETED\_CHAIN\_DEF(\mbox{\hyperlink{classGeomVertexArrayDataHandle}{GeomVertexArrayDataHandle}});}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00061\ GeomVertexArrayData::}
+\DoxyCodeLine{00062\ GeomVertexArrayData()\ :}
+\DoxyCodeLine{00063\ \ \ \mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}(0),}
+\DoxyCodeLine{00064\ \ \ \_array\_format(nullptr),}
+\DoxyCodeLine{00065\ \ \ \_contexts(nullptr)\ \{}
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00067\ \ \ \textcolor{comment}{//\ Can't\ put\ it\ in\ the\ LRU\ until\ it\ has\ been\ read\ in\ and\ made\ valid.}}
+\DoxyCodeLine{00068\ \}}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00073\ PT(\mbox{\hyperlink{classCopyOnWriteObject}{CopyOnWriteObject}})\ GeomVertexArrayData::}
+\DoxyCodeLine{00074\ make\_cow\_copy()\ \{}
+\DoxyCodeLine{00075\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00076\ \}}
+\DoxyCodeLine{00077\ }
+\DoxyCodeLine{00081\ GeomVertexArrayData::}
+\DoxyCodeLine{00082\ GeomVertexArrayData(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexArrayFormat}{GeomVertexArrayFormat}}\ *array\_format,}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GeomVertexArrayData::UsageHint\ usage\_hint)\ :}
+\DoxyCodeLine{00084\ \ \ \mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}(0),}
+\DoxyCodeLine{00085\ \ \ \_array\_format(array\_format),}
+\DoxyCodeLine{00086\ \ \ \_contexts(nullptr),}
+\DoxyCodeLine{00087\ \ \ \_cycler(CData(usage\_hint))}
+\DoxyCodeLine{00088\ \{}
+\DoxyCodeLine{00089\ \ \ set\_lru\_size(0);}
+\DoxyCodeLine{00090\ \ \ nassertv(\_array\_format-\/>is\_registered());}
+\DoxyCodeLine{00091\ \}}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00096\ GeomVertexArrayData::}
+\DoxyCodeLine{00097\ GeomVertexArrayData(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ \&copy)\ :}
+\DoxyCodeLine{00098\ \ \ \mbox{\hyperlink{classCopyOnWriteObject}{CopyOnWriteObject}}(copy),}
+\DoxyCodeLine{00099\ \ \ \mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}(copy),}
+\DoxyCodeLine{00100\ \ \ \_array\_format(copy.\_array\_format),}
+\DoxyCodeLine{00101\ \ \ \_contexts(nullptr),}
+\DoxyCodeLine{00102\ \ \ \_cycler(copy.\_cycler)}
+\DoxyCodeLine{00103\ \{}
+\DoxyCodeLine{00104\ \ \ copy.mark\_used\_lru();}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00106\ \ \ set\_lru\_size(get\_data\_size\_bytes());}
+\DoxyCodeLine{00107\ \ \ nassertv(\_array\_format-\/>is\_registered());}
+\DoxyCodeLine{00108\ \}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00113\ GeomVertexArrayData::}
+\DoxyCodeLine{00114\ \string~GeomVertexArrayData()\ \{}
+\DoxyCodeLine{00115\ \ \ \mbox{\hyperlink{classGeomVertexArrayData_aa31faa5552bfc9ff566f348452d77324}{release\_all}}();}
+\DoxyCodeLine{00116\ \}}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00122\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classGeomVertexArrayData_a50b73a3122c66bd612f922292810d636}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00123\ \mbox{\hyperlink{classGeomVertexArrayData_a50b73a3122c66bd612f922292810d636}{compare\_to}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ \&other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00124\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \ \ CPT(\mbox{\hyperlink{classGeomVertexArrayDataHandle}{GeomVertexArrayDataHandle}})\ handle\ =\ get\_handle(current\_thread);}
+\DoxyCodeLine{00127\ \ \ CPT(\mbox{\hyperlink{classGeomVertexArrayDataHandle}{GeomVertexArrayDataHandle}})\ other\_handle\ =\ other.get\_handle(current\_thread);}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00129\ \ \ \textcolor{keywordflow}{if}\ (handle-\/>get\_usage\_hint()\ !=\ other\_handle-\/>get\_usage\_hint())\ \{}
+\DoxyCodeLine{00130\ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{int})handle-\/>get\_usage\_hint()\ -\/\ (int)other\_handle-\/>get\_usage\_hint();}
+\DoxyCodeLine{00131\ \ \ \}}
+\DoxyCodeLine{00132\ \ \ \textcolor{keywordflow}{if}\ (handle-\/>get\_array\_format()\ !=\ other\_handle-\/>get\_array\_format())\ \{}
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{keywordflow}{return}\ handle-\/>get\_array\_format()\ <\ other\_handle-\/>get\_array\_format()\ ?\ -\/1\ :\ 1;}
+\DoxyCodeLine{00134\ \ \ \}}
+\DoxyCodeLine{00135\ \ \ \textcolor{keywordflow}{if}\ (handle-\/>get\_data\_size\_bytes()\ !=\ other\_handle-\/>get\_data\_size\_bytes())\ \{}
+\DoxyCodeLine{00136\ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{int})handle-\/>get\_data\_size\_bytes()\ -\/\ (int)other\_handle-\/>get\_data\_size\_bytes();}
+\DoxyCodeLine{00137\ \ \ \}}
+\DoxyCodeLine{00138\ \ \ \textcolor{keywordflow}{return}\ memcmp(handle-\/>get\_read\_pointer(\textcolor{keyword}{true}),}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ other\_handle-\/>get\_read\_pointer(\textcolor{keyword}{true}),}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ handle-\/>get\_data\_size\_bytes());}
+\DoxyCodeLine{00141\ \}}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00149\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayData_a7cd81a8ceb841bb6b3842238d0175dce}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00150\ \mbox{\hyperlink{classGeomVertexArrayData_a7cd81a8ceb841bb6b3842238d0175dce}{set\_usage\_hint}}(GeomVertexArrayData::UsageHint\ usage\_hint)\ \{}
+\DoxyCodeLine{00151\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00152\ \ \ cdata-\/>\_usage\_hint\ =\ usage\_hint;}
+\DoxyCodeLine{00153\ \ \ cdata-\/>\_modified\ =\ \mbox{\hyperlink{classGeom_ac422c1cae0da52be830d0eaf6533fb73}{Geom::get\_next\_modified}}();}
+\DoxyCodeLine{00154\ \}}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00159\ \textcolor{keywordtype}{void}\ GeomVertexArrayData::}
+\DoxyCodeLine{00160\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00161\ \ \ nassertv(\_array\_format\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00162\ \ \ out\ <<\ get\_num\_rows()\ <<\ \textcolor{stringliteral}{"{}\ rows:\ "{}}\ <<\ *\_array\_format;}
+\DoxyCodeLine{00163\ \}}
+\DoxyCodeLine{00164\ }
+\DoxyCodeLine{00168\ \textcolor{keywordtype}{void}\ GeomVertexArrayData::}
+\DoxyCodeLine{00169\ write(std::ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00170\ \ \ nassertv(\_array\_format\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00171\ \ \ \_array\_format-\/>write\_with\_data(out,\ indent\_level,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00172\ \}}
+\DoxyCodeLine{00173\ }
+\DoxyCodeLine{00182\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayData_aaca7069ff4669f48d2d6714ce1fc5b61}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00183\ \mbox{\hyperlink{classGeomVertexArrayData_aaca7069ff4669f48d2d6714ce1fc5b61}{prepare}}(\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *prepared\_objects)\ \{}
+\DoxyCodeLine{00184\ \ \ prepared\_objects-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_a079c30ee715d902194d78a002f8956d3}{enqueue\_vertex\_buffer}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00185\ \}}
+\DoxyCodeLine{00186\ }
+\DoxyCodeLine{00191\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classGeomVertexArrayData_a48a88566f4755dc0bf19279c8488ac5a}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00192\ \mbox{\hyperlink{classGeomVertexArrayData_a48a88566f4755dc0bf19279c8488ac5a}{is\_prepared}}(\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *prepared\_objects)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00193\ \ \ \textcolor{keywordflow}{if}\ (\_contexts\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00195\ \ \ \}}
+\DoxyCodeLine{00196\ \ \ Contexts::const\_iterator\ ci;}
+\DoxyCodeLine{00197\ \ \ ci\ =\ \_contexts-\/>find(prepared\_objects);}
+\DoxyCodeLine{00198\ \ \ \textcolor{keywordflow}{if}\ (ci\ !=\ \_contexts-\/>end())\ \{}
+\DoxyCodeLine{00199\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00200\ \ \ \}}
+\DoxyCodeLine{00201\ \ \ \textcolor{keywordflow}{return}\ prepared\_objects-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_ae9c5184ab1923a62fbd26e50e418406f}{is\_vertex\_buffer\_queued}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00202\ \}}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00215\ \mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *\mbox{\hyperlink{classGeomVertexArrayData_ad2f7ad8e84a6cf685ca1820cf6aaaa83}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00216\ \mbox{\hyperlink{classGeomVertexArrayData_ad2f7ad8e84a6cf685ca1820cf6aaaa83}{prepare\_now}}(\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *prepared\_objects,}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg)\ \{}
+\DoxyCodeLine{00218\ \ \ \textcolor{keywordflow}{if}\ (\_contexts\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ Contexts::const\_iterator\ ci;}
+\DoxyCodeLine{00220\ \ \ \ \ ci\ =\ \_contexts-\/>find(prepared\_objects);}
+\DoxyCodeLine{00221\ \ \ \ \ \textcolor{keywordflow}{if}\ (ci\ !=\ \_contexts-\/>end())\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ (*ci).second;}
+\DoxyCodeLine{00223\ \ \ \ \ \}}
+\DoxyCodeLine{00224\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \_contexts\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classpmap}{Contexts}};}
+\DoxyCodeLine{00226\ \ \ \}}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *vbc\ =\ prepared\_objects-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_afeaff6051a1dd128235fb44dd2ac1c59}{prepare\_vertex\_buffer\_now}}(\textcolor{keyword}{this},\ gsg);}
+\DoxyCodeLine{00229\ \ \ \textcolor{keywordflow}{if}\ (vbc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00230\ \ \ \ \ (*\_contexts)[prepared\_objects]\ =\ vbc;}
+\DoxyCodeLine{00231\ \ \ \}}
+\DoxyCodeLine{00232\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_contexts-\/>empty())\ \{}
+\DoxyCodeLine{00233\ \ \ \ \ \textcolor{keyword}{delete}\ \_contexts;}
+\DoxyCodeLine{00234\ \ \ \ \ \_contexts\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00235\ \ \ \}}
+\DoxyCodeLine{00236\ \ \ \textcolor{keywordflow}{return}\ vbc;}
+\DoxyCodeLine{00237\ \}}
+\DoxyCodeLine{00238\ }
+\DoxyCodeLine{00243\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classGeomVertexArrayData_a43f568ea7d291f014042e251ff60c264}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00244\ \mbox{\hyperlink{classGeomVertexArrayData_a43f568ea7d291f014042e251ff60c264}{release}}(\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *prepared\_objects)\ \{}
+\DoxyCodeLine{00245\ \ \ \textcolor{keywordflow}{if}\ (\_contexts\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00246\ \ \ \ \ Contexts::iterator\ ci;}
+\DoxyCodeLine{00247\ \ \ \ \ ci\ =\ \_contexts-\/>find(prepared\_objects);}
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{keywordflow}{if}\ (ci\ !=\ \_contexts-\/>end())\ \{}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *vbc\ =\ (*ci).second;}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ prepared\_objects-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_ae66e2cf8ebb5525ddd2a453639382600}{release\_vertex\_buffer}}(vbc);}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00252\ \ \ \ \ \}}
+\DoxyCodeLine{00253\ \ \ \}}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \ \ \textcolor{comment}{//\ Maybe\ it\ wasn't\ prepared\ yet,\ but\ it's\ about\ to\ be.}}
+\DoxyCodeLine{00256\ \ \ \textcolor{keywordflow}{return}\ prepared\_objects-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_a1e4bdb510823b3ad5359172953879f67}{dequeue\_vertex\_buffer}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00257\ \}}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00263\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classGeomVertexArrayData_aa31faa5552bfc9ff566f348452d77324}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00264\ \mbox{\hyperlink{classGeomVertexArrayData_aa31faa5552bfc9ff566f348452d77324}{release\_all}}()\ \{}
+\DoxyCodeLine{00265\ \ \ \textcolor{keywordtype}{int}\ num\_freed\ =\ 0;}
+\DoxyCodeLine{00266\ }
+\DoxyCodeLine{00267\ \ \ \textcolor{keywordflow}{if}\ (\_contexts\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00268\ \ \ \ \ \textcolor{comment}{//\ We\ have\ to\ traverse\ a\ copy\ of\ the\ \_contexts\ list,\ because\ the}}
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{comment}{//\ PreparedGraphicsObjects\ object\ will\ call\ clear\_prepared()\ in\ response}}
+\DoxyCodeLine{00270\ \ \ \ \ \textcolor{comment}{//\ to\ each\ release\_vertex\_buffer(),\ and\ we\ don't\ want\ to\ be\ modifying\ the}}
+\DoxyCodeLine{00271\ \ \ \ \ \textcolor{comment}{//\ \_contexts\ list\ while\ we're\ traversing\ it.}}
+\DoxyCodeLine{00272\ \ \ \ \ \mbox{\hyperlink{classpmap}{Contexts}}\ temp\ =\ *\_contexts;}
+\DoxyCodeLine{00273\ \ \ \ \ num\_freed\ =\ (int)\_contexts-\/>size();}
+\DoxyCodeLine{00274\ }
+\DoxyCodeLine{00275\ \ \ \ \ Contexts::const\_iterator\ ci;}
+\DoxyCodeLine{00276\ \ \ \ \ \textcolor{keywordflow}{for}\ (ci\ =\ temp.begin();\ ci\ !=\ temp.end();\ ++ci)\ \{}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ \mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *prepared\_objects\ =\ (*ci).first;}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *vbc\ =\ (*ci).second;}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ prepared\_objects-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_ae66e2cf8ebb5525ddd2a453639382600}{release\_vertex\_buffer}}(vbc);}
+\DoxyCodeLine{00280\ \ \ \ \ \}}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \ \ \ \ \textcolor{comment}{//\ Now\ that\ we've\ called\ release\_vertex\_buffer()\ on\ every\ known\ context,}}
+\DoxyCodeLine{00283\ \ \ \ \ \textcolor{comment}{//\ the\ \_contexts\ list\ should\ have\ completely\ emptied\ itself.}}
+\DoxyCodeLine{00284\ \ \ \ \ nassertr(\_contexts\ ==\ \textcolor{keyword}{nullptr},\ num\_freed);}
+\DoxyCodeLine{00285\ \ \ \}}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \ \ \textcolor{keywordflow}{return}\ num\_freed;}
+\DoxyCodeLine{00288\ \}}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00294\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayData_aeb17a2fb51993bddef3eb745b667593a}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00295\ \mbox{\hyperlink{classGeomVertexArrayData_aeb17a2fb51993bddef3eb745b667593a}{lru\_epoch}}()\ \{}
+\DoxyCodeLine{00296\ \ \ \_independent\_lru.begin\_epoch();}
+\DoxyCodeLine{00297\ \ \ VertexDataPage::get\_global\_lru(VertexDataPage::RC\_resident)-\/>begin\_epoch();}
+\DoxyCodeLine{00298\ \ \ VertexDataPage::get\_global\_lru(VertexDataPage::RC\_compressed)-\/>begin\_epoch();}
+\DoxyCodeLine{00299\ \}}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00311\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayData_a2c06ad86955e30ff5f1dd7511eb82bb9}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00312\ \mbox{\hyperlink{classGeomVertexArrayData_a2c06ad86955e30ff5f1dd7511eb82bb9}{evict\_lru}}()\ \{}
+\DoxyCodeLine{00313\ \ \ dequeue\_lru();}
+\DoxyCodeLine{00314\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00315\ \ \ cdata-\/>\_buffer.page\_out(\_book);}
+\DoxyCodeLine{00316\ \}}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00324\ \textcolor{keywordtype}{void}\ GeomVertexArrayData::}
+\DoxyCodeLine{00325\ clear\_prepared(\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *prepared\_objects)\ \{}
+\DoxyCodeLine{00326\ \ \ nassertv(\_contexts\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00327\ }
+\DoxyCodeLine{00328\ \ \ Contexts::iterator\ ci;}
+\DoxyCodeLine{00329\ \ \ ci\ =\ \_contexts-\/>find(prepared\_objects);}
+\DoxyCodeLine{00330\ \ \ \textcolor{keywordflow}{if}\ (ci\ !=\ \_contexts-\/>end())\ \{}
+\DoxyCodeLine{00331\ \ \ \ \ \_contexts-\/>erase(ci);}
+\DoxyCodeLine{00332\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_contexts-\/>empty())\ \{}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_contexts;}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \_contexts\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00335\ \ \ \ \ \}}
+\DoxyCodeLine{00336\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00337\ \ \ \ \ \textcolor{comment}{//\ If\ this\ assertion\ fails,\ clear\_prepared()\ was\ given\ a\ prepared\_objects}}
+\DoxyCodeLine{00338\ \ \ \ \ \textcolor{comment}{//\ which\ the\ data\ array\ didn't\ know\ about.}}
+\DoxyCodeLine{00339\ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}unknown\ PreparedGraphicsObjects"{}});}
+\DoxyCodeLine{00340\ \ \ \}}
+\DoxyCodeLine{00341\ \}}
+\DoxyCodeLine{00342\ }
+\DoxyCodeLine{00348\ \textcolor{keywordtype}{void}\ GeomVertexArrayData::}
+\DoxyCodeLine{00349\ reverse\_data\_endianness(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *dest,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *source,}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00351\ \ \ \textcolor{keywordtype}{int}\ num\_columns\ =\ \_array\_format-\/>get\_num\_columns();}
+\DoxyCodeLine{00352\ }
+\DoxyCodeLine{00353\ \ \ \textcolor{comment}{//\ Walk\ through\ each\ row\ of\ the\ data.}}
+\DoxyCodeLine{00354\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ pi\ =\ 0;\ pi\ <\ size;\ pi\ +=\ \_array\_format-\/>get\_stride())\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ \textcolor{comment}{//\ For\ each\ row,\ visit\ all\ of\ the\ columns;\ and\ for\ each\ column,\ visit\ all}}
+\DoxyCodeLine{00356\ \ \ \ \ \textcolor{comment}{//\ of\ the\ components\ of\ that\ column.}}
+\DoxyCodeLine{00357\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ci\ =\ 0;\ ci\ <\ num\_columns;\ ++ci)\ \{}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexColumn}{GeomVertexColumn}}\ *col\ =\ \_array\_format-\/>get\_column(ci);}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ component\_bytes\ =\ col-\/>get\_component\_bytes();}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (component\_bytes\ >\ 1)\ \{}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Get\ the\ index\ of\ the\ beginning\ of\ the\ column.}}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ ci\ =\ pi\ +\ col-\/>get\_start();}
+\DoxyCodeLine{00363\ }
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_components\ =\ col-\/>get\_num\_components();}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ cj\ =\ 0;\ cj\ <\ num\_components;\ ++cj)\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Reverse\ the\ bytes\ of\ each\ component.}}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classReversedNumericData}{ReversedNumericData}}\ nd(source\ +\ ci,\ component\_bytes);}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ \ \ nd.store\_value(dest\ +\ ci,\ component\_bytes);}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ \ \ ci\ +=\ component\_bytes;}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00372\ \ \ \ \ \}}
+\DoxyCodeLine{00373\ \ \ \}}
+\DoxyCodeLine{00374\ \}}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00379\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayData_a6cb2ef5065eef0ec4d1f67b58d31076b}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00380\ \mbox{\hyperlink{classGeomVertexArrayData_a6cb2ef5065eef0ec4d1f67b58d31076b}{register\_with\_read\_factory}}()\ \{}
+\DoxyCodeLine{00381\ \ \ BamReader::get\_factory()-\/>register\_factory(get\_class\_type(),\ \mbox{\hyperlink{classGeomVertexArrayData_ada023378ef76394658744e34e87d56d6}{make\_from\_bam}});}
+\DoxyCodeLine{00382\ \}}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00388\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayData_a67eab08388599a2ed83880786d4beaea}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00389\ \mbox{\hyperlink{classGeomVertexArrayData_a67eab08388599a2ed83880786d4beaea}{write\_datagram}}(\mbox{\hyperlink{classBamWriter}{BamWriter}}\ *manager,\ \mbox{\hyperlink{classDatagram}{Datagram}}\ \&dg)\ \{}
+\DoxyCodeLine{00390\ \ \ CopyOnWriteObject::write\_datagram(manager,\ dg);}
+\DoxyCodeLine{00391\ }
+\DoxyCodeLine{00392\ \ \ manager-\/>\mbox{\hyperlink{classBamWriter_a634bd4eb8e9b33ffde91a27c02f80467}{write\_pointer}}(dg,\ \_array\_format);}
+\DoxyCodeLine{00393\ \ \ manager-\/>\mbox{\hyperlink{classBamWriter_a4a957fdbd6f508ee3029a41a794030cd}{write\_cdata}}(dg,\ \_cycler,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00394\ \}}
+\DoxyCodeLine{00395\ }
+\DoxyCodeLine{00400\ \mbox{\hyperlink{classPointerToArray}{PTA\_uchar}}\ \mbox{\hyperlink{classGeomVertexArrayData_a8ea92ac0cca3c70316e0ef6b2b4435aa}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00401\ \mbox{\hyperlink{classGeomVertexArrayData_a8ea92ac0cca3c70316e0ef6b2b4435aa}{read\_raw\_data}}(\mbox{\hyperlink{classBamReader}{BamReader}}\ *manager,\ \mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan)\ \{}
+\DoxyCodeLine{00402\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ scan.get\_uint32();}
+\DoxyCodeLine{00403\ \ \ \mbox{\hyperlink{classPointerToArray}{PTA\_uchar}}\ data\ =\ PTA\_uchar::empty\_array(size,\ get\_class\_type());}
+\DoxyCodeLine{00404\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *source\_data\ =}
+\DoxyCodeLine{00405\ \ \ \ \ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)scan.get\_datagram().get\_data();}
+\DoxyCodeLine{00406\ \ \ memcpy(data,\ source\_data\ +\ scan.get\_current\_index(),\ size);}
+\DoxyCodeLine{00407\ \ \ scan.skip\_bytes(size);}
+\DoxyCodeLine{00408\ }
+\DoxyCodeLine{00409\ \ \ \textcolor{keywordflow}{return}\ data;}
+\DoxyCodeLine{00410\ \}}
+\DoxyCodeLine{00411\ }
+\DoxyCodeLine{00416\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classGeomVertexArrayData_afe089668285eb151ab93b46a23297882}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00417\ \mbox{\hyperlink{classGeomVertexArrayData_afe089668285eb151ab93b46a23297882}{complete\_pointers}}(\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ **p\_list,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{00418\ \ \ \textcolor{keywordtype}{int}\ pi\ =\ \mbox{\hyperlink{classTypedWritable_addc29bb978851cacca2196f8a1f35014}{CopyOnWriteObject::complete\_pointers}}(p\_list,\ manager);}
+\DoxyCodeLine{00419\ }
+\DoxyCodeLine{00420\ \ \ \_array\_format\ =\ DCAST(\mbox{\hyperlink{classGeomVertexArrayFormat}{GeomVertexArrayFormat}},\ p\_list[pi++]);}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00422\ \ \ \textcolor{keywordflow}{return}\ pi;}
+\DoxyCodeLine{00423\ \}}
+\DoxyCodeLine{00424\ }
+\DoxyCodeLine{00430\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayData_a44c6d2c251b7cf5192ff2d469362bbec}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00431\ \mbox{\hyperlink{classGeomVertexArrayData_a44c6d2c251b7cf5192ff2d469362bbec}{finalize}}(\mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{00432\ \ \ \textcolor{comment}{//\ Now\ we\ need\ to\ register\ the\ format\ that\ we\ have\ read\ from\ the\ bam\ file}}
+\DoxyCodeLine{00433\ \ \ \textcolor{comment}{//\ (since\ it\ doesn't\ come\ out\ of\ the\ bam\ file\ automatically\ registered).}}
+\DoxyCodeLine{00434\ \ \ \textcolor{comment}{//\ This\ may\ change\ the\ format's\ pointer,\ which\ we\ should\ then\ update\ our\ own}}
+\DoxyCodeLine{00435\ \ \ \textcolor{comment}{//\ data\ to\ reflect.\ \ But\ since\ this\ may\ cause\ the\ unregistered\ object\ to}}
+\DoxyCodeLine{00436\ \ \ \textcolor{comment}{//\ destruct,\ we\ have\ to\ also\ tell\ the\ BamReader\ to\ return\ the\ new\ object}}
+\DoxyCodeLine{00437\ \ \ \textcolor{comment}{//\ from\ now\ on.}}
+\DoxyCodeLine{00438\ }
+\DoxyCodeLine{00439\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00440\ }
+\DoxyCodeLine{00441\ \ \ CPT(\mbox{\hyperlink{classGeomVertexArrayFormat}{GeomVertexArrayFormat}})\ new\_array\_format\ =}
+\DoxyCodeLine{00442\ \ \ \ \ GeomVertexArrayFormat::register\_format(\_array\_format);}
+\DoxyCodeLine{00443\ }
+\DoxyCodeLine{00444\ \ \ manager-\/>\mbox{\hyperlink{classBamReader_a0ca396cd4d55d805e00e66b111fc9ddb}{change\_pointer}}(\_array\_format,\ new\_array\_format);}
+\DoxyCodeLine{00445\ \ \ \_array\_format\ =\ new\_array\_format;}
+\DoxyCodeLine{00446\ }
+\DoxyCodeLine{00447\ \ \ PT(BamAuxData)\ aux\_data\ =\ (BamAuxData\ *)manager-\/>\mbox{\hyperlink{classBamReader_ad712ff1b19f81915b7619978ce485254}{get\_aux\_data}}(\textcolor{keyword}{this},\ \textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00448\ \ \ \textcolor{keywordflow}{if}\ (aux\_data\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00449\ \ \ \ \ \textcolor{keywordflow}{if}\ (aux\_data-\/>\_endian\_reversed)\ \{}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ is\ the\ time\ to\ endian-\/reverse\ the\ data.}}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \mbox{\hyperlink{classVertexDataBuffer}{VertexDataBuffer}}\ new\_buffer(cdata-\/>\_buffer.get\_size());}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ reverse\_data\_endianness(new\_buffer.get\_write\_pointer(),\ cdata-\/>\_buffer.get\_read\_pointer(\textcolor{keyword}{true}),\ cdata-\/>\_buffer.get\_size());}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ cdata-\/>\_buffer.swap(new\_buffer);}
+\DoxyCodeLine{00454\ \ \ \ \ \}}
+\DoxyCodeLine{00455\ \ \ \}}
+\DoxyCodeLine{00456\ }
+\DoxyCodeLine{00457\ \ \ set\_lru\_size(cdata-\/>\_buffer.get\_size());}
+\DoxyCodeLine{00458\ \}}
+\DoxyCodeLine{00459\ }
+\DoxyCodeLine{00465\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\mbox{\hyperlink{classGeomVertexArrayData_ada023378ef76394658744e34e87d56d6}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00466\ \mbox{\hyperlink{classGeomVertexArrayData_ada023378ef76394658744e34e87d56d6}{make\_from\_bam}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFactoryParams}{FactoryParams}}\ \&params)\ \{}
+\DoxyCodeLine{00467\ \ \ \mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *\textcolor{keywordtype}{object}\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}};}
+\DoxyCodeLine{00468\ \ \ \mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ scan;}
+\DoxyCodeLine{00469\ \ \ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager;}
+\DoxyCodeLine{00470\ }
+\DoxyCodeLine{00471\ \ \ parse\_params(params,\ scan,\ manager);}
+\DoxyCodeLine{00472\ \ \ \textcolor{keywordtype}{object}-\/>fillin(scan,\ manager);}
+\DoxyCodeLine{00473\ \ \ manager-\/>\mbox{\hyperlink{classBamReader_a0c2e8dc5a794a4263139116b5b8dcb2d}{register\_finalize}}(\textcolor{keywordtype}{object});}
+\DoxyCodeLine{00474\ }
+\DoxyCodeLine{00475\ \ \ \textcolor{keywordflow}{return}\ object;}
+\DoxyCodeLine{00476\ \}}
+\DoxyCodeLine{00477\ }
+\DoxyCodeLine{00482\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayData_a6badaf1e6bcdbb5a965e41a6b977c866}{GeomVertexArrayData::}}}
+\DoxyCodeLine{00483\ \mbox{\hyperlink{classGeomVertexArrayData_a6badaf1e6bcdbb5a965e41a6b977c866}{fillin}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{00484\ \ \ \mbox{\hyperlink{classTypedWritable_a3ad6cc1cd23bc3783d83edb3302bb43c}{CopyOnWriteObject::fillin}}(scan,\ manager);}
+\DoxyCodeLine{00485\ }
+\DoxyCodeLine{00486\ \ \ manager-\/>\mbox{\hyperlink{classBamReader_ac0ecc0609d9c6de514145777b3336435}{read\_pointer}}(scan);}
+\DoxyCodeLine{00487\ \ \ manager-\/>\mbox{\hyperlink{classBamReader_ae63d90cd5d2c87fe3159f6b5d6d9fe10}{read\_cdata}}(scan,\ \_cycler,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00488\ \}}
+\DoxyCodeLine{00489\ }
+\DoxyCodeLine{00493\ GeomVertexArrayData::CData::}
+\DoxyCodeLine{00494\ \string~CData()\ \{}
+\DoxyCodeLine{00495\ \}}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00500\ \mbox{\hyperlink{classCycleData}{CycleData}}\ *GeomVertexArrayData::CData::}
+\DoxyCodeLine{00501\ make\_copy()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00502\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ CData(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00503\ \}}
+\DoxyCodeLine{00504\ }
+\DoxyCodeLine{00509\ \textcolor{keywordtype}{void}\ GeomVertexArrayData::CData::}
+\DoxyCodeLine{00510\ write\_datagram(\mbox{\hyperlink{classBamWriter}{BamWriter}}\ *manager,\ \mbox{\hyperlink{classDatagram}{Datagram}}\ \&dg,\ \textcolor{keywordtype}{void}\ *extra\_data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00511\ \ \ \mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *array\_data\ =\ (\mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *)extra\_data;}
+\DoxyCodeLine{00512\ \ \ dg.add\_uint8(\_usage\_hint);}
+\DoxyCodeLine{00513\ }
+\DoxyCodeLine{00514\ \ \ dg.add\_uint32(\_buffer.get\_size());}
+\DoxyCodeLine{00515\ }
+\DoxyCodeLine{00516\ \ \ \textcolor{keywordflow}{if}\ (manager-\/>get\_file\_endian()\ ==\ BamWriter::BE\_native)\ \{}
+\DoxyCodeLine{00517\ \ \ \ \ \textcolor{comment}{//\ For\ native\ endianness,\ we\ only\ have\ to\ write\ the\ data\ directly.}}
+\DoxyCodeLine{00518\ \ \ \ \ dg.append\_data(\_buffer.get\_read\_pointer(\textcolor{keyword}{true}),\ \_buffer.get\_size());}
+\DoxyCodeLine{00519\ }
+\DoxyCodeLine{00520\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00521\ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ we\ have\ to\ convert\ it.}}
+\DoxyCodeLine{00522\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *new\_data\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)alloca(\_buffer.get\_size());}
+\DoxyCodeLine{00523\ \ \ \ \ array\_data-\/>reverse\_data\_endianness(new\_data,\ \_buffer.get\_read\_pointer(\textcolor{keyword}{true}),\ \_buffer.get\_size());}
+\DoxyCodeLine{00524\ \ \ \ \ dg.append\_data(new\_data,\ \_buffer.get\_size());}
+\DoxyCodeLine{00525\ \ \ \}}
+\DoxyCodeLine{00526\ \}}
+\DoxyCodeLine{00527\ }
+\DoxyCodeLine{00532\ \textcolor{keywordtype}{void}\ GeomVertexArrayData::CData::}
+\DoxyCodeLine{00533\ fillin(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager,\ \textcolor{keywordtype}{void}\ *extra\_data)\ \{}
+\DoxyCodeLine{00534\ \ \ \mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *array\_data\ =\ (\mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *)extra\_data;}
+\DoxyCodeLine{00535\ \ \ \_usage\_hint\ =\ (UsageHint)scan.get\_uint8();}
+\DoxyCodeLine{00536\ }
+\DoxyCodeLine{00537\ \ \ \textcolor{keywordflow}{if}\ (manager-\/>get\_file\_minor\_ver()\ <\ 8)\ \{}
+\DoxyCodeLine{00538\ \ \ \ \ \textcolor{comment}{//\ Before\ bam\ version\ 6.8,\ the\ array\ data\ was\ a\ PTA\_uchar.}}
+\DoxyCodeLine{00539\ \ \ \ \ \mbox{\hyperlink{classPointerToArray}{PTA\_uchar}}\ new\_data;}
+\DoxyCodeLine{00540\ \ \ \ \ READ\_PTA(manager,\ scan,\ array\_data-\/>\mbox{\hyperlink{classGeomVertexArrayData_a8ea92ac0cca3c70316e0ef6b2b4435aa}{read\_raw\_data}},\ new\_data);}
+\DoxyCodeLine{00541\ \ \ \ \ \_buffer.unclean\_realloc(new\_data.size());}
+\DoxyCodeLine{00542\ \ \ \ \ \_buffer.set\_size(new\_data.size());}
+\DoxyCodeLine{00543\ \ \ \ \ memcpy(\_buffer.get\_write\_pointer(),\ \&new\_data[0],\ new\_data.size());}
+\DoxyCodeLine{00544\ }
+\DoxyCodeLine{00545\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00546\ \ \ \ \ \textcolor{comment}{//\ Now,\ the\ array\ data\ is\ just\ stored\ directly.}}
+\DoxyCodeLine{00547\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ scan.get\_uint32();}
+\DoxyCodeLine{00548\ \ \ \ \ \_buffer.unclean\_realloc(size);}
+\DoxyCodeLine{00549\ \ \ \ \ \_buffer.set\_size(size);}
+\DoxyCodeLine{00550\ }
+\DoxyCodeLine{00551\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *source\_data\ =}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)scan.get\_datagram().get\_data();}
+\DoxyCodeLine{00553\ \ \ \ \ memcpy(\_buffer.get\_write\_pointer(),\ source\_data\ +\ scan.get\_current\_index(),\ size);}
+\DoxyCodeLine{00554\ \ \ \ \ scan.skip\_bytes(size);}
+\DoxyCodeLine{00555\ \ \ \}}
+\DoxyCodeLine{00556\ }
+\DoxyCodeLine{00557\ \ \ \textcolor{keywordtype}{bool}\ endian\_reversed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00558\ }
+\DoxyCodeLine{00559\ \ \ \textcolor{keywordflow}{if}\ (manager-\/>get\_file\_endian()\ !=\ BamReader::BE\_native)\ \{}
+\DoxyCodeLine{00560\ \ \ \ \ \textcolor{comment}{//\ For\ non-\/native\ endian\ files,\ we\ have\ to\ convert\ the\ data.}}
+\DoxyCodeLine{00561\ }
+\DoxyCodeLine{00562\ \ \ \ \ \textcolor{keywordflow}{if}\ (array\_data-\/>\_array\_format\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \textcolor{comment}{//\ But\ we\ can't\ do\ that\ until\ we've\ completed\ the\ \_array\_format\ pointer,}}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \textcolor{comment}{//\ which\ tells\ us\ how\ to\ convert\ it.}}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ endian\_reversed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00566\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \textcolor{comment}{//\ Since\ we\ have\ the\ \_array\_format\ pointer\ now,\ we\ can\ reverse\ it}}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \textcolor{comment}{//\ immediately\ (and\ we\ should,\ to\ support\ threaded\ CData\ updates).}}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \mbox{\hyperlink{classVertexDataBuffer}{VertexDataBuffer}}\ new\_buffer(\_buffer.get\_size());}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ array\_data-\/>reverse\_data\_endianness(new\_buffer.get\_write\_pointer(),\ \_buffer.get\_read\_pointer(\textcolor{keyword}{true}),\ \_buffer.get\_size());}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \_buffer.swap(new\_buffer);}
+\DoxyCodeLine{00572\ \ \ \ \ \}}
+\DoxyCodeLine{00573\ \ \ \}}
+\DoxyCodeLine{00574\ }
+\DoxyCodeLine{00575\ \ \ \textcolor{keywordflow}{if}\ (endian\_reversed)\ \{}
+\DoxyCodeLine{00576\ \ \ \ \ PT(BamAuxData)\ aux\_data\ =\ \textcolor{keyword}{new}\ BamAuxData;}
+\DoxyCodeLine{00577\ \ \ \ \ aux\_data-\/>\_endian\_reversed\ =\ endian\_reversed;}
+\DoxyCodeLine{00578\ \ \ \ \ manager-\/>\mbox{\hyperlink{classBamReader_a97cb720e14628af2131871369039b986}{set\_aux\_data}}(array\_data,\ \textcolor{stringliteral}{"{}"{}},\ aux\_data);}
+\DoxyCodeLine{00579\ \ \ \}}
+\DoxyCodeLine{00580\ }
+\DoxyCodeLine{00581\ \ \ array\_data-\/>set\_lru\_size(\_buffer.get\_size());}
+\DoxyCodeLine{00582\ }
+\DoxyCodeLine{00583\ \ \ \_modified\ =\ \mbox{\hyperlink{classGeom_ac422c1cae0da52be830d0eaf6533fb73}{Geom::get\_next\_modified}}();}
+\DoxyCodeLine{00584\ \}}
+\DoxyCodeLine{00585\ }
+\DoxyCodeLine{00589\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *\mbox{\hyperlink{classGeomVertexArrayDataHandle_a74a78c3f7f07f818efce591d8440e979}{GeomVertexArrayDataHandle::}}}
+\DoxyCodeLine{00590\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_a74a78c3f7f07f818efce591d8440e979}{get\_write\_pointer}}()\ \{}
+\DoxyCodeLine{00591\ \ \ nassertr(\_writable,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00592\ \ \ mark\_used();}
+\DoxyCodeLine{00593\ \ \ \_cdata-\/>\_modified\ =\ \mbox{\hyperlink{classGeom_ac422c1cae0da52be830d0eaf6533fb73}{Geom::get\_next\_modified}}();}
+\DoxyCodeLine{00594\ \ \ \textcolor{keywordflow}{return}\ \_cdata-\/>\_buffer.get\_write\_pointer();}
+\DoxyCodeLine{00595\ \}}
+\DoxyCodeLine{00596\ }
+\DoxyCodeLine{00600\ \textcolor{keywordtype}{bool}\ GeomVertexArrayDataHandle::}
+\DoxyCodeLine{00601\ set\_num\_rows(\textcolor{keywordtype}{int}\ n)\ \{}
+\DoxyCodeLine{00602\ \ \ nassertr(\_writable,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00603\ \ \ mark\_used();}
+\DoxyCodeLine{00604\ }
+\DoxyCodeLine{00605\ \ \ \textcolor{keywordtype}{int}\ stride\ =\ \_object-\/>\_array\_format-\/>get\_stride();}
+\DoxyCodeLine{00606\ \ \ \textcolor{keywordtype}{size\_t}\ new\_size\ =\ n\ *\ stride;}
+\DoxyCodeLine{00607\ \ \ \textcolor{keywordtype}{size\_t}\ orig\_size\ =\ \_cdata-\/>\_buffer.get\_size();}
+\DoxyCodeLine{00608\ }
+\DoxyCodeLine{00609\ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00610\ \ \ \ \ gobj\_cat.spam()}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ <<\ \_object\ <<\ \textcolor{stringliteral}{"{}.set\_num\_rows("{}}\ <<\ n\ <<\ \textcolor{stringliteral}{"{}),\ size\ =\ "{}}\ <<\ new\_size\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00612\ \ \ \}}
+\DoxyCodeLine{00613\ }
+\DoxyCodeLine{00614\ \ \ \textcolor{keywordflow}{if}\ (new\_size\ !=\ orig\_size)\ \{}
+\DoxyCodeLine{00615\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ orig\_reserved\_size\ =\ \_cdata-\/>\_buffer.get\_reserved\_size();}
+\DoxyCodeLine{00616\ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_size\ >\ orig\_reserved\_size)\ \{}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \textcolor{comment}{//\ Add\ more\ rows.\ \ Go\ up\ to\ the\ next\ power\ of\ two\ bytes,\ mainly\ to}}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \textcolor{comment}{//\ reduce\ the\ number\ of\ allocs\ needed.}}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ new\_reserved\_size\ =\ (size\_t)1\ <<\ get\_next\_higher\_bit(new\_size\ -\/\ 1);}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ nassertr(new\_reserved\_size\ >=\ new\_size,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00621\ }
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \_cdata-\/>\_buffer.clean\_realloc(new\_reserved\_size);}
+\DoxyCodeLine{00623\ }
+\DoxyCodeLine{00624\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (new\_size\ ==\ 0)\ \{}
+\DoxyCodeLine{00625\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ set\ the\ number\ of\ rows\ to\ 0,\ go\ ahead\ and\ clear\ the\ buffer}}
+\DoxyCodeLine{00626\ \ \ \ \ \ \ \textcolor{comment}{//\ altogether,\ and\ let\ the\ user\ build\ it\ up\ again\ from\ nothing,\ to\ try}}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \textcolor{comment}{//\ to\ reduce\ frivolous\ memory\ waste.}}
+\DoxyCodeLine{00628\ \ \ \ \ \ \ \_cdata-\/>\_buffer.clear();}
+\DoxyCodeLine{00629\ \ \ \ \ \}}
+\DoxyCodeLine{00630\ }
+\DoxyCodeLine{00631\ \ \ \ \ \_cdata-\/>\_buffer.set\_size(new\_size);}
+\DoxyCodeLine{00632\ }
+\DoxyCodeLine{00633\ \ \ \ \ \textcolor{comment}{//\ Now\ ensure\ that\ the\ newly-\/added\ rows\ are\ initialized\ to\ 0.}}
+\DoxyCodeLine{00634\ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_size\ >\ orig\_size)\ \{}
+\DoxyCodeLine{00635\ \ \ \ \ \ \ memset(\_cdata-\/>\_buffer.get\_write\_pointer()\ +\ orig\_size,\ 0,}
+\DoxyCodeLine{00636\ \ \ \ \ \ \ \ \ \ \ \ \ \ new\_size\ -\/\ orig\_size);}
+\DoxyCodeLine{00637\ \ \ \ \ \}}
+\DoxyCodeLine{00638\ }
+\DoxyCodeLine{00639\ \ \ \ \ \_cdata-\/>\_modified\ =\ \mbox{\hyperlink{classGeom_ac422c1cae0da52be830d0eaf6533fb73}{Geom::get\_next\_modified}}();}
+\DoxyCodeLine{00640\ }
+\DoxyCodeLine{00641\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_current\_thread()-\/>get\_pipeline\_stage()\ ==\ 0)\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ \_object-\/>set\_lru\_size(\_cdata-\/>\_buffer.get\_size());}
+\DoxyCodeLine{00643\ \ \ \ \ \}}
+\DoxyCodeLine{00644\ }
+\DoxyCodeLine{00645\ \ \ \ \ nassertr(get\_num\_rows()\ ==\ n,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00646\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00647\ \ \ \}}
+\DoxyCodeLine{00648\ }
+\DoxyCodeLine{00649\ \ \ nassertr(get\_num\_rows()\ ==\ n,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00650\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00651\ \}}
+\DoxyCodeLine{00652\ }
+\DoxyCodeLine{00656\ \textcolor{keywordtype}{bool}\ GeomVertexArrayDataHandle::}
+\DoxyCodeLine{00657\ unclean\_set\_num\_rows(\textcolor{keywordtype}{int}\ n)\ \{}
+\DoxyCodeLine{00658\ \ \ nassertr(\_writable,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00659\ \ \ mark\_used();}
+\DoxyCodeLine{00660\ }
+\DoxyCodeLine{00661\ \ \ \textcolor{keywordtype}{int}\ stride\ =\ \_object-\/>\_array\_format-\/>get\_stride();}
+\DoxyCodeLine{00662\ \ \ \textcolor{keywordtype}{size\_t}\ new\_size\ =\ n\ *\ stride;}
+\DoxyCodeLine{00663\ \ \ \textcolor{keywordtype}{size\_t}\ orig\_size\ =\ \_cdata-\/>\_buffer.get\_size();}
+\DoxyCodeLine{00664\ \ \ \textcolor{keywordtype}{size\_t}\ orig\_reserved\_size\ =\ \_cdata-\/>\_buffer.get\_reserved\_size();}
+\DoxyCodeLine{00665\ }
+\DoxyCodeLine{00666\ \ \ \textcolor{keywordflow}{if}\ (new\_size\ !=\ orig\_size\ ||\ new\_size\ !=\ orig\_reserved\_size)\ \{}
+\DoxyCodeLine{00667\ \ \ \ \ \textcolor{comment}{//\ Since\ this\ is\ unclean\_set\_num\_rows(),\ we\ won't\ be\ using\ it\ to}}
+\DoxyCodeLine{00668\ \ \ \ \ \textcolor{comment}{//\ incrementally\ increase\ the\ array;\ instead,\ it\ will\ generally\ be\ used}}
+\DoxyCodeLine{00669\ \ \ \ \ \textcolor{comment}{//\ only\ to\ create\ an\ array\ initially.\ \ So\ it\ makes\ sense\ to\ set\ the}}
+\DoxyCodeLine{00670\ \ \ \ \ \textcolor{comment}{//\ reserved\ size\ to\ precisely\ the\ same\ as\ the\ target\ size.}}
+\DoxyCodeLine{00671\ }
+\DoxyCodeLine{00672\ \ \ \ \ \_cdata-\/>\_buffer.unclean\_realloc(new\_size);}
+\DoxyCodeLine{00673\ \ \ \ \ \_cdata-\/>\_buffer.set\_size(new\_size);}
+\DoxyCodeLine{00674\ }
+\DoxyCodeLine{00675\ \ \ \ \ \textcolor{comment}{//\ No\ need\ to\ fill\ to\ zero\ or\ copy\ the\ old\ buffer,\ since\ this\ is}}
+\DoxyCodeLine{00676\ \ \ \ \ \textcolor{comment}{//\ unclean\_set\_num\_rows().}}
+\DoxyCodeLine{00677\ }
+\DoxyCodeLine{00678\ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_size\ !=\ orig\_size)\ \{}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ \_cdata-\/>\_modified\ =\ \mbox{\hyperlink{classGeom_ac422c1cae0da52be830d0eaf6533fb73}{Geom::get\_next\_modified}}();}
+\DoxyCodeLine{00680\ }
+\DoxyCodeLine{00681\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_current\_thread()-\/>get\_pipeline\_stage()\ ==\ 0)\ \{}
+\DoxyCodeLine{00682\ \ \ \ \ \ \ \ \ \_object-\/>set\_lru\_size(\_cdata-\/>\_buffer.get\_size());}
+\DoxyCodeLine{00683\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00684\ \ \ \ \ \}}
+\DoxyCodeLine{00685\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00686\ \ \ \}}
+\DoxyCodeLine{00687\ }
+\DoxyCodeLine{00688\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00689\ \}}
+\DoxyCodeLine{00690\ }
+\DoxyCodeLine{00694\ \textcolor{keywordtype}{bool}\ GeomVertexArrayDataHandle::}
+\DoxyCodeLine{00695\ reserve\_num\_rows(\textcolor{keywordtype}{int}\ n)\ \{}
+\DoxyCodeLine{00696\ \ \ nassertr(\_writable,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00697\ \ \ mark\_used();}
+\DoxyCodeLine{00698\ }
+\DoxyCodeLine{00699\ \ \ \textcolor{keywordtype}{int}\ stride\ =\ \_object-\/>\_array\_format-\/>get\_stride();}
+\DoxyCodeLine{00700\ \ \ \textcolor{keywordtype}{size\_t}\ new\_reserved\_size\ =\ n\ *\ stride;}
+\DoxyCodeLine{00701\ \ \ new\_reserved\_size\ =\ max(\_cdata-\/>\_buffer.get\_size(),\ new\_reserved\_size);}
+\DoxyCodeLine{00702\ \ \ \textcolor{keywordtype}{size\_t}\ orig\_reserved\_size\ =\ \_cdata-\/>\_buffer.get\_reserved\_size();}
+\DoxyCodeLine{00703\ }
+\DoxyCodeLine{00704\ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00705\ \ \ \ \ gobj\_cat.debug()}
+\DoxyCodeLine{00706\ \ \ \ \ \ \ <<\ \_object\ <<\ \textcolor{stringliteral}{"{}.reserve\_num\_rows("{}}\ <<\ n\ <<\ \textcolor{stringliteral}{"{}),\ size\ =\ "{}}\ <<\ new\_reserved\_size\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00707\ \ \ \}}
+\DoxyCodeLine{00708\ }
+\DoxyCodeLine{00709\ \ \ \textcolor{keywordflow}{if}\ (new\_reserved\_size\ !=\ orig\_reserved\_size)\ \{}
+\DoxyCodeLine{00710\ \ \ \ \ \textcolor{comment}{//\ We\ allow\ the\ user\ to\ set\ the\ alloc\ point\ smaller\ with\ this\ call,}}
+\DoxyCodeLine{00711\ \ \ \ \ \textcolor{comment}{//\ assuming\ the\ user\ knows\ what\ he's\ doing.\ \ This\ allows\ the\ user\ to}}
+\DoxyCodeLine{00712\ \ \ \ \ \textcolor{comment}{//\ reduce\ wasted\ memory\ after\ completely\ filling\ up\ a\ buffer.}}
+\DoxyCodeLine{00713\ \ \ \ \ \_cdata-\/>\_buffer.clean\_realloc(new\_reserved\_size);}
+\DoxyCodeLine{00714\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00715\ \ \ \}}
+\DoxyCodeLine{00716\ }
+\DoxyCodeLine{00717\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00718\ \}}
+\DoxyCodeLine{00719\ }
+\DoxyCodeLine{00723\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_a11fd4e98c8eabd3672d2400b53e19abd}{GeomVertexArrayDataHandle::}}}
+\DoxyCodeLine{00724\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_a11fd4e98c8eabd3672d2400b53e19abd}{copy\_data\_from}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexArrayDataHandle}{GeomVertexArrayDataHandle}}\ *other)\ \{}
+\DoxyCodeLine{00725\ \ \ nassertv(\_writable);}
+\DoxyCodeLine{00726\ \ \ other-\/>mark\_used();}
+\DoxyCodeLine{00727\ }
+\DoxyCodeLine{00728\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ other-\/>\_cdata-\/>\_buffer.get\_size();}
+\DoxyCodeLine{00729\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *source\ =\ other-\/>\_cdata-\/>\_buffer.get\_read\_pointer(\textcolor{keyword}{true});}
+\DoxyCodeLine{00730\ }
+\DoxyCodeLine{00731\ \ \ copy\_data\_from(source,\ size);}
+\DoxyCodeLine{00732\ \}}
+\DoxyCodeLine{00733\ }
+\DoxyCodeLine{00739\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_a90d393ee71940745e14bb6bc84c83ade}{GeomVertexArrayDataHandle::}}}
+\DoxyCodeLine{00740\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_a90d393ee71940745e14bb6bc84c83ade}{copy\_subdata\_from}}(\textcolor{keywordtype}{size\_t}\ to\_start,\ \textcolor{keywordtype}{size\_t}\ to\_size,}
+\DoxyCodeLine{00741\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexArrayDataHandle}{GeomVertexArrayDataHandle}}\ *other,}
+\DoxyCodeLine{00742\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ from\_start,\ \textcolor{keywordtype}{size\_t}\ from\_size)\ \{}
+\DoxyCodeLine{00743\ \ \ other-\/>mark\_used();}
+\DoxyCodeLine{00744\ }
+\DoxyCodeLine{00745\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classVertexDataBuffer}{VertexDataBuffer}}\ \&from\_buffer\ =\ other-\/>\_cdata-\/>\_buffer;}
+\DoxyCodeLine{00746\ \ \ \textcolor{keywordtype}{size\_t}\ from\_buffer\_orig\_size\ =\ from\_buffer.get\_size();}
+\DoxyCodeLine{00747\ \ \ from\_start\ =\ min(from\_start,\ from\_buffer\_orig\_size);}
+\DoxyCodeLine{00748\ \ \ from\_size\ =\ min(from\_size,\ from\_buffer\_orig\_size\ -\/\ from\_start);}
+\DoxyCodeLine{00749\ }
+\DoxyCodeLine{00750\ \ \ copy\_subdata\_from(to\_start,\ to\_size,}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ other-\/>get\_read\_pointer(\textcolor{keyword}{true}),}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ from\_start,\ from\_size);}
+\DoxyCodeLine{00753\ \}}
+\DoxyCodeLine{00754\ }
+\DoxyCodeLine{00758\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_a11fd4e98c8eabd3672d2400b53e19abd}{GeomVertexArrayDataHandle::}}}
+\DoxyCodeLine{00759\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_a11fd4e98c8eabd3672d2400b53e19abd}{copy\_data\_from}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *source,\ \textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00760\ \ \ nassertv(\_writable);}
+\DoxyCodeLine{00761\ \ \ mark\_used();}
+\DoxyCodeLine{00762\ }
+\DoxyCodeLine{00763\ \ \ \_cdata-\/>\_buffer.unclean\_realloc(size);}
+\DoxyCodeLine{00764\ \ \ \_cdata-\/>\_buffer.set\_size(size);}
+\DoxyCodeLine{00765\ }
+\DoxyCodeLine{00766\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *dest\ =\ \_cdata-\/>\_buffer.get\_write\_pointer();}
+\DoxyCodeLine{00767\ \ \ memcpy(dest,\ source,\ size);}
+\DoxyCodeLine{00768\ }
+\DoxyCodeLine{00769\ \ \ \_cdata-\/>\_modified\ =\ \mbox{\hyperlink{classGeom_ac422c1cae0da52be830d0eaf6533fb73}{Geom::get\_next\_modified}}();}
+\DoxyCodeLine{00770\ }
+\DoxyCodeLine{00771\ \ \ \textcolor{keywordflow}{if}\ (get\_current\_thread()-\/>get\_pipeline\_stage()\ ==\ 0)\ \{}
+\DoxyCodeLine{00772\ \ \ \ \ \_object-\/>set\_lru\_size(\_cdata-\/>\_buffer.get\_size());}
+\DoxyCodeLine{00773\ \ \ \}}
+\DoxyCodeLine{00774\ \}}
+\DoxyCodeLine{00775\ }
+\DoxyCodeLine{00781\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_a90d393ee71940745e14bb6bc84c83ade}{GeomVertexArrayDataHandle::}}}
+\DoxyCodeLine{00782\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_a90d393ee71940745e14bb6bc84c83ade}{copy\_subdata\_from}}(\textcolor{keywordtype}{size\_t}\ to\_start,\ \textcolor{keywordtype}{size\_t}\ to\_size,}
+\DoxyCodeLine{00783\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *source,}
+\DoxyCodeLine{00784\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ from\_start,\ \textcolor{keywordtype}{size\_t}\ from\_size)\ \{}
+\DoxyCodeLine{00785\ \ \ nassertv(\_writable);}
+\DoxyCodeLine{00786\ \ \ mark\_used();}
+\DoxyCodeLine{00787\ }
+\DoxyCodeLine{00788\ \ \ \mbox{\hyperlink{classVertexDataBuffer}{VertexDataBuffer}}\ \&to\_buffer\ =\ \_cdata-\/>\_buffer;}
+\DoxyCodeLine{00789\ \ \ \textcolor{keywordtype}{size\_t}\ to\_buffer\_orig\_size\ =\ to\_buffer.get\_size();}
+\DoxyCodeLine{00790\ \ \ to\_start\ =\ min(to\_start,\ to\_buffer\_orig\_size);}
+\DoxyCodeLine{00791\ \ \ to\_size\ =\ min(to\_size,\ to\_buffer\_orig\_size\ -\/\ to\_start);}
+\DoxyCodeLine{00792\ }
+\DoxyCodeLine{00793\ \ \ \textcolor{keywordflow}{if}\ (from\_size\ <\ to\_size)\ \{}
+\DoxyCodeLine{00794\ \ \ \ \ \textcolor{comment}{//\ Reduce\ the\ array.}}
+\DoxyCodeLine{00795\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *pointer\ =\ to\_buffer.get\_write\_pointer();}
+\DoxyCodeLine{00796\ \ \ \ \ memmove(pointer\ +\ to\_start\ +\ to\_size,}
+\DoxyCodeLine{00797\ \ \ \ \ \ \ \ \ \ \ \ \ pointer\ +\ to\_start\ +\ from\_size,}
+\DoxyCodeLine{00798\ \ \ \ \ \ \ \ \ \ \ \ \ to\_buffer\_orig\_size\ -\/\ (to\_start\ +\ to\_size));}
+\DoxyCodeLine{00799\ \ \ \ \ to\_buffer.set\_size(to\_buffer\_orig\_size\ +\ from\_size\ -\/\ to\_size);}
+\DoxyCodeLine{00800\ }
+\DoxyCodeLine{00801\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (to\_size\ <\ from\_size)\ \{}
+\DoxyCodeLine{00802\ \ \ \ \ \textcolor{comment}{//\ Expand\ the\ array.}}
+\DoxyCodeLine{00803\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ needed\_size\ =\ to\_buffer\_orig\_size\ +\ from\_size\ -\/\ to\_size;}
+\DoxyCodeLine{00804\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ to\_buffer\_orig\_reserved\_size\ =\ to\_buffer.get\_reserved\_size();}
+\DoxyCodeLine{00805\ \ \ \ \ \textcolor{keywordflow}{if}\ (needed\_size\ >\ to\_buffer\_orig\_reserved\_size)\ \{}
+\DoxyCodeLine{00806\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ new\_reserved\_size\ =\ (size\_t)1\ <<\ get\_next\_higher\_bit(needed\_size\ -\/\ 1);}
+\DoxyCodeLine{00807\ \ \ \ \ \ \ to\_buffer.clean\_realloc(new\_reserved\_size);}
+\DoxyCodeLine{00808\ \ \ \ \ \}}
+\DoxyCodeLine{00809\ \ \ \ \ to\_buffer.set\_size(needed\_size);}
+\DoxyCodeLine{00810\ }
+\DoxyCodeLine{00811\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *pointer\ =\ to\_buffer.get\_write\_pointer();}
+\DoxyCodeLine{00812\ \ \ \ \ memmove(pointer\ +\ to\_start\ +\ to\_size,}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ \ \ \ \ \ \ pointer\ +\ to\_start\ +\ from\_size,}
+\DoxyCodeLine{00814\ \ \ \ \ \ \ \ \ \ \ \ \ to\_buffer\_orig\_size\ -\/\ (to\_start\ +\ to\_size));}
+\DoxyCodeLine{00815\ \ \ \}}
+\DoxyCodeLine{00816\ }
+\DoxyCodeLine{00817\ \ \ \textcolor{comment}{//\ Now\ copy\ the\ data.}}
+\DoxyCodeLine{00818\ \ \ memcpy(to\_buffer.get\_write\_pointer()\ +\ to\_start,}
+\DoxyCodeLine{00819\ \ \ \ \ \ \ \ \ \ source\ +\ from\_start,\ from\_size);}
+\DoxyCodeLine{00820\ \ \ \_cdata-\/>\_modified\ =\ \mbox{\hyperlink{classGeom_ac422c1cae0da52be830d0eaf6533fb73}{Geom::get\_next\_modified}}();}
+\DoxyCodeLine{00821\ }
+\DoxyCodeLine{00822\ \ \ \textcolor{keywordflow}{if}\ (get\_current\_thread()-\/>get\_pipeline\_stage()\ ==\ 0)\ \{}
+\DoxyCodeLine{00823\ \ \ \ \ \_object-\/>set\_lru\_size(\_cdata-\/>\_buffer.get\_size());}
+\DoxyCodeLine{00824\ \ \ \}}
+\DoxyCodeLine{00825\ \}}
+\DoxyCodeLine{00826\ }
+\DoxyCodeLine{00832\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_aaf4a1a9cbf2d351d1b4cccd1a2c6afa5}{GeomVertexArrayDataHandle::}}}
+\DoxyCodeLine{00833\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_aaf4a1a9cbf2d351d1b4cccd1a2c6afa5}{set\_data}}(\textcolor{keyword}{const}\ vector\_uchar\ \&data)\ \{}
+\DoxyCodeLine{00834\ \ \ nassertv(\_writable);}
+\DoxyCodeLine{00835\ \ \ mark\_used();}
+\DoxyCodeLine{00836\ }
+\DoxyCodeLine{00837\ \ \ \_cdata-\/>\_buffer.unclean\_realloc(data.size());}
+\DoxyCodeLine{00838\ \ \ \_cdata-\/>\_buffer.set\_size(data.size());}
+\DoxyCodeLine{00839\ \ \ memcpy(\_cdata-\/>\_buffer.get\_write\_pointer(),\ data.data(),\ data.size());}
+\DoxyCodeLine{00840\ }
+\DoxyCodeLine{00841\ \ \ \_cdata-\/>\_modified\ =\ \mbox{\hyperlink{classGeom_ac422c1cae0da52be830d0eaf6533fb73}{Geom::get\_next\_modified}}();}
+\DoxyCodeLine{00842\ }
+\DoxyCodeLine{00843\ \ \ \textcolor{keywordflow}{if}\ (get\_current\_thread()-\/>get\_pipeline\_stage()\ ==\ 0)\ \{}
+\DoxyCodeLine{00844\ \ \ \ \ \_object-\/>set\_lru\_size(\_cdata-\/>\_buffer.get\_size());}
+\DoxyCodeLine{00845\ \ \ \}}
+\DoxyCodeLine{00846\ \}}
+\DoxyCodeLine{00847\ }
+\DoxyCodeLine{00854\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_a202583523519720c51c3f8ef3f1dbe8e}{GeomVertexArrayDataHandle::}}}
+\DoxyCodeLine{00855\ \mbox{\hyperlink{classGeomVertexArrayDataHandle_a202583523519720c51c3f8ef3f1dbe8e}{set\_subdata}}(\textcolor{keywordtype}{size\_t}\ start,\ \textcolor{keywordtype}{size\_t}\ size,\ \textcolor{keyword}{const}\ vector\_uchar\ \&data)\ \{}
+\DoxyCodeLine{00856\ \ \ nassertv(\_writable);}
+\DoxyCodeLine{00857\ \ \ mark\_used();}
+\DoxyCodeLine{00858\ }
+\DoxyCodeLine{00859\ \ \ \mbox{\hyperlink{classVertexDataBuffer}{VertexDataBuffer}}\ \&to\_buffer\ =\ \_cdata-\/>\_buffer;}
+\DoxyCodeLine{00860\ \ \ \textcolor{keywordtype}{size\_t}\ to\_buffer\_orig\_size\ =\ to\_buffer.get\_size();}
+\DoxyCodeLine{00861\ \ \ start\ =\ min(start,\ to\_buffer\_orig\_size);}
+\DoxyCodeLine{00862\ \ \ size\ =\ min(size,\ to\_buffer\_orig\_size\ -\/\ start);}
+\DoxyCodeLine{00863\ }
+\DoxyCodeLine{00864\ \ \ \textcolor{keywordtype}{size\_t}\ from\_size\ =\ data.size();}
+\DoxyCodeLine{00865\ }
+\DoxyCodeLine{00866\ \ \ \textcolor{keywordflow}{if}\ (from\_size\ <\ size)\ \{}
+\DoxyCodeLine{00867\ \ \ \ \ \textcolor{comment}{//\ Reduce\ the\ array.}}
+\DoxyCodeLine{00868\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *pointer\ =\ to\_buffer.get\_write\_pointer();}
+\DoxyCodeLine{00869\ \ \ \ \ memmove(pointer\ +\ start\ +\ from\_size,}
+\DoxyCodeLine{00870\ \ \ \ \ \ \ \ \ \ \ \ \ pointer\ +\ start\ +\ size,}
+\DoxyCodeLine{00871\ \ \ \ \ \ \ \ \ \ \ \ \ to\_buffer\_orig\_size\ -\/\ (start\ +\ size));}
+\DoxyCodeLine{00872\ \ \ \ \ to\_buffer.set\_size(to\_buffer\_orig\_size\ +\ from\_size\ -\/\ size);}
+\DoxyCodeLine{00873\ }
+\DoxyCodeLine{00874\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (size\ <\ from\_size)\ \{}
+\DoxyCodeLine{00875\ \ \ \ \ \textcolor{comment}{//\ Expand\ the\ array.}}
+\DoxyCodeLine{00876\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ needed\_size\ =\ to\_buffer\_orig\_size\ +\ from\_size\ -\/\ size;}
+\DoxyCodeLine{00877\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ to\_buffer\_orig\_reserved\_size\ =\ to\_buffer.get\_reserved\_size();}
+\DoxyCodeLine{00878\ \ \ \ \ \textcolor{keywordflow}{if}\ (needed\_size\ >\ to\_buffer\_orig\_reserved\_size)\ \{}
+\DoxyCodeLine{00879\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ new\_reserved\_size\ =\ (size\_t)1\ <<\ get\_next\_higher\_bit(needed\_size\ -\/\ 1);}
+\DoxyCodeLine{00880\ \ \ \ \ \ \ to\_buffer.clean\_realloc(new\_reserved\_size);}
+\DoxyCodeLine{00881\ \ \ \ \ \}}
+\DoxyCodeLine{00882\ \ \ \ \ to\_buffer.set\_size(needed\_size);}
+\DoxyCodeLine{00883\ }
+\DoxyCodeLine{00884\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *pointer\ =\ to\_buffer.get\_write\_pointer();}
+\DoxyCodeLine{00885\ \ \ \ \ memmove(pointer\ +\ start\ +\ from\_size,}
+\DoxyCodeLine{00886\ \ \ \ \ \ \ \ \ \ \ \ \ pointer\ +\ start\ +\ size,}
+\DoxyCodeLine{00887\ \ \ \ \ \ \ \ \ \ \ \ \ to\_buffer\_orig\_size\ -\/\ (start\ +\ size));}
+\DoxyCodeLine{00888\ \ \ \}}
+\DoxyCodeLine{00889\ }
+\DoxyCodeLine{00890\ \ \ \textcolor{comment}{//\ Now\ copy\ the\ data.}}
+\DoxyCodeLine{00891\ \ \ memcpy(to\_buffer.get\_write\_pointer()\ +\ start,\ data.data(),\ from\_size);}
+\DoxyCodeLine{00892\ \ \ \_cdata-\/>\_modified\ =\ \mbox{\hyperlink{classGeom_ac422c1cae0da52be830d0eaf6533fb73}{Geom::get\_next\_modified}}();}
+\DoxyCodeLine{00893\ }
+\DoxyCodeLine{00894\ \ \ \textcolor{keywordflow}{if}\ (get\_current\_thread()-\/>get\_pipeline\_stage()\ ==\ 0)\ \{}
+\DoxyCodeLine{00895\ \ \ \ \ \_object-\/>set\_lru\_size(\_cdata-\/>\_buffer.get\_size());}
+\DoxyCodeLine{00896\ \ \ \}}
+\DoxyCodeLine{00897\ \}}
+
+\end{DoxyCode}

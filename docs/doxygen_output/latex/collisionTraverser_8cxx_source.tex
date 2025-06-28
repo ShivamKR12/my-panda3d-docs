@@ -1,0 +1,1270 @@
+\doxysection{collision\+Traverser.\+cxx}
+\hypertarget{collisionTraverser_8cxx_source}{}\label{collisionTraverser_8cxx_source}\index{panda/src/collide/collisionTraverser.cxx@{panda/src/collide/collisionTraverser.cxx}}
+\mbox{\hyperlink{collisionTraverser_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionTraverser_8h}{collisionTraverser.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionNode_8h}{collisionNode.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionEntry_8h}{collisionEntry.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionPolygon_8h}{collisionPolygon.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionGeom_8h}{collisionGeom.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionRecorder_8h}{collisionRecorder.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionVisualizer_8h}{collisionVisualizer.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionSphere_8h}{collisionSphere.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionHeightfield_8h}{collisionHeightfield.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionBox_8h}{collisionBox.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionCapsule_8h}{collisionCapsule.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionPolygon_8h}{collisionPolygon.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{collisionPlane_8h}{collisionPlane.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__collide_8h}{config\_collide.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{boundingSphere_8h}{boundingSphere.h}}"{}}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{transformState_8h}{transformState.h}}"{}}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomNode_8h}{geomNode.h}}"{}}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geom_8h}{geom.h}}"{}}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geom_8h}{geom.h}}"{}}}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomTriangles_8h}{geomTriangles.h}}"{}}}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexReader_8h}{geomVertexReader.h}}"{}}}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lodNode_8h}{lodNode.h}}"{}}}
+\DoxyCodeLine{00036\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{nodePath_8h}{nodePath.h}}"{}}}
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimer_8h}{pStatTimer.h}}"{}}}
+\DoxyCodeLine{00038\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{indent_8h}{indent.h}}"{}}}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00044\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ CollisionTraverser::\_collisions\_pcollector(\textcolor{stringliteral}{"{}App:Collisions"{}});}
+\DoxyCodeLine{00045\ }
+\DoxyCodeLine{00046\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ CollisionTraverser::\_cnode\_volume\_pcollector(\textcolor{stringliteral}{"{}Collision\ Volumes:CollisionNode"{}});}
+\DoxyCodeLine{00047\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ CollisionTraverser::\_gnode\_volume\_pcollector(\textcolor{stringliteral}{"{}Collision\ Volumes:GeomNode"{}});}
+\DoxyCodeLine{00048\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ CollisionTraverser::\_geom\_volume\_pcollector(\textcolor{stringliteral}{"{}Collision\ Volumes:Geom"{}});}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ CollisionTraverser::\_type\_handle;}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \textcolor{comment}{//\ This\ function\ object\ class\ is\ used\ in\ prepare\_colliders(),\ below.}}
+\DoxyCodeLine{00053\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classSortByColliderSort}{SortByColliderSort}}\ \{}
+\DoxyCodeLine{00054\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00055\ \ \ \mbox{\hyperlink{classSortByColliderSort}{SortByColliderSort}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionTraverser}{CollisionTraverser}}\ \&trav)\ :}
+\DoxyCodeLine{00056\ \ \ \ \ \_trav(trav)}
+\DoxyCodeLine{00057\ \ \ \{}
+\DoxyCodeLine{00058\ \ \ \}}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00060\ \ \ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{bool}\ operator\ ()\ (\textcolor{keywordtype}{int}\ a,\ \textcolor{keywordtype}{int}\ b)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00061\ \ \ \ \ \textcolor{keyword}{const}\ CollisionTraverser::OrderedColliderDef\ \&ocd\_a\ =\ \_trav.\_ordered\_colliders[a];}
+\DoxyCodeLine{00062\ \ \ \ \ \textcolor{keyword}{const}\ CollisionTraverser::OrderedColliderDef\ \&ocd\_b\ =\ \_trav.\_ordered\_colliders[b];}
+\DoxyCodeLine{00063\ \ \ \ \ \textcolor{keywordflow}{return}\ ((\textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *)ocd\_a.\_node\_path.node())-\/>get\_collider\_sort()\ <\ ((\textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *)ocd\_b.\_node\_path.node())-\/>get\_collider\_sort();}
+\DoxyCodeLine{00064\ \ \ \}}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCollisionTraverser}{CollisionTraverser}}\ \&\_trav;}
+\DoxyCodeLine{00067\ \};}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00072\ CollisionTraverser::}
+\DoxyCodeLine{00073\ CollisionTraverser(\textcolor{keyword}{const}\ std::string\ \&name)\ :}
+\DoxyCodeLine{00074\ \ \ \mbox{\hyperlink{classNamable}{Namable}}(name),}
+\DoxyCodeLine{00075\ \ \ \_this\_pcollector(\_collisions\_pcollector,\ name)}
+\DoxyCodeLine{00076\ \{}
+\DoxyCodeLine{00077\ \ \ \_respect\_prev\_transform\ =\ respect\_prev\_transform;}
+\DoxyCodeLine{00078\ \textcolor{preprocessor}{\ \ \#ifdef\ DO\_COLLISION\_RECORDING}}
+\DoxyCodeLine{00079\ \ \ \_recorder\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00080\ \textcolor{preprocessor}{\ \ \#endif}}
+\DoxyCodeLine{00081\ \}}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00086\ CollisionTraverser::}
+\DoxyCodeLine{00087\ \string~CollisionTraverser()\ \{}
+\DoxyCodeLine{00088\ \textcolor{preprocessor}{\ \ \#ifdef\ DO\_COLLISION\_RECORDING}}
+\DoxyCodeLine{00089\ \ \ clear\_recorder();}
+\DoxyCodeLine{00090\ \textcolor{preprocessor}{\ \ \#endif}}
+\DoxyCodeLine{00091\ \}}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00102\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00103\ add\_collider(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&collider,\ \mbox{\hyperlink{classCollisionHandler}{CollisionHandler}}\ *handler)\ \{}
+\DoxyCodeLine{00104\ \ \ nassertv(\_ordered\_colliders.size()\ ==\ \_colliders.size());}
+\DoxyCodeLine{00105\ \ \ nassertv(!collider.is\_empty()\ \&\&\ collider.node()-\/>\mbox{\hyperlink{classPandaNode_ab86095d2dc71d5bdfbd7685fc5f062e0}{is\_collision\_node}}());}
+\DoxyCodeLine{00106\ \ \ nassertv(handler\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00108\ \ \ Colliders::iterator\ ci\ =\ \_colliders.find(collider);}
+\DoxyCodeLine{00109\ \ \ \textcolor{keywordflow}{if}\ (ci\ !=\ \_colliders.end())\ \{}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{comment}{//\ We\ already\ knew\ about\ this\ collider.}}
+\DoxyCodeLine{00111\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*ci).second\ !=\ handler)\ \{}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \textcolor{comment}{//\ Change\ the\ handler.}}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classCollisionHandler}{CollisionHandler}})\ old\_handler\ =\ (*ci).second;}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ (*ci).second\ =\ handler;}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ update\ our\ own\ reference\ counts\ within\ our\ handler\ set.}}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ Handlers::iterator\ hi\ =\ \_handlers.find(old\_handler);}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ nassertv(hi\ !=\ \_handlers.end());}
+\DoxyCodeLine{00119\ \ \ \ \ \ \ (*hi).second-\/-\/;}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ nassertv((*hi).second\ >=\ 0);}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((*hi).second\ ==\ 0)\ \{}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \ \ \_handlers.erase(hi);}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \ \ \ \ hi\ =\ \_handlers.find(handler);}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hi\ ==\ \_handlers.end())\ \{}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \ \ \_handlers.insert(Handlers::value\_type(handler,\ 1));}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \ \ ++(*hi).second;}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00131\ \ \ \ \ \}}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{comment}{//\ We\ hadn't\ already\ known\ about\ this\ collider.}}
+\DoxyCodeLine{00135\ \ \ \ \ \_colliders.insert(Colliders::value\_type(collider,\ handler));}
+\DoxyCodeLine{00136\ \ \ \ \ OrderedColliderDef\ ocdef;}
+\DoxyCodeLine{00137\ \ \ \ \ ocdef.\_node\_path\ =\ collider;}
+\DoxyCodeLine{00138\ \ \ \ \ ocdef.\_in\_graph\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00139\ \ \ \ \ \_ordered\_colliders.push\_back(ocdef);}
+\DoxyCodeLine{00140\ }
+\DoxyCodeLine{00141\ \ \ \ \ Handlers::iterator\ hi\ =\ \_handlers.find(handler);}
+\DoxyCodeLine{00142\ \ \ \ \ \textcolor{keywordflow}{if}\ (hi\ ==\ \_handlers.end())\ \{}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \_handlers.insert(Handlers::value\_type(handler,\ 1));}
+\DoxyCodeLine{00144\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ ++(*hi).second;}
+\DoxyCodeLine{00146\ \ \ \ \ \}}
+\DoxyCodeLine{00147\ \ \ \}}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ nassertv(\_ordered\_colliders.size()\ ==\ \_colliders.size());}
+\DoxyCodeLine{00150\ \}}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00158\ \textcolor{keywordtype}{bool}\ CollisionTraverser::}
+\DoxyCodeLine{00159\ remove\_collider(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&collider)\ \{}
+\DoxyCodeLine{00160\ \ \ nassertr(\_ordered\_colliders.size()\ ==\ \_colliders.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00161\ }
+\DoxyCodeLine{00162\ \ \ Colliders::iterator\ ci\ =\ \_colliders.find(collider);}
+\DoxyCodeLine{00163\ \ \ \textcolor{keywordflow}{if}\ (ci\ ==\ \_colliders.end())\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ \textcolor{comment}{//\ We\ didn't\ know\ about\ this\ node.}}
+\DoxyCodeLine{00165\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00166\ \ \ \}}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \ \ \mbox{\hyperlink{classCollisionHandler}{CollisionHandler}}\ *handler\ =\ (*ci).second;}
+\DoxyCodeLine{00169\ }
+\DoxyCodeLine{00170\ \ \ \textcolor{comment}{//\ Update\ the\ set\ of\ handlers.}}
+\DoxyCodeLine{00171\ \ \ Handlers::iterator\ hi\ =\ \_handlers.find(handler);}
+\DoxyCodeLine{00172\ \ \ nassertr(hi\ !=\ \_handlers.end(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00173\ \ \ (*hi).second-\/-\/;}
+\DoxyCodeLine{00174\ \ \ nassertr((*hi).second\ >=\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00175\ \ \ \textcolor{keywordflow}{if}\ ((*hi).second\ ==\ 0)\ \{}
+\DoxyCodeLine{00176\ \ \ \ \ \_handlers.erase(hi);}
+\DoxyCodeLine{00177\ \ \ \}}
+\DoxyCodeLine{00178\ }
+\DoxyCodeLine{00179\ \ \ \_colliders.erase(ci);}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00181\ \ \ OrderedColliders::iterator\ oci;}
+\DoxyCodeLine{00182\ \ \ oci\ =\ \_ordered\_colliders.begin();}
+\DoxyCodeLine{00183\ \ \ \textcolor{keywordflow}{while}\ (oci\ !=\ \_ordered\_colliders.end()\ \&\&}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \ \ \ (*oci).\_node\_path\ !=\ collider)\ \{}
+\DoxyCodeLine{00185\ \ \ \ \ ++oci;}
+\DoxyCodeLine{00186\ \ \ \}}
+\DoxyCodeLine{00187\ }
+\DoxyCodeLine{00188\ \ \ nassertr(oci\ !=\ \_ordered\_colliders.end(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00189\ \ \ \_ordered\_colliders.erase(oci);}
+\DoxyCodeLine{00190\ }
+\DoxyCodeLine{00191\ \ \ nassertr(\_ordered\_colliders.size()\ ==\ \_colliders.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00193\ \}}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00199\ \textcolor{keywordtype}{bool}\ CollisionTraverser::}
+\DoxyCodeLine{00200\ has\_collider(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&collider)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00201\ \ \ Colliders::const\_iterator\ ci\ =\ \_colliders.find(collider);}
+\DoxyCodeLine{00202\ \ \ \textcolor{keywordflow}{return}\ (ci\ !=\ \_colliders.end());}
+\DoxyCodeLine{00203\ \}}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00209\ \textcolor{keywordtype}{int}\ CollisionTraverser::}
+\DoxyCodeLine{00210\ get\_num\_colliders()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00211\ \ \ nassertr(\_ordered\_colliders.size()\ ==\ \_colliders.size(),\ 0);}
+\DoxyCodeLine{00212\ \ \ \textcolor{keywordflow}{return}\ \_ordered\_colliders.size();}
+\DoxyCodeLine{00213\ \}}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00219\ \mbox{\hyperlink{classNodePath}{NodePath}}\ CollisionTraverser::}
+\DoxyCodeLine{00220\ get\_collider(\textcolor{keywordtype}{int}\ n)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00221\ \ \ nassertr(\_ordered\_colliders.size()\ ==\ \_colliders.size(),\ \mbox{\hyperlink{classNodePath}{NodePath}}());}
+\DoxyCodeLine{00222\ \ \ nassertr(n\ >=\ 0\ \&\&\ n\ <\ (\textcolor{keywordtype}{int})\_ordered\_colliders.size(),\ \mbox{\hyperlink{classNodePath}{NodePath}}());}
+\DoxyCodeLine{00223\ \ \ \textcolor{keywordflow}{return}\ \_ordered\_colliders[n].\_node\_path;}
+\DoxyCodeLine{00224\ \}}
+\DoxyCodeLine{00225\ }
+\DoxyCodeLine{00231\ \mbox{\hyperlink{classCollisionHandler}{CollisionHandler}}\ *CollisionTraverser::}
+\DoxyCodeLine{00232\ get\_handler(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&collider)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00233\ \ \ Colliders::const\_iterator\ ci\ =\ \_colliders.find(collider);}
+\DoxyCodeLine{00234\ \ \ \textcolor{keywordflow}{if}\ (ci\ !=\ \_colliders.end())\ \{}
+\DoxyCodeLine{00235\ \ \ \ \ \textcolor{keywordflow}{return}\ (*ci).second;}
+\DoxyCodeLine{00236\ \ \ \}}
+\DoxyCodeLine{00237\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00238\ \}}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00244\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00245\ clear\_colliders()\ \{}
+\DoxyCodeLine{00246\ \ \ \_colliders.clear();}
+\DoxyCodeLine{00247\ \ \ \_ordered\_colliders.clear();}
+\DoxyCodeLine{00248\ \ \ \_handlers.clear();}
+\DoxyCodeLine{00249\ \}}
+\DoxyCodeLine{00250\ }
+\DoxyCodeLine{00257\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00258\ traverse(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&root)\ \{}
+\DoxyCodeLine{00259\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_this\_pcollector);}
+\DoxyCodeLine{00260\ }
+\DoxyCodeLine{00261\ \textcolor{preprocessor}{\ \ \#ifdef\ DO\_COLLISION\_RECORDING}}
+\DoxyCodeLine{00262\ \ \ \textcolor{keywordflow}{if}\ (has\_recorder())\ \{}
+\DoxyCodeLine{00263\ \ \ \ \ get\_recorder()-\/>begin\_traversal();}
+\DoxyCodeLine{00264\ \ \ \}}
+\DoxyCodeLine{00265\ \textcolor{preprocessor}{\ \ \#endif\ \ }\textcolor{comment}{//\ DO\_COLLISION\_RECORDING}}
+\DoxyCodeLine{00266\ }
+\DoxyCodeLine{00267\ \ \ Handlers::iterator\ hi;}
+\DoxyCodeLine{00268\ \ \ \textcolor{keywordflow}{for}\ (hi\ =\ \_handlers.begin();\ hi\ !=\ \_handlers.end();\ ++hi)\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*hi).first-\/>wants\_all\_potential\_collidees())\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ (*hi).first-\/>set\_root(root);}
+\DoxyCodeLine{00271\ \ \ \ \ \}}
+\DoxyCodeLine{00272\ \ \ \ \ (*hi).first-\/>begin\_group();}
+\DoxyCodeLine{00273\ \ \ \}}
+\DoxyCodeLine{00274\ }
+\DoxyCodeLine{00275\ \ \ \textcolor{keywordtype}{bool}\ traversal\_done\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00276\ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{int})\_colliders.size()\ <=\ CollisionLevelStateSingle::get\_max\_colliders()\ ||}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ !allow\_collider\_multiple)\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ \textcolor{comment}{//\ Use\ the\ single-\/word-\/at-\/a-\/time\ traverser,\ which\ might\ need\ to\ make\ lots}}
+\DoxyCodeLine{00279\ \ \ \ \ \textcolor{comment}{//\ of\ passes.}}
+\DoxyCodeLine{00280\ \ \ \ \ LevelStatesSingle\ level\_states;}
+\DoxyCodeLine{00281\ \ \ \ \ prepare\_colliders\_single(level\_states,\ root);}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00283\ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_states.size()\ ==\ 1\ ||\ !allow\_collider\_multiple)\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ traversal\_done\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \ \ \ \ \textcolor{comment}{//\ Make\ a\ number\ of\ passes,\ one\ for\ each\ group\ of\ 32\ Colliders\ (or}}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \textcolor{comment}{//\ whatever\ number\ of\ bits\ we\ have\ available\ in\ CurrentMask).}}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ pass\ =\ 0;\ pass\ <\ level\_states.size();\ ++pass)\ \{}
+\DoxyCodeLine{00289\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ pass\_timer(get\_pass\_collector(pass));}
+\DoxyCodeLine{00291\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_states[pass].any\_in\_bounds())\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ \ \ \ \ r\_traverse\_single(level\_states[pass],\ pass);}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00296\ \ \ \ \ \}}
+\DoxyCodeLine{00297\ \ \ \}}
+\DoxyCodeLine{00298\ }
+\DoxyCodeLine{00299\ \ \ \textcolor{keywordflow}{if}\ (!traversal\_done\ \&\&}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ (\textcolor{keywordtype}{int})\_colliders.size()\ <=\ CollisionLevelStateDouble::get\_max\_colliders())\ \{}
+\DoxyCodeLine{00301\ \ \ \ \ \textcolor{comment}{//\ Try\ the\ double-\/word-\/at-\/a-\/time\ traverser.}}
+\DoxyCodeLine{00302\ \ \ \ \ LevelStatesDouble\ level\_states;}
+\DoxyCodeLine{00303\ \ \ \ \ prepare\_colliders\_double(level\_states,\ root);}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_states.size()\ ==\ 1)\ \{}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ traversal\_done\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00307\ }
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ pass\ =\ 0;\ pass\ <\ level\_states.size();\ ++pass)\ \{}
+\DoxyCodeLine{00309\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ pass\_timer(get\_pass\_collector(pass));}
+\DoxyCodeLine{00311\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ r\_traverse\_double(level\_states[pass],\ pass);}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00314\ \ \ \ \ \}}
+\DoxyCodeLine{00315\ \ \ \}}
+\DoxyCodeLine{00316\ }
+\DoxyCodeLine{00317\ \ \ \textcolor{keywordflow}{if}\ (!traversal\_done)\ \{}
+\DoxyCodeLine{00318\ \ \ \ \ \textcolor{comment}{//\ OK,\ do\ the\ quad-\/word-\/at-\/a-\/time\ traverser.}}
+\DoxyCodeLine{00319\ \ \ \ \ LevelStatesQuad\ level\_states;}
+\DoxyCodeLine{00320\ \ \ \ \ prepare\_colliders\_quad(level\_states,\ root);}
+\DoxyCodeLine{00321\ }
+\DoxyCodeLine{00322\ \ \ \ \ traversal\_done\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00323\ }
+\DoxyCodeLine{00324\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ pass\ =\ 0;\ pass\ <\ level\_states.size();\ ++pass)\ \{}
+\DoxyCodeLine{00325\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ pass\_timer(get\_pass\_collector(pass));}
+\DoxyCodeLine{00327\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ r\_traverse\_quad(level\_states[pass],\ pass);}
+\DoxyCodeLine{00329\ \ \ \ \ \}}
+\DoxyCodeLine{00330\ \ \ \}}
+\DoxyCodeLine{00331\ }
+\DoxyCodeLine{00332\ \ \ hi\ =\ \_handlers.begin();}
+\DoxyCodeLine{00333\ \ \ \textcolor{keywordflow}{while}\ (hi\ !=\ \_handlers.end())\ \{}
+\DoxyCodeLine{00334\ \ \ \ \ \textcolor{keywordflow}{if}\ (!(*hi).first-\/>end\_group())\ \{}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ handler\ wants\ to\ remove\ itself\ from\ the\ traversal\ list.}}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ hi\ =\ remove\_handler(hi);}
+\DoxyCodeLine{00337\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ ++hi;}
+\DoxyCodeLine{00339\ \ \ \ \ \}}
+\DoxyCodeLine{00340\ \ \ \}}
+\DoxyCodeLine{00341\ }
+\DoxyCodeLine{00342\ \textcolor{preprocessor}{\ \ \#ifdef\ DO\_COLLISION\_RECORDING}}
+\DoxyCodeLine{00343\ \ \ \textcolor{keywordflow}{if}\ (has\_recorder())\ \{}
+\DoxyCodeLine{00344\ \ \ \ \ get\_recorder()-\/>end\_traversal();}
+\DoxyCodeLine{00345\ \ \ \}}
+\DoxyCodeLine{00346\ \textcolor{preprocessor}{\ \ \#endif\ \ }\textcolor{comment}{//\ DO\_COLLISION\_RECORDING}}
+\DoxyCodeLine{00347\ }
+\DoxyCodeLine{00348\ \ \ CollisionLevelStateBase::\_node\_volume\_pcollector.flush\_level();}
+\DoxyCodeLine{00349\ \ \ \_cnode\_volume\_pcollector.flush\_level();}
+\DoxyCodeLine{00350\ \ \ \_gnode\_volume\_pcollector.flush\_level();}
+\DoxyCodeLine{00351\ \ \ \_geom\_volume\_pcollector.flush\_level();}
+\DoxyCodeLine{00352\ }
+\DoxyCodeLine{00353\ \ \ CollisionSphere::flush\_level();}
+\DoxyCodeLine{00354\ \ \ CollisionCapsule::flush\_level();}
+\DoxyCodeLine{00355\ \ \ CollisionPolygon::flush\_level();}
+\DoxyCodeLine{00356\ \ \ CollisionPlane::flush\_level();}
+\DoxyCodeLine{00357\ \ \ CollisionBox::flush\_level();}
+\DoxyCodeLine{00358\ \ \ CollisionHeightfield::flush\_level();}
+\DoxyCodeLine{00359\ \}}
+\DoxyCodeLine{00360\ }
+\DoxyCodeLine{00361\ \textcolor{preprocessor}{\#if\ defined(DO\_COLLISION\_RECORDING)\ ||\ !defined(CPPPARSER)}}
+\DoxyCodeLine{00378\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00379\ set\_recorder(CollisionRecorder\ *recorder)\ \{}
+\DoxyCodeLine{00380\ \textcolor{preprocessor}{\#ifdef\ DO\_COLLISION\_RECORDING}}
+\DoxyCodeLine{00381\ \ \ \textcolor{keywordflow}{if}\ (recorder\ !=\ \_recorder)\ \{}
+\DoxyCodeLine{00382\ \ \ \ \ \textcolor{comment}{//\ Remove\ the\ old\ recorder,\ if\ any.}}
+\DoxyCodeLine{00383\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_recorder\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ nassertv(\_recorder-\/>\_trav\ ==\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \_recorder-\/>\_trav\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00386\ \ \ \ \ \}}
+\DoxyCodeLine{00387\ }
+\DoxyCodeLine{00388\ \ \ \ \ \_recorder\ =\ recorder;}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \ \ \textcolor{comment}{//\ Tell\ the\ new\ recorder\ about\ his\ new\ owner.}}
+\DoxyCodeLine{00391\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_recorder\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ nassertv(\_recorder-\/>\_trav\ !=\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_recorder-\/>\_trav\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \_recorder-\/>\_trav-\/>clear\_recorder();}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ nassertv(\_recorder-\/>\_trav\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \_recorder-\/>\_trav\ =\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00398\ \ \ \ \ \}}
+\DoxyCodeLine{00399\ \ \ \}}
+\DoxyCodeLine{00400\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00401\ \}}
+\DoxyCodeLine{00402\ }
+\DoxyCodeLine{00409\ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *CollisionTraverser::}
+\DoxyCodeLine{00410\ show\_collisions(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&root)\ \{}
+\DoxyCodeLine{00411\ \textcolor{preprocessor}{\#ifdef\ DO\_COLLISION\_RECORDING}}
+\DoxyCodeLine{00412\ \ \ hide\_collisions();}
+\DoxyCodeLine{00413\ \ \ CollisionVisualizer\ *viz\ =\ \textcolor{keyword}{new}\ CollisionVisualizer(\textcolor{stringliteral}{"{}show\_collisions"{}});}
+\DoxyCodeLine{00414\ \ \ \_collision\_visualizer\_np\ =\ root.attach\_new\_node(viz);}
+\DoxyCodeLine{00415\ \ \ set\_recorder(viz);}
+\DoxyCodeLine{00416\ \ \ \textcolor{keywordflow}{return}\ viz;}
+\DoxyCodeLine{00417\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00418\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00419\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00420\ \}}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00425\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00426\ hide\_collisions()\ \{}
+\DoxyCodeLine{00427\ \textcolor{preprocessor}{\#ifdef\ DO\_COLLISION\_RECORDING}}
+\DoxyCodeLine{00428\ \ \ \textcolor{keywordflow}{if}\ (!\_collision\_visualizer\_np.is\_empty())\ \{}
+\DoxyCodeLine{00429\ \ \ \ \ \_collision\_visualizer\_np.remove\_node();}
+\DoxyCodeLine{00430\ \ \ \}}
+\DoxyCodeLine{00431\ \ \ clear\_recorder();}
+\DoxyCodeLine{00432\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00433\ \}}
+\DoxyCodeLine{00434\ }
+\DoxyCodeLine{00435\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_COLLISION\_RECORDING}}
+\DoxyCodeLine{00436\ }
+\DoxyCodeLine{00440\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00441\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00442\ \ \ out\ <<\ \textcolor{stringliteral}{"{}CollisionTraverser,\ "{}}\ <<\ \_colliders.size()}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ colliders\ and\ "{}}\ <<\ \_handlers.size()\ <<\ \textcolor{stringliteral}{"{}\ handlers.\(\backslash\)n"{}};}
+\DoxyCodeLine{00444\ \}}
+\DoxyCodeLine{00445\ }
+\DoxyCodeLine{00449\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00450\ write(std::ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00451\ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level)}
+\DoxyCodeLine{00452\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}CollisionTraverser,\ "{}}\ <<\ \_colliders.size()}
+\DoxyCodeLine{00453\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ colliders\ and\ "{}}\ <<\ \_handlers.size()\ <<\ \textcolor{stringliteral}{"{}\ handlers:\(\backslash\)n"{}};}
+\DoxyCodeLine{00454\ }
+\DoxyCodeLine{00455\ \ \ OrderedColliders::const\_iterator\ oci;}
+\DoxyCodeLine{00456\ \ \ \textcolor{keywordflow}{for}\ (oci\ =\ \_ordered\_colliders.begin();}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \ oci\ !=\ \_ordered\_colliders.end();}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \ ++oci)\ \{}
+\DoxyCodeLine{00459\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ cnode\_path\ =\ (*oci).\_node\_path;}
+\DoxyCodeLine{00460\ \ \ \ \ \textcolor{keywordtype}{bool}\ in\_graph\ =\ (*oci).\_in\_graph;}
+\DoxyCodeLine{00461\ }
+\DoxyCodeLine{00462\ \ \ \ \ Colliders::const\_iterator\ ci;}
+\DoxyCodeLine{00463\ \ \ \ \ ci\ =\ \_colliders.find(cnode\_path);}
+\DoxyCodeLine{00464\ \ \ \ \ nassertv(ci\ !=\ \_colliders.end());}
+\DoxyCodeLine{00465\ }
+\DoxyCodeLine{00466\ \ \ \ \ \mbox{\hyperlink{classCollisionHandler}{CollisionHandler}}\ *handler\ =\ (*ci).second;}
+\DoxyCodeLine{00467\ \ \ \ \ nassertv(handler\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00468\ }
+\DoxyCodeLine{00469\ \ \ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level\ +\ 2)}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ <<\ cnode\_path;}
+\DoxyCodeLine{00471\ \ \ \ \ \textcolor{keywordflow}{if}\ (in\_graph)\ \{}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ handled\ by\ "{}}\ <<\ handler-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00473\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ ignored\(\backslash\)n"{}};}
+\DoxyCodeLine{00475\ \ \ \ \ \}}
+\DoxyCodeLine{00476\ }
+\DoxyCodeLine{00477\ \ \ \ \ \textcolor{keywordflow}{if}\ (!cnode\_path.is\_empty()\ \&\&\ cnode\_path.node()-\/>\mbox{\hyperlink{classPandaNode_ab86095d2dc71d5bdfbd7685fc5f062e0}{is\_collision\_node}}())\ \{}
+\DoxyCodeLine{00478\ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *cnode\ =\ DCAST(\mbox{\hyperlink{classCollisionNode}{CollisionNode}},\ cnode\_path.node());}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_solids\ =\ cnode-\/>get\_num\_solids();}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_solids;\ ++i)\ \{}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ \ \ cnode-\/>get\_solid(i)-\/>write(out,\ indent\_level\ +\ 4);}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00484\ \ \ \ \ \}}
+\DoxyCodeLine{00485\ \ \ \}}
+\DoxyCodeLine{00486\ \}}
+\DoxyCodeLine{00487\ }
+\DoxyCodeLine{00495\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00496\ prepare\_colliders\_single(\mbox{\hyperlink{classpvector}{CollisionTraverser::LevelStatesSingle}}\ \&level\_states,}
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&root)\ \{}
+\DoxyCodeLine{00498\ \ \ \textcolor{keywordtype}{int}\ num\_colliders\ =\ \_colliders.size();}
+\DoxyCodeLine{00499\ \ \ \textcolor{keywordtype}{int}\ max\_colliders\ =\ CollisionLevelStateSingle::get\_max\_colliders();}
+\DoxyCodeLine{00500\ }
+\DoxyCodeLine{00501\ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateSingle}}\ level\_state(root);}
+\DoxyCodeLine{00502\ \ \ \textcolor{comment}{//\ This\ reserve()\ call\ is\ only\ correct\ if\ there\ is\ exactly\ one\ solid\ per}}
+\DoxyCodeLine{00503\ \ \ \textcolor{comment}{//\ collider\ added\ to\ the\ traverser,\ which\ is\ the\ normal\ case.\ \ If\ there\ is}}
+\DoxyCodeLine{00504\ \ \ \textcolor{comment}{//\ more\ than\ one\ solid\ in\ any\ of\ the\ colliders,\ this\ reserve()\ call\ won't}}
+\DoxyCodeLine{00505\ \ \ \textcolor{comment}{//\ reserve\ enough,\ but\ the\ code\ is\ otherwise\ correct.}}
+\DoxyCodeLine{00506\ \ \ level\_state.reserve(min(num\_colliders,\ max\_colliders));}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00508\ \ \ \textcolor{comment}{//\ Create\ an\ indirect\ index\ array\ to\ walk\ through\ the\ colliders\ in\ sorted}}
+\DoxyCodeLine{00509\ \ \ \textcolor{comment}{//\ order,\ without\ affect\ the\ actual\ collider\ order.}}
+\DoxyCodeLine{00510\ \ \ \textcolor{keywordtype}{int}\ *indirect\ =\ (\textcolor{keywordtype}{int}\ *)alloca(\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{int})\ *\ num\_colliders);}
+\DoxyCodeLine{00511\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00512\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_colliders;\ ++i)\ \{}
+\DoxyCodeLine{00513\ \ \ \ \ indirect[i]\ =\ i;}
+\DoxyCodeLine{00514\ \ \ \}}
+\DoxyCodeLine{00515\ \ \ std::sort(indirect,\ indirect\ +\ num\_colliders,\ \mbox{\hyperlink{classSortByColliderSort}{SortByColliderSort}}(*\textcolor{keyword}{this}));}
+\DoxyCodeLine{00516\ }
+\DoxyCodeLine{00517\ \ \ \textcolor{keywordtype}{int}\ num\_remaining\_colliders\ =\ num\_colliders;}
+\DoxyCodeLine{00518\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_colliders;\ ++i)\ \{}
+\DoxyCodeLine{00519\ \ \ \ \ OrderedColliderDef\ \&ocd\ =\ \_ordered\_colliders[indirect[i]];}
+\DoxyCodeLine{00520\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ cnode\_path\ =\ ocd.\_node\_path;}
+\DoxyCodeLine{00521\ }
+\DoxyCodeLine{00522\ \ \ \ \ \textcolor{keywordflow}{if}\ (!cnode\_path.is\_same\_graph(root))\ \{}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ocd.\_in\_graph)\ \{}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Only\ report\ this\ warning\ once.}}
+\DoxyCodeLine{00525\ \ \ \ \ \ \ \ \ collide\_cat.info()}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Collider\ "{}}\ <<\ cnode\_path}
+\DoxyCodeLine{00527\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ is\ not\ in\ scene\ graph.\ \ Ignoring.\(\backslash\)n"{}};}
+\DoxyCodeLine{00528\ \ \ \ \ \ \ \ \ ocd.\_in\_graph\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00530\ }
+\DoxyCodeLine{00531\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ ocd.\_in\_graph\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00533\ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *cnode\ =\ DCAST(\mbox{\hyperlink{classCollisionNode}{CollisionNode}},\ cnode\_path.node());}
+\DoxyCodeLine{00534\ }
+\DoxyCodeLine{00535\ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelStateBase_1_1ColliderDef}{CollisionLevelStateSingle::ColliderDef}}\ def;}
+\DoxyCodeLine{00536\ \ \ \ \ \ \ def.\_node\ =\ cnode;}
+\DoxyCodeLine{00537\ \ \ \ \ \ \ def.\_node\_path\ =\ cnode\_path;}
+\DoxyCodeLine{00538\ }
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_solids\ =\ cnode-\/>get\_num\_solids();}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ s\ =\ 0;\ s\ <\ num\_solids;\ ++s)\ \{}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classCollisionSolid}{CollisionSolid}})\ collider\ =\ cnode-\/>get\_solid(s);}
+\DoxyCodeLine{00542\ \ \ \ \ \ \ \ \ def.\_collider\ =\ collider;}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \ \ level\_state.prepare\_collider(def,\ root);}
+\DoxyCodeLine{00544\ }
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_state.get\_num\_colliders()\ ==\ max\_colliders)\ \{}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ That's\ the\ limit.\ \ Save\ off\ this\ level\ state\ and\ make\ a\ new\ one.}}
+\DoxyCodeLine{00547\ \ \ \ \ \ \ \ \ \ \ level\_states.push\_back(level\_state);}
+\DoxyCodeLine{00548\ \ \ \ \ \ \ \ \ \ \ level\_state.clear();}
+\DoxyCodeLine{00549\ \ \ \ \ \ \ \ \ \ \ level\_state.reserve(min(num\_remaining\_colliders,\ max\_colliders));}
+\DoxyCodeLine{00550\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00552\ \ \ \ \ \}}
+\DoxyCodeLine{00553\ }
+\DoxyCodeLine{00554\ \ \ \ \ -\/-\/num\_remaining\_colliders;}
+\DoxyCodeLine{00555\ \ \ \ \ nassertv(num\_remaining\_colliders\ >=\ 0);}
+\DoxyCodeLine{00556\ \ \ \}}
+\DoxyCodeLine{00557\ }
+\DoxyCodeLine{00558\ \ \ \textcolor{keywordflow}{if}\ (level\_state.get\_num\_colliders()\ !=\ 0)\ \{}
+\DoxyCodeLine{00559\ \ \ \ \ level\_states.push\_back(level\_state);}
+\DoxyCodeLine{00560\ \ \ \}}
+\DoxyCodeLine{00561\ \ \ nassertv(num\_remaining\_colliders\ ==\ 0);}
+\DoxyCodeLine{00562\ \}}
+\DoxyCodeLine{00563\ }
+\DoxyCodeLine{00567\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00568\ r\_traverse\_single(\mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateSingle}}\ \&level\_state,\ \textcolor{keywordtype}{size\_t}\ pass)\ \{}
+\DoxyCodeLine{00569\ \ \ \textcolor{keywordflow}{if}\ (!level\_state.apply\_transform())\ \{}
+\DoxyCodeLine{00570\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00571\ \ \ \}}
+\DoxyCodeLine{00572\ }
+\DoxyCodeLine{00573\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node\ =\ level\_state.node();}
+\DoxyCodeLine{00574\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_ab86095d2dc71d5bdfbd7685fc5f062e0}{is\_collision\_node}}())\ \{}
+\DoxyCodeLine{00575\ \ \ \ \ \mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *cnode\ =\ (\mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *)node;}
+\DoxyCodeLine{00576\ }
+\DoxyCodeLine{00577\ \ \ \ \ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ entry;}
+\DoxyCodeLine{00578\ \ \ \ \ entry.\_into\_node\ =\ cnode;}
+\DoxyCodeLine{00579\ \ \ \ \ entry.\_into\_node\_path\ =\ level\_state.get\_node\_path();}
+\DoxyCodeLine{00580\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_respect\_prev\_transform)\ \{}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ entry.\_flags\ |=\ CollisionEntry::F\_respect\_prev\_transform;}
+\DoxyCodeLine{00582\ \ \ \ \ \}}
+\DoxyCodeLine{00583\ }
+\DoxyCodeLine{00584\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_colliders\ =\ level\_state.get\_num\_colliders();}
+\DoxyCodeLine{00585\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ c\ =\ 0;\ c\ <\ num\_colliders;\ ++c)\ \{}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_state.has\_collider(c))\ \{}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *from\_node\ =\ level\_state.get\_collider\_node(c);}
+\DoxyCodeLine{00588\ }
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((from\_node-\/>get\_from\_collide\_mask()\ \&}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \ \ \ \ \ \ \ cnode-\/>get\_into\_collide\_mask())\ !=\ 0)\ \{}
+\DoxyCodeLine{00591\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00592\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PStatTimer\ collide\_timer(\_solid\_collide\_collectors[pass]);}}
+\DoxyCodeLine{00593\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \ \ \ \ entry.\_from\_node\ =\ from\_node;}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \ \ \ \ entry.\_from\_node\_path\ =\ level\_state.get\_collider\_node\_path(c);}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \ \ \ \ entry.\_from\ =\ level\_state.get\_collider(c);}
+\DoxyCodeLine{00597\ }
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \ \ \ \ compare\_collider\_to\_node(}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ entry,}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_parent\_bound(c),}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_local\_bound(c),}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_node\_bound());}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00605\ \ \ \ \ \}}
+\DoxyCodeLine{00606\ }
+\DoxyCodeLine{00607\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00608\ \textcolor{preprocessor}{\ \ \ \ \#ifndef\ NDEBUG}}
+\DoxyCodeLine{00609\ \ \ \ \ \textcolor{keywordflow}{if}\ (collide\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ collide\_cat.spam()}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reached\ "{}}\ <<\ *node\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00612\ \ \ \ \ \}}
+\DoxyCodeLine{00613\ \textcolor{preprocessor}{\ \ \ \ \#endif}}
+\DoxyCodeLine{00614\ }
+\DoxyCodeLine{00615\ \ \ \ \ \mbox{\hyperlink{classGeomNode}{GeomNode}}\ *gnode\ =\ (\mbox{\hyperlink{classGeomNode}{GeomNode}}\ *)node;}
+\DoxyCodeLine{00616\ }
+\DoxyCodeLine{00617\ \ \ \ \ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ entry;}
+\DoxyCodeLine{00618\ \ \ \ \ entry.\_into\_node\ =\ gnode;}
+\DoxyCodeLine{00619\ \ \ \ \ entry.\_into\_node\_path\ =\ level\_state.get\_node\_path();}
+\DoxyCodeLine{00620\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_respect\_prev\_transform)\ \{}
+\DoxyCodeLine{00621\ \ \ \ \ \ \ entry.\_flags\ |=\ CollisionEntry::F\_respect\_prev\_transform;}
+\DoxyCodeLine{00622\ \ \ \ \ \}}
+\DoxyCodeLine{00623\ }
+\DoxyCodeLine{00624\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_colliders\ =\ level\_state.get\_num\_colliders();}
+\DoxyCodeLine{00625\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ c\ =\ 0;\ c\ <\ num\_colliders;\ ++c)\ \{}
+\DoxyCodeLine{00626\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_state.has\_collider(c))\ \{}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \ \ entry.\_from\_node\ =\ level\_state.get\_collider\_node(c);}
+\DoxyCodeLine{00628\ }
+\DoxyCodeLine{00629\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((entry.\_from\_node-\/>get\_from\_collide\_mask()\ \&}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \ \ \ \ \ \ \ gnode-\/>get\_into\_collide\_mask())\ !=\ 0)\ \{}
+\DoxyCodeLine{00631\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00632\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PStatTimer\ collide\_timer(\_solid\_collide\_collectors[pass]);}}
+\DoxyCodeLine{00633\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00634\ \ \ \ \ \ \ \ \ \ \ entry.\_from\_node\_path\ =\ level\_state.get\_collider\_node\_path(c);}
+\DoxyCodeLine{00635\ \ \ \ \ \ \ \ \ \ \ entry.\_from\ =\ level\_state.get\_collider(c);}
+\DoxyCodeLine{00636\ }
+\DoxyCodeLine{00637\ \ \ \ \ \ \ \ \ \ \ compare\_collider\_to\_geom\_node(}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ entry,}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_parent\_bound(c),}
+\DoxyCodeLine{00640\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_local\_bound(c),}
+\DoxyCodeLine{00641\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_node\_bound());}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00644\ \ \ \ \ \}}
+\DoxyCodeLine{00645\ \ \ \}}
+\DoxyCodeLine{00646\ }
+\DoxyCodeLine{00647\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a2413e0a016c8a6d5b208f37e6dbd78c4}{has\_single\_child\_visibility}}())\ \{}
+\DoxyCodeLine{00648\ \ \ \ \ \textcolor{comment}{//\ If\ it's\ a\ switch\ node\ or\ sequence\ node,\ visit\ just\ the\ one\ visible}}
+\DoxyCodeLine{00649\ \ \ \ \ \textcolor{comment}{//\ child.}}
+\DoxyCodeLine{00650\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ node-\/>\mbox{\hyperlink{classPandaNode_a28d19405e8610fc317f58b17f20d6c2a}{get\_visible\_child}}();}
+\DoxyCodeLine{00651\ \ \ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00652\ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ >=\ 0\ \&\&\ (\textcolor{keywordtype}{size\_t})index\ <\ children.get\_num\_children())\ \{}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode_1_1DownConnection}{PandaNode::DownConnection}}\ \&child\ =\ children.get\_child\_connection(index);}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ CollisionLevelStateSingle::CurrentMask\ mask\ =\ level\_state.get\_child\_mask(child);}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!mask.is\_zero())\ \{}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateSingle}}\ next\_state(level\_state,\ child,\ mask);}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \ \ r\_traverse\_single(next\_state,\ pass);}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00659\ \ \ \ \ \}}
+\DoxyCodeLine{00660\ }
+\DoxyCodeLine{00661\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_aacb666aa53f9c5a729e33098c8ee144b}{is\_lod\_node}}())\ \{}
+\DoxyCodeLine{00662\ \ \ \ \ \textcolor{comment}{//\ If\ it's\ an\ LODNode,\ visit\ the\ lowest\ level\ of\ detail\ with\ all\ bits,}}
+\DoxyCodeLine{00663\ \ \ \ \ \textcolor{comment}{//\ allowing\ collision\ with\ geometry\ under\ the\ lowest\ level\ of\ default;\ and}}
+\DoxyCodeLine{00664\ \ \ \ \ \textcolor{comment}{//\ visit\ all\ other\ levels\ without\ GeomNode::get\_default\_collide\_mask(),}}
+\DoxyCodeLine{00665\ \ \ \ \ \textcolor{comment}{//\ allowing\ only\ collision\ with\ CollisionNodes\ and\ special\ geometry\ under}}
+\DoxyCodeLine{00666\ \ \ \ \ \textcolor{comment}{//\ higher\ levels\ of\ detail.}}
+\DoxyCodeLine{00667\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ DCAST(\mbox{\hyperlink{classLODNode}{LODNode}},\ node)-\/>get\_lowest\_switch();}
+\DoxyCodeLine{00668\ \ \ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00669\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00670\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00671\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode_1_1DownConnection}{PandaNode::DownConnection}}\ \&child\ =\ children.get\_child\_connection(i);}
+\DoxyCodeLine{00672\ \ \ \ \ \ \ CollisionLevelStateSingle::CurrentMask\ mask\ =\ level\_state.get\_child\_mask(child);}
+\DoxyCodeLine{00673\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!mask.is\_zero())\ \{}
+\DoxyCodeLine{00674\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateSingle}}\ next\_state(level\_state,\ child,\ mask);}
+\DoxyCodeLine{00675\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ !=\ index)\ \{}
+\DoxyCodeLine{00676\ \ \ \ \ \ \ \ \ \ \ next\_state.set\_include\_mask(next\_state.get\_include\_mask()\ \&}
+\DoxyCodeLine{00677\ \ \ \ \ \ \ \ \ \ \ \ \ \string~GeomNode::get\_default\_collide\_mask());}
+\DoxyCodeLine{00678\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ \ \ r\_traverse\_single(next\_state,\ pass);}
+\DoxyCodeLine{00680\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00681\ \ \ \ \ \}}
+\DoxyCodeLine{00682\ }
+\DoxyCodeLine{00683\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00684\ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ visit\ all\ the\ children.}}
+\DoxyCodeLine{00685\ \ \ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00686\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00687\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00688\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode_1_1DownConnection}{PandaNode::DownConnection}}\ \&child\ =\ children.get\_child\_connection(i);}
+\DoxyCodeLine{00689\ \ \ \ \ \ \ CollisionLevelStateSingle::CurrentMask\ mask\ =\ level\_state.get\_child\_mask(child);}
+\DoxyCodeLine{00690\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!mask.is\_zero())\ \{}
+\DoxyCodeLine{00691\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateSingle}}\ next\_state(level\_state,\ child,\ mask);}
+\DoxyCodeLine{00692\ \ \ \ \ \ \ \ \ r\_traverse\_single(next\_state,\ pass);}
+\DoxyCodeLine{00693\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00694\ \ \ \ \ \}}
+\DoxyCodeLine{00695\ \ \ \}}
+\DoxyCodeLine{00696\ \}}
+\DoxyCodeLine{00697\ }
+\DoxyCodeLine{00705\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00706\ prepare\_colliders\_double(\mbox{\hyperlink{classpvector}{CollisionTraverser::LevelStatesDouble}}\ \&level\_states,}
+\DoxyCodeLine{00707\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&root)\ \{}
+\DoxyCodeLine{00708\ \ \ \textcolor{keywordtype}{int}\ num\_colliders\ =\ \_colliders.size();}
+\DoxyCodeLine{00709\ \ \ \textcolor{keywordtype}{int}\ max\_colliders\ =\ CollisionLevelStateDouble::get\_max\_colliders();}
+\DoxyCodeLine{00710\ }
+\DoxyCodeLine{00711\ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateDouble}}\ level\_state(root);}
+\DoxyCodeLine{00712\ \ \ \textcolor{comment}{//\ This\ reserve()\ call\ is\ only\ correct\ if\ there\ is\ exactly\ one\ solid\ per}}
+\DoxyCodeLine{00713\ \ \ \textcolor{comment}{//\ collider\ added\ to\ the\ traverser,\ which\ is\ the\ normal\ case.\ \ If\ there\ is}}
+\DoxyCodeLine{00714\ \ \ \textcolor{comment}{//\ more\ than\ one\ solid\ in\ any\ of\ the\ colliders,\ this\ reserve()\ call\ won't}}
+\DoxyCodeLine{00715\ \ \ \textcolor{comment}{//\ reserve\ enough,\ but\ the\ code\ is\ otherwise\ correct.}}
+\DoxyCodeLine{00716\ \ \ level\_state.\mbox{\hyperlink{classCollisionLevelStateBase_a03003d804bf7c066eb23a02d66ec34b1}{reserve}}(min(num\_colliders,\ max\_colliders));}
+\DoxyCodeLine{00717\ }
+\DoxyCodeLine{00718\ \ \ \textcolor{comment}{//\ Create\ an\ indirect\ index\ array\ to\ walk\ through\ the\ colliders\ in\ sorted}}
+\DoxyCodeLine{00719\ \ \ \textcolor{comment}{//\ order,\ without\ affect\ the\ actual\ collider\ order.}}
+\DoxyCodeLine{00720\ \ \ \textcolor{keywordtype}{int}\ *indirect\ =\ (\textcolor{keywordtype}{int}\ *)alloca(\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{int})\ *\ num\_colliders);}
+\DoxyCodeLine{00721\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00722\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_colliders;\ ++i)\ \{}
+\DoxyCodeLine{00723\ \ \ \ \ indirect[i]\ =\ i;}
+\DoxyCodeLine{00724\ \ \ \}}
+\DoxyCodeLine{00725\ \ \ std::sort(indirect,\ indirect\ +\ num\_colliders,\ \mbox{\hyperlink{classSortByColliderSort}{SortByColliderSort}}(*\textcolor{keyword}{this}));}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00727\ \ \ \textcolor{keywordtype}{int}\ num\_remaining\_colliders\ =\ num\_colliders;}
+\DoxyCodeLine{00728\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_colliders;\ ++i)\ \{}
+\DoxyCodeLine{00729\ \ \ \ \ OrderedColliderDef\ \&ocd\ =\ \_ordered\_colliders[indirect[i]];}
+\DoxyCodeLine{00730\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ cnode\_path\ =\ ocd.\_node\_path;}
+\DoxyCodeLine{00731\ }
+\DoxyCodeLine{00732\ \ \ \ \ \textcolor{keywordflow}{if}\ (!cnode\_path.is\_same\_graph(root))\ \{}
+\DoxyCodeLine{00733\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ocd.\_in\_graph)\ \{}
+\DoxyCodeLine{00734\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Only\ report\ this\ warning\ once.}}
+\DoxyCodeLine{00735\ \ \ \ \ \ \ \ \ collide\_cat.info()}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Collider\ "{}}\ <<\ cnode\_path}
+\DoxyCodeLine{00737\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ is\ not\ in\ scene\ graph.\ \ Ignoring.\(\backslash\)n"{}};}
+\DoxyCodeLine{00738\ \ \ \ \ \ \ \ \ ocd.\_in\_graph\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00739\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00740\ }
+\DoxyCodeLine{00741\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00742\ \ \ \ \ \ \ ocd.\_in\_graph\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *cnode\ =\ DCAST(\mbox{\hyperlink{classCollisionNode}{CollisionNode}},\ cnode\_path.node());}
+\DoxyCodeLine{00744\ }
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelStateBase_1_1ColliderDef}{CollisionLevelStateDouble::ColliderDef}}\ def;}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ def.\_node\ =\ cnode;}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ def.\_node\_path\ =\ cnode\_path;}
+\DoxyCodeLine{00748\ }
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_solids\ =\ cnode-\/>get\_num\_solids();}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ s\ =\ 0;\ s\ <\ num\_solids;\ ++s)\ \{}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classCollisionSolid}{CollisionSolid}})\ collider\ =\ cnode-\/>get\_solid(s);}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \ \ def.\_collider\ =\ collider;}
+\DoxyCodeLine{00753\ \ \ \ \ \ \ \ \ level\_state.prepare\_collider(def,\ root);}
+\DoxyCodeLine{00754\ }
+\DoxyCodeLine{00755\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_state.get\_num\_colliders()\ ==\ max\_colliders)\ \{}
+\DoxyCodeLine{00756\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ That's\ the\ limit.\ \ Save\ off\ this\ level\ state\ and\ make\ a\ new\ one.}}
+\DoxyCodeLine{00757\ \ \ \ \ \ \ \ \ \ \ level\_states.push\_back(level\_state);}
+\DoxyCodeLine{00758\ \ \ \ \ \ \ \ \ \ \ level\_state.clear();}
+\DoxyCodeLine{00759\ \ \ \ \ \ \ \ \ \ \ level\_state.\mbox{\hyperlink{classCollisionLevelStateBase_a03003d804bf7c066eb23a02d66ec34b1}{reserve}}(min(num\_remaining\_colliders,\ max\_colliders));}
+\DoxyCodeLine{00760\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00762\ \ \ \ \ \}}
+\DoxyCodeLine{00763\ }
+\DoxyCodeLine{00764\ \ \ \ \ -\/-\/num\_remaining\_colliders;}
+\DoxyCodeLine{00765\ \ \ \ \ nassertv(num\_remaining\_colliders\ >=\ 0);}
+\DoxyCodeLine{00766\ \ \ \}}
+\DoxyCodeLine{00767\ }
+\DoxyCodeLine{00768\ \ \ \textcolor{keywordflow}{if}\ (level\_state.get\_num\_colliders()\ !=\ 0)\ \{}
+\DoxyCodeLine{00769\ \ \ \ \ level\_states.push\_back(level\_state);}
+\DoxyCodeLine{00770\ \ \ \}}
+\DoxyCodeLine{00771\ \ \ nassertv(num\_remaining\_colliders\ ==\ 0);}
+\DoxyCodeLine{00772\ \}}
+\DoxyCodeLine{00773\ }
+\DoxyCodeLine{00777\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00778\ r\_traverse\_double(\mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateDouble}}\ \&level\_state,\ \textcolor{keywordtype}{size\_t}\ pass)\ \{}
+\DoxyCodeLine{00779\ \ \ \textcolor{keywordflow}{if}\ (!level\_state.apply\_transform())\ \{}
+\DoxyCodeLine{00780\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00781\ \ \ \}}
+\DoxyCodeLine{00782\ }
+\DoxyCodeLine{00783\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node\ =\ level\_state.node();}
+\DoxyCodeLine{00784\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_ab86095d2dc71d5bdfbd7685fc5f062e0}{is\_collision\_node}}())\ \{}
+\DoxyCodeLine{00785\ \ \ \ \ \mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *cnode\ =\ (\mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *)node;}
+\DoxyCodeLine{00786\ }
+\DoxyCodeLine{00787\ \ \ \ \ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ entry;}
+\DoxyCodeLine{00788\ \ \ \ \ entry.\_into\_node\ =\ cnode;}
+\DoxyCodeLine{00789\ \ \ \ \ entry.\_into\_node\_path\ =\ level\_state.get\_node\_path();}
+\DoxyCodeLine{00790\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_respect\_prev\_transform)\ \{}
+\DoxyCodeLine{00791\ \ \ \ \ \ \ entry.\_flags\ |=\ CollisionEntry::F\_respect\_prev\_transform;}
+\DoxyCodeLine{00792\ \ \ \ \ \}}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00794\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_colliders\ =\ level\_state.get\_num\_colliders();}
+\DoxyCodeLine{00795\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ c\ =\ 0;\ c\ <\ num\_colliders;\ ++c)\ \{}
+\DoxyCodeLine{00796\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_state.has\_collider(c))\ \{}
+\DoxyCodeLine{00797\ \ \ \ \ \ \ \ \ entry.\_from\_node\ =\ level\_state.get\_collider\_node(c);}
+\DoxyCodeLine{00798\ }
+\DoxyCodeLine{00799\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((entry.\_from\_node-\/>get\_from\_collide\_mask()\ \&}
+\DoxyCodeLine{00800\ \ \ \ \ \ \ \ \ \ \ \ \ \ cnode-\/>get\_into\_collide\_mask())\ !=\ 0)\ \{}
+\DoxyCodeLine{00801\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00802\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PStatTimer\ collide\_timer(\_solid\_collide\_collectors[pass]);}}
+\DoxyCodeLine{00803\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00804\ \ \ \ \ \ \ \ \ \ \ entry.\_from\_node\_path\ =\ level\_state.get\_collider\_node\_path(c);}
+\DoxyCodeLine{00805\ \ \ \ \ \ \ \ \ \ \ entry.\_from\ =\ level\_state.get\_collider(c);}
+\DoxyCodeLine{00806\ }
+\DoxyCodeLine{00807\ \ \ \ \ \ \ \ \ \ \ compare\_collider\_to\_node(}
+\DoxyCodeLine{00808\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ entry,}
+\DoxyCodeLine{00809\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_parent\_bound(c),}
+\DoxyCodeLine{00810\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_local\_bound(c),}
+\DoxyCodeLine{00811\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_node\_bound());}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00814\ \ \ \ \ \}}
+\DoxyCodeLine{00815\ }
+\DoxyCodeLine{00816\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{00817\ \textcolor{preprocessor}{\ \ \ \ \#ifndef\ NDEBUG}}
+\DoxyCodeLine{00818\ \ \ \ \ \textcolor{keywordflow}{if}\ (collide\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00819\ \ \ \ \ \ \ collide\_cat.spam()}
+\DoxyCodeLine{00820\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reached\ "{}}\ <<\ *node\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00821\ \ \ \ \ \}}
+\DoxyCodeLine{00822\ \textcolor{preprocessor}{\ \ \ \ \#endif}}
+\DoxyCodeLine{00823\ }
+\DoxyCodeLine{00824\ \ \ \ \ \mbox{\hyperlink{classGeomNode}{GeomNode}}\ *gnode\ =\ (\mbox{\hyperlink{classGeomNode}{GeomNode}}\ *)node;}
+\DoxyCodeLine{00825\ }
+\DoxyCodeLine{00826\ \ \ \ \ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ entry;}
+\DoxyCodeLine{00827\ \ \ \ \ entry.\_into\_node\ =\ gnode;}
+\DoxyCodeLine{00828\ \ \ \ \ entry.\_into\_node\_path\ =\ level\_state.get\_node\_path();}
+\DoxyCodeLine{00829\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_respect\_prev\_transform)\ \{}
+\DoxyCodeLine{00830\ \ \ \ \ \ \ entry.\_flags\ |=\ CollisionEntry::F\_respect\_prev\_transform;}
+\DoxyCodeLine{00831\ \ \ \ \ \}}
+\DoxyCodeLine{00832\ }
+\DoxyCodeLine{00833\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_colliders\ =\ level\_state.get\_num\_colliders();}
+\DoxyCodeLine{00834\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ c\ =\ 0;\ c\ <\ num\_colliders;\ ++c)\ \{}
+\DoxyCodeLine{00835\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_state.has\_collider(c))\ \{}
+\DoxyCodeLine{00836\ \ \ \ \ \ \ \ \ entry.\_from\_node\ =\ level\_state.get\_collider\_node(c);}
+\DoxyCodeLine{00837\ }
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((entry.\_from\_node-\/>get\_from\_collide\_mask()\ \&}
+\DoxyCodeLine{00839\ \ \ \ \ \ \ \ \ \ \ \ \ \ gnode-\/>get\_into\_collide\_mask())\ !=\ 0)\ \{}
+\DoxyCodeLine{00840\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00841\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PStatTimer\ collide\_timer(\_solid\_collide\_collectors[pass]);}}
+\DoxyCodeLine{00842\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00843\ \ \ \ \ \ \ \ \ \ \ entry.\_from\_node\_path\ =\ level\_state.get\_collider\_node\_path(c);}
+\DoxyCodeLine{00844\ \ \ \ \ \ \ \ \ \ \ entry.\_from\ =\ level\_state.get\_collider(c);}
+\DoxyCodeLine{00845\ }
+\DoxyCodeLine{00846\ \ \ \ \ \ \ \ \ \ \ compare\_collider\_to\_geom\_node(}
+\DoxyCodeLine{00847\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ entry,}
+\DoxyCodeLine{00848\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_parent\_bound(c),}
+\DoxyCodeLine{00849\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_local\_bound(c),}
+\DoxyCodeLine{00850\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_node\_bound());}
+\DoxyCodeLine{00851\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00852\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00853\ \ \ \ \ \}}
+\DoxyCodeLine{00854\ \ \ \}}
+\DoxyCodeLine{00855\ }
+\DoxyCodeLine{00856\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a2413e0a016c8a6d5b208f37e6dbd78c4}{has\_single\_child\_visibility}}())\ \{}
+\DoxyCodeLine{00857\ \ \ \ \ \textcolor{comment}{//\ If\ it's\ a\ switch\ node\ or\ sequence\ node,\ visit\ just\ the\ one\ visible}}
+\DoxyCodeLine{00858\ \ \ \ \ \textcolor{comment}{//\ child.}}
+\DoxyCodeLine{00859\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ node-\/>\mbox{\hyperlink{classPandaNode_a28d19405e8610fc317f58b17f20d6c2a}{get\_visible\_child}}();}
+\DoxyCodeLine{00860\ \ \ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00861\ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ >=\ 0\ \&\&\ (\textcolor{keywordtype}{size\_t})index\ <\ children.get\_num\_children())\ \{}
+\DoxyCodeLine{00862\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode_1_1DownConnection}{PandaNode::DownConnection}}\ \&child\ =\ children.get\_child\_connection(index);}
+\DoxyCodeLine{00863\ \ \ \ \ \ \ CollisionLevelStateDouble::CurrentMask\ mask\ =\ level\_state.get\_child\_mask(child);}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!mask.is\_zero())\ \{}
+\DoxyCodeLine{00865\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateDouble}}\ next\_state(level\_state,\ child,\ mask);}
+\DoxyCodeLine{00866\ \ \ \ \ \ \ \ \ r\_traverse\_double(next\_state,\ pass);}
+\DoxyCodeLine{00867\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00868\ \ \ \ \ \}}
+\DoxyCodeLine{00869\ }
+\DoxyCodeLine{00870\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_aacb666aa53f9c5a729e33098c8ee144b}{is\_lod\_node}}())\ \{}
+\DoxyCodeLine{00871\ \ \ \ \ \textcolor{comment}{//\ If\ it's\ an\ LODNode,\ visit\ the\ lowest\ level\ of\ detail\ with\ all\ bits,}}
+\DoxyCodeLine{00872\ \ \ \ \ \textcolor{comment}{//\ allowing\ collision\ with\ geometry\ under\ the\ lowest\ level\ of\ default;\ and}}
+\DoxyCodeLine{00873\ \ \ \ \ \textcolor{comment}{//\ visit\ all\ other\ levels\ without\ GeomNode::get\_default\_collide\_mask(),}}
+\DoxyCodeLine{00874\ \ \ \ \ \textcolor{comment}{//\ allowing\ only\ collision\ with\ CollisionNodes\ and\ special\ geometry\ under}}
+\DoxyCodeLine{00875\ \ \ \ \ \textcolor{comment}{//\ higher\ levels\ of\ detail.}}
+\DoxyCodeLine{00876\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ ((\mbox{\hyperlink{classLODNode}{LODNode}}\ *)node)-\/>get\_lowest\_switch();}
+\DoxyCodeLine{00877\ \ \ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00878\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00879\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00880\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode_1_1DownConnection}{PandaNode::DownConnection}}\ \&child\ =\ children.get\_child\_connection(i);}
+\DoxyCodeLine{00881\ \ \ \ \ \ \ CollisionLevelStateDouble::CurrentMask\ mask\ =\ level\_state.get\_child\_mask(child);}
+\DoxyCodeLine{00882\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!mask.is\_zero())\ \{}
+\DoxyCodeLine{00883\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateDouble}}\ next\_state(level\_state,\ child,\ mask);}
+\DoxyCodeLine{00884\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ !=\ index)\ \{}
+\DoxyCodeLine{00885\ \ \ \ \ \ \ \ \ \ \ next\_state.set\_include\_mask(next\_state.get\_include\_mask()\ \&}
+\DoxyCodeLine{00886\ \ \ \ \ \ \ \ \ \ \ \ \ \string~GeomNode::get\_default\_collide\_mask());}
+\DoxyCodeLine{00887\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00888\ \ \ \ \ \ \ \ \ r\_traverse\_double(next\_state,\ pass);}
+\DoxyCodeLine{00889\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00890\ \ \ \ \ \}}
+\DoxyCodeLine{00891\ }
+\DoxyCodeLine{00892\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00893\ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ visit\ all\ the\ children.}}
+\DoxyCodeLine{00894\ \ \ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{00895\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{00896\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{00897\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode_1_1DownConnection}{PandaNode::DownConnection}}\ \&child\ =\ children.get\_child\_connection(i);}
+\DoxyCodeLine{00898\ \ \ \ \ \ \ CollisionLevelStateDouble::CurrentMask\ mask\ =\ level\_state.get\_child\_mask(child);}
+\DoxyCodeLine{00899\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!mask.is\_zero())\ \{}
+\DoxyCodeLine{00900\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateDouble}}\ next\_state(level\_state,\ child,\ mask);}
+\DoxyCodeLine{00901\ \ \ \ \ \ \ \ \ r\_traverse\_double(next\_state,\ pass);}
+\DoxyCodeLine{00902\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00903\ \ \ \ \ \}}
+\DoxyCodeLine{00904\ \ \ \}}
+\DoxyCodeLine{00905\ \}}
+\DoxyCodeLine{00906\ }
+\DoxyCodeLine{00914\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00915\ prepare\_colliders\_quad(\mbox{\hyperlink{classpvector}{CollisionTraverser::LevelStatesQuad}}\ \&level\_states,}
+\DoxyCodeLine{00916\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&root)\ \{}
+\DoxyCodeLine{00917\ \ \ \textcolor{keywordtype}{int}\ num\_colliders\ =\ \_colliders.size();}
+\DoxyCodeLine{00918\ \ \ \textcolor{keywordtype}{int}\ max\_colliders\ =\ CollisionLevelStateQuad::get\_max\_colliders();}
+\DoxyCodeLine{00919\ }
+\DoxyCodeLine{00920\ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateQuad}}\ level\_state(root);}
+\DoxyCodeLine{00921\ \ \ \textcolor{comment}{//\ This\ reserve()\ call\ is\ only\ correct\ if\ there\ is\ exactly\ one\ solid\ per}}
+\DoxyCodeLine{00922\ \ \ \textcolor{comment}{//\ collider\ added\ to\ the\ traverser,\ which\ is\ the\ normal\ case.\ \ If\ there\ is}}
+\DoxyCodeLine{00923\ \ \ \textcolor{comment}{//\ more\ than\ one\ solid\ in\ any\ of\ the\ colliders,\ this\ reserve()\ call\ won't}}
+\DoxyCodeLine{00924\ \ \ \textcolor{comment}{//\ reserve\ enough,\ but\ the\ code\ is\ otherwise\ correct.}}
+\DoxyCodeLine{00925\ \ \ level\_state.\mbox{\hyperlink{classCollisionLevelStateBase_a03003d804bf7c066eb23a02d66ec34b1}{reserve}}(min(num\_colliders,\ max\_colliders));}
+\DoxyCodeLine{00926\ }
+\DoxyCodeLine{00927\ \ \ \textcolor{comment}{//\ Create\ an\ indirect\ index\ array\ to\ walk\ through\ the\ colliders\ in\ sorted}}
+\DoxyCodeLine{00928\ \ \ \textcolor{comment}{//\ order,\ without\ affect\ the\ actual\ collider\ order.}}
+\DoxyCodeLine{00929\ \ \ \textcolor{keywordtype}{int}\ *indirect\ =\ (\textcolor{keywordtype}{int}\ *)alloca(\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{int})\ *\ num\_colliders);}
+\DoxyCodeLine{00930\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00931\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_colliders;\ ++i)\ \{}
+\DoxyCodeLine{00932\ \ \ \ \ indirect[i]\ =\ i;}
+\DoxyCodeLine{00933\ \ \ \}}
+\DoxyCodeLine{00934\ \ \ std::sort(indirect,\ indirect\ +\ num\_colliders,\ \mbox{\hyperlink{classSortByColliderSort}{SortByColliderSort}}(*\textcolor{keyword}{this}));}
+\DoxyCodeLine{00935\ }
+\DoxyCodeLine{00936\ \ \ \textcolor{keywordtype}{int}\ num\_remaining\_colliders\ =\ num\_colliders;}
+\DoxyCodeLine{00937\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_colliders;\ ++i)\ \{}
+\DoxyCodeLine{00938\ \ \ \ \ OrderedColliderDef\ \&ocd\ =\ \_ordered\_colliders[indirect[i]];}
+\DoxyCodeLine{00939\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ cnode\_path\ =\ ocd.\_node\_path;}
+\DoxyCodeLine{00940\ }
+\DoxyCodeLine{00941\ \ \ \ \ \textcolor{keywordflow}{if}\ (!cnode\_path.is\_same\_graph(root))\ \{}
+\DoxyCodeLine{00942\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ocd.\_in\_graph)\ \{}
+\DoxyCodeLine{00943\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Only\ report\ this\ warning\ once.}}
+\DoxyCodeLine{00944\ \ \ \ \ \ \ \ \ collide\_cat.info()}
+\DoxyCodeLine{00945\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Collider\ "{}}\ <<\ cnode\_path}
+\DoxyCodeLine{00946\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ is\ not\ in\ scene\ graph.\ \ Ignoring.\(\backslash\)n"{}};}
+\DoxyCodeLine{00947\ \ \ \ \ \ \ \ \ ocd.\_in\_graph\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00948\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00949\ }
+\DoxyCodeLine{00950\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00951\ \ \ \ \ \ \ ocd.\_in\_graph\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00952\ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *cnode\ =\ DCAST(\mbox{\hyperlink{classCollisionNode}{CollisionNode}},\ cnode\_path.node());}
+\DoxyCodeLine{00953\ }
+\DoxyCodeLine{00954\ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelStateBase_1_1ColliderDef}{CollisionLevelStateQuad::ColliderDef}}\ def;}
+\DoxyCodeLine{00955\ \ \ \ \ \ \ def.\_node\ =\ cnode;}
+\DoxyCodeLine{00956\ \ \ \ \ \ \ def.\_node\_path\ =\ cnode\_path;}
+\DoxyCodeLine{00957\ }
+\DoxyCodeLine{00958\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_solids\ =\ cnode-\/>get\_num\_solids();}
+\DoxyCodeLine{00959\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ s\ =\ 0;\ s\ <\ num\_solids;\ ++s)\ \{}
+\DoxyCodeLine{00960\ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classCollisionSolid}{CollisionSolid}})\ collider\ =\ cnode-\/>get\_solid(s);}
+\DoxyCodeLine{00961\ \ \ \ \ \ \ \ \ def.\_collider\ =\ collider;}
+\DoxyCodeLine{00962\ \ \ \ \ \ \ \ \ level\_state.prepare\_collider(def,\ root);}
+\DoxyCodeLine{00963\ }
+\DoxyCodeLine{00964\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_state.get\_num\_colliders()\ ==\ max\_colliders)\ \{}
+\DoxyCodeLine{00965\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ That's\ the\ limit.\ \ Save\ off\ this\ level\ state\ and\ make\ a\ new\ one.}}
+\DoxyCodeLine{00966\ \ \ \ \ \ \ \ \ \ \ level\_states.push\_back(level\_state);}
+\DoxyCodeLine{00967\ \ \ \ \ \ \ \ \ \ \ level\_state.clear();}
+\DoxyCodeLine{00968\ \ \ \ \ \ \ \ \ \ \ level\_state.\mbox{\hyperlink{classCollisionLevelStateBase_a03003d804bf7c066eb23a02d66ec34b1}{reserve}}(min(num\_remaining\_colliders,\ max\_colliders));}
+\DoxyCodeLine{00969\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00970\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00971\ \ \ \ \ \}}
+\DoxyCodeLine{00972\ }
+\DoxyCodeLine{00973\ \ \ \ \ -\/-\/num\_remaining\_colliders;}
+\DoxyCodeLine{00974\ \ \ \ \ nassertv(num\_remaining\_colliders\ >=\ 0);}
+\DoxyCodeLine{00975\ \ \ \}}
+\DoxyCodeLine{00976\ }
+\DoxyCodeLine{00977\ \ \ \textcolor{keywordflow}{if}\ (level\_state.get\_num\_colliders()\ !=\ 0)\ \{}
+\DoxyCodeLine{00978\ \ \ \ \ level\_states.push\_back(level\_state);}
+\DoxyCodeLine{00979\ \ \ \}}
+\DoxyCodeLine{00980\ \ \ nassertv(num\_remaining\_colliders\ ==\ 0);}
+\DoxyCodeLine{00981\ \}}
+\DoxyCodeLine{00982\ }
+\DoxyCodeLine{00986\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{00987\ r\_traverse\_quad(\mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateQuad}}\ \&level\_state,\ \textcolor{keywordtype}{size\_t}\ pass)\ \{}
+\DoxyCodeLine{00988\ \ \ \textcolor{keywordflow}{if}\ (!level\_state.apply\_transform())\ \{}
+\DoxyCodeLine{00989\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00990\ \ \ \}}
+\DoxyCodeLine{00991\ }
+\DoxyCodeLine{00992\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node\ =\ level\_state.node();}
+\DoxyCodeLine{00993\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_ab86095d2dc71d5bdfbd7685fc5f062e0}{is\_collision\_node}}())\ \{}
+\DoxyCodeLine{00994\ \ \ \ \ \mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *cnode\ =\ (\mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *)node;}
+\DoxyCodeLine{00995\ }
+\DoxyCodeLine{00996\ \ \ \ \ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ entry;}
+\DoxyCodeLine{00997\ \ \ \ \ entry.\_into\_node\ =\ cnode;}
+\DoxyCodeLine{00998\ \ \ \ \ entry.\_into\_node\_path\ =\ level\_state.get\_node\_path();}
+\DoxyCodeLine{00999\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_respect\_prev\_transform)\ \{}
+\DoxyCodeLine{01000\ \ \ \ \ \ \ entry.\_flags\ |=\ CollisionEntry::F\_respect\_prev\_transform;}
+\DoxyCodeLine{01001\ \ \ \ \ \}}
+\DoxyCodeLine{01002\ }
+\DoxyCodeLine{01003\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_colliders\ =\ level\_state.get\_num\_colliders();}
+\DoxyCodeLine{01004\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ c\ =\ 0;\ c\ <\ num\_colliders;\ ++c)\ \{}
+\DoxyCodeLine{01005\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_state.has\_collider(c))\ \{}
+\DoxyCodeLine{01006\ \ \ \ \ \ \ \ \ entry.\_from\_node\ =\ level\_state.get\_collider\_node(c);}
+\DoxyCodeLine{01007\ }
+\DoxyCodeLine{01008\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((entry.\_from\_node-\/>get\_from\_collide\_mask()\ \&}
+\DoxyCodeLine{01009\ \ \ \ \ \ \ \ \ \ \ \ \ \ cnode-\/>get\_into\_collide\_mask())\ !=\ 0)\ \{}
+\DoxyCodeLine{01010\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{01011\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PStatTimer\ collide\_timer(\_solid\_collide\_collectors[pass]);}}
+\DoxyCodeLine{01012\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{01013\ \ \ \ \ \ \ \ \ \ \ entry.\_from\_node\_path\ =\ level\_state.get\_collider\_node\_path(c);}
+\DoxyCodeLine{01014\ \ \ \ \ \ \ \ \ \ \ entry.\_from\ =\ level\_state.get\_collider(c);}
+\DoxyCodeLine{01015\ }
+\DoxyCodeLine{01016\ \ \ \ \ \ \ \ \ \ \ compare\_collider\_to\_node(}
+\DoxyCodeLine{01017\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ entry,}
+\DoxyCodeLine{01018\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_parent\_bound(c),}
+\DoxyCodeLine{01019\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_local\_bound(c),}
+\DoxyCodeLine{01020\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_node\_bound());}
+\DoxyCodeLine{01021\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01022\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01023\ \ \ \ \ \}}
+\DoxyCodeLine{01024\ }
+\DoxyCodeLine{01025\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a1799fcdc4d1d62fbbbb63d4dedc1bdcf}{is\_geom\_node}}())\ \{}
+\DoxyCodeLine{01026\ \textcolor{preprocessor}{\ \ \ \ \#ifndef\ NDEBUG}}
+\DoxyCodeLine{01027\ \ \ \ \ \textcolor{keywordflow}{if}\ (collide\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01028\ \ \ \ \ \ \ collide\_cat.spam()}
+\DoxyCodeLine{01029\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reached\ "{}}\ <<\ *node\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01030\ \ \ \ \ \}}
+\DoxyCodeLine{01031\ \textcolor{preprocessor}{\ \ \ \ \#endif}}
+\DoxyCodeLine{01032\ }
+\DoxyCodeLine{01033\ \ \ \ \ \mbox{\hyperlink{classGeomNode}{GeomNode}}\ *gnode\ =\ (\mbox{\hyperlink{classGeomNode}{GeomNode}}\ *)node;}
+\DoxyCodeLine{01034\ }
+\DoxyCodeLine{01035\ \ \ \ \ \mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ entry;}
+\DoxyCodeLine{01036\ \ \ \ \ entry.\_into\_node\ =\ gnode;}
+\DoxyCodeLine{01037\ \ \ \ \ entry.\_into\_node\_path\ =\ level\_state.get\_node\_path();}
+\DoxyCodeLine{01038\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_respect\_prev\_transform)\ \{}
+\DoxyCodeLine{01039\ \ \ \ \ \ \ entry.\_flags\ |=\ CollisionEntry::F\_respect\_prev\_transform;}
+\DoxyCodeLine{01040\ \ \ \ \ \}}
+\DoxyCodeLine{01041\ }
+\DoxyCodeLine{01042\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_colliders\ =\ level\_state.get\_num\_colliders();}
+\DoxyCodeLine{01043\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ c\ =\ 0;\ c\ <\ num\_colliders;\ ++c)\ \{}
+\DoxyCodeLine{01044\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (level\_state.has\_collider(c))\ \{}
+\DoxyCodeLine{01045\ \ \ \ \ \ \ \ \ entry.\_from\_node\ =\ level\_state.get\_collider\_node(c);}
+\DoxyCodeLine{01046\ }
+\DoxyCodeLine{01047\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((entry.\_from\_node-\/>get\_from\_collide\_mask()\ \&}
+\DoxyCodeLine{01048\ \ \ \ \ \ \ \ \ \ \ \ \ \ gnode-\/>get\_into\_collide\_mask())\ !=\ 0)\ \{}
+\DoxyCodeLine{01049\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{01050\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PStatTimer\ collide\_timer(\_solid\_collide\_collectors[pass]);}}
+\DoxyCodeLine{01051\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{01052\ \ \ \ \ \ \ \ \ \ \ entry.\_from\_node\_path\ =\ level\_state.get\_collider\_node\_path(c);}
+\DoxyCodeLine{01053\ \ \ \ \ \ \ \ \ \ \ entry.\_from\ =\ level\_state.get\_collider(c);}
+\DoxyCodeLine{01054\ }
+\DoxyCodeLine{01055\ \ \ \ \ \ \ \ \ \ \ compare\_collider\_to\_geom\_node(}
+\DoxyCodeLine{01056\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ entry,}
+\DoxyCodeLine{01057\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_parent\_bound(c),}
+\DoxyCodeLine{01058\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_local\_bound(c),}
+\DoxyCodeLine{01059\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ level\_state.get\_node\_bound());}
+\DoxyCodeLine{01060\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01061\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01062\ \ \ \ \ \}}
+\DoxyCodeLine{01063\ \ \ \}}
+\DoxyCodeLine{01064\ }
+\DoxyCodeLine{01065\ \ \ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_a2413e0a016c8a6d5b208f37e6dbd78c4}{has\_single\_child\_visibility}}())\ \{}
+\DoxyCodeLine{01066\ \ \ \ \ \textcolor{comment}{//\ If\ it's\ a\ switch\ node\ or\ sequence\ node,\ visit\ just\ the\ one\ visible}}
+\DoxyCodeLine{01067\ \ \ \ \ \textcolor{comment}{//\ child.}}
+\DoxyCodeLine{01068\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ node-\/>\mbox{\hyperlink{classPandaNode_a28d19405e8610fc317f58b17f20d6c2a}{get\_visible\_child}}();}
+\DoxyCodeLine{01069\ \ \ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{01070\ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ >=\ 0\ \&\&\ (\textcolor{keywordtype}{size\_t})index\ <\ children.get\_num\_children())\ \{}
+\DoxyCodeLine{01071\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode_1_1DownConnection}{PandaNode::DownConnection}}\ \&child\ =\ children.get\_child\_connection(index);}
+\DoxyCodeLine{01072\ \ \ \ \ \ \ CollisionLevelStateQuad::CurrentMask\ mask\ =\ level\_state.get\_child\_mask(child);}
+\DoxyCodeLine{01073\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!mask.is\_zero())\ \{}
+\DoxyCodeLine{01074\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateQuad}}\ next\_state(level\_state,\ child,\ mask);}
+\DoxyCodeLine{01075\ \ \ \ \ \ \ \ \ r\_traverse\_quad(next\_state,\ pass);}
+\DoxyCodeLine{01076\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01077\ \ \ \ \ \}}
+\DoxyCodeLine{01078\ }
+\DoxyCodeLine{01079\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (node-\/>\mbox{\hyperlink{classPandaNode_aacb666aa53f9c5a729e33098c8ee144b}{is\_lod\_node}}())\ \{}
+\DoxyCodeLine{01080\ \ \ \ \ \textcolor{comment}{//\ If\ it's\ an\ LODNode,\ visit\ the\ lowest\ level\ of\ detail\ with\ all\ bits,}}
+\DoxyCodeLine{01081\ \ \ \ \ \textcolor{comment}{//\ allowing\ collision\ with\ geometry\ under\ the\ lowest\ level\ of\ default;\ and}}
+\DoxyCodeLine{01082\ \ \ \ \ \textcolor{comment}{//\ visit\ all\ other\ levels\ without\ GeomNode::get\_default\_collide\_mask(),}}
+\DoxyCodeLine{01083\ \ \ \ \ \textcolor{comment}{//\ allowing\ only\ collision\ with\ CollisionNodes\ and\ special\ geometry\ under}}
+\DoxyCodeLine{01084\ \ \ \ \ \textcolor{comment}{//\ higher\ levels\ of\ detail.}}
+\DoxyCodeLine{01085\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ ((\mbox{\hyperlink{classLODNode}{LODNode}}\ *)node)-\/>get\_lowest\_switch();}
+\DoxyCodeLine{01086\ \ \ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{01087\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{01088\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{01089\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode_1_1DownConnection}{PandaNode::DownConnection}}\ \&child\ =\ children.get\_child\_connection(i);}
+\DoxyCodeLine{01090\ \ \ \ \ \ \ CollisionLevelStateQuad::CurrentMask\ mask\ =\ level\_state.get\_child\_mask(child);}
+\DoxyCodeLine{01091\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!mask.is\_zero())\ \{}
+\DoxyCodeLine{01092\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateQuad}}\ next\_state(level\_state,\ child,\ mask);}
+\DoxyCodeLine{01093\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ !=\ index)\ \{}
+\DoxyCodeLine{01094\ \ \ \ \ \ \ \ \ \ \ next\_state.set\_include\_mask(next\_state.get\_include\_mask()\ \&}
+\DoxyCodeLine{01095\ \ \ \ \ \ \ \ \ \ \ \ \ \string~GeomNode::get\_default\_collide\_mask());}
+\DoxyCodeLine{01096\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01097\ \ \ \ \ \ \ \ \ r\_traverse\_quad(next\_state,\ pass);}
+\DoxyCodeLine{01098\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01099\ \ \ \ \ \}}
+\DoxyCodeLine{01100\ }
+\DoxyCodeLine{01101\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01102\ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ visit\ all\ the\ children.}}
+\DoxyCodeLine{01103\ \ \ \ \ PandaNode::Children\ children\ =\ node-\/>get\_children();}
+\DoxyCodeLine{01104\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_children\ =\ children.get\_num\_children();}
+\DoxyCodeLine{01105\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_children;\ ++i)\ \{}
+\DoxyCodeLine{01106\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPandaNode_1_1DownConnection}{PandaNode::DownConnection}}\ \&child\ =\ children.get\_child\_connection(i);}
+\DoxyCodeLine{01107\ \ \ \ \ \ \ CollisionLevelStateQuad::CurrentMask\ mask\ =\ level\_state.get\_child\_mask(child);}
+\DoxyCodeLine{01108\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!mask.is\_zero())\ \{}
+\DoxyCodeLine{01109\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCollisionLevelState}{CollisionLevelStateQuad}}\ next\_state(level\_state,\ child,\ mask);}
+\DoxyCodeLine{01110\ \ \ \ \ \ \ \ \ r\_traverse\_quad(next\_state,\ pass);}
+\DoxyCodeLine{01111\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01112\ \ \ \ \ \}}
+\DoxyCodeLine{01113\ \ \ \}}
+\DoxyCodeLine{01114\ \}}
+\DoxyCodeLine{01115\ }
+\DoxyCodeLine{01119\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{01120\ compare\_collider\_to\_node(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ \&entry,}
+\DoxyCodeLine{01121\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *from\_parent\_gbv,}
+\DoxyCodeLine{01122\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *from\_node\_gbv,}
+\DoxyCodeLine{01123\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *into\_node\_gbv)\ \{}
+\DoxyCodeLine{01124\ \ \ \textcolor{keywordtype}{bool}\ within\_node\_bounds\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01125\ \ \ \textcolor{keywordflow}{if}\ (from\_parent\_gbv\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{01126\ \ \ \ \ \ \ into\_node\_gbv\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01127\ \ \ \ \ within\_node\_bounds\ =\ (into\_node\_gbv-\/>contains(from\_parent\_gbv)\ !=\ 0);}
+\DoxyCodeLine{01128\ \ \ \ \ \_cnode\_volume\_pcollector.add\_level(1);}
+\DoxyCodeLine{01129\ \ \ \}}
+\DoxyCodeLine{01130\ }
+\DoxyCodeLine{01131\ \ \ \textcolor{keywordflow}{if}\ (within\_node\_bounds)\ \{}
+\DoxyCodeLine{01132\ \ \ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{01133\ }
+\DoxyCodeLine{01134\ \ \ \ \ \mbox{\hyperlink{classCollisionNode}{CollisionNode}}\ *cnode;}
+\DoxyCodeLine{01135\ \ \ \ \ DCAST\_INTO\_V(cnode,\ entry.\_into\_node);}
+\DoxyCodeLine{01136\ }
+\DoxyCodeLine{01137\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_solids\ =\ cnode-\/>get\_num\_solids();}
+\DoxyCodeLine{01138\ \ \ \ \ \textcolor{keywordflow}{if}\ (collide\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01139\ \ \ \ \ \ \ collide\_cat.spam()}
+\DoxyCodeLine{01140\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Colliding\ against\ CollisionNode\ "{}}\ <<\ entry.\_into\_node}
+\DoxyCodeLine{01141\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ which\ has\ "{}}\ <<\ num\_solids\ <<\ \textcolor{stringliteral}{"{}\ collision\ solids.\(\backslash\)n"{}};}
+\DoxyCodeLine{01142\ \ \ \ \ \}}
+\DoxyCodeLine{01143\ }
+\DoxyCodeLine{01144\ \ \ \ \ \textcolor{comment}{//\ Only\ bother\ to\ test\ against\ each\ solid's\ bounding\ volume\ if\ we\ have}}
+\DoxyCodeLine{01145\ \ \ \ \ \textcolor{comment}{//\ more\ than\ one\ solid\ in\ the\ node,\ as\ a\ slight\ optimization.\ \ (If\ the}}
+\DoxyCodeLine{01146\ \ \ \ \ \textcolor{comment}{//\ node\ contains\ just\ one\ solid,\ then\ the\ node's\ bounding\ volume,\ which}}
+\DoxyCodeLine{01147\ \ \ \ \ \textcolor{comment}{//\ we\ just\ tested,\ is\ the\ same\ as\ the\ solid's\ bounding\ volume.)}}
+\DoxyCodeLine{01148\ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_solids\ ==\ 1)\ \{}
+\DoxyCodeLine{01149\ \ \ \ \ \ \ entry.\_into\ =\ cnode-\/>\_solids[0].get\_read\_pointer(current\_thread);}
+\DoxyCodeLine{01150\ \ \ \ \ \ \ Colliders::const\_iterator\ ci;}
+\DoxyCodeLine{01151\ \ \ \ \ \ \ ci\ =\ \_colliders.find(entry.get\_from\_node\_path());}
+\DoxyCodeLine{01152\ \ \ \ \ \ \ nassertv(ci\ !=\ \_colliders.end());}
+\DoxyCodeLine{01153\ \ \ \ \ \ \ entry.test\_intersection((*ci).second,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01154\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01155\ \ \ \ \ \ \ CollisionNode::Solids::const\_iterator\ si;}
+\DoxyCodeLine{01156\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (si\ =\ cnode-\/>\_solids.begin();\ si\ !=\ cnode-\/>\_solids.end();\ ++si)\ \{}
+\DoxyCodeLine{01157\ \ \ \ \ \ \ \ \ entry.\_into\ =\ (*si).get\_read\_pointer(current\_thread);}
+\DoxyCodeLine{01158\ }
+\DoxyCodeLine{01159\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ should\ allow\ a\ collision\ test\ for\ solid\ into\ itself,\ because\ the}}
+\DoxyCodeLine{01160\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ solid\ might\ be\ simply\ instanced\ into\ multiple\ different}}
+\DoxyCodeLine{01161\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ CollisionNodes.\ \ We\ are\ already\ filtering\ out\ tests\ for\ a}}
+\DoxyCodeLine{01162\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ CollisionNode\ into\ itself.}}
+\DoxyCodeLine{01163\ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classBoundingVolume}{BoundingVolume}})\ solid\_bv\ =\ entry.\_into-\/>get\_bounds();}
+\DoxyCodeLine{01164\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *solid\_gbv\ =\ solid\_bv-\/>\mbox{\hyperlink{classGeometricBoundingVolume_ad2f80e4331f60ae9a0eeda85a347c8d3}{as\_geometric\_bounding\_volume}}();}
+\DoxyCodeLine{01165\ }
+\DoxyCodeLine{01166\ \ \ \ \ \ \ \ \ compare\_collider\_to\_solid(entry,\ from\_node\_gbv,\ solid\_gbv);}
+\DoxyCodeLine{01167\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01168\ \ \ \ \ \}}
+\DoxyCodeLine{01169\ \ \ \}}
+\DoxyCodeLine{01170\ \}}
+\DoxyCodeLine{01171\ }
+\DoxyCodeLine{01175\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{01176\ compare\_collider\_to\_geom\_node(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ \&entry,}
+\DoxyCodeLine{01177\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *from\_parent\_gbv,}
+\DoxyCodeLine{01178\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *from\_node\_gbv,}
+\DoxyCodeLine{01179\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *into\_node\_gbv)\ \{}
+\DoxyCodeLine{01180\ \ \ \textcolor{keywordtype}{bool}\ within\_node\_bounds\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01181\ \ \ \textcolor{keywordflow}{if}\ (from\_parent\_gbv\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{01182\ \ \ \ \ \ \ into\_node\_gbv\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01183\ \ \ \ \ within\_node\_bounds\ =\ (into\_node\_gbv-\/>contains(from\_parent\_gbv)\ !=\ 0);}
+\DoxyCodeLine{01184\ \ \ \ \ \_gnode\_volume\_pcollector.add\_level(1);}
+\DoxyCodeLine{01185\ \ \ \}}
+\DoxyCodeLine{01186\ }
+\DoxyCodeLine{01187\ \ \ \textcolor{keywordflow}{if}\ (within\_node\_bounds)\ \{}
+\DoxyCodeLine{01188\ \ \ \ \ \mbox{\hyperlink{classGeomNode}{GeomNode}}\ *gnode;}
+\DoxyCodeLine{01189\ \ \ \ \ DCAST\_INTO\_V(gnode,\ entry.\_into\_node);}
+\DoxyCodeLine{01190\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_geoms\ =\ gnode-\/>get\_num\_geoms();}
+\DoxyCodeLine{01191\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ s\ =\ 0;\ s\ <\ num\_geoms;\ ++s)\ \{}
+\DoxyCodeLine{01192\ \ \ \ \ \ \ entry.\_into\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01193\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeom}{Geom}}\ *geom\ =\ DCAST(\mbox{\hyperlink{classGeom}{Geom}},\ gnode-\/>get\_geom(s));}
+\DoxyCodeLine{01194\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (geom\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01195\ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classBoundingVolume}{BoundingVolume}})\ geom\_bv\ =\ geom-\/>get\_bounds();}
+\DoxyCodeLine{01196\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *geom\_gbv\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01197\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_geoms\ >\ 1)\ \{}
+\DoxyCodeLine{01198\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Only\ bother\ to\ test\ against\ each\ geom's\ bounding\ volume\ if\ we}}
+\DoxyCodeLine{01199\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ have\ more\ than\ one\ geom\ in\ the\ node,\ as\ a\ slight\ optimization.}}
+\DoxyCodeLine{01200\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ (If\ the\ node\ contains\ just\ one\ geom,\ then\ the\ node's\ bounding}}
+\DoxyCodeLine{01201\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ volume,\ which\ we\ just\ tested,\ is\ the\ same\ as\ the\ geom's\ bounding}}
+\DoxyCodeLine{01202\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ volume.)}}
+\DoxyCodeLine{01203\ \ \ \ \ \ \ \ \ \ \ geom\_gbv\ =\ geom\_bv-\/>\mbox{\hyperlink{classGeometricBoundingVolume_ad2f80e4331f60ae9a0eeda85a347c8d3}{as\_geometric\_bounding\_volume}}();}
+\DoxyCodeLine{01204\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01205\ }
+\DoxyCodeLine{01206\ \ \ \ \ \ \ \ \ compare\_collider\_to\_geom(entry,\ geom,\ from\_node\_gbv,\ geom\_gbv);}
+\DoxyCodeLine{01207\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01208\ \ \ \ \ \}}
+\DoxyCodeLine{01209\ \ \ \}}
+\DoxyCodeLine{01210\ \}}
+\DoxyCodeLine{01211\ }
+\DoxyCodeLine{01215\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{01216\ compare\_collider\_to\_solid(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ \&entry,}
+\DoxyCodeLine{01217\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *from\_node\_gbv,}
+\DoxyCodeLine{01218\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *solid\_gbv)\ \{}
+\DoxyCodeLine{01219\ \ \ \textcolor{keywordtype}{bool}\ within\_solid\_bounds\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01220\ \ \ \textcolor{keywordflow}{if}\ (from\_node\_gbv\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{01221\ \ \ \ \ \ \ solid\_gbv\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01222\ \ \ \ \ within\_solid\_bounds\ =\ (solid\_gbv-\/>contains(from\_node\_gbv)\ !=\ 0);}
+\DoxyCodeLine{01223\ \textcolor{preprocessor}{\ \ \ \ \#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{01224\ \ \ \ \ ((\mbox{\hyperlink{classCollisionSolid}{CollisionSolid}}\ *)entry.get\_into())-\/>get\_volume\_pcollector().add\_level(1);}
+\DoxyCodeLine{01225\ \textcolor{preprocessor}{\ \ \ \ \#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{01226\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{01227\ \ \ \ \ \textcolor{keywordflow}{if}\ (collide\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01228\ \ \ \ \ \ \ collide\_cat.spam(\textcolor{keyword}{false})}
+\DoxyCodeLine{01229\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Comparing\ to\ solid:\ "{}}\ <<\ *from\_node\_gbv}
+\DoxyCodeLine{01230\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}\ <<\ *solid\_gbv\ <<\ \textcolor{stringliteral}{"{},\ within\_solid\_bounds\ =\ "{}}}
+\DoxyCodeLine{01231\ \ \ \ \ \ \ \ \ <<\ within\_solid\_bounds\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01232\ \ \ \ \ \}}
+\DoxyCodeLine{01233\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{01234\ \ \ \}}
+\DoxyCodeLine{01235\ \ \ \textcolor{keywordflow}{if}\ (within\_solid\_bounds)\ \{}
+\DoxyCodeLine{01236\ \ \ \ \ Colliders::const\_iterator\ ci;}
+\DoxyCodeLine{01237\ \ \ \ \ ci\ =\ \_colliders.find(entry.get\_from\_node\_path());}
+\DoxyCodeLine{01238\ \ \ \ \ nassertv(ci\ !=\ \_colliders.end());}
+\DoxyCodeLine{01239\ \ \ \ \ entry.test\_intersection((*ci).second,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01240\ \ \ \}}
+\DoxyCodeLine{01241\ \}}
+\DoxyCodeLine{01242\ }
+\DoxyCodeLine{01246\ \textcolor{keywordtype}{void}\ CollisionTraverser::}
+\DoxyCodeLine{01247\ compare\_collider\_to\_geom(\mbox{\hyperlink{classCollisionEntry}{CollisionEntry}}\ \&entry,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeom}{Geom}}\ *geom,}
+\DoxyCodeLine{01248\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *from\_node\_gbv,}
+\DoxyCodeLine{01249\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *geom\_gbv)\ \{}
+\DoxyCodeLine{01250\ \ \ \textcolor{keywordtype}{bool}\ within\_geom\_bounds\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01251\ \ \ \textcolor{keywordflow}{if}\ (from\_node\_gbv\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{01252\ \ \ \ \ \ \ geom\_gbv\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01253\ \ \ \ \ within\_geom\_bounds\ =\ (geom\_gbv-\/>contains(from\_node\_gbv)\ !=\ 0);}
+\DoxyCodeLine{01254\ \ \ \ \ \_geom\_volume\_pcollector.add\_level(1);}
+\DoxyCodeLine{01255\ \ \ \}}
+\DoxyCodeLine{01256\ \ \ \textcolor{keywordflow}{if}\ (within\_geom\_bounds)\ \{}
+\DoxyCodeLine{01257\ \ \ \ \ Colliders::const\_iterator\ ci;}
+\DoxyCodeLine{01258\ \ \ \ \ ci\ =\ \_colliders.find(entry.get\_from\_node\_path());}
+\DoxyCodeLine{01259\ \ \ \ \ nassertv(ci\ !=\ \_colliders.end());}
+\DoxyCodeLine{01260\ }
+\DoxyCodeLine{01261\ \ \ \ \ \textcolor{keywordflow}{if}\ (geom-\/>get\_primitive\_type()\ ==\ Geom::PT\_polygons)\ \{}
+\DoxyCodeLine{01262\ \ \ \ \ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{01263\ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ data\ =\ geom-\/>get\_animated\_vertex\_data(\textcolor{keyword}{true},\ current\_thread);}
+\DoxyCodeLine{01264\ \ \ \ \ \ \ \mbox{\hyperlink{classGeomVertexReader}{GeomVertexReader}}\ vertex(data,\ InternalName::get\_vertex());}
+\DoxyCodeLine{01265\ }
+\DoxyCodeLine{01266\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_primitives\ =\ geom-\/>get\_num\_primitives();}
+\DoxyCodeLine{01267\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_primitives;\ ++i)\ \{}
+\DoxyCodeLine{01268\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}}\ *primitive\ =\ geom-\/>get\_primitive(i);}
+\DoxyCodeLine{01269\ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}})\ tris\ =\ primitive-\/>decompose();}
+\DoxyCodeLine{01270\ \ \ \ \ \ \ \ \ nassertv(tris-\/>is\_of\_type(GeomTriangles::get\_class\_type()));}
+\DoxyCodeLine{01271\ }
+\DoxyCodeLine{01272\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tris-\/>is\_indexed())\ \{}
+\DoxyCodeLine{01273\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Indexed\ case.}}
+\DoxyCodeLine{01274\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classGeomVertexReader}{GeomVertexReader}}\ index(tris-\/>get\_vertices(),\ 0);}
+\DoxyCodeLine{01275\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (!index.is\_at\_end())\ \{}
+\DoxyCodeLine{01276\ \ \ \ \ \ \ \ \ \ \ \ \ LPoint3\ v[3];}
+\DoxyCodeLine{01277\ }
+\DoxyCodeLine{01278\ \ \ \ \ \ \ \ \ \ \ \ \ vertex.set\_row\_unsafe(index.get\_data1i());}
+\DoxyCodeLine{01279\ \ \ \ \ \ \ \ \ \ \ \ \ v[0]\ =\ vertex.get\_data3();}
+\DoxyCodeLine{01280\ \ \ \ \ \ \ \ \ \ \ \ \ vertex.set\_row\_unsafe(index.get\_data1i());}
+\DoxyCodeLine{01281\ \ \ \ \ \ \ \ \ \ \ \ \ v[1]\ =\ vertex.get\_data3();}
+\DoxyCodeLine{01282\ \ \ \ \ \ \ \ \ \ \ \ \ vertex.set\_row\_unsafe(index.get\_data1i());}
+\DoxyCodeLine{01283\ \ \ \ \ \ \ \ \ \ \ \ \ v[2]\ =\ vertex.get\_data3();}
+\DoxyCodeLine{01284\ }
+\DoxyCodeLine{01285\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Generate\ a\ temporary\ CollisionGeom\ on\ the\ fly\ for\ each\ triangle}}
+\DoxyCodeLine{01286\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ in\ the\ Geom.}}
+\DoxyCodeLine{01287\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classCollisionPolygon_a110103e56df1def1daf08ac4b79697c9}{CollisionPolygon::verify\_points}}(v[0],\ v[1],\ v[2]))\ \{}
+\DoxyCodeLine{01288\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ within\_solid\_bounds\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01289\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (from\_node\_gbv\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01290\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classBoundingSphere}{BoundingSphere}}\ sphere;}
+\DoxyCodeLine{01291\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sphere.around(v,\ v\ +\ 3);}
+\DoxyCodeLine{01292\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ within\_solid\_bounds\ =\ (sphere.contains(from\_node\_gbv)\ !=\ 0);}
+\DoxyCodeLine{01293\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{01294\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ CollisionGeom::\_volume\_pcollector.add\_level(1);}
+\DoxyCodeLine{01295\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{01296\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01297\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (within\_solid\_bounds)\ \{}
+\DoxyCodeLine{01298\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classCollisionGeom}{CollisionGeom}})\ cgeom\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classCollisionGeom}{CollisionGeom}}(v[0],\ v[1],\ v[2]);}
+\DoxyCodeLine{01299\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ entry.\_into\ =\ cgeom;}
+\DoxyCodeLine{01300\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ entry.test\_intersection((*ci).second,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01301\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01302\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01303\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01304\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01305\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Non-\/indexed\ case.}}
+\DoxyCodeLine{01306\ \ \ \ \ \ \ \ \ \ \ vertex.set\_row\_unsafe(primitive-\/>get\_first\_vertex());}
+\DoxyCodeLine{01307\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_vertices\ =\ primitive-\/>get\_num\_vertices();}
+\DoxyCodeLine{01308\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_vertices;\ i\ +=\ 3)\ \{}
+\DoxyCodeLine{01309\ \ \ \ \ \ \ \ \ \ \ \ \ LPoint3\ v[3];}
+\DoxyCodeLine{01310\ }
+\DoxyCodeLine{01311\ \ \ \ \ \ \ \ \ \ \ \ \ v[0]\ =\ vertex.get\_data3();}
+\DoxyCodeLine{01312\ \ \ \ \ \ \ \ \ \ \ \ \ v[1]\ =\ vertex.get\_data3();}
+\DoxyCodeLine{01313\ \ \ \ \ \ \ \ \ \ \ \ \ v[2]\ =\ vertex.get\_data3();}
+\DoxyCodeLine{01314\ }
+\DoxyCodeLine{01315\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Generate\ a\ temporary\ CollisionGeom\ on\ the\ fly\ for\ each\ triangle}}
+\DoxyCodeLine{01316\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ in\ the\ Geom.}}
+\DoxyCodeLine{01317\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classCollisionPolygon_a110103e56df1def1daf08ac4b79697c9}{CollisionPolygon::verify\_points}}(v[0],\ v[1],\ v[2]))\ \{}
+\DoxyCodeLine{01318\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ within\_solid\_bounds\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01319\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (from\_node\_gbv\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01320\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classBoundingSphere}{BoundingSphere}}\ sphere;}
+\DoxyCodeLine{01321\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sphere.around(v,\ v\ +\ 3);}
+\DoxyCodeLine{01322\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ within\_solid\_bounds\ =\ (sphere.contains(from\_node\_gbv)\ !=\ 0);}
+\DoxyCodeLine{01323\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{01324\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ CollisionGeom::\_volume\_pcollector.add\_level(1);}
+\DoxyCodeLine{01325\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{01326\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01327\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (within\_solid\_bounds)\ \{}
+\DoxyCodeLine{01328\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classCollisionGeom}{CollisionGeom}})\ cgeom\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classCollisionGeom}{CollisionGeom}}(v[0],\ v[1],\ v[2]);}
+\DoxyCodeLine{01329\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ entry.\_into\ =\ cgeom;}
+\DoxyCodeLine{01330\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ entry.test\_intersection((*ci).second,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01331\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01332\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01333\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01334\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01335\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01336\ \ \ \ \ \}}
+\DoxyCodeLine{01337\ \ \ \}}
+\DoxyCodeLine{01338\ \}}
+\DoxyCodeLine{01339\ }
+\DoxyCodeLine{01349\ CollisionTraverser::Handlers::iterator\ CollisionTraverser::}
+\DoxyCodeLine{01350\ remove\_handler(CollisionTraverser::Handlers::iterator\ hi)\ \{}
+\DoxyCodeLine{01351\ \ \ nassertr(hi\ !=\ \_handlers.end(),\ hi);}
+\DoxyCodeLine{01352\ }
+\DoxyCodeLine{01353\ \ \ \mbox{\hyperlink{classCollisionHandler}{CollisionHandler}}\ *handler\ =\ (*hi).first;}
+\DoxyCodeLine{01354\ \ \ Handlers::iterator\ hnext\ =\ hi;}
+\DoxyCodeLine{01355\ \ \ ++hnext;}
+\DoxyCodeLine{01356\ \ \ \_handlers.erase(hi);}
+\DoxyCodeLine{01357\ \ \ hi\ =\ hnext;}
+\DoxyCodeLine{01358\ }
+\DoxyCodeLine{01359\ \ \ \textcolor{comment}{//\ Now\ scan\ for\ colliders\ that\ reference\ this\ handler.}}
+\DoxyCodeLine{01360\ \ \ Colliders::iterator\ ci;}
+\DoxyCodeLine{01361\ \ \ ci\ =\ \_colliders.begin();}
+\DoxyCodeLine{01362\ \ \ \textcolor{keywordflow}{while}\ (ci\ !=\ \_colliders.end())\ \{}
+\DoxyCodeLine{01363\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*ci).second\ ==\ handler)\ \{}
+\DoxyCodeLine{01364\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ collider\ references\ this\ handler;\ remove\ it.}}
+\DoxyCodeLine{01365\ \ \ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ node\_path\ =\ (*ci).first;}
+\DoxyCodeLine{01366\ }
+\DoxyCodeLine{01367\ \ \ \ \ \ \ Colliders::iterator\ cnext\ =\ ci;}
+\DoxyCodeLine{01368\ \ \ \ \ \ \ ++cnext;}
+\DoxyCodeLine{01369\ \ \ \ \ \ \ \_colliders.erase(ci);}
+\DoxyCodeLine{01370\ \ \ \ \ \ \ ci\ =\ cnext;}
+\DoxyCodeLine{01371\ }
+\DoxyCodeLine{01372\ \ \ \ \ \ \ \textcolor{comment}{//\ Also\ remove\ it\ from\ the\ ordered\ list.}}
+\DoxyCodeLine{01373\ \ \ \ \ \ \ OrderedColliders::iterator\ oci;}
+\DoxyCodeLine{01374\ \ \ \ \ \ \ oci\ =\ \_ordered\_colliders.begin();}
+\DoxyCodeLine{01375\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (oci\ !=\ \_ordered\_colliders.end()\ \&\&}
+\DoxyCodeLine{01376\ \ \ \ \ \ \ \ \ \ \ \ \ \ (*oci).\_node\_path\ !=\ node\_path)\ \{}
+\DoxyCodeLine{01377\ \ \ \ \ \ \ \ \ ++oci;}
+\DoxyCodeLine{01378\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01379\ \ \ \ \ \ \ nassertr(oci\ !=\ \_ordered\_colliders.end(),\ hi);}
+\DoxyCodeLine{01380\ \ \ \ \ \ \ \_ordered\_colliders.erase(oci);}
+\DoxyCodeLine{01381\ }
+\DoxyCodeLine{01382\ \ \ \ \ \ \ nassertr(\_ordered\_colliders.size()\ ==\ \_colliders.size(),\ hi);}
+\DoxyCodeLine{01383\ }
+\DoxyCodeLine{01384\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01385\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ collider\ references\ some\ other\ handler;\ keep\ it.}}
+\DoxyCodeLine{01386\ \ \ \ \ \ \ ++ci;}
+\DoxyCodeLine{01387\ \ \ \ \ \}}
+\DoxyCodeLine{01388\ \ \ \}}
+\DoxyCodeLine{01389\ }
+\DoxyCodeLine{01390\ \ \ \textcolor{keywordflow}{return}\ hi;}
+\DoxyCodeLine{01391\ \}}
+\DoxyCodeLine{01392\ }
+\DoxyCodeLine{01396\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \&CollisionTraverser::}
+\DoxyCodeLine{01397\ get\_pass\_collector(\textcolor{keywordtype}{int}\ pass)\ \{}
+\DoxyCodeLine{01398\ \ \ nassertr(pass\ >=\ 0,\ \_this\_pcollector);}
+\DoxyCodeLine{01399\ \ \ \textcolor{keywordflow}{while}\ ((\textcolor{keywordtype}{int})\_pass\_collectors.size()\ <=\ pass)\ \{}
+\DoxyCodeLine{01400\ \ \ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ name;}
+\DoxyCodeLine{01401\ \ \ \ \ name\ <<\ \textcolor{stringliteral}{"{}pass"{}}\ <<\ (\_pass\_collectors.size()\ +\ 1);}
+\DoxyCodeLine{01402\ \ \ \ \ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ col(\_this\_pcollector,\ name.str());}
+\DoxyCodeLine{01403\ \ \ \ \ \_pass\_collectors.push\_back(col);}
+\DoxyCodeLine{01404\ \ \ \ \ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ sc\_col(col,\ \textcolor{stringliteral}{"{}solid\_collide"{}});}
+\DoxyCodeLine{01405\ \ \ \ \ \_solid\_collide\_collectors.push\_back(sc\_col);}
+\DoxyCodeLine{01406\ \ \ \}}
+\DoxyCodeLine{01407\ }
+\DoxyCodeLine{01408\ \ \ \textcolor{keywordflow}{return}\ \_pass\_collectors[pass];}
+\DoxyCodeLine{01409\ \}}
+
+\end{DoxyCode}

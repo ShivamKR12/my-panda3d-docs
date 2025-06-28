@@ -1,0 +1,1271 @@
+\doxysection{bam\+Reader.\+cxx}
+\hypertarget{bamReader_8cxx_source}{}\label{bamReader_8cxx_source}\index{panda/src/putil/bamReader.cxx@{panda/src/putil/bamReader.cxx}}
+\mbox{\hyperlink{bamReader_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pandabase_8h}{pandabase.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnotify_8h}{pnotify.h}}"{}}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bam_8h}{bam.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamReader_8h}{bamReader.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagramIterator_8h}{datagramIterator.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__putil_8h}{config\_putil.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pipelineCyclerBase_8h}{pipelineCyclerBase.h}}"{}}}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ BamReaderAuxData::\_type\_handle;}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \mbox{\hyperlink{classFactory}{WritableFactory}}\ *BamReader::\_factory\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00028\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *\textcolor{keyword}{const}\ BamReader::Null\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00029\ \mbox{\hyperlink{classFactory}{WritableFactory}}\ *\textcolor{keyword}{const}\ BamReader::NullFactory\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ BamReader::NewTypes\ BamReader::\_new\_types;}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ BamReader::\_cur\_major\ =\ \_bam\_major\_ver;}
+\DoxyCodeLine{00034\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ BamReader::\_cur\_minor\ =\ \_bam\_minor\_ver;}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00040\ BamReader::}
+\DoxyCodeLine{00041\ BamReader(\mbox{\hyperlink{classDatagramGenerator}{DatagramGenerator}}\ *source)}
+\DoxyCodeLine{00042\ \ \ :\ \_source(source)}
+\DoxyCodeLine{00043\ \{}
+\DoxyCodeLine{00044\ \ \ \_needs\_init\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00045\ \ \ \_num\_extra\_objects\ =\ 0;}
+\DoxyCodeLine{00046\ \ \ \_nesting\_level\ =\ 0;}
+\DoxyCodeLine{00047\ \ \ \_now\_creating\ =\ \_created\_objs.end();}
+\DoxyCodeLine{00048\ \ \ \_reading\_cycler\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00049\ \ \ \_pta\_id\ =\ -\/1;}
+\DoxyCodeLine{00050\ \ \ \_long\_object\_id\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00051\ \ \ \_long\_pta\_id\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00052\ \}}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00058\ BamReader::}
+\DoxyCodeLine{00059\ \string~BamReader()\ \{}
+\DoxyCodeLine{00060\ \ \ nassertv(\_num\_extra\_objects\ ==\ 0);}
+\DoxyCodeLine{00061\ \ \ nassertv(\_nesting\_level\ ==\ 0);}
+\DoxyCodeLine{00062\ \}}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00068\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_ae7d0044dde4a13b80d0e78e53814b894}{BamReader::}}}
+\DoxyCodeLine{00069\ \mbox{\hyperlink{classBamReader_ae7d0044dde4a13b80d0e78e53814b894}{set\_source}}(\mbox{\hyperlink{classDatagramGenerator}{DatagramGenerator}}\ *source)\ \{}
+\DoxyCodeLine{00070\ \ \ \_source\ =\ source;}
+\DoxyCodeLine{00071\ \ \ \textcolor{keywordflow}{if}\ (\_needs\_init\ \&\&\ \_source\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00072\ \ \ \ \ \textcolor{keywordtype}{bool}\ success\ =\ \mbox{\hyperlink{classBamReader_a93a91392b652d4096988fd6c093ee128}{init}}();}
+\DoxyCodeLine{00073\ \ \ \ \ nassertv(success);}
+\DoxyCodeLine{00074\ \ \ \}}
+\DoxyCodeLine{00075\ \}}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00084\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classBamReader_a93a91392b652d4096988fd6c093ee128}{BamReader::}}}
+\DoxyCodeLine{00085\ \mbox{\hyperlink{classBamReader_a93a91392b652d4096988fd6c093ee128}{init}}()\ \{}
+\DoxyCodeLine{00086\ \ \ nassertr(\_source\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00087\ \ \ nassertr(\_needs\_init,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00088\ \ \ \_needs\_init\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00089\ \ \ \mbox{\hyperlink{classDatagram}{Datagram}}\ header;}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \ \ \textcolor{keywordflow}{if}\ (\_source-\/>is\_error())\ \{}
+\DoxyCodeLine{00092\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00093\ \ \ \}}
+\DoxyCodeLine{00094\ }
+\DoxyCodeLine{00095\ \ \ \textcolor{keywordflow}{if}\ (!get\_datagram(header))\ \{}
+\DoxyCodeLine{00096\ \ \ \ \ bam\_cat.error()}
+\DoxyCodeLine{00097\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ read\ Bam\ header.\(\backslash\)n"{}};}
+\DoxyCodeLine{00098\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00099\ \ \ \}}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \ \ \mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ scan(header);}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00103\ \ \ \_file\_major\ =\ scan.get\_uint16();}
+\DoxyCodeLine{00104\ \ \ \_file\_minor\ =\ scan.get\_uint16();}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00106\ \ \ \textcolor{comment}{//\ If\ the\ major\ version\ is\ different,\ or\ the\ minor\ version\ is\ *newer*,\ we}}
+\DoxyCodeLine{00107\ \ \ \textcolor{comment}{//\ can't\ safely\ load\ the\ file.}}
+\DoxyCodeLine{00108\ \ \ \textcolor{keywordflow}{if}\ (\_file\_major\ !=\ \_bam\_major\_ver\ ||}
+\DoxyCodeLine{00109\ \ \ \ \ \ \ \_file\_minor\ <\ \_bam\_first\_minor\_ver\ ||}
+\DoxyCodeLine{00110\ \ \ \ \ \ \ \_file\_minor\ >\ \_bam\_last\_minor\_ver)\ \{}
+\DoxyCodeLine{00111\ \ \ \ \ bam\_cat.error()}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Bam\ file\ is\ version\ "{}}\ <<\ \_file\_major\ <<\ \textcolor{stringliteral}{"{}."{}}\ <<\ \_file\_minor}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_bam\_minor\_ver\ ==\ \_bam\_first\_minor\_ver)\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ bam\_cat.error()}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}This\ program\ can\ only\ load\ version\ "{}}}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \ \ <<\ \_bam\_major\_ver\ <<\ \textcolor{stringliteral}{"{}."{}}\ <<\ \_bam\_first\_minor\_ver\ <<\ \textcolor{stringliteral}{"{}\ bams.\(\backslash\)n"{}};}
+\DoxyCodeLine{00119\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ bam\_cat.error()}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}This\ program\ can\ only\ load\ version\ "{}}}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \ \ <<\ \_bam\_major\_ver\ <<\ \textcolor{stringliteral}{"{}."{}}\ <<\ \_bam\_first\_minor\_ver\ <<\ \textcolor{stringliteral}{"{}\ through\ "{}}}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \ \ <<\ \_bam\_major\_ver\ <<\ \textcolor{stringliteral}{"{}."{}}\ <<\ \_bam\_last\_minor\_ver\ <<\ \textcolor{stringliteral}{"{}\ bams.\(\backslash\)n"{}};}
+\DoxyCodeLine{00124\ \ \ \ \ \}}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00127\ \ \ \}}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00129\ \ \ \_file\_endian\ =\ (BamEndian)scan.get\_uint8();}
+\DoxyCodeLine{00130\ }
+\DoxyCodeLine{00131\ \ \ \_file\_stdfloat\_double\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00132\ \ \ \textcolor{keywordflow}{if}\ (\_file\_minor\ >=\ 27)\ \{}
+\DoxyCodeLine{00133\ \ \ \ \ \_file\_stdfloat\_double\ =\ scan.get\_bool();}
+\DoxyCodeLine{00134\ \ \ \}}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00136\ \ \ \textcolor{keywordflow}{if}\ (scan.get\_current\_index()\ >\ header.get\_length())\ \{}
+\DoxyCodeLine{00137\ \ \ \ \ bam\_cat.error()}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Bam\ header\ is\ too\ short.\(\backslash\)n"{}};}
+\DoxyCodeLine{00139\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00140\ \ \ \}}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00142\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00143\ \}}
+\DoxyCodeLine{00144\ }
+\DoxyCodeLine{00166\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_a97cb720e14628af2131871369039b986}{BamReader::}}}
+\DoxyCodeLine{00167\ \mbox{\hyperlink{classBamReader_a97cb720e14628af2131871369039b986}{set\_aux\_data}}(\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *obj,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name,\ \mbox{\hyperlink{classBamReader_1_1AuxData}{BamReader::AuxData}}\ *data)\ \{}
+\DoxyCodeLine{00168\ \ \ \textcolor{keywordflow}{if}\ (data\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00169\ \ \ \ \ AuxDataTable::iterator\ ti\ =\ \_aux\_data.find(obj);}
+\DoxyCodeLine{00170\ \ \ \ \ \textcolor{keywordflow}{if}\ (ti\ !=\ \_aux\_data.end())\ \{}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \mbox{\hyperlink{classpmap}{AuxDataNames}}\ \&names\ =\ (*ti).second;}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ names.erase(name);}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (names.empty())\ \{}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \_aux\_data.erase(ti);}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00176\ \ \ \ \ \}}
+\DoxyCodeLine{00177\ }
+\DoxyCodeLine{00178\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00179\ \ \ \ \ \_aux\_data[obj][name]\ =\ data;}
+\DoxyCodeLine{00180\ \ \ \}}
+\DoxyCodeLine{00181\ \}}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00188\ \mbox{\hyperlink{classBamReader_1_1AuxData}{BamReader::AuxData}}\ *\mbox{\hyperlink{classBamReader_ad712ff1b19f81915b7619978ce485254}{BamReader::}}}
+\DoxyCodeLine{00189\ \mbox{\hyperlink{classBamReader_ad712ff1b19f81915b7619978ce485254}{get\_aux\_data}}(\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *obj,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00190\ \ \ AuxDataTable::const\_iterator\ ti\ =\ \_aux\_data.find(obj);}
+\DoxyCodeLine{00191\ \ \ \textcolor{keywordflow}{if}\ (ti\ !=\ \_aux\_data.end())\ \{}
+\DoxyCodeLine{00192\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classpmap}{AuxDataNames}}\ \&names\ =\ (*ti).second;}
+\DoxyCodeLine{00193\ \ \ \ \ AuxDataNames::const\_iterator\ ni\ =\ names.find(name);}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keywordflow}{if}\ (ni\ !=\ names.end())\ \{}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ (*ni).second;}
+\DoxyCodeLine{00196\ \ \ \ \ \}}
+\DoxyCodeLine{00197\ \ \ \}}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00199\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00200\ \}}
+\DoxyCodeLine{00201\ }
+\DoxyCodeLine{00202\ }
+\DoxyCodeLine{00223\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\mbox{\hyperlink{classBamReader_aa2745e61d4d3750aae692e72bc02fa3f}{BamReader::}}}
+\DoxyCodeLine{00224\ \mbox{\hyperlink{classBamReader_aa2745e61d4d3750aae692e72bc02fa3f}{read\_object}}()\ \{}
+\DoxyCodeLine{00225\ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *ptr;}
+\DoxyCodeLine{00226\ \ \ \mbox{\hyperlink{classReferenceCount}{ReferenceCount}}\ *ref\_ptr;}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordflow}{if}\ (!\mbox{\hyperlink{classBamReader_aa2745e61d4d3750aae692e72bc02fa3f}{read\_object}}(ptr,\ ref\_ptr))\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00230\ \ \ \}}
+\DoxyCodeLine{00231\ }
+\DoxyCodeLine{00232\ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00233\ \}}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00244\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classBamReader_aa2745e61d4d3750aae692e72bc02fa3f}{BamReader::}}}
+\DoxyCodeLine{00245\ \mbox{\hyperlink{classBamReader_aa2745e61d4d3750aae692e72bc02fa3f}{read\_object}}(\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\&ptr,\ \mbox{\hyperlink{classReferenceCount}{ReferenceCount}}\ *\&ref\_ptr)\ \{}
+\DoxyCodeLine{00246\ \ \ ptr\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00247\ \ \ ref\_ptr\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00248\ \ \ nassertr(\_num\_extra\_objects\ ==\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00250\ \ \ \textcolor{keywordtype}{int}\ start\_level\ =\ \_nesting\_level;}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \ \ \textcolor{comment}{//\ First,\ read\ the\ base\ object.}}
+\DoxyCodeLine{00253\ \ \ \textcolor{keywordtype}{int}\ object\_id\ =\ p\_read\_object();}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \ \ \textcolor{comment}{//\ Now\ that\ object\ might\ have\ included\ some\ pointers\ to\ other\ objects,\ which}}
+\DoxyCodeLine{00256\ \ \ \textcolor{comment}{//\ may\ still\ need\ to\ be\ read.\ \ And\ those\ objects\ might\ in\ turn\ require}}
+\DoxyCodeLine{00257\ \ \ \textcolor{comment}{//\ reading\ additional\ objects.\ \ Read\ all\ the\ remaining\ objects.}}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \textcolor{comment}{//\ Prior\ to\ 6.21,\ we\ kept\ track\ of\ \_num\_extra\_objects\ to\ know\ when\ we're}}
+\DoxyCodeLine{00260\ \ \ \textcolor{comment}{//\ done.}}
+\DoxyCodeLine{00261\ \ \ \textcolor{keywordflow}{while}\ (\_num\_extra\_objects\ >\ 0)\ \{}
+\DoxyCodeLine{00262\ \ \ \ \ p\_read\_object();}
+\DoxyCodeLine{00263\ \ \ \ \ \_num\_extra\_objects-\/-\/;}
+\DoxyCodeLine{00264\ \ \ \}}
+\DoxyCodeLine{00265\ }
+\DoxyCodeLine{00266\ \ \ \textcolor{comment}{//\ Beginning\ with\ 6.21,\ we\ use\ explicit\ nesting\ commands\ to\ know\ when\ we're}}
+\DoxyCodeLine{00267\ \ \ \textcolor{comment}{//\ done.}}
+\DoxyCodeLine{00268\ \ \ \textcolor{keywordflow}{while}\ (\_nesting\_level\ >\ start\_level)\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ p\_read\_object();}
+\DoxyCodeLine{00270\ \ \ \}}
+\DoxyCodeLine{00271\ }
+\DoxyCodeLine{00272\ \ \ \textcolor{comment}{//\ Now\ look\ up\ the\ pointer\ of\ the\ object\ we\ read\ first.\ \ It\ should\ be}}
+\DoxyCodeLine{00273\ \ \ \textcolor{comment}{//\ available\ now.}}
+\DoxyCodeLine{00274\ \ \ \textcolor{keywordflow}{if}\ (object\_id\ ==\ 0)\ \{}
+\DoxyCodeLine{00275\ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Returning\ false\(\backslash\)n"{}};}
+\DoxyCodeLine{00278\ \ \ \ \ \}}
+\DoxyCodeLine{00279\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00280\ \ \ \}}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \ \ CreatedObjs::iterator\ oi\ =\ \_created\_objs.find(object\_id);}
+\DoxyCodeLine{00283\ }
+\DoxyCodeLine{00284\ \ \ \textcolor{keywordflow}{if}\ (oi\ ==\ \_created\_objs.end())\ \{}
+\DoxyCodeLine{00285\ \ \ \ \ bam\_cat.error()}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Undefined\ object\ encountered!\(\backslash\)n"{}};}
+\DoxyCodeLine{00287\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00290\ \ \ \ \ CreatedObj\ \&created\_obj\ =\ (*oi).second;}
+\DoxyCodeLine{00291\ \ \ \ \ ptr\ =\ created\_obj.\_ptr;}
+\DoxyCodeLine{00292\ \ \ \ \ ref\_ptr\ =\ created\_obj.\_ref\_ptr;}
+\DoxyCodeLine{00293\ }
+\DoxyCodeLine{00294\ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ptr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Returning\ object\ of\ type\ "{}}\ <<\ ptr-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00299\ \ \ \ \ \}}
+\DoxyCodeLine{00300\ \ \ \ \ \textcolor{keywordflow}{if}\ (created\_obj.\_change\_this\ !=\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ created\_obj.\_change\_this\_ref\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ bam\_cat.warning()}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Returning\ pointer\ to\ "{}}\ <<\ ptr-\/>get\_type()}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ that\ might\ change.\(\backslash\)n"{}};}
+\DoxyCodeLine{00305\ \ \ \ \ \}}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00307\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00308\ \ \ \}}
+\DoxyCodeLine{00309\ \}}
+\DoxyCodeLine{00310\ }
+\DoxyCodeLine{00324\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classBamReader_a79364fc8c51fdf559ea8c8c8aea0fb41}{BamReader::}}}
+\DoxyCodeLine{00325\ \mbox{\hyperlink{classBamReader_a79364fc8c51fdf559ea8c8c8aea0fb41}{resolve}}()\ \{}
+\DoxyCodeLine{00326\ \ \ \textcolor{keywordtype}{bool}\ all\_completed;}
+\DoxyCodeLine{00327\ \ \ \textcolor{keywordtype}{bool}\ any\_completed\_this\_pass;}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00329\ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00330\ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}resolve\ pass\ begin\(\backslash\)n"{}};}
+\DoxyCodeLine{00333\ \ \ \ \ \}}
+\DoxyCodeLine{00334\ \ \ \ \ all\_completed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00335\ \ \ \ \ any\_completed\_this\_pass\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00336\ }
+\DoxyCodeLine{00337\ \ \ \ \ ObjectPointers::iterator\ oi;}
+\DoxyCodeLine{00338\ \ \ \ \ oi\ =\ \_object\_pointers.begin();}
+\DoxyCodeLine{00339\ \ \ \ \ \textcolor{keywordflow}{while}\ (oi\ !=\ \_object\_pointers.end())\ \{}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ object\_id\ =\ (*oi).first;}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ PointerReference\ \&pref\ =\ (*oi).second;}
+\DoxyCodeLine{00342\ }
+\DoxyCodeLine{00343\ \ \ \ \ \ \ CreatedObjs::iterator\ ci\ =\ \_created\_objs.find(object\_id);}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ nassertr(ci\ !=\ \_created\_objs.end(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00345\ }
+\DoxyCodeLine{00346\ \ \ \ \ \ \ CreatedObj\ \&created\_obj\ =\ (*ci).second;}
+\DoxyCodeLine{00347\ }
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *object\_ptr\ =\ created\_obj.\_ptr;}
+\DoxyCodeLine{00349\ }
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \textcolor{comment}{//\ Update\ \_now\_creating,\ so\ a\ call\ to\ get\_int\_tag()\ from\ within}}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \textcolor{comment}{//\ complete\_pointers()\ will\ come\ to\ the\ right\ place.}}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ CreatedObjs::iterator\ was\_creating\ =\ \_now\_creating;}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \_now\_creating\ =\ ci;}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (resolve\_object\_pointers(object\_ptr,\ pref))\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ remove\ this\ object\ from\ the\ list\ of\ things\ that\ need}}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ completion.\ \ We\ have\ to\ be\ a\ bit\ careful\ when\ deleting\ things\ from}}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ STL\ container\ while\ we\ are\ traversing\ it.}}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \ \ ObjectPointers::iterator\ old\ =\ oi;}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ ++oi;}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \_object\_pointers.erase(old);}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \ \ any\_completed\_this\_pass\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00363\ }
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Does\ the\ pointer\ need\ to\ change?}}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (created\_obj.\_change\_this\_ref\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Reference-\/counting\ variant.}}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classTypedWritableReferenceCount}{TypedWritableReferenceCount}}\ *object\_ref\_ptr\ =\ (\mbox{\hyperlink{classTypedWritableReferenceCount}{TypedWritableReferenceCount}}\ *)object\_ptr;}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ \ \ nassertr(created\_obj.\_ref\_ptr\ ==\ \textcolor{keyword}{nullptr}\ ||\ created\_obj.\_ref\_ptr\ ==\ object\_ref\_ptr,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classTypedWritableReferenceCount}{TypedWritableReferenceCount}})\ new\_ptr\ =\ created\_obj.\_change\_this\_ref(object\_ref\_ptr,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_ptr\ !=\ object\_ref\_ptr)\ \{}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Also\ update\ the\ reverse}}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \ \ \ \ vector\_int\ \&old\_refs\ =\ \_created\_objs\_by\_pointer[object\_ptr];}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ \ \ \ \ vector\_int\ \&new\_refs\ =\ \_created\_objs\_by\_pointer[new\_ptr];}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (vector\_int::const\_iterator\ oi\ =\ old\_refs.begin();}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ oi\ !=\ old\_refs.end();}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ++oi)\ \{}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ new\_refs.push\_back(*oi);}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ \ \ \_created\_objs\_by\_pointer.erase(object\_ptr);}
+\DoxyCodeLine{00380\ }
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Remove\ the\ pointer\ from\ the\ finalize\ list\ (the\ new\ pointer}}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ presumably\ doesn't\ require\ finalizing).}}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \ \ \ \ \ \ \_finalize\_list.erase(object\_ptr);}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \ \ \ \ created\_obj.set\_ptr(new\_ptr,\ new\_ptr);}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \ \ \ \ created\_obj.\_change\_this\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \ \ \ \ created\_obj.\_change\_this\_ref\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00388\ }
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (created\_obj.\_change\_this\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Non-\/reference-\/counting\ variant.}}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *new\_ptr\ =\ created\_obj.\_change\_this(object\_ptr,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_ptr\ !=\ object\_ptr)\ \{}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Also\ update\ the\ reverse}}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \ \ \ \ vector\_int\ \&old\_refs\ =\ \_created\_objs\_by\_pointer[object\_ptr];}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \ \ \ \ vector\_int\ \&new\_refs\ =\ \_created\_objs\_by\_pointer[new\_ptr];}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (vector\_int::const\_iterator\ oi\ =\ old\_refs.begin();}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ oi\ !=\ old\_refs.end();}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ++oi)\ \{}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ new\_refs.push\_back(*oi);}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \ \ \ \ \ \ \_created\_objs\_by\_pointer.erase(object\_ptr);}
+\DoxyCodeLine{00402\ }
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Remove\ the\ pointer\ from\ the\ finalize\ list\ (the\ new\ pointer}}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ presumably\ doesn't\ require\ finalizing).}}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ \ \ \ \ \_finalize\_list.erase(object\_ptr);}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \ \ \ \ created\_obj.set\_ptr(new\_ptr,\ new\_ptr-\/>\mbox{\hyperlink{classTypedWritable_a513f54c9a8a11960785d199393ef9e5a}{as\_reference\_count}}());}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ \ \ created\_obj.\_change\_this\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \ \ created\_obj.\_change\_this\_ref\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00411\ }
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Couldn't\ complete\ this\ object\ yet;\ it'll\ wait\ for\ next\ time.}}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ ++oi;}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \ \ all\_completed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00417\ }
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \_now\_creating\ =\ was\_creating;}
+\DoxyCodeLine{00419\ \ \ \ \ \}}
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00421\ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}resolve\ pass\ end:\ all\_completed\ =\ "{}}\ <<\ all\_completed}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ any\_completed\_this\_pass\ =\ "{}}\ <<\ any\_completed\_this\_pass}
+\DoxyCodeLine{00425\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00426\ \ \ \ \ \}}
+\DoxyCodeLine{00427\ \ \ \}\ \textcolor{keywordflow}{while}\ (!all\_completed\ \&\&\ any\_completed\_this\_pass);}
+\DoxyCodeLine{00428\ }
+\DoxyCodeLine{00429\ \ \ \textcolor{keywordflow}{if}\ (all\_completed)\ \{}
+\DoxyCodeLine{00430\ \ \ \ \ finalize();}
+\DoxyCodeLine{00431\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{comment}{//\ Report\ all\ the\ uncompleted\ objects\ for\ no\ good\ reason.\ \ This\ will}}
+\DoxyCodeLine{00433\ \ \ \ \ \textcolor{comment}{//\ probably\ have\ to\ come\ out\ later\ when\ we\ have\ cases\ in\ which\ some}}
+\DoxyCodeLine{00434\ \ \ \ \ \textcolor{comment}{//\ objects\ might\ legitimately\ be\ uncompleted\ after\ calling\ resolve(),\ but}}
+\DoxyCodeLine{00435\ \ \ \ \ \textcolor{comment}{//\ for\ now\ we\ expect\ resolve()\ to\ always\ succeed.}}
+\DoxyCodeLine{00436\ \ \ \ \ ObjectPointers::const\_iterator\ oi;}
+\DoxyCodeLine{00437\ \ \ \ \ \textcolor{keywordflow}{for}\ (oi\ =\ \_object\_pointers.begin();}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ \ \ \ oi\ !=\ \_object\_pointers.end();}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \ \ \ ++oi)\ \{}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ object\_id\ =\ (*oi).first;}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ CreatedObjs::iterator\ ci\ =\ \_created\_objs.find(object\_id);}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ nassertr(ci\ !=\ \_created\_objs.end(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ CreatedObj\ \&created\_obj\ =\ (*ci).second;}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *object\_ptr\ =\ created\_obj.\_ptr;}
+\DoxyCodeLine{00445\ }
+\DoxyCodeLine{00446\ \ \ \ \ \ \ bam\_cat.warning()}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ complete\ "{}}\ <<\ object\_ptr-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00448\ \ \ \ \ \}}
+\DoxyCodeLine{00449\ \ \ \}}
+\DoxyCodeLine{00450\ }
+\DoxyCodeLine{00451\ \ \ \textcolor{keywordflow}{return}\ all\_completed;}
+\DoxyCodeLine{00452\ \}}
+\DoxyCodeLine{00453\ }
+\DoxyCodeLine{00463\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classBamReader_a0ca396cd4d55d805e00e66b111fc9ddb}{BamReader::}}}
+\DoxyCodeLine{00464\ \mbox{\hyperlink{classBamReader_a0ca396cd4d55d805e00e66b111fc9ddb}{change\_pointer}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *orig\_pointer,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *new\_pointer)\ \{}
+\DoxyCodeLine{00465\ \ \ \textcolor{keywordflow}{if}\ (orig\_pointer\ ==\ new\_pointer)\ \{}
+\DoxyCodeLine{00466\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00467\ \ \ \}}
+\DoxyCodeLine{00468\ \ \ CreatedObjsByPointer::iterator\ ci\ =\ \_created\_objs\_by\_pointer.find(orig\_pointer);}
+\DoxyCodeLine{00469\ \ \ \textcolor{keywordflow}{if}\ (ci\ ==\ \_created\_objs\_by\_pointer.end())\ \{}
+\DoxyCodeLine{00470\ \ \ \ \ \textcolor{comment}{//\ No\ record\ of\ this\ object.}}
+\DoxyCodeLine{00471\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00472\ \ \ \}}
+\DoxyCodeLine{00473\ }
+\DoxyCodeLine{00474\ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00475\ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}change\_pointer("{}}\ <<\ (\textcolor{keywordtype}{void}\ *)orig\_pointer\ <<\ \textcolor{stringliteral}{"{},\ "{}}}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ <<\ (\textcolor{keywordtype}{void}\ *)new\_pointer\ <<\ \textcolor{stringliteral}{"{})\ ("{}}\ <<\ new\_pointer-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00478\ \ \ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ \ \ \textcolor{keyword}{const}\ vector\_int\ \&old\_refs\ =\ (*ci).second;}
+\DoxyCodeLine{00481\ \ \ vector\_int\ \&new\_refs\ =\ \_created\_objs\_by\_pointer[new\_pointer];}
+\DoxyCodeLine{00482\ }
+\DoxyCodeLine{00483\ \ \ \textcolor{keywordflow}{for}\ (vector\_int::const\_iterator\ oi\ =\ old\_refs.begin();}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \ oi\ !=\ old\_refs.end();}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \ ++oi)\ \{}
+\DoxyCodeLine{00486\ \ \ \ \ \textcolor{keywordtype}{int}\ object\_id\ =\ (*oi);}
+\DoxyCodeLine{00487\ }
+\DoxyCodeLine{00488\ \ \ \ \ CreatedObjs::iterator\ ci\ =\ \_created\_objs.find(object\_id);}
+\DoxyCodeLine{00489\ \ \ \ \ nassertr(ci\ !=\ \_created\_objs.end(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00490\ \ \ \ \ nassertr((*ci).second.\_ptr\ ==\ orig\_pointer,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00491\ }
+\DoxyCodeLine{00492\ \ \ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *ptr\ =\ (\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *)new\_pointer;}
+\DoxyCodeLine{00493\ \ \ \ \ (*ci).second.set\_ptr(ptr,\ ptr-\/>\mbox{\hyperlink{classTypedWritable_a513f54c9a8a11960785d199393ef9e5a}{as\_reference\_count}}());}
+\DoxyCodeLine{00494\ \ \ \ \ new\_refs.push\_back(object\_id);}
+\DoxyCodeLine{00495\ \ \ \}}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00497\ \ \ \_created\_objs\_by\_pointer.erase(ci);}
+\DoxyCodeLine{00498\ }
+\DoxyCodeLine{00499\ \ \ \textcolor{comment}{//\ Also\ change\ the\ pointer\ on\ the\ finalize\_list.}}
+\DoxyCodeLine{00500\ \ \ Finalize::iterator\ fi\ =\ \_finalize\_list.find((\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *)orig\_pointer);}
+\DoxyCodeLine{00501\ \ \ \textcolor{keywordflow}{if}\ (fi\ !=\ \_finalize\_list.end())\ \{}
+\DoxyCodeLine{00502\ \ \ \ \ \_finalize\_list.insert((\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *)new\_pointer);}
+\DoxyCodeLine{00503\ \ \ \ \ \_finalize\_list.erase(fi);}
+\DoxyCodeLine{00504\ \ \ \}}
+\DoxyCodeLine{00505\ }
+\DoxyCodeLine{00506\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00507\ \}}
+\DoxyCodeLine{00508\ }
+\DoxyCodeLine{00509\ }
+\DoxyCodeLine{00513\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ \mbox{\hyperlink{classBamReader_a0c90778c24386544356506d4a022188e}{BamReader::}}}
+\DoxyCodeLine{00514\ \mbox{\hyperlink{classBamReader_a0c90778c24386544356506d4a022188e}{read\_handle}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan)\ \{}
+\DoxyCodeLine{00515\ \ \ \textcolor{comment}{//\ We\ encode\ TypeHandles\ within\ the\ Bam\ file\ by\ writing\ a\ unique\ index}}
+\DoxyCodeLine{00516\ \ \ \textcolor{comment}{//\ number\ for\ each\ one\ to\ the\ file.\ \ When\ we\ write\ a\ particular\ TypeHandle}}
+\DoxyCodeLine{00517\ \ \ \textcolor{comment}{//\ for\ the\ first\ time,\ we\ assign\ it\ a\ new\ index\ number\ and\ then\ immediately}}
+\DoxyCodeLine{00518\ \ \ \textcolor{comment}{//\ follow\ it\ by\ its\ definition;\ when\ we\ write\ the\ same\ TypeHandle\ on}}
+\DoxyCodeLine{00519\ \ \ \textcolor{comment}{//\ subsequent\ times\ we\ only\ write\ the\ index\ number.}}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ \ \ \textcolor{comment}{//\ Thus,\ to\ read\ a\ TypeHandle,\ we\ first\ read\ the\ index\ number.\ \ If\ it\ is\ a}}
+\DoxyCodeLine{00522\ \ \ \textcolor{comment}{//\ number\ we\ have\ not\ yet\ encountered,\ we\ must\ then\ read\ the\ definition.}}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00524\ \ \ \textcolor{comment}{//\ Here's\ the\ index\ number.}}
+\DoxyCodeLine{00525\ \ \ \textcolor{keywordtype}{int}\ \textcolor{keywordtype}{id}\ =\ scan.get\_uint16();}
+\DoxyCodeLine{00526\ }
+\DoxyCodeLine{00527\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{id}\ ==\ 0)\ \{}
+\DoxyCodeLine{00528\ \ \ \ \ \textcolor{comment}{//\ Index\ number\ 0\ is\ always,\ by\ convention,\ TypeHandle::none().}}
+\DoxyCodeLine{00529\ \ \ \ \ \textcolor{keywordflow}{return}\ TypeHandle::none();}
+\DoxyCodeLine{00530\ \ \ \}}
+\DoxyCodeLine{00531\ }
+\DoxyCodeLine{00532\ \ \ IndexMap::const\_iterator\ mi\ =\ \_index\_map.find(\textcolor{keywordtype}{id});}
+\DoxyCodeLine{00533\ \ \ \textcolor{keywordflow}{if}\ (mi\ !=\ \_index\_map.end())\ \{}
+\DoxyCodeLine{00534\ \ \ \ \ \textcolor{comment}{//\ We've\ encountered\ this\ index\ number\ before,\ so\ there\ should\ be\ no\ type}}
+\DoxyCodeLine{00535\ \ \ \ \ \textcolor{comment}{//\ definition\ following\ the\ id.\ \ Simply\ return\ the\ TypeHandle\ we}}
+\DoxyCodeLine{00536\ \ \ \ \ \textcolor{comment}{//\ previously\ associated\ with\ the\ id.}}
+\DoxyCodeLine{00537\ \ \ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type\ =\ (*mi).second;}
+\DoxyCodeLine{00538\ \ \ \ \ \textcolor{keywordflow}{return}\ type;}
+\DoxyCodeLine{00539\ \ \ \}}
+\DoxyCodeLine{00540\ }
+\DoxyCodeLine{00541\ \ \ \textcolor{comment}{//\ We\ haven't\ encountered\ this\ index\ number\ before.\ \ This\ means\ it\ will\ be}}
+\DoxyCodeLine{00542\ \ \ \textcolor{comment}{//\ immediately\ followed\ by\ the\ type\ definition.\ \ This\ consists\ of\ the\ string}}
+\DoxyCodeLine{00543\ \ \ \textcolor{comment}{//\ name,\ followed\ by\ the\ list\ of\ parent\ TypeHandles\ for\ this\ type.}}
+\DoxyCodeLine{00544\ }
+\DoxyCodeLine{00545\ \ \ \textcolor{keywordtype}{string}\ name\ =\ scan.\mbox{\hyperlink{classDatagramIterator_aa5b2810c1b772f83e744fed70bb313ea}{get\_string}}();}
+\DoxyCodeLine{00546\ \ \ \textcolor{keywordtype}{bool}\ new\_type\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00547\ }
+\DoxyCodeLine{00548\ \ \ \mbox{\hyperlink{classTypeRegistry}{TypeRegistry}}\ *type\_registry\ =\ TypeRegistry::ptr();}
+\DoxyCodeLine{00549\ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type\ =\ type\_registry-\/>\mbox{\hyperlink{classTypeRegistry_ace84a2c2729c7c85c6456ba84b6f46d3}{find\_type}}(name);}
+\DoxyCodeLine{00550\ \ \ \textcolor{keywordflow}{if}\ (type\ ==\ TypeHandle::none())\ \{}
+\DoxyCodeLine{00551\ \ \ \ \ \textcolor{comment}{//\ We've\ never\ heard\ of\ this\ type\ before!\ \ This\ is\ really\ an\ error}}
+\DoxyCodeLine{00552\ \ \ \ \ \textcolor{comment}{//\ condition,\ but\ we'll\ do\ the\ best\ we\ can\ and\ declare\ it\ on-\/the-\/fly.}}
+\DoxyCodeLine{00553\ }
+\DoxyCodeLine{00554\ \ \ \ \ type\ =\ type\_registry-\/>register\_dynamic\_type(name);}
+\DoxyCodeLine{00555\ \ \ \ \ bam\_cat.warning()}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Bam\ file\ '"{}}\ <<\ get\_filename()\ <<\ \textcolor{stringliteral}{"{}'\ contains\ objects\ of\ unknown\ type:\ "{}}}
+\DoxyCodeLine{00557\ \ \ \ \ \ \ <<\ type\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00558\ \ \ \ \ new\_type\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00559\ \ \ \ \ \_new\_types.insert(type);}
+\DoxyCodeLine{00560\ \ \ \}}
+\DoxyCodeLine{00561\ }
+\DoxyCodeLine{00562\ \ \ \textcolor{comment}{//\ Now\ pick\ up\ the\ derivation\ information.}}
+\DoxyCodeLine{00563\ \ \ \textcolor{keywordtype}{int}\ num\_parent\_classes\ =\ scan.get\_uint8();}
+\DoxyCodeLine{00564\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_parent\_classes;\ i++)\ \{}
+\DoxyCodeLine{00565\ \ \ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ parent\_type\ =\ \mbox{\hyperlink{classBamReader_a0c90778c24386544356506d4a022188e}{read\_handle}}(scan);}
+\DoxyCodeLine{00566\ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_type)\ \{}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ type\_registry-\/>\mbox{\hyperlink{classTypeRegistry_aa9189b18a15371963fc342f5905ccfbc}{record\_derivation}}(type,\ parent\_type);}
+\DoxyCodeLine{00568\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (type.get\_parent\_towards(parent\_type)\ !=\ parent\_type)\ \{}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ \ \ bam\_cat.debug()}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Bam\ file\ indicates\ a\ derivation\ of\ "{}}\ <<\ type}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ from\ "{}}\ <<\ parent\_type\ <<\ \textcolor{stringliteral}{"{}\ which\ is\ no\ longer\ true.\(\backslash\)n"{}};}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00576\ \ \ \ \ \}}
+\DoxyCodeLine{00577\ \ \ \}}
+\DoxyCodeLine{00578\ }
+\DoxyCodeLine{00579\ \ \ \textcolor{keywordtype}{bool}\ inserted\ =\ \_index\_map.insert(IndexMap::value\_type(\textcolor{keywordtype}{id},\ type)).second;}
+\DoxyCodeLine{00580\ \ \ nassertr(inserted,\ type);}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00583\ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Read\ TypeHandle\ for\ "{}}\ <<\ type\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00585\ \ \ \}}
+\DoxyCodeLine{00586\ }
+\DoxyCodeLine{00587\ \ \ \textcolor{keywordflow}{return}\ type;}
+\DoxyCodeLine{00588\ \}}
+\DoxyCodeLine{00589\ }
+\DoxyCodeLine{00610\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classBamReader_ac0ecc0609d9c6de514145777b3336435}{BamReader::}}}
+\DoxyCodeLine{00611\ \mbox{\hyperlink{classBamReader_ac0ecc0609d9c6de514145777b3336435}{read\_pointer}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan)\ \{}
+\DoxyCodeLine{00612\ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00613\ }
+\DoxyCodeLine{00614\ \ \ nassertr(\_now\_creating\ !=\ \_created\_objs.end(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00615\ \ \ \textcolor{keywordtype}{int}\ requestor\_id\ =\ (*\_now\_creating).first;}
+\DoxyCodeLine{00616\ }
+\DoxyCodeLine{00617\ \ \ \textcolor{comment}{//\ Read\ the\ object\ ID,\ and\ associate\ it\ with\ the\ requesting\ object.}}
+\DoxyCodeLine{00618\ \ \ \textcolor{keywordtype}{int}\ object\_id\ =\ read\_object\_id(scan);}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00620\ \ \ PointerReference\ \&pref\ =\ \_object\_pointers[requestor\_id];}
+\DoxyCodeLine{00621\ \ \ \textcolor{keywordflow}{if}\ (\_reading\_cycler\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00622\ \ \ \ \ \textcolor{comment}{//\ This\ is\ not\ being\ read\ within\ a\ read\_cdata()\ call.}}
+\DoxyCodeLine{00623\ \ \ \ \ pref.\_objects.push\_back(object\_id);}
+\DoxyCodeLine{00624\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00625\ \ \ \ \ \textcolor{comment}{//\ This\ *is*\ being\ read\ within\ a\ read\_cdata()\ call.}}
+\DoxyCodeLine{00626\ \ \ \ \ pref.\_cycler\_pointers[\_reading\_cycler].push\_back(object\_id);}
+\DoxyCodeLine{00627\ \ \ \}}
+\DoxyCodeLine{00628\ }
+\DoxyCodeLine{00629\ \ \ \textcolor{comment}{//\ If\ the\ object\ ID\ is\ zero\ (which\ indicates\ a\ NULL\ pointer),\ we\ don't\ have}}
+\DoxyCodeLine{00630\ \ \ \textcolor{comment}{//\ to\ do\ anything\ else.}}
+\DoxyCodeLine{00631\ \ \ \textcolor{keywordflow}{if}\ (object\_id\ !=\ 0)\ \{}
+\DoxyCodeLine{00632\ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00633\ \textcolor{comment}{\ \ \ \ CreatedObj\ new\_created\_obj;}}
+\DoxyCodeLine{00634\ \textcolor{comment}{\ \ \ \ \_created\_objs.insert(CreatedObjs::value\_type(object\_id,\ new\_created\_obj)).second;}}
+\DoxyCodeLine{00635\ \textcolor{comment}{\ \ \ \ */}}
+\DoxyCodeLine{00636\ }
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_file\_minor\_ver()\ <\ 21)\ \{}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \textcolor{comment}{//\ Prior\ to\ bam\ version\ 6.21,\ we\ expect\ to\ read\ an\ adjunct\ object\ for}}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \textcolor{comment}{//\ each\ non-\/NULL\ pointer\ we\ read.}}
+\DoxyCodeLine{00640\ \ \ \ \ \ \ \_num\_extra\_objects++;}
+\DoxyCodeLine{00641\ \ \ \ \ \}}
+\DoxyCodeLine{00642\ }
+\DoxyCodeLine{00643\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00644\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00645\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00646\ \ \ \}}
+\DoxyCodeLine{00647\ \}}
+\DoxyCodeLine{00648\ }
+\DoxyCodeLine{00653\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_a10ea3ed8500e58d80ff4c58e4f1771cb}{BamReader::}}}
+\DoxyCodeLine{00654\ \mbox{\hyperlink{classBamReader_a10ea3ed8500e58d80ff4c58e4f1771cb}{read\_pointers}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan,\ \textcolor{keywordtype}{int}\ count)\ \{}
+\DoxyCodeLine{00655\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ count;\ i++)\ \{}
+\DoxyCodeLine{00656\ \ \ \ \ \mbox{\hyperlink{classBamReader_ac0ecc0609d9c6de514145777b3336435}{read\_pointer}}(scan);}
+\DoxyCodeLine{00657\ \ \ \}}
+\DoxyCodeLine{00658\ \}}
+\DoxyCodeLine{00659\ }
+\DoxyCodeLine{00665\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_a63c44ae63b95a3ddcce8b42ff80ccec7}{BamReader::}}}
+\DoxyCodeLine{00666\ \mbox{\hyperlink{classBamReader_a63c44ae63b95a3ddcce8b42ff80ccec7}{skip\_pointer}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan)\ \{}
+\DoxyCodeLine{00667\ \ \ read\_object\_id(scan);}
+\DoxyCodeLine{00668\ \}}
+\DoxyCodeLine{00669\ }
+\DoxyCodeLine{00677\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_a244a3bc4eed4b5d8e8c8f7a717f57578}{BamReader::}}}
+\DoxyCodeLine{00678\ \mbox{\hyperlink{classBamReader_a244a3bc4eed4b5d8e8c8f7a717f57578}{read\_file\_data}}(\mbox{\hyperlink{classSubfileInfo}{SubfileInfo}}\ \&info)\ \{}
+\DoxyCodeLine{00679\ \ \ \textcolor{comment}{//\ write\_file\_data()\ actually\ writes\ the\ blocks\ in\ datagrams\ prior\ to\ this}}
+\DoxyCodeLine{00680\ \ \ \textcolor{comment}{//\ particular\ datagram.\ \ Assume\ we\ get\ the\ calls\ to\ read\_file\_data()\ in\ the}}
+\DoxyCodeLine{00681\ \ \ \textcolor{comment}{//\ same\ order\ as\ the\ corresponding\ calls\ to\ write\_file\_data(),\ and\ just\ pop}}
+\DoxyCodeLine{00682\ \ \ \textcolor{comment}{//\ the\ first\ one\ off\ the\ queue.\ \ There's\ no\ actual\ data\ written\ to\ the}}
+\DoxyCodeLine{00683\ \ \ \textcolor{comment}{//\ stream\ at\ this\ point.}}
+\DoxyCodeLine{00684\ \ \ nassertv(!\_file\_data\_records.empty());}
+\DoxyCodeLine{00685\ \ \ info\ =\ \_file\_data\_records.front();}
+\DoxyCodeLine{00686\ \ \ \_file\_data\_records.pop\_front();}
+\DoxyCodeLine{00687\ \}}
+\DoxyCodeLine{00688\ }
+\DoxyCodeLine{00695\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_ae63d90cd5d2c87fe3159f6b5d6d9fe10}{BamReader::}}}
+\DoxyCodeLine{00696\ \mbox{\hyperlink{classBamReader_ae63d90cd5d2c87fe3159f6b5d6d9fe10}{read\_cdata}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan,\ \mbox{\hyperlink{structPipelineCyclerTrivialImpl}{PipelineCyclerBase}}\ \&cycler)\ \{}
+\DoxyCodeLine{00697\ \ \ \mbox{\hyperlink{structPipelineCyclerTrivialImpl}{PipelineCyclerBase}}\ *old\_cycler\ =\ \_reading\_cycler;}
+\DoxyCodeLine{00698\ \ \ \_reading\_cycler\ =\ \&cycler;}
+\DoxyCodeLine{00699\ \ \ \mbox{\hyperlink{classCycleData}{CycleData}}\ *cdata\ =\ cycler.write(Thread::get\_current\_thread());}
+\DoxyCodeLine{00700\ \ \ cdata-\/>\mbox{\hyperlink{classCycleData_ab97b8929015ca1250aa7a3ae59da30b8}{fillin}}(scan,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00701\ \ \ cycler.release\_write(cdata);}
+\DoxyCodeLine{00702\ \ \ \_reading\_cycler\ =\ old\_cycler;}
+\DoxyCodeLine{00703\ \}}
+\DoxyCodeLine{00704\ }
+\DoxyCodeLine{00709\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_ae63d90cd5d2c87fe3159f6b5d6d9fe10}{BamReader::}}}
+\DoxyCodeLine{00710\ \mbox{\hyperlink{classBamReader_ae63d90cd5d2c87fe3159f6b5d6d9fe10}{read\_cdata}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan,\ \mbox{\hyperlink{structPipelineCyclerTrivialImpl}{PipelineCyclerBase}}\ \&cycler,}
+\DoxyCodeLine{00711\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{void}\ *extra\_data)\ \{}
+\DoxyCodeLine{00712\ \ \ \mbox{\hyperlink{structPipelineCyclerTrivialImpl}{PipelineCyclerBase}}\ *old\_cycler\ =\ \_reading\_cycler;}
+\DoxyCodeLine{00713\ \ \ \_reading\_cycler\ =\ \&cycler;}
+\DoxyCodeLine{00714\ \ \ \mbox{\hyperlink{classCycleData}{CycleData}}\ *cdata\ =\ cycler.write(Thread::get\_current\_thread());}
+\DoxyCodeLine{00715\ \ \ cdata-\/>\mbox{\hyperlink{classCycleData_ab97b8929015ca1250aa7a3ae59da30b8}{fillin}}(scan,\ \textcolor{keyword}{this},\ extra\_data);}
+\DoxyCodeLine{00716\ \ \ cycler.release\_write(cdata);}
+\DoxyCodeLine{00717\ \ \ \_reading\_cycler\ =\ old\_cycler;}
+\DoxyCodeLine{00718\ \}}
+\DoxyCodeLine{00719\ }
+\DoxyCodeLine{00731\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_abd83f808114527e3b7b0a40cab0ca761}{BamReader::}}}
+\DoxyCodeLine{00732\ \mbox{\hyperlink{classBamReader_abd83f808114527e3b7b0a40cab0ca761}{set\_int\_tag}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&tag,\ \textcolor{keywordtype}{int}\ value)\ \{}
+\DoxyCodeLine{00733\ \ \ nassertv(\_now\_creating\ !=\ \_created\_objs.end());}
+\DoxyCodeLine{00734\ \ \ \textcolor{keywordtype}{int}\ requestor\_id\ =\ (*\_now\_creating).first;}
+\DoxyCodeLine{00735\ }
+\DoxyCodeLine{00736\ \ \ PointerReference\ \&pref\ =\ \_object\_pointers[requestor\_id];}
+\DoxyCodeLine{00737\ \ \ pref.\_int\_tags[tag]\ =\ value;}
+\DoxyCodeLine{00738\ \}}
+\DoxyCodeLine{00739\ }
+\DoxyCodeLine{00744\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classBamReader_a2eed6914e03be304c6cf14ea291d97e6}{BamReader::}}}
+\DoxyCodeLine{00745\ \mbox{\hyperlink{classBamReader_a2eed6914e03be304c6cf14ea291d97e6}{get\_int\_tag}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&tag)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00746\ \ \ nassertr(\_now\_creating\ !=\ \_created\_objs.end(),\ 0);}
+\DoxyCodeLine{00747\ \ \ \textcolor{keywordtype}{int}\ requestor\_id\ =\ (*\_now\_creating).first;}
+\DoxyCodeLine{00748\ }
+\DoxyCodeLine{00749\ \ \ ObjectPointers::const\_iterator\ opi\ =\ \_object\_pointers.find(requestor\_id);}
+\DoxyCodeLine{00750\ \ \ nassertr(opi\ !=\ \_object\_pointers.end(),\ 0);}
+\DoxyCodeLine{00751\ \ \ \textcolor{keyword}{const}\ PointerReference\ \&pref\ =\ (*opi).second;}
+\DoxyCodeLine{00752\ }
+\DoxyCodeLine{00753\ \ \ IntTags::const\_iterator\ iti\ =\ pref.\_int\_tags.find(tag);}
+\DoxyCodeLine{00754\ \ \ nassertr(iti\ !=\ pref.\_int\_tags.end(),\ 0);}
+\DoxyCodeLine{00755\ \ \ \textcolor{keywordflow}{return}\ (*iti).second;}
+\DoxyCodeLine{00756\ \}}
+\DoxyCodeLine{00757\ }
+\DoxyCodeLine{00772\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_a8aa3682ea4e1d6fb08f88fb3f65104d0}{BamReader::}}}
+\DoxyCodeLine{00773\ \mbox{\hyperlink{classBamReader_a8aa3682ea4e1d6fb08f88fb3f65104d0}{set\_aux\_tag}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&tag,\ \mbox{\hyperlink{classBamReaderAuxData}{BamReaderAuxData}}\ *value)\ \{}
+\DoxyCodeLine{00774\ \ \ nassertv(\_now\_creating\ !=\ \_created\_objs.end());}
+\DoxyCodeLine{00775\ \ \ \textcolor{keywordtype}{int}\ requestor\_id\ =\ (*\_now\_creating).first;}
+\DoxyCodeLine{00776\ }
+\DoxyCodeLine{00777\ \ \ PointerReference\ \&pref\ =\ \_object\_pointers[requestor\_id];}
+\DoxyCodeLine{00778\ \ \ pref.\_aux\_tags[tag]\ =\ value;}
+\DoxyCodeLine{00779\ \}}
+\DoxyCodeLine{00780\ }
+\DoxyCodeLine{00785\ \mbox{\hyperlink{classBamReaderAuxData}{BamReaderAuxData}}\ *\mbox{\hyperlink{classBamReader_a731a71d6c4028513e2685a5f633692ab}{BamReader::}}}
+\DoxyCodeLine{00786\ \mbox{\hyperlink{classBamReader_a731a71d6c4028513e2685a5f633692ab}{get\_aux\_tag}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&tag)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00787\ \ \ nassertr(\_now\_creating\ !=\ \_created\_objs.end(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00788\ \ \ \textcolor{keywordtype}{int}\ requestor\_id\ =\ (*\_now\_creating).first;}
+\DoxyCodeLine{00789\ }
+\DoxyCodeLine{00790\ \ \ ObjectPointers::const\_iterator\ opi\ =\ \_object\_pointers.find(requestor\_id);}
+\DoxyCodeLine{00791\ \ \ nassertr(opi\ !=\ \_object\_pointers.end(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00792\ \ \ \textcolor{keyword}{const}\ PointerReference\ \&pref\ =\ (*opi).second;}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00794\ \ \ AuxTags::const\_iterator\ ati\ =\ pref.\_aux\_tags.find(tag);}
+\DoxyCodeLine{00795\ \ \ nassertr(ati\ !=\ pref.\_aux\_tags.end(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00796\ \ \ \textcolor{keywordflow}{return}\ (*ati).second;}
+\DoxyCodeLine{00797\ \}}
+\DoxyCodeLine{00798\ }
+\DoxyCodeLine{00808\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_a0c2e8dc5a794a4263139116b5b8dcb2d}{BamReader::}}}
+\DoxyCodeLine{00809\ \mbox{\hyperlink{classBamReader_a0c2e8dc5a794a4263139116b5b8dcb2d}{register\_finalize}}(\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *whom)\ \{}
+\DoxyCodeLine{00810\ \ \ nassertv(whom\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00811\ }
+\DoxyCodeLine{00812\ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00813\ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{00814\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}register\_finalize("{}}\ <<\ (\textcolor{keywordtype}{void}\ *)whom\ <<\ \textcolor{stringliteral}{"{})\ ("{}}\ <<\ whom-\/>get\_type()}
+\DoxyCodeLine{00815\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00816\ \ \ \}}
+\DoxyCodeLine{00817\ }
+\DoxyCodeLine{00818\ \ \ \_finalize\_list.insert(whom);}
+\DoxyCodeLine{00819\ \}}
+\DoxyCodeLine{00820\ }
+\DoxyCodeLine{00835\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_aa694b5968c0fa549f26b8919451ac230}{BamReader::}}}
+\DoxyCodeLine{00836\ \mbox{\hyperlink{classBamReader_aa694b5968c0fa549f26b8919451ac230}{register\_change\_this}}(ChangeThisFunc\ func,\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\textcolor{keywordtype}{object})\ \{}
+\DoxyCodeLine{00837\ \ \ nassertv(\_now\_creating\ !=\ \_created\_objs.end());}
+\DoxyCodeLine{00838\ \ \ CreatedObj\ \&created\_obj\ =\ (*\_now\_creating).second;}
+\DoxyCodeLine{00839\ }
+\DoxyCodeLine{00840\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00841\ \ \ \textcolor{comment}{//\ Sanity\ check\ the\ pointer-\/-\/it\ should\ always\ be\ the\ same\ pointer\ after\ we}}
+\DoxyCodeLine{00842\ \ \ \textcolor{comment}{//\ set\ it\ the\ first\ time.}}
+\DoxyCodeLine{00843\ \ \ \textcolor{keywordflow}{if}\ (created\_obj.\_ptr\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00844\ \ \ \ \ created\_obj.set\_ptr(\textcolor{keywordtype}{object},\ object-\/>as\_reference\_count());}
+\DoxyCodeLine{00845\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00846\ \ \ \ \ \textcolor{comment}{//\ We've\ previously\ assigned\ this\ pointer,\ and\ we\ should\ have\ assigned\ it}}
+\DoxyCodeLine{00847\ \ \ \ \ \textcolor{comment}{//\ to\ the\ same\ this\ pointer\ we\ have\ now.}}
+\DoxyCodeLine{00848\ \ \ \ \ nassertv(created\_obj.\_ptr\ ==\ \textcolor{keywordtype}{object});}
+\DoxyCodeLine{00849\ \ \ \}}
+\DoxyCodeLine{00850\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{00851\ }
+\DoxyCodeLine{00852\ \ \ created\_obj.\_change\_this\ =\ func;}
+\DoxyCodeLine{00853\ \ \ created\_obj.\_change\_this\_ref\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00854\ \}}
+\DoxyCodeLine{00855\ }
+\DoxyCodeLine{00870\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_aa694b5968c0fa549f26b8919451ac230}{BamReader::}}}
+\DoxyCodeLine{00871\ \mbox{\hyperlink{classBamReader_aa694b5968c0fa549f26b8919451ac230}{register\_change\_this}}(ChangeThisRefFunc\ func,\ \mbox{\hyperlink{classTypedWritableReferenceCount}{TypedWritableReferenceCount}}\ *\textcolor{keywordtype}{object})\ \{}
+\DoxyCodeLine{00872\ \ \ nassertv(\_now\_creating\ !=\ \_created\_objs.end());}
+\DoxyCodeLine{00873\ \ \ CreatedObj\ \&created\_obj\ =\ (*\_now\_creating).second;}
+\DoxyCodeLine{00874\ }
+\DoxyCodeLine{00875\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00876\ \ \ \textcolor{comment}{//\ Sanity\ check\ the\ pointer-\/-\/it\ should\ always\ be\ the\ same\ pointer\ after\ we}}
+\DoxyCodeLine{00877\ \ \ \textcolor{comment}{//\ set\ it\ the\ first\ time.}}
+\DoxyCodeLine{00878\ \ \ \textcolor{keywordflow}{if}\ (created\_obj.\_ptr\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00879\ \ \ \ \ created\_obj.set\_ptr(\textcolor{keywordtype}{object},\ \textcolor{keywordtype}{object});}
+\DoxyCodeLine{00880\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00881\ \ \ \ \ \textcolor{comment}{//\ We've\ previously\ assigned\ this\ pointer,\ and\ we\ should\ have\ assigned\ it}}
+\DoxyCodeLine{00882\ \ \ \ \ \textcolor{comment}{//\ to\ the\ same\ this\ pointer\ we\ have\ now.}}
+\DoxyCodeLine{00883\ \ \ \ \ nassertv(created\_obj.\_ptr\ ==\ \textcolor{keywordtype}{object});}
+\DoxyCodeLine{00884\ \ \ \ \ nassertv(created\_obj.\_ref\_ptr\ ==\ \textcolor{keywordtype}{object});}
+\DoxyCodeLine{00885\ \ \ \}}
+\DoxyCodeLine{00886\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{00887\ }
+\DoxyCodeLine{00888\ \ \ created\_obj.\_change\_this\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00889\ \ \ created\_obj.\_change\_this\_ref\ =\ func;}
+\DoxyCodeLine{00890\ \}}
+\DoxyCodeLine{00891\ }
+\DoxyCodeLine{00897\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_a786911fd5b8d98eed701a3bb6e2b3a19}{BamReader::}}}
+\DoxyCodeLine{00898\ \mbox{\hyperlink{classBamReader_a786911fd5b8d98eed701a3bb6e2b3a19}{finalize\_now}}(\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *whom)\ \{}
+\DoxyCodeLine{00899\ \ \ \textcolor{keywordflow}{if}\ (whom\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00900\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00901\ \ \ \}}
+\DoxyCodeLine{00902\ }
+\DoxyCodeLine{00903\ \ \ Finalize::iterator\ fi\ =\ \_finalize\_list.find(whom);}
+\DoxyCodeLine{00904\ \ \ \textcolor{keywordflow}{if}\ (fi\ !=\ \_finalize\_list.end())\ \{}
+\DoxyCodeLine{00905\ \ \ \ \ \_finalize\_list.erase(fi);}
+\DoxyCodeLine{00906\ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00907\ \ \ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{00908\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}finalizing\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)whom\ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ whom-\/>get\_type()}
+\DoxyCodeLine{00909\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00910\ \ \ \ \ \}}
+\DoxyCodeLine{00911\ \ \ \ \ whom-\/>\mbox{\hyperlink{classTypedWritable_a0fc29d217d45307ff1592abae99d37a6}{finalize}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00912\ \ \ \}}
+\DoxyCodeLine{00913\ \}}
+\DoxyCodeLine{00914\ }
+\DoxyCodeLine{00931\ \textcolor{keywordtype}{void}\ *\mbox{\hyperlink{classBamReader_a9efece8c0f1619065ec377d4b597889e}{BamReader::}}}
+\DoxyCodeLine{00932\ \mbox{\hyperlink{classBamReader_a9efece8c0f1619065ec377d4b597889e}{get\_pta}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan)\ \{}
+\DoxyCodeLine{00933\ \ \ nassertr(\_pta\_id\ ==\ -\/1,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00934\ \ \ \textcolor{keywordtype}{int}\ \textcolor{keywordtype}{id}\ =\ read\_pta\_id(scan);}
+\DoxyCodeLine{00935\ }
+\DoxyCodeLine{00936\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{id}\ ==\ 0)\ \{}
+\DoxyCodeLine{00937\ \ \ \ \ \textcolor{comment}{//\ As\ always,\ a\ 0\ ID\ indicates\ a\ NULL\ pointer.\ \ The\ caller\ will\ not\ be}}
+\DoxyCodeLine{00938\ \ \ \ \ \textcolor{comment}{//\ able\ to\ differentiate\ this\ case\ from\ that\ of\ a\ previously-\/read\ pointer,}}
+\DoxyCodeLine{00939\ \ \ \ \ \textcolor{comment}{//\ but\ that's\ OK\ because\ the\ next\ data\ in\ the\ Bam\ file\ is\ the\ length\ of}}
+\DoxyCodeLine{00940\ \ \ \ \ \textcolor{comment}{//\ the\ array,\ which\ will\ be\ zero-\/-\/indicating\ an\ empty\ or\ NULL\ array.}}
+\DoxyCodeLine{00941\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00942\ \ \ \}}
+\DoxyCodeLine{00943\ }
+\DoxyCodeLine{00944\ \ \ PTAMap::iterator\ pi\ =\ \_pta\_map.find(\textcolor{keywordtype}{id});}
+\DoxyCodeLine{00945\ \ \ \textcolor{keywordflow}{if}\ (pi\ ==\ \_pta\_map.end())\ \{}
+\DoxyCodeLine{00946\ \ \ \ \ \textcolor{comment}{//\ This\ is\ the\ first\ time\ we've\ encountered\ this\ particular\ ID,\ meaning\ we}}
+\DoxyCodeLine{00947\ \ \ \ \ \textcolor{comment}{//\ need\ to\ read\ the\ data\ now\ and\ register\ it.}}
+\DoxyCodeLine{00948\ \ \ \ \ \_pta\_id\ =\ id;}
+\DoxyCodeLine{00949\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00950\ \ \ \}}
+\DoxyCodeLine{00951\ }
+\DoxyCodeLine{00952\ \ \ \textcolor{keywordflow}{return}\ (*pi).second;}
+\DoxyCodeLine{00953\ \}}
+\DoxyCodeLine{00954\ }
+\DoxyCodeLine{00964\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classBamReader_a40ecebbcf5c5058f8660d6d5cada23ea}{BamReader::}}}
+\DoxyCodeLine{00965\ \mbox{\hyperlink{classBamReader_a40ecebbcf5c5058f8660d6d5cada23ea}{register\_pta}}(\textcolor{keywordtype}{void}\ *ptr)\ \{}
+\DoxyCodeLine{00966\ \ \ \textcolor{keywordflow}{if}\ (\_pta\_id\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00967\ \ \ \ \ \textcolor{keywordtype}{bool}\ inserted\ =\ \_pta\_map.insert(PTAMap::value\_type(\_pta\_id,\ ptr)).second;}
+\DoxyCodeLine{00968\ \ \ \ \ \_pta\_id\ =\ -\/1;}
+\DoxyCodeLine{00969\ \ \ \ \ nassertv(inserted);}
+\DoxyCodeLine{00970\ \ \ \}}
+\DoxyCodeLine{00971\ \}}
+\DoxyCodeLine{00972\ }
+\DoxyCodeLine{00978\ \textcolor{keywordtype}{void}\ BamReader::}
+\DoxyCodeLine{00979\ free\_object\_ids(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan)\ \{}
+\DoxyCodeLine{00980\ \ \ \textcolor{comment}{//\ We\ have\ to\ fully\ complete\ any\ objects\ before\ we\ remove\ them.\ \ Might\ as}}
+\DoxyCodeLine{00981\ \ \ \textcolor{comment}{//\ well\ try\ to\ complete\ everything\ before\ we\ get\ started.}}
+\DoxyCodeLine{00982\ \ \ \mbox{\hyperlink{classBamReader_a79364fc8c51fdf559ea8c8c8aea0fb41}{resolve}}();}
+\DoxyCodeLine{00983\ }
+\DoxyCodeLine{00984\ \ \ \textcolor{keywordflow}{while}\ (scan.get\_remaining\_size()\ >\ 0)\ \{}
+\DoxyCodeLine{00985\ \ \ \ \ \textcolor{keywordtype}{int}\ object\_id\ =\ read\_object\_id(scan);}
+\DoxyCodeLine{00986\ }
+\DoxyCodeLine{00987\ \ \ \ \ CreatedObjs::iterator\ ci\ =\ \_created\_objs.find(object\_id);}
+\DoxyCodeLine{00988\ \ \ \ \ \textcolor{keywordflow}{if}\ (ci\ ==\ \_created\_objs.end())\ \{}
+\DoxyCodeLine{00989\ \ \ \ \ \ \ util\_cat.warning()}
+\DoxyCodeLine{00990\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Bam\ file\ suggests\ eliminating\ object\_id\ "{}}\ <<\ object\_id}
+\DoxyCodeLine{00991\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ already\ gone.\(\backslash\)n"{}};}
+\DoxyCodeLine{00992\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00993\ }
+\DoxyCodeLine{00994\ \ \ \ \ \ \ \textcolor{comment}{//\ Make\ sure\ the\ object\ was\ successfully\ completed.}}
+\DoxyCodeLine{00995\ \ \ \ \ \ \ ObjectPointers::iterator\ oi\ =\ \_object\_pointers.find(object\_id);}
+\DoxyCodeLine{00996\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (oi\ !=\ \_object\_pointers.end())\ \{}
+\DoxyCodeLine{00997\ \ \ \ \ \ \ \ \ util\_cat.warning()}
+\DoxyCodeLine{00998\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ resolve\ object\ "{}}\ <<\ object\_id}
+\DoxyCodeLine{00999\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ before\ removing\ from\ table.\(\backslash\)n"{}};}
+\DoxyCodeLine{01000\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01001\ }
+\DoxyCodeLine{01002\ \ \ \ \ \ \ \_created\_objs\_by\_pointer.erase((*ci).second.\_ptr);}
+\DoxyCodeLine{01003\ \ \ \ \ \ \ \_created\_objs.erase(ci);}
+\DoxyCodeLine{01004\ \ \ \ \ \}}
+\DoxyCodeLine{01005\ \ \ \}}
+\DoxyCodeLine{01006\ \}}
+\DoxyCodeLine{01007\ }
+\DoxyCodeLine{01008\ }
+\DoxyCodeLine{01012\ \textcolor{keywordtype}{int}\ BamReader::}
+\DoxyCodeLine{01013\ read\_object\_id(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan)\ \{}
+\DoxyCodeLine{01014\ \ \ \textcolor{keywordtype}{int}\ object\_id;}
+\DoxyCodeLine{01015\ }
+\DoxyCodeLine{01016\ \ \ \textcolor{keywordflow}{if}\ (\_long\_object\_id)\ \{}
+\DoxyCodeLine{01017\ \ \ \ \ object\_id\ =\ scan.get\_uint32();}
+\DoxyCodeLine{01018\ }
+\DoxyCodeLine{01019\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01020\ \ \ \ \ object\_id\ =\ scan.get\_uint16();}
+\DoxyCodeLine{01021\ \ \ \ \ \textcolor{keywordflow}{if}\ (object\_id\ ==\ 0xffff)\ \{}
+\DoxyCodeLine{01022\ \ \ \ \ \ \ \_long\_object\_id\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01023\ \ \ \ \ \}}
+\DoxyCodeLine{01024\ \ \ \}}
+\DoxyCodeLine{01025\ }
+\DoxyCodeLine{01026\ \ \ \textcolor{keywordflow}{return}\ object\_id;}
+\DoxyCodeLine{01027\ \}}
+\DoxyCodeLine{01028\ }
+\DoxyCodeLine{01032\ \textcolor{keywordtype}{int}\ BamReader::}
+\DoxyCodeLine{01033\ read\_pta\_id(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan)\ \{}
+\DoxyCodeLine{01034\ \ \ \textcolor{keywordtype}{int}\ pta\_id;}
+\DoxyCodeLine{01035\ }
+\DoxyCodeLine{01036\ \ \ \textcolor{keywordflow}{if}\ (\_long\_pta\_id)\ \{}
+\DoxyCodeLine{01037\ \ \ \ \ pta\_id\ =\ scan.get\_uint32();}
+\DoxyCodeLine{01038\ }
+\DoxyCodeLine{01039\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01040\ \ \ \ \ pta\_id\ =\ scan.get\_uint16();}
+\DoxyCodeLine{01041\ \ \ \ \ \textcolor{keywordflow}{if}\ (pta\_id\ ==\ 0xffff)\ \{}
+\DoxyCodeLine{01042\ \ \ \ \ \ \ \_long\_pta\_id\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01043\ \ \ \ \ \}}
+\DoxyCodeLine{01044\ \ \ \}}
+\DoxyCodeLine{01045\ }
+\DoxyCodeLine{01046\ \ \ \textcolor{keywordflow}{return}\ pta\_id;}
+\DoxyCodeLine{01047\ \}}
+\DoxyCodeLine{01048\ }
+\DoxyCodeLine{01053\ \textcolor{keywordtype}{int}\ BamReader::}
+\DoxyCodeLine{01054\ p\_read\_object()\ \{}
+\DoxyCodeLine{01055\ \ \ \mbox{\hyperlink{classDatagram}{Datagram}}\ dg;}
+\DoxyCodeLine{01056\ }
+\DoxyCodeLine{01057\ \ \ \textcolor{comment}{//\ First,\ read\ a\ datagram\ for\ the\ object.}}
+\DoxyCodeLine{01058\ \ \ \textcolor{keywordflow}{if}\ (!get\_datagram(dg))\ \{}
+\DoxyCodeLine{01059\ \ \ \ \ \textcolor{comment}{//\ When\ we\ run\ out\ of\ datagrams,\ we're\ at\ the\ end\ of\ the\ file.}}
+\DoxyCodeLine{01060\ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01061\ \ \ \ \ \ \ bam\_cat.debug()}
+\DoxyCodeLine{01062\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reached\ end\ of\ bam\ source.\(\backslash\)n"{}};}
+\DoxyCodeLine{01063\ \ \ \ \ \}}
+\DoxyCodeLine{01064\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{01065\ \ \ \}}
+\DoxyCodeLine{01066\ }
+\DoxyCodeLine{01067\ \ \ \textcolor{comment}{//\ Now\ extract\ the\ object\ definition\ from\ the\ datagram.}}
+\DoxyCodeLine{01068\ \ \ \mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ scan(dg);}
+\DoxyCodeLine{01069\ }
+\DoxyCodeLine{01070\ \ \ \textcolor{comment}{//\ First,\ read\ the\ BamObjectCode.\ \ In\ bam\ versions\ prior\ to\ 6.21,\ there\ was}}
+\DoxyCodeLine{01071\ \ \ \textcolor{comment}{//\ no\ BamObjectCode\ in\ the\ stream.}}
+\DoxyCodeLine{01072\ \ \ BamObjectCode\ boc\ =\ BOC\_adjunct;}
+\DoxyCodeLine{01073\ \ \ \textcolor{keywordflow}{if}\ (get\_file\_minor\_ver()\ >=\ 21)\ \{}
+\DoxyCodeLine{01074\ \ \ \ \ boc\ =\ (BamObjectCode)scan.get\_uint8();}
+\DoxyCodeLine{01075\ \ \ \}}
+\DoxyCodeLine{01076\ \ \ \textcolor{keywordflow}{switch}\ (boc)\ \{}
+\DoxyCodeLine{01077\ \ \ \textcolor{keywordflow}{case}\ BOC\_push:}
+\DoxyCodeLine{01078\ \ \ \ \ ++\_nesting\_level;}
+\DoxyCodeLine{01079\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01080\ }
+\DoxyCodeLine{01081\ \ \ \textcolor{keywordflow}{case}\ BOC\_pop:}
+\DoxyCodeLine{01082\ \ \ \ \ -\/-\/\_nesting\_level;}
+\DoxyCodeLine{01083\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{01084\ }
+\DoxyCodeLine{01085\ \ \ \textcolor{keywordflow}{case}\ BOC\_adjunct:}
+\DoxyCodeLine{01086\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01087\ }
+\DoxyCodeLine{01088\ \ \ \textcolor{keywordflow}{case}\ BOC\_remove:}
+\DoxyCodeLine{01089\ \ \ \ \ \textcolor{comment}{//\ The\ BOC\_remove\ code\ is\ a\ special\ case;\ it\ begins\ a\ record\ that\ simply}}
+\DoxyCodeLine{01090\ \ \ \ \ \textcolor{comment}{//\ lists\ all\ of\ the\ object\ ID's\ that\ are\ no\ longer\ important\ to\ the\ file}}
+\DoxyCodeLine{01091\ \ \ \ \ \textcolor{comment}{//\ and\ may\ be\ released.}}
+\DoxyCodeLine{01092\ \ \ \ \ free\_object\_ids(scan);}
+\DoxyCodeLine{01093\ }
+\DoxyCodeLine{01094\ \ \ \ \ \textcolor{comment}{//\ Now\ that\ we've\ freed\ all\ of\ the\ object\ id's\ indicate,\ read\ the\ next}}
+\DoxyCodeLine{01095\ \ \ \ \ \textcolor{comment}{//\ object\ id\ in\ the\ stream.\ \ It's\ easiest\ to\ do\ this\ by\ calling}}
+\DoxyCodeLine{01096\ \ \ \ \ \textcolor{comment}{//\ recursively.}}
+\DoxyCodeLine{01097\ \ \ \ \ \textcolor{keywordflow}{return}\ p\_read\_object();}
+\DoxyCodeLine{01098\ }
+\DoxyCodeLine{01099\ \ \ \textcolor{keywordflow}{case}\ BOC\_file\_data:}
+\DoxyCodeLine{01100\ \ \ \ \ \textcolor{comment}{//\ Another\ special\ case.\ \ This\ marks\ an\ auxiliary\ file\ data\ record\ that\ we}}
+\DoxyCodeLine{01101\ \ \ \ \ \textcolor{comment}{//\ skip\ over\ for\ now,\ but\ we\ note\ its\ position\ within\ the\ stream,\ so\ that}}
+\DoxyCodeLine{01102\ \ \ \ \ \textcolor{comment}{//\ we\ can\ hand\ it\ to\ a\ future\ object\ who\ may\ request\ it.}}
+\DoxyCodeLine{01103\ \ \ \ \ \{}
+\DoxyCodeLine{01104\ \ \ \ \ \ \ \mbox{\hyperlink{classSubfileInfo}{SubfileInfo}}\ info;}
+\DoxyCodeLine{01105\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_source-\/>save\_datagram(info))\ \{}
+\DoxyCodeLine{01106\ \ \ \ \ \ \ \ \ bam\_cat.error()}
+\DoxyCodeLine{01107\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ read\ file\ data.\(\backslash\)n"{}};}
+\DoxyCodeLine{01108\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{01109\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01110\ \ \ \ \ \ \ \_file\_data\_records.push\_back(info);}
+\DoxyCodeLine{01111\ \ \ \ \ \}}
+\DoxyCodeLine{01112\ }
+\DoxyCodeLine{01113\ \ \ \ \ \textcolor{keywordflow}{return}\ p\_read\_object();}
+\DoxyCodeLine{01114\ }
+\DoxyCodeLine{01115\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{01116\ \ \ \ \ bam\_cat.error()}
+\DoxyCodeLine{01117\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Encountered\ invalid\ BamObjectCode\ 0x"{}}\ <<\ std::hex\ <<\ (int)boc\ <<\ std::dec\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01118\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{01119\ \ \ \}}
+\DoxyCodeLine{01120\ }
+\DoxyCodeLine{01121\ \ \ \textcolor{comment}{//\ An\ object\ definition\ in\ a\ Bam\ file\ consists\ of\ a\ TypeHandle\ definition,}}
+\DoxyCodeLine{01122\ \ \ \textcolor{comment}{//\ defining\ the\ object's\ type,\ followed\ by\ an\ object\ ID\ index,\ defining\ the}}
+\DoxyCodeLine{01123\ \ \ \textcolor{comment}{//\ particular\ instance\ (e.g.\ \ pointer)\ of\ this\ object.}}
+\DoxyCodeLine{01124\ }
+\DoxyCodeLine{01125\ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type\ =\ \mbox{\hyperlink{classBamReader_a0c90778c24386544356506d4a022188e}{read\_handle}}(scan);}
+\DoxyCodeLine{01126\ }
+\DoxyCodeLine{01127\ \ \ \textcolor{keywordtype}{int}\ object\_id\ =\ read\_object\_id(scan);}
+\DoxyCodeLine{01128\ }
+\DoxyCodeLine{01129\ \ \ \textcolor{keywordflow}{if}\ (scan.get\_current\_index()\ >\ dg.get\_length())\ \{}
+\DoxyCodeLine{01130\ \ \ \ \ bam\_cat.error()}
+\DoxyCodeLine{01131\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Found\ truncated\ datagram\ in\ bam\ stream\(\backslash\)n"{}};}
+\DoxyCodeLine{01132\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{01133\ \ \ \}}
+\DoxyCodeLine{01134\ }
+\DoxyCodeLine{01135\ \ \ \textcolor{comment}{//\ There\ are\ two\ cases\ (not\ counting\ the\ special\ \_remove\_flag\ case,\ above).}}
+\DoxyCodeLine{01136\ \ \ \textcolor{comment}{//\ Either\ this\ is\ a\ new\ object\ definition,\ or\ this\ is\ a\ reference\ to\ an}}
+\DoxyCodeLine{01137\ \ \ \textcolor{comment}{//\ object\ that\ was\ previously\ defined.}}
+\DoxyCodeLine{01138\ }
+\DoxyCodeLine{01139\ \ \ \textcolor{comment}{//\ We\ use\ the\ TypeHandle\ to\ differentiate\ these\ two\ cases.\ \ By\ convention,}}
+\DoxyCodeLine{01140\ \ \ \textcolor{comment}{//\ we\ write\ a\ TypeHandle::none()\ to\ the\ Bam\ file\ when\ we\ are\ writing\ a}}
+\DoxyCodeLine{01141\ \ \ \textcolor{comment}{//\ reference\ to\ a\ previously-\/defined\ object,\ but\ we\ write\ the\ object's}}
+\DoxyCodeLine{01142\ \ \ \textcolor{comment}{//\ actual\ type\ when\ we\ are\ writing\ its\ definition\ right\ now.}}
+\DoxyCodeLine{01143\ }
+\DoxyCodeLine{01144\ \ \ \textcolor{comment}{//\ Therefore,\ if\ the\ type\ is\ TypeHandle::none(),\ then\ we\ must\ have\ already}}
+\DoxyCodeLine{01145\ \ \ \textcolor{comment}{//\ read\ in\ and\ created\ the\ object\ (although\ its\ pointers\ may\ not\ be\ fully}}
+\DoxyCodeLine{01146\ \ \ \textcolor{comment}{//\ instantiated\ yet).\ \ On\ the\ other\ hand,\ if\ the\ type\ is\ anything\ else,\ then}}
+\DoxyCodeLine{01147\ \ \ \textcolor{comment}{//\ we\ must\ read\ the\ definition\ to\ follow.}}
+\DoxyCodeLine{01148\ }
+\DoxyCodeLine{01149\ \ \ \textcolor{keywordflow}{if}\ (type\ !=\ TypeHandle::none())\ \{}
+\DoxyCodeLine{01150\ \ \ \ \ \textcolor{comment}{//\ Now\ we\ are\ going\ to\ read\ and\ create\ a\ new\ object.}}
+\DoxyCodeLine{01151\ }
+\DoxyCodeLine{01152\ \ \ \ \ \textcolor{comment}{//\ First,\ we\ must\ add\ an\ entry\ into\ the\ map\ for\ this\ object\ ID,\ so\ that\ in}}
+\DoxyCodeLine{01153\ \ \ \ \ \textcolor{comment}{//\ case\ this\ function\ is\ called\ recursively\ during\ the\ object's\ factory}}
+\DoxyCodeLine{01154\ \ \ \ \ \textcolor{comment}{//\ constructor,\ we\ will\ have\ some\ definition\ for\ the\ object.\ \ For\ now,\ we}}
+\DoxyCodeLine{01155\ \ \ \ \ \textcolor{comment}{//\ give\ it\ a\ NULL\ pointer.}}
+\DoxyCodeLine{01156\ \ \ \ \ CreatedObj\ new\_created\_obj;}
+\DoxyCodeLine{01157\ \ \ \ \ CreatedObjs::iterator\ oi\ =}
+\DoxyCodeLine{01158\ \ \ \ \ \ \ \_created\_objs.insert(CreatedObjs::value\_type(object\_id,\ new\_created\_obj)).first;}
+\DoxyCodeLine{01159\ \ \ \ \ CreatedObj\ \&created\_obj\ =\ (*oi).second;}
+\DoxyCodeLine{01160\ }
+\DoxyCodeLine{01161\ \ \ \ \ \textcolor{keywordflow}{if}\ (created\_obj.\_ptr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01162\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ object\ had\ already\ existed;\ thus,\ we\ are\ just\ receiving\ an}}
+\DoxyCodeLine{01163\ \ \ \ \ \ \ \textcolor{comment}{//\ update\ for\ it.}}
+\DoxyCodeLine{01164\ }
+\DoxyCodeLine{01165\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_object\_pointers.find(object\_id)\ !=\ \_object\_pointers.end())\ \{}
+\DoxyCodeLine{01166\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Aieee!\ This\ object\ isn't\ even\ complete\ from\ the\ last\ time\ we}}
+\DoxyCodeLine{01167\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ encountered\ it\ in\ the\ stream!\ This\ should\ never\ happen.\ Something's}}
+\DoxyCodeLine{01168\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ corrupt\ or\ the\ stream\ was\ maliciously\ crafted.}}
+\DoxyCodeLine{01169\ \ \ \ \ \ \ \ \ bam\_cat.error()}
+\DoxyCodeLine{01170\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Found\ object\ "{}}\ <<\ object\_id\ <<\ \textcolor{stringliteral}{"{}\ in\ bam\ stream\ again\ while\ "{}}}
+\DoxyCodeLine{01171\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}trying\ to\ resolve\ its\ own\ pointers.\(\backslash\)n"{}};}
+\DoxyCodeLine{01172\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{01173\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01174\ }
+\DoxyCodeLine{01175\ \ \ \ \ \ \ \textcolor{comment}{//\ Update\ \_now\_creating\ during\ this\ call\ so\ if\ this\ function\ calls}}
+\DoxyCodeLine{01176\ \ \ \ \ \ \ \textcolor{comment}{//\ read\_pointer()\ or\ register\_change\_this()\ we'll\ match\ it\ up\ properly.}}
+\DoxyCodeLine{01177\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ might\ recursively\ call\ back\ into\ this\ p\_read\_object(),\ so\ be}}
+\DoxyCodeLine{01178\ \ \ \ \ \ \ \textcolor{comment}{//\ sure\ to\ save\ and\ restore\ the\ original\ value\ of\ \_now\_creating.}}
+\DoxyCodeLine{01179\ \ \ \ \ \ \ CreatedObjs::iterator\ was\_creating\ =\ \_now\_creating;}
+\DoxyCodeLine{01180\ \ \ \ \ \ \ \_now\_creating\ =\ oi;}
+\DoxyCodeLine{01181\ \ \ \ \ \ \ created\_obj.\_ptr-\/>fillin(scan,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01182\ \ \ \ \ \ \ \_now\_creating\ =\ was\_creating;}
+\DoxyCodeLine{01183\ }
+\DoxyCodeLine{01184\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (scan.get\_remaining\_size()\ >\ 0)\ \{}
+\DoxyCodeLine{01185\ \ \ \ \ \ \ \ \ bam\_cat.warning()}
+\DoxyCodeLine{01186\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Skipping\ "{}}\ <<\ scan.get\_remaining\_size()\ <<\ \textcolor{stringliteral}{"{}\ remaining\ bytes\ "{}}}
+\DoxyCodeLine{01187\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}in\ datagram\ containing\ type\ "{}}\ <<\ type\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01188\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01189\ }
+\DoxyCodeLine{01190\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01191\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ are\ receiving\ a\ new\ object.\ \ Now\ we\ can\ call\ the\ factory\ to\ create}}
+\DoxyCodeLine{01192\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ object.}}
+\DoxyCodeLine{01193\ }
+\DoxyCodeLine{01194\ \ \ \ \ \ \ \textcolor{comment}{//\ Define\ the\ parameters\ for\ passing\ to\ the\ object\ factory.}}
+\DoxyCodeLine{01195\ \ \ \ \ \ \ \mbox{\hyperlink{classFactoryParams}{FactoryParams}}\ fparams;}
+\DoxyCodeLine{01196\ \ \ \ \ \ \ fparams.add\_param(\textcolor{keyword}{new}\ \mbox{\hyperlink{classBamReaderParam}{BamReaderParam}}(scan,\ \textcolor{keyword}{this}));}
+\DoxyCodeLine{01197\ }
+\DoxyCodeLine{01198\ \ \ \ \ \ \ \textcolor{comment}{//\ As\ above,\ we\ update\ and\ preserve\ \_now\_creating\ during\ this\ call.}}
+\DoxyCodeLine{01199\ \ \ \ \ \ \ CreatedObjs::iterator\ was\_creating\ =\ \_now\_creating;}
+\DoxyCodeLine{01200\ \ \ \ \ \ \ \_now\_creating\ =\ oi;}
+\DoxyCodeLine{01201\ \ \ \ \ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\textcolor{keywordtype}{object}\ =}
+\DoxyCodeLine{01202\ \ \ \ \ \ \ \ \ \_factory-\/>make\_instance\_more\_general(type,\ fparams);}
+\DoxyCodeLine{01203\ \ \ \ \ \ \ \_now\_creating\ =\ was\_creating;}
+\DoxyCodeLine{01204\ }
+\DoxyCodeLine{01205\ \ \ \ \ \ \ \textcolor{comment}{//\ And\ now\ we\ can\ store\ the\ new\ object\ pointer\ in\ the\ map.}}
+\DoxyCodeLine{01206\ \ \ \ \ \ \ nassertr(created\_obj.\_ptr\ ==\ \textcolor{keywordtype}{object}\ ||\ created\_obj.\_ptr\ ==\ \textcolor{keyword}{nullptr},\ object\_id);}
+\DoxyCodeLine{01207\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{object}\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01208\ \ \ \ \ \ \ \ \ created\_obj.set\_ptr(\textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01209\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01210\ \ \ \ \ \ \ \ \ created\_obj.set\_ptr(\textcolor{keywordtype}{object},\ object-\/>as\_reference\_count());}
+\DoxyCodeLine{01211\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01212\ \ \ \ \ \ \ created\_obj.\_created\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01213\ }
+\DoxyCodeLine{01214\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (created\_obj.\_change\_this\_ref\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01215\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ pointer\ is\ scheduled\ to\ change\ after\ complete\_pointers(),}}
+\DoxyCodeLine{01216\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ but\ we\ have\ no\ entry\ in\ \_object\_pointers\ for\ this\ object\ (and\ hence}}
+\DoxyCodeLine{01217\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ no\ plan\ to\ call\ complete\_pointers()),\ then\ just\ change\ the\ pointer}}
+\DoxyCodeLine{01218\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ immediately.}}
+\DoxyCodeLine{01219\ \ \ \ \ \ \ \ \ ObjectPointers::const\_iterator\ ri\ =\ \_object\_pointers.find(object\_id);}
+\DoxyCodeLine{01220\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ri\ ==\ \_object\_pointers.end())\ \{}
+\DoxyCodeLine{01221\ \ \ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classTypedWritableReferenceCount}{TypedWritableReferenceCount}})\ object\_ref\ =\ (*created\_obj.\_change\_this\_ref)((\mbox{\hyperlink{classTypedWritableReferenceCount}{TypedWritableReferenceCount}}\ *)object,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01222\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *new\_ptr\ =\ object\_ref;}
+\DoxyCodeLine{01223\ \ \ \ \ \ \ \ \ \ \ created\_obj.set\_ptr(object\_ref,\ object\_ref);}
+\DoxyCodeLine{01224\ \ \ \ \ \ \ \ \ \ \ created\_obj.\_change\_this\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01225\ \ \ \ \ \ \ \ \ \ \ created\_obj.\_change\_this\_ref\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01226\ }
+\DoxyCodeLine{01227\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Remove\ the\ pointer\ from\ the\ finalize\ list\ (the\ new\ pointer}}
+\DoxyCodeLine{01228\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ presumably\ doesn't\ require\ finalizing).}}
+\DoxyCodeLine{01229\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_ptr\ !=\ \textcolor{keywordtype}{object})\ \{}
+\DoxyCodeLine{01230\ \ \ \ \ \ \ \ \ \ \ \ \ \_finalize\_list.erase(\textcolor{keywordtype}{object});}
+\DoxyCodeLine{01231\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01232\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{object}\ =\ new\_ptr;}
+\DoxyCodeLine{01233\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01234\ }
+\DoxyCodeLine{01235\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (created\_obj.\_change\_this\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01236\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Non-\/reference-\/counting\ variant.}}
+\DoxyCodeLine{01237\ \ \ \ \ \ \ \ \ ObjectPointers::const\_iterator\ ri\ =\ \_object\_pointers.find(object\_id);}
+\DoxyCodeLine{01238\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ri\ ==\ \_object\_pointers.end())\ \{}
+\DoxyCodeLine{01239\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *new\_ptr\ =\ (*created\_obj.\_change\_this)(\textcolor{keywordtype}{object},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01240\ \ \ \ \ \ \ \ \ \ \ created\_obj.set\_ptr(new\_ptr,\ new\_ptr-\/>\mbox{\hyperlink{classTypedWritable_a513f54c9a8a11960785d199393ef9e5a}{as\_reference\_count}}());}
+\DoxyCodeLine{01241\ \ \ \ \ \ \ \ \ \ \ created\_obj.\_change\_this\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01242\ \ \ \ \ \ \ \ \ \ \ created\_obj.\_change\_this\_ref\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01243\ }
+\DoxyCodeLine{01244\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_ptr\ !=\ \textcolor{keywordtype}{object})\ \{}
+\DoxyCodeLine{01245\ \ \ \ \ \ \ \ \ \ \ \ \ \_finalize\_list.erase(\textcolor{keywordtype}{object});}
+\DoxyCodeLine{01246\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01247\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{object}\ =\ new\_ptr;}
+\DoxyCodeLine{01248\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01249\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01250\ }
+\DoxyCodeLine{01251\ \ \ \ \ \ \ \_created\_objs\_by\_pointer[created\_obj.\_ptr].push\_back(object\_id);}
+\DoxyCodeLine{01252\ }
+\DoxyCodeLine{01253\ \ \ \ \ \ \ \textcolor{comment}{//\ Just\ some\ sanity\ checks}}
+\DoxyCodeLine{01254\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{object}\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01255\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01256\ \ \ \ \ \ \ \ \ \ \ bam\_cat.debug()}
+\DoxyCodeLine{01257\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ create\ an\ object\ of\ type\ "{}}\ <<\ type\ <<\ std::endl;}
+\DoxyCodeLine{01258\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01259\ }
+\DoxyCodeLine{01260\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (object-\/>get\_type()\ !=\ type)\ \{}
+\DoxyCodeLine{01261\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_new\_types.find(type)\ !=\ \_new\_types.end())\ \{}
+\DoxyCodeLine{01262\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ was\ a\ type\ we\ hadn't\ heard\ of\ before,\ so\ it's\ not\ really}}
+\DoxyCodeLine{01263\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ surprising\ we\ didn't\ know\ how\ to\ create\ it.\ \ Suppress\ the\ warning}}
+\DoxyCodeLine{01264\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ (make\ it\ a\ debug\ statement\ instead).}}
+\DoxyCodeLine{01265\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01266\ \ \ \ \ \ \ \ \ \ \ \ \ bam\_cat.warning()}
+\DoxyCodeLine{01267\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Attempted\ to\ create\ a\ "{}}\ <<\ type.get\_name()\ \ \ \ \(\backslash\)}
+\DoxyCodeLine{01268\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ but\ a\ "{}}\ <<\ \textcolor{keywordtype}{object}-\/>get\_type()\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \(\backslash\)}
+\DoxyCodeLine{01269\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ was\ created\ instead."{}}\ <<\ std::endl;}
+\DoxyCodeLine{01270\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01271\ }
+\DoxyCodeLine{01272\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01273\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ was\ a\ normal\ type\ that\ we\ should\ have\ known\ how\ to\ create.}}
+\DoxyCodeLine{01274\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Report\ the\ error.}}
+\DoxyCodeLine{01275\ \ \ \ \ \ \ \ \ \ \ bam\_cat.warning()}
+\DoxyCodeLine{01276\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Attempted\ to\ create\ a\ "{}}\ <<\ type.get\_name()\ \ \ \ \ \ \(\backslash\)}
+\DoxyCodeLine{01277\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ but\ a\ "{}}\ <<\ \textcolor{keywordtype}{object}-\/>get\_type()\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \(\backslash\)}
+\DoxyCodeLine{01278\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ was\ created\ instead."{}}\ <<\ std::endl;}
+\DoxyCodeLine{01279\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01280\ }
+\DoxyCodeLine{01281\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01282\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01283\ \ \ \ \ \ \ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{01284\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Read\ a\ "{}}\ <<\ \textcolor{keywordtype}{object}-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)\textcolor{keywordtype}{object}}
+\DoxyCodeLine{01285\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ (id="{}}\ <<\ object\_id\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{01286\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01287\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01288\ \ \ \ \ \}}
+\DoxyCodeLine{01289\ }
+\DoxyCodeLine{01290\ \ \ \ \ \textcolor{comment}{//\ Sanity\ check\ that\ we\ read\ the\ expected\ number\ of\ bytes.}}
+\DoxyCodeLine{01291\ \ \ \ \ \textcolor{keywordflow}{if}\ (scan.get\_current\_index()\ >\ dg.get\_length())\ \{}
+\DoxyCodeLine{01292\ \ \ \ \ \ \ bam\_cat.error()}
+\DoxyCodeLine{01293\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}End\ of\ datagram\ reached\ while\ reading\ bam\ object\ "{}}}
+\DoxyCodeLine{01294\ \ \ \ \ \ \ \ \ <<\ type\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)created\_obj.\_ptr\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01295\ \ \ \ \ \}}
+\DoxyCodeLine{01296\ \ \ \}}
+\DoxyCodeLine{01297\ }
+\DoxyCodeLine{01298\ \ \ \textcolor{keywordflow}{return}\ object\_id;}
+\DoxyCodeLine{01299\ \}}
+\DoxyCodeLine{01300\ }
+\DoxyCodeLine{01306\ \textcolor{keywordtype}{bool}\ BamReader::}
+\DoxyCodeLine{01307\ resolve\_object\_pointers(\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\textcolor{keywordtype}{object},}
+\DoxyCodeLine{01308\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ BamReader::PointerReference\ \&pref)\ \{}
+\DoxyCodeLine{01309\ \ \ \textcolor{comment}{//\ Some\ objects\ further\ require\ all\ of\ their\ nested\ objects\ to\ have\ been}}
+\DoxyCodeLine{01310\ \ \ \textcolor{comment}{//\ completed\ (i.e.\ \ complete\_pointers\ has\ been\ called\ on\ each\ nested\ object)}}
+\DoxyCodeLine{01311\ \ \ \textcolor{comment}{//\ before\ they\ can\ themselves\ be\ completed.}}
+\DoxyCodeLine{01312\ \ \ \textcolor{keywordtype}{bool}\ require\_fully\_complete\ =\ \textcolor{keywordtype}{object}-\/>require\_fully\_complete();}
+\DoxyCodeLine{01313\ }
+\DoxyCodeLine{01314\ \ \ \textcolor{comment}{//\ First\ do\ the\ PipelineCycler\ objects.}}
+\DoxyCodeLine{01315\ \ \ CyclerPointers::iterator\ ci;}
+\DoxyCodeLine{01316\ \ \ ci\ =\ pref.\_cycler\_pointers.begin();}
+\DoxyCodeLine{01317\ \ \ \textcolor{keywordflow}{while}\ (ci\ !=\ pref.\_cycler\_pointers.end())\ \{}
+\DoxyCodeLine{01318\ \ \ \ \ \mbox{\hyperlink{structPipelineCyclerTrivialImpl}{PipelineCyclerBase}}\ *cycler\ =\ (*ci).first;}
+\DoxyCodeLine{01319\ \ \ \ \ \textcolor{keyword}{const}\ vector\_int\ \&pointer\_ids\ =\ (*ci).second;}
+\DoxyCodeLine{01320\ }
+\DoxyCodeLine{01321\ \ \ \ \ \textcolor{keywordflow}{if}\ (resolve\_cycler\_pointers(cycler,\ pointer\_ids,\ require\_fully\_complete))\ \{}
+\DoxyCodeLine{01322\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ remove\ this\ cycler\ from\ the\ list\ of\ things\ that\ need\ completion.}}
+\DoxyCodeLine{01323\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ have\ to\ be\ a\ bit\ careful\ when\ deleting\ things\ from\ the\ STL}}
+\DoxyCodeLine{01324\ \ \ \ \ \ \ \textcolor{comment}{//\ container\ while\ we\ are\ traversing\ it.}}
+\DoxyCodeLine{01325\ \ \ \ \ \ \ CyclerPointers::iterator\ old\ =\ ci;}
+\DoxyCodeLine{01326\ \ \ \ \ \ \ ++ci;}
+\DoxyCodeLine{01327\ \ \ \ \ \ \ pref.\_cycler\_pointers.erase(old);}
+\DoxyCodeLine{01328\ }
+\DoxyCodeLine{01329\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01330\ \ \ \ \ \ \ \textcolor{comment}{//\ Couldn't\ complete\ this\ cycler\ yet;\ it'll\ wait\ for\ next\ time.}}
+\DoxyCodeLine{01331\ \ \ \ \ \ \ ++ci;}
+\DoxyCodeLine{01332\ \ \ \ \ \}}
+\DoxyCodeLine{01333\ \ \ \}}
+\DoxyCodeLine{01334\ }
+\DoxyCodeLine{01335\ \ \ \textcolor{keywordflow}{if}\ (!pref.\_cycler\_pointers.empty())\ \{}
+\DoxyCodeLine{01336\ \ \ \ \ \textcolor{comment}{//\ If\ we\ didn't\ get\ all\ the\ cyclers,\ we\ have\ to\ wait.}}
+\DoxyCodeLine{01337\ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01338\ \ \ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{01339\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}some\ cyclers\ pending:\ complete\_pointers\ for\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)\textcolor{keywordtype}{object}}
+\DoxyCodeLine{01340\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ object-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{01341\ \ \ \ \ \}}
+\DoxyCodeLine{01342\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01343\ \ \ \}}
+\DoxyCodeLine{01344\ }
+\DoxyCodeLine{01345\ \ \ \textcolor{comment}{//\ Now\ make\ sure\ we\ have\ all\ of\ the\ pointers\ this\ object\ is\ waiting\ for.\ \ If}}
+\DoxyCodeLine{01346\ \ \ \textcolor{comment}{//\ any\ of\ the\ pointers\ has\ not\ yet\ been\ read\ in,\ we\ can't\ resolve\ this}}
+\DoxyCodeLine{01347\ \ \ \textcolor{comment}{//\ object-\/-\/we\ can't\ do\ anything\ for\ a\ given\ object\ until\ we\ have\ *all*}}
+\DoxyCodeLine{01348\ \ \ \textcolor{comment}{//\ outstanding\ pointers\ for\ that\ object.}}
+\DoxyCodeLine{01349\ \ \ \textcolor{keywordtype}{bool}\ is\_complete\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01350\ }
+\DoxyCodeLine{01351\ \ \ vector\_typedWritable\ references;}
+\DoxyCodeLine{01352\ \ \ references.reserve(pref.\_objects.size());}
+\DoxyCodeLine{01353\ }
+\DoxyCodeLine{01354\ \ \ vector\_int::const\_iterator\ pi;}
+\DoxyCodeLine{01355\ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ pref.\_objects.begin();}
+\DoxyCodeLine{01356\ \ \ \ \ \ \ \ pi\ !=\ pref.\_objects.end()\ \&\&\ is\_complete;}
+\DoxyCodeLine{01357\ \ \ \ \ \ \ \ ++pi)\ \{}
+\DoxyCodeLine{01358\ \ \ \ \ \textcolor{keywordtype}{int}\ child\_id\ =\ (*pi);}
+\DoxyCodeLine{01359\ \ \ \ \ \textcolor{keywordflow}{if}\ (child\_id\ ==\ 0)\ \{}
+\DoxyCodeLine{01360\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ NULL\ pointer\ is\ a\ NULL\ pointer.}}
+\DoxyCodeLine{01361\ \ \ \ \ \ \ references.push\_back(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01362\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01363\ \ \ \ \ \}}
+\DoxyCodeLine{01364\ }
+\DoxyCodeLine{01365\ \ \ \ \ \textcolor{comment}{//\ See\ if\ we\ have\ the\ pointer\ available\ now.}}
+\DoxyCodeLine{01366\ \ \ \ \ CreatedObjs::const\_iterator\ oi\ =\ \_created\_objs.find(child\_id);}
+\DoxyCodeLine{01367\ \ \ \ \ \textcolor{keywordflow}{if}\ (oi\ ==\ \_created\_objs.end())\ \{}
+\DoxyCodeLine{01368\ \ \ \ \ \ \ \textcolor{comment}{//\ No,\ too\ bad.}}
+\DoxyCodeLine{01369\ \ \ \ \ \ \ is\_complete\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01370\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01371\ \ \ \ \ \}}
+\DoxyCodeLine{01372\ }
+\DoxyCodeLine{01373\ \ \ \ \ \textcolor{keyword}{const}\ CreatedObj\ \&child\_obj\ =\ (*oi).second;}
+\DoxyCodeLine{01374\ \ \ \ \ \textcolor{keywordflow}{if}\ (!child\_obj.\_created)\ \{}
+\DoxyCodeLine{01375\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ child\ object\ hasn't\ yet\ been\ created.}}
+\DoxyCodeLine{01376\ \ \ \ \ \ \ is\_complete\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01377\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01378\ \ \ \ \ \}}
+\DoxyCodeLine{01379\ }
+\DoxyCodeLine{01380\ \ \ \ \ \textcolor{keywordflow}{if}\ (child\_obj.\_change\_this\ !=\ \textcolor{keyword}{nullptr}\ ||\ child\_obj.\_change\_this\_ref\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01381\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ been\ created,\ but\ the\ pointer\ might\ still\ change.}}
+\DoxyCodeLine{01382\ \ \ \ \ \ \ is\_complete\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01383\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01384\ \ \ \ \ \}}
+\DoxyCodeLine{01385\ }
+\DoxyCodeLine{01386\ \ \ \ \ \textcolor{keywordflow}{if}\ (require\_fully\_complete\ \&\&}
+\DoxyCodeLine{01387\ \ \ \ \ \ \ \ \ \_object\_pointers.find(child\_id)\ !=\ \_object\_pointers.end())\ \{}
+\DoxyCodeLine{01388\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ not\ yet\ complete\ itself.}}
+\DoxyCodeLine{01389\ \ \ \ \ \ \ is\_complete\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01390\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01391\ \ \ \ \ \}}
+\DoxyCodeLine{01392\ }
+\DoxyCodeLine{01393\ \ \ \ \ \textcolor{comment}{//\ Yes,\ it's\ ready.}}
+\DoxyCodeLine{01394\ \ \ \ \ references.push\_back(child\_obj.\_ptr);}
+\DoxyCodeLine{01395\ \ \ \}}
+\DoxyCodeLine{01396\ }
+\DoxyCodeLine{01397\ \ \ \textcolor{keywordflow}{if}\ (is\_complete)\ \{}
+\DoxyCodeLine{01398\ \ \ \ \ \textcolor{comment}{//\ Okay,\ here's\ the\ complete\ list\ of\ pointers\ for\ you!}}
+\DoxyCodeLine{01399\ \ \ \ \ nassertr(references.size()\ ==\ pref.\_objects.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01400\ }
+\DoxyCodeLine{01401\ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01402\ \ \ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{01403\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}complete\_pointers\ for\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)\textcolor{keywordtype}{object}}
+\DoxyCodeLine{01404\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ object-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}),\ "{}}\ <<\ references.size()}
+\DoxyCodeLine{01405\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ pointers.\(\backslash\)n"{}};}
+\DoxyCodeLine{01406\ \ \ \ \ \}}
+\DoxyCodeLine{01407\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_completed\ =\ 0;}
+\DoxyCodeLine{01408\ \ \ \ \ \textcolor{keywordflow}{if}\ (!references.empty())\ \{}
+\DoxyCodeLine{01409\ \ \ \ \ \ \ num\_completed\ =\ \textcolor{keywordtype}{object}-\/>complete\_pointers(\&references[0],\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01410\ \ \ \ \ \}}
+\DoxyCodeLine{01411\ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_completed\ !=\ (\textcolor{keywordtype}{int})references.size())\ \{}
+\DoxyCodeLine{01412\ \ \ \ \ \ \ bam\_cat.warning()}
+\DoxyCodeLine{01413\ \ \ \ \ \ \ \ \ <<\ \textcolor{keywordtype}{object}-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}\ completed\ "{}}\ <<\ num\_completed}
+\DoxyCodeLine{01414\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ of\ "{}}\ <<\ references.size()\ <<\ \textcolor{stringliteral}{"{}\ pointers.\(\backslash\)n"{}};}
+\DoxyCodeLine{01415\ \ \ \ \ \ \ nassertr(num\_completed\ <\ (\textcolor{keywordtype}{int})references.size(),\ \textcolor{keyword}{true});}
+\DoxyCodeLine{01416\ \ \ \ \ \}}
+\DoxyCodeLine{01417\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01418\ }
+\DoxyCodeLine{01419\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01420\ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01421\ \ \ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{01422\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}not\ ready:\ complete\_pointers\ for\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)\textcolor{keywordtype}{object}}
+\DoxyCodeLine{01423\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ object-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{01424\ \ \ \ \ \}}
+\DoxyCodeLine{01425\ \ \ \}}
+\DoxyCodeLine{01426\ }
+\DoxyCodeLine{01427\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01428\ \}}
+\DoxyCodeLine{01429\ }
+\DoxyCodeLine{01435\ \textcolor{keywordtype}{bool}\ BamReader::}
+\DoxyCodeLine{01436\ resolve\_cycler\_pointers(\mbox{\hyperlink{structPipelineCyclerTrivialImpl}{PipelineCyclerBase}}\ *cycler,}
+\DoxyCodeLine{01437\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ vector\_int\ \&pointer\_ids,}
+\DoxyCodeLine{01438\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ require\_fully\_complete)\ \{}
+\DoxyCodeLine{01439\ \ \ \textcolor{comment}{//\ Now\ make\ sure\ we\ have\ all\ of\ the\ pointers\ this\ cycler\ is\ waiting\ for.\ \ If}}
+\DoxyCodeLine{01440\ \ \ \textcolor{comment}{//\ any\ of\ the\ pointers\ has\ not\ yet\ been\ read\ in,\ we\ can't\ resolve\ this}}
+\DoxyCodeLine{01441\ \ \ \textcolor{comment}{//\ cycler-\/-\/we\ can't\ do\ anything\ for\ a\ given\ cycler\ until\ we\ have\ *all*}}
+\DoxyCodeLine{01442\ \ \ \textcolor{comment}{//\ outstanding\ pointers\ for\ that\ cycler.}}
+\DoxyCodeLine{01443\ }
+\DoxyCodeLine{01444\ \ \ \textcolor{keywordtype}{bool}\ is\_complete\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01445\ \ \ vector\_typedWritable\ references;}
+\DoxyCodeLine{01446\ }
+\DoxyCodeLine{01447\ \ \ vector\_int::const\_iterator\ pi;}
+\DoxyCodeLine{01448\ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ pointer\_ids.begin();\ pi\ !=\ pointer\_ids.end()\ \&\&\ is\_complete;\ ++pi)\ \{}
+\DoxyCodeLine{01449\ \ \ \ \ \textcolor{keywordtype}{int}\ child\_id\ =\ (*pi);}
+\DoxyCodeLine{01450\ }
+\DoxyCodeLine{01451\ \ \ \ \ \textcolor{keywordflow}{if}\ (child\_id\ ==\ 0)\ \{}
+\DoxyCodeLine{01452\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ NULL\ pointer\ is\ a\ NULL\ pointer.}}
+\DoxyCodeLine{01453\ \ \ \ \ \ \ references.push\_back(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01454\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01455\ \ \ \ \ \}}
+\DoxyCodeLine{01456\ }
+\DoxyCodeLine{01457\ \ \ \ \ \textcolor{comment}{//\ See\ if\ we\ have\ the\ pointer\ available\ now.}}
+\DoxyCodeLine{01458\ \ \ \ \ CreatedObjs::const\_iterator\ oi\ =\ \_created\_objs.find(child\_id);}
+\DoxyCodeLine{01459\ \ \ \ \ \textcolor{keywordflow}{if}\ (oi\ ==\ \_created\_objs.end())\ \{}
+\DoxyCodeLine{01460\ \ \ \ \ \ \ \textcolor{comment}{//\ No,\ too\ bad.}}
+\DoxyCodeLine{01461\ \ \ \ \ \ \ is\_complete\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01462\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01463\ \ \ \ \ \}}
+\DoxyCodeLine{01464\ }
+\DoxyCodeLine{01465\ \ \ \ \ \textcolor{keyword}{const}\ CreatedObj\ \&child\_obj\ =\ (*oi).second;}
+\DoxyCodeLine{01466\ \ \ \ \ \textcolor{keywordflow}{if}\ (child\_obj.\_change\_this\ !=\ \textcolor{keyword}{nullptr}\ ||\ child\_obj.\_change\_this\_ref\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01467\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ been\ created,\ but\ the\ pointer\ might\ still\ change.}}
+\DoxyCodeLine{01468\ \ \ \ \ \ \ is\_complete\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01469\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01470\ \ \ \ \ \}}
+\DoxyCodeLine{01471\ }
+\DoxyCodeLine{01472\ \ \ \ \ \textcolor{keywordflow}{if}\ (require\_fully\_complete\ \&\&}
+\DoxyCodeLine{01473\ \ \ \ \ \ \ \ \ \_object\_pointers.find(child\_id)\ !=\ \_object\_pointers.end())\ \{}
+\DoxyCodeLine{01474\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ not\ yet\ complete\ itself.}}
+\DoxyCodeLine{01475\ \ \ \ \ \ \ is\_complete\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01476\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01477\ \ \ \ \ \}}
+\DoxyCodeLine{01478\ }
+\DoxyCodeLine{01479\ \ \ \ \ \textcolor{comment}{//\ Yes,\ it's\ ready.}}
+\DoxyCodeLine{01480\ \ \ \ \ references.push\_back(child\_obj.\_ptr);}
+\DoxyCodeLine{01481\ \ \ \}}
+\DoxyCodeLine{01482\ }
+\DoxyCodeLine{01483\ \ \ \textcolor{keywordflow}{if}\ (is\_complete)\ \{}
+\DoxyCodeLine{01484\ \ \ \ \ \textcolor{comment}{//\ Okay,\ here's\ the\ complete\ list\ of\ pointers\ for\ you!}}
+\DoxyCodeLine{01485\ \ \ \ \ \mbox{\hyperlink{classCycleData}{CycleData}}\ *cdata\ =\ cycler-\/>write(Thread::get\_current\_thread());}
+\DoxyCodeLine{01486\ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01487\ \ \ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{01488\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}complete\_pointers\ for\ CycleData\ object\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)cdata}
+\DoxyCodeLine{01489\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01490\ \ \ \ \ \}}
+\DoxyCodeLine{01491\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_completed\ =\ cdata-\/>\mbox{\hyperlink{classCycleData_afae68c5bc34c5cd6ab858d009fbdf1b3}{complete\_pointers}}(\&references[0],\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01492\ \ \ \ \ cycler-\/>release\_write(cdata);}
+\DoxyCodeLine{01493\ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_completed\ !=\ (\textcolor{keywordtype}{int})references.size())\ \{}
+\DoxyCodeLine{01494\ \ \ \ \ \ \ bam\_cat.warning()}
+\DoxyCodeLine{01495\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}CycleData\ object\ completed\ "{}}\ <<\ num\_completed}
+\DoxyCodeLine{01496\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ of\ "{}}\ <<\ references.size()\ <<\ \textcolor{stringliteral}{"{}\ pointers.\(\backslash\)n"{}};}
+\DoxyCodeLine{01497\ \ \ \ \ \ \ nassertr(num\_completed\ <\ (\textcolor{keywordtype}{int})references.size(),\ \textcolor{keyword}{true});}
+\DoxyCodeLine{01498\ \ \ \ \ \}}
+\DoxyCodeLine{01499\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01500\ \ \ \}}
+\DoxyCodeLine{01501\ }
+\DoxyCodeLine{01502\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01503\ \}}
+\DoxyCodeLine{01504\ }
+\DoxyCodeLine{01509\ \textcolor{keywordtype}{void}\ BamReader::}
+\DoxyCodeLine{01510\ finalize()\ \{}
+\DoxyCodeLine{01511\ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01512\ \ \ \ \ bam\_cat.debug()}
+\DoxyCodeLine{01513\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Finalizing\ bam\ source\(\backslash\)n"{}};}
+\DoxyCodeLine{01514\ \ \ \}}
+\DoxyCodeLine{01515\ }
+\DoxyCodeLine{01516\ \ \ Finalize::iterator\ fi\ =\ \_finalize\_list.begin();}
+\DoxyCodeLine{01517\ \ \ \textcolor{keywordflow}{while}\ (fi\ !=\ \_finalize\_list.end())\ \{}
+\DoxyCodeLine{01518\ \ \ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\textcolor{keywordtype}{object}\ =\ (*fi);}
+\DoxyCodeLine{01519\ \ \ \ \ nassertv(\textcolor{keywordtype}{object}\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01520\ \ \ \ \ \_finalize\_list.erase(fi);}
+\DoxyCodeLine{01521\ \ \ \ \ \textcolor{keywordflow}{if}\ (bam\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01522\ \ \ \ \ \ \ bam\_cat.spam()}
+\DoxyCodeLine{01523\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}finalizing\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)\textcolor{keywordtype}{object}\ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ object-\/>get\_type()}
+\DoxyCodeLine{01524\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{01525\ \ \ \ \ \}}
+\DoxyCodeLine{01526\ \ \ \ \ \textcolor{keywordtype}{object}-\/>finalize(\textcolor{keyword}{this});}
+\DoxyCodeLine{01527\ \ \ \ \ \_aux\_data.erase(\textcolor{keywordtype}{object});}
+\DoxyCodeLine{01528\ \ \ \ \ fi\ =\ \_finalize\_list.begin();}
+\DoxyCodeLine{01529\ \ \ \}}
+\DoxyCodeLine{01530\ }
+\DoxyCodeLine{01531\ \ \ \textcolor{comment}{//\ Now\ clear\ the\ aux\ data\ of\ all\ objects,\ except\ the\ NULL\ object.}}
+\DoxyCodeLine{01532\ \ \ \textcolor{keywordflow}{if}\ (!\_aux\_data.empty())\ \{}
+\DoxyCodeLine{01533\ \ \ \ \ AuxDataTable::iterator\ ti\ =\ \_aux\_data.find(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01534\ }
+\DoxyCodeLine{01535\ \ \ \ \ \textcolor{keywordflow}{if}\ (ti\ !=\ \_aux\_data.end())\ \{}
+\DoxyCodeLine{01536\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_aux\_data.size()\ >\ 1)\ \{}
+\DoxyCodeLine{01537\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Move\ the\ NULL\ data\ to\ the\ new\ table;\ remove\ the\ rest.}}
+\DoxyCodeLine{01538\ \ \ \ \ \ \ \ \ AuxDataTable\ new\_aux\_data;}
+\DoxyCodeLine{01539\ \ \ \ \ \ \ \ \ AuxDataTable::iterator\ nti\ =}
+\DoxyCodeLine{01540\ \ \ \ \ \ \ \ \ \ \ new\_aux\_data.insert(AuxDataTable::value\_type(\textcolor{keyword}{nullptr},\ AuxDataNames())).first;}
+\DoxyCodeLine{01541\ \ \ \ \ \ \ \ \ (*nti).second.swap((*ti).second);}
+\DoxyCodeLine{01542\ \ \ \ \ \ \ \ \ \_aux\_data.swap(new\_aux\_data);}
+\DoxyCodeLine{01543\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01544\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01545\ \ \ \ \ \ \ \textcolor{comment}{//\ There's\ no\ NULL\ data;\ clear\ the\ whole\ table.}}
+\DoxyCodeLine{01546\ \ \ \ \ \ \ \_aux\_data.clear();}
+\DoxyCodeLine{01547\ \ \ \ \ \}}
+\DoxyCodeLine{01548\ \ \ \}}
+\DoxyCodeLine{01549\ \}}
+
+\end{DoxyCode}

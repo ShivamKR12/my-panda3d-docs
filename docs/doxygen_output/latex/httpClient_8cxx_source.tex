@@ -1,0 +1,1300 @@
+\doxysection{http\+Client.\+cxx}
+\hypertarget{httpClient_8cxx_source}{}\label{httpClient_8cxx_source}\index{panda/src/downloader/httpClient.cxx@{panda/src/downloader/httpClient.cxx}}
+\mbox{\hyperlink{httpClient_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{httpClient_8h}{httpClient.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{httpChannel_8h}{httpChannel.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__downloader_8h}{config\_downloader.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{filename_8h}{filename.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__express_8h}{config\_express.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFileSystem_8h}{virtualFileSystem.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{executionEnvironment_8h}{executionEnvironment.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{httpBasicAuthorization_8h}{httpBasicAuthorization.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{httpDigestAuthorization_8h}{httpDigestAuthorization.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{globPattern_8h}{globPattern.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{string__utils_8h}{string\_utils.h}}"{}}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{openSSLWrapper_8h}{openSSLWrapper.h}}"{}}}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ PT(HTTPClient)\ HTTPClient::\_global\_ptr;}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00039\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00040\ ssl\_msg\_callback(\textcolor{keywordtype}{int}\ write\_p,\ \textcolor{keywordtype}{int}\ version,\ \textcolor{keywordtype}{int}\ content\_type,}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{void}\ *,\ \textcolor{keywordtype}{size\_t}\ len,\ SSL\ *,\ \textcolor{keywordtype}{void}\ *)\ \{}
+\DoxyCodeLine{00042\ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ describe;}
+\DoxyCodeLine{00043\ \ \ \textcolor{keywordflow}{if}\ (write\_p)\ \{}
+\DoxyCodeLine{00044\ \ \ \ \ describe\ <<\ \textcolor{stringliteral}{"{}sent\ "{}};}
+\DoxyCodeLine{00045\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00046\ \ \ \ \ describe\ <<\ \textcolor{stringliteral}{"{}received\ "{}};}
+\DoxyCodeLine{00047\ \ \ \}}
+\DoxyCodeLine{00048\ \ \ \textcolor{keywordflow}{switch}\ (version)\ \{}
+\DoxyCodeLine{00049\ \ \ \textcolor{keywordflow}{case}\ SSL2\_VERSION:}
+\DoxyCodeLine{00050\ \ \ \ \ describe\ <<\ \textcolor{stringliteral}{"{}SSL\ 2.0\ "{}};}
+\DoxyCodeLine{00051\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \ \ \textcolor{keywordflow}{case}\ SSL3\_VERSION:}
+\DoxyCodeLine{00054\ \ \ \ \ describe\ <<\ \textcolor{stringliteral}{"{}SSL\ 3.0\ "{}};}
+\DoxyCodeLine{00055\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00057\ \ \ \textcolor{keywordflow}{case}\ TLS1\_VERSION:}
+\DoxyCodeLine{00058\ \ \ \ \ describe\ <<\ \textcolor{stringliteral}{"{}TLS\ 1.0\ "{}};}
+\DoxyCodeLine{00059\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00061\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00062\ \ \ \ \ describe\ <<\ \textcolor{stringliteral}{"{}unknown\ protocol\ "{}};}
+\DoxyCodeLine{00063\ \ \ \}}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ \ \ describe\ <<\ \textcolor{stringliteral}{"{}message:\ "{}};}
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00067\ \ \ \textcolor{keywordflow}{if}\ (version\ !=\ SSL2\_VERSION)\ \{}
+\DoxyCodeLine{00068\ \ \ \ \ \textcolor{keywordflow}{switch}\ (content\_type)\ \{}
+\DoxyCodeLine{00069\ \ \ \ \ \textcolor{keywordflow}{case}\ 20:}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ describe\ <<\ \textcolor{stringliteral}{"{}change\ cipher\ spec,\ "{}};}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00072\ }
+\DoxyCodeLine{00073\ \ \ \ \ \textcolor{keywordflow}{case}\ 21:}
+\DoxyCodeLine{00074\ \ \ \ \ \ \ describe\ <<\ \textcolor{stringliteral}{"{}alert,\ "{}};}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00077\ \ \ \ \ \textcolor{keywordflow}{case}\ 22:}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ describe\ <<\ \textcolor{stringliteral}{"{}handshake,\ "{}};}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00080\ }
+\DoxyCodeLine{00081\ \ \ \ \ \textcolor{keywordflow}{case}\ 23:}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ describe\ <<\ \textcolor{stringliteral}{"{}application\ data,\ "{}};}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00085\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00086\ \ \ \ \ \ \ describe\ <<\ \textcolor{stringliteral}{"{}unknown\ content\ type,\ "{}};}
+\DoxyCodeLine{00087\ \ \ \ \ \}}
+\DoxyCodeLine{00088\ \ \ \}}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00090\ \ \ describe\ <<\ len\ <<\ \textcolor{stringliteral}{"{}\ bytes.\(\backslash\)n"{}};}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00092\ \ \ downloader\_cat.debug()\ <<\ describe.str();}
+\DoxyCodeLine{00093\ \}}
+\DoxyCodeLine{00094\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ !defined(NDEBUG)}}
+\DoxyCodeLine{00095\ }
+\DoxyCodeLine{00099\ HTTPClient::}
+\DoxyCodeLine{00100\ HTTPClient()\ \{}
+\DoxyCodeLine{00101\ \ \ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}\ verify\_ssl}
+\DoxyCodeLine{00102\ \ \ \ \ (\textcolor{stringliteral}{"{}verify-\/ssl"{}},\ \textcolor{keyword}{true},}
+\DoxyCodeLine{00103\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}Configure\ this\ true\ (the\ default)\ to\ insist\ on\ verifying\ all\ SSL\ "{}}}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}(e.g.\ https)\ servers\ against\ a\ known\ certificate,\ or\ false\ to\ allow\ "{}}}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}an\ unverified\ connection.\ \ This\ controls\ the\ default\ behavior;\ the\ "{}}}
+\DoxyCodeLine{00106\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}specific\ behavior\ for\ a\ particular\ HTTPClient\ can\ be\ adjusted\ at\ "{}}}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}runtime\ with\ set\_verify\_ssl()."{}}));}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \ \ \mbox{\hyperlink{classConfigVariableString}{ConfigVariableString}}\ ssl\_cipher\_list}
+\DoxyCodeLine{00110\ \ \ \ \ (\textcolor{stringliteral}{"{}ssl-\/cipher-\/list"{}},\ \textcolor{stringliteral}{"{}DEFAULT"{}},}
+\DoxyCodeLine{00111\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ is\ the\ default\ value\ for\ HTTPClient::set\_cipher\_list()."{}}));}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00113\ \ \ \mbox{\hyperlink{classConfigVariableString}{ConfigVariableString}}\ http\_proxy}
+\DoxyCodeLine{00114\ \ \ \ \ (\textcolor{stringliteral}{"{}http-\/proxy"{}},\ \textcolor{stringliteral}{"{}"{}},}
+\DoxyCodeLine{00115\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ specifies\ the\ default\ value\ for\ HTTPClient::set\_proxy\_spec().\ \ "{}}}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}It\ is\ a\ semicolon-\/delimited\ list\ of\ proxies\ that\ we\ use\ to\ contact\ "{}}}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}all\ HTTP\ hosts\ that\ don't\ specify\ otherwise.\ \ See\ "{}}}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}set\_proxy\_spec()\ for\ more\ information."{}}));}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ \ \ \mbox{\hyperlink{classConfigVariableString}{ConfigVariableString}}\ http\_direct\_hosts}
+\DoxyCodeLine{00121\ \ \ \ \ (\textcolor{stringliteral}{"{}http-\/direct-\/hosts"{}},\ \textcolor{stringliteral}{"{}"{}},}
+\DoxyCodeLine{00122\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ specifies\ the\ default\ value\ for\ HTTPClient::set\_direct\_host\_spec().\ \ "{}}}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}It\ is\ a\ semicolon-\/delimited\ list\ of\ host\ names\ that\ do\ not\ require\ a\ "{}}}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}proxy.\ \ See\ set\_direct\_host\_spec()\ for\ more\ information."{}}));}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \ \ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}\ http\_try\_all\_direct}
+\DoxyCodeLine{00127\ \ \ \ \ (\textcolor{stringliteral}{"{}http-\/try-\/all-\/direct"{}},\ \textcolor{keyword}{true},}
+\DoxyCodeLine{00128\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ specifies\ the\ default\ value\ for\ HTTPClient::set\_try\_all\_direct().\ \ "{}}}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}If\ this\ is\ true,\ a\ direct\ connection\ will\ always\ be\ attempted\ after\ an\ "{}}}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}attempt\ to\ connect\ through\ a\ proxy\ fails."{}}));}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ \ \ \mbox{\hyperlink{classConfigVariableString}{ConfigVariableString}}\ http\_proxy\_username}
+\DoxyCodeLine{00133\ \ \ \ \ (\textcolor{stringliteral}{"{}http-\/proxy-\/username"{}},\ \textcolor{stringliteral}{"{}"{}},}
+\DoxyCodeLine{00134\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ specifies\ a\ default\ username:password\ to\ pass\ to\ the\ proxy."{}}));}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00136\ \ \ \mbox{\hyperlink{classConfigVariableList}{ConfigVariableList}}\ http\_username}
+\DoxyCodeLine{00137\ \ \ \ \ (\textcolor{stringliteral}{"{}http-\/username"{}},}
+\DoxyCodeLine{00138\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}Adds\ one\ or\ more\ username/password\ pairs\ to\ all\ HTTP\ clients.\ \ The\ client\ "{}}}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}will\ present\ this\ username/password\ when\ asked\ to\ authenticate\ a\ request\ "{}}}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}for\ a\ particular\ server\ and/or\ realm.\ \ The\ username\ is\ of\ the\ form\ "{}}}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}server:realm:username:password,\ where\ either\ or\ both\ of\ server\ and\ "{}}}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}realm\ may\ be\ empty,\ or\ just\ realm:username:password\ or\ username:password.\ \ "{}}}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}If\ the\ server\ or\ realm\ is\ empty,\ they\ will\ match\ anything."{}}));}
+\DoxyCodeLine{00144\ }
+\DoxyCodeLine{00145\ \ \ \mbox{\hyperlink{classConfigVariableFilename}{ConfigVariableFilename}}\ http\_client\_certificate\_filename}
+\DoxyCodeLine{00146\ \ \ \ \ (\textcolor{stringliteral}{"{}http-\/client-\/certificate-\/filename"{}},\ \textcolor{stringliteral}{"{}"{}},}
+\DoxyCodeLine{00147\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ provides\ a\ default\ client\ certificate\ to\ offer\ up\ should\ an\ "{}}}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}SSL\ server\ demand\ one.\ \ The\ file\ names\ a\ PEM-\/formatted\ file\ "{}}}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}that\ includes\ a\ public\ and\ private\ key\ specification.\ \ A\ "{}}}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}connection-\/specific\ certificate\ may\ also\ be\ specified\ at\ runtime\ on\ "{}}}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}the\ HTTPClient\ object,\ but\ this\ will\ require\ having\ a\ different\ "{}}}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}HTTPClient\ object\ for\ each\ differently-\/certificated\ connection."{}}));}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00154\ \ \ \mbox{\hyperlink{classConfigVariableString}{ConfigVariableString}}\ http\_client\_certificate\_passphrase}
+\DoxyCodeLine{00155\ \ \ \ \ (\textcolor{stringliteral}{"{}http-\/client-\/certificate-\/passphrase"{}},\ \textcolor{stringliteral}{"{}"{}},}
+\DoxyCodeLine{00156\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ specifies\ the\ passphrase\ to\ use\ to\ decode\ the\ certificate\ named\ "{}}}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}by\ http-\/client-\/certificate-\/filename."{}}));}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \mbox{\hyperlink{classConfigVariableList}{ConfigVariableList}}\ http\_preapproved\_server\_certificate\_filename}
+\DoxyCodeLine{00161\ \ \ \ \ (\textcolor{stringliteral}{"{}http-\/preapproved-\/server-\/certificate-\/filename"{}},}
+\DoxyCodeLine{00162\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ specifies\ a\ server\ hostname:port\ combination,\ followed\ by\ "{}}}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}at\ least\ one\ space,\ and\ the\ name\ of\ a\ PEM\ file\ that\ contains\ "{}}}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}an\ SSL\ certificate\ that\ we\ expect\ this\ server\ to\ offer.\ \ If\ "{}}}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}it\ does,\ we\ will\ accept\ the\ cert\ without\ further\ question,\ "{}}}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}even\ if\ the\ cert\ does\ not\ match\ any\ known\ certificate\ "{}}}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}authorities.\ \ This\ option\ may\ appear\ multiple\ times."{}}));}
+\DoxyCodeLine{00168\ }
+\DoxyCodeLine{00169\ \ \ \mbox{\hyperlink{classConfigVariableList}{ConfigVariableList}}\ http\_preapproved\_server\_certificate\_name}
+\DoxyCodeLine{00170\ \ \ \ \ (\textcolor{stringliteral}{"{}http-\/preapproved-\/server-\/certificate-\/name"{}},}
+\DoxyCodeLine{00171\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ specifies\ a\ server\ hostname:port\ combination,\ followed\ by\ "{}}}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}at\ least\ one\ space,\ and\ a\ string\ describing\ the\ subject\ name\ "{}}}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}of\ an\ SSL\ certificate\ we\ expect\ this\ server\ to\ offer.\ \ If\ it\ "{}}}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}it\ does,\ we\ will\ accept\ the\ cert,\ but\ only\ if\ it\ also\ matches\ "{}}}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}a\ known\ certificate\ authority.\ \ This\ option\ may\ appear\ "{}}}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}multiple\ times."{}}));}
+\DoxyCodeLine{00177\ }
+\DoxyCodeLine{00178\ \ \ \_http\_version\ =\ HTTPEnum::HV\_11;}
+\DoxyCodeLine{00179\ \ \ \_verify\_ssl\ =\ verify\_ssl\ ?\ VS\_normal\ :\ VS\_no\_verify;}
+\DoxyCodeLine{00180\ \ \ \_ssl\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00181\ }
+\DoxyCodeLine{00182\ \ \ set\_proxy\_spec(http\_proxy);}
+\DoxyCodeLine{00183\ \ \ set\_direct\_host\_spec(http\_direct\_hosts);}
+\DoxyCodeLine{00184\ \ \ \_try\_all\_direct\ =\ http\_try\_all\_direct;}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00186\ \ \ \textcolor{keywordflow}{if}\ (!http\_proxy\_username.empty())\ \{}
+\DoxyCodeLine{00187\ \ \ \ \ set\_username(\textcolor{stringliteral}{"{}*proxy"{}},\ \textcolor{stringliteral}{"{}"{}},\ http\_proxy\_username);}
+\DoxyCodeLine{00188\ \ \ \}}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00190\ \ \ set\_cipher\_list(ssl\_cipher\_list);}
+\DoxyCodeLine{00191\ }
+\DoxyCodeLine{00192\ \ \ \{}
+\DoxyCodeLine{00193\ \ \ \ \ \textcolor{comment}{//\ Also\ load\ in\ the\ general\ usernames.}}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_unique\_values\ =\ http\_username.get\_num\_unique\_values();}
+\DoxyCodeLine{00195\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_unique\_values;\ i++)\ \{}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ username\ =\ http\_username.get\_unique\_value(i);}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ add\_http\_username(username);}
+\DoxyCodeLine{00198\ \ \ \ \ \}}
+\DoxyCodeLine{00199\ \ \ \}}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ \_client\_certificate\_filename\ =\ http\_client\_certificate\_filename;}
+\DoxyCodeLine{00202\ \ \ \_client\_certificate\_passphrase\ =\ http\_client\_certificate\_passphrase;}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00204\ \ \ \_client\_certificate\_loaded\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00205\ \ \ \_client\_certificate\_pub\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00206\ \ \ \_client\_certificate\_priv\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00207\ }
+\DoxyCodeLine{00208\ \ \ \textcolor{keywordtype}{int}\ num\_server\_certs\ =\ http\_preapproved\_server\_certificate\_filename.get\_num\_unique\_values();}
+\DoxyCodeLine{00209\ \ \ \textcolor{keywordtype}{int}\ si;}
+\DoxyCodeLine{00210\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ 0;\ si\ <\ num\_server\_certs;\ si++)\ \{}
+\DoxyCodeLine{00211\ \ \ \ \ \textcolor{keywordtype}{string}\ cert\_line\ =\ http\_preapproved\_server\_certificate\_filename.get\_unique\_value(si);}
+\DoxyCodeLine{00212\ \ \ \ \ \textcolor{keywordtype}{string}\ a,\ b;}
+\DoxyCodeLine{00213\ \ \ \ \ split\_whitespace(a,\ b,\ cert\_line);}
+\DoxyCodeLine{00214\ \ \ \ \ add\_preapproved\_server\_certificate\_filename(\mbox{\hyperlink{classURLSpec}{URLSpec}}(a,\ \textcolor{keyword}{true}),\ b);}
+\DoxyCodeLine{00215\ \ \ \}}
+\DoxyCodeLine{00216\ }
+\DoxyCodeLine{00217\ \ \ num\_server\_certs\ =\ http\_preapproved\_server\_certificate\_name.get\_num\_unique\_values();}
+\DoxyCodeLine{00218\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ 0;\ si\ <\ num\_server\_certs;\ si++)\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ \textcolor{keywordtype}{string}\ cert\_line\ =\ http\_preapproved\_server\_certificate\_name.get\_unique\_value(si);}
+\DoxyCodeLine{00220\ \ \ \ \ \textcolor{keywordtype}{string}\ a,\ b;}
+\DoxyCodeLine{00221\ \ \ \ \ split\_whitespace(a,\ b,\ cert\_line);}
+\DoxyCodeLine{00222\ \ \ \ \ add\_preapproved\_server\_certificate\_name(\mbox{\hyperlink{classURLSpec}{URLSpec}}(a,\ \textcolor{keyword}{true}),\ b);}
+\DoxyCodeLine{00223\ \ \ \}}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00225\ \ \ \textcolor{comment}{//\ The\ first\ time\ we\ create\ an\ HTTPClient,\ we\ must\ initialize\ the\ OpenSSL}}
+\DoxyCodeLine{00226\ \ \ \textcolor{comment}{//\ library.\ \ The\ OpenSSLWrapper\ object\ does\ that.}}
+\DoxyCodeLine{00227\ \ \ OpenSSLWrapper::get\_global\_ptr();}
+\DoxyCodeLine{00228\ \}}
+\DoxyCodeLine{00229\ }
+\DoxyCodeLine{00233\ HTTPClient::}
+\DoxyCodeLine{00234\ HTTPClient(\textcolor{keyword}{const}\ HTTPClient\ \&copy)\ \{}
+\DoxyCodeLine{00235\ \ \ \_ssl\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00236\ }
+\DoxyCodeLine{00237\ \ \ (*this)\ =\ copy;}
+\DoxyCodeLine{00238\ \}}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00243\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00244\ operator\ =\ (\textcolor{keyword}{const}\ HTTPClient\ \&copy)\ \{}
+\DoxyCodeLine{00245\ \ \ \_proxies\_by\_scheme\ =\ copy.\_proxies\_by\_scheme;}
+\DoxyCodeLine{00246\ \ \ \_direct\_hosts\ =\ copy.\_direct\_hosts;}
+\DoxyCodeLine{00247\ \ \ \_try\_all\_direct\ =\ copy.\_try\_all\_direct;}
+\DoxyCodeLine{00248\ \ \ \_http\_version\ =\ copy.\_http\_version;}
+\DoxyCodeLine{00249\ \ \ \_verify\_ssl\ =\ copy.\_verify\_ssl;}
+\DoxyCodeLine{00250\ \ \ \_usernames\ =\ copy.\_usernames;}
+\DoxyCodeLine{00251\ \ \ \_cookies\ =\ copy.\_cookies;}
+\DoxyCodeLine{00252\ \}}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00257\ HTTPClient::}
+\DoxyCodeLine{00258\ \string~HTTPClient()\ \{}
+\DoxyCodeLine{00259\ \ \ \textcolor{keywordflow}{if}\ (\_ssl\_ctx\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00260\ \textcolor{preprocessor}{\#if\ OPENSSL\_VERSION\_NUMBER\ <\ 0x10100000}}
+\DoxyCodeLine{00261\ \ \ \ \ \textcolor{comment}{//\ Before\ we\ can\ free\ the\ context,\ we\ must\ remove\ the\ X509\_STORE\ pointer}}
+\DoxyCodeLine{00262\ \ \ \ \ \textcolor{comment}{//\ from\ it,\ so\ it\ won't\ be\ destroyed\ along\ with\ it\ (this\ object\ is\ shared}}
+\DoxyCodeLine{00263\ \ \ \ \ \textcolor{comment}{//\ among\ all\ contexts).}}
+\DoxyCodeLine{00264\ \ \ \ \ \_ssl\_ctx-\/>cert\_store\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00265\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00266\ \ \ \ \ SSL\_CTX\_free(\_ssl\_ctx);}
+\DoxyCodeLine{00267\ \ \ \}}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ unload\_client\_certificate();}
+\DoxyCodeLine{00270\ \}}
+\DoxyCodeLine{00271\ }
+\DoxyCodeLine{00283\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00284\ init\_random\_seed()\ \{}
+\DoxyCodeLine{00285\ \ \ \textcolor{comment}{//\ Creating\ the\ global\ OpenSSLWrapper\ object\ is\ nowadays\ sufficient\ to}}
+\DoxyCodeLine{00286\ \ \ \textcolor{comment}{//\ ensure\ that\ OpenSSL\ and\ its\ random\ seed\ have\ been\ initialized.}}
+\DoxyCodeLine{00287\ \ \ OpenSSLWrapper::get\_global\_ptr();}
+\DoxyCodeLine{00288\ \}}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00299\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00300\ set\_proxy\_spec(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&proxy\_spec)\ \{}
+\DoxyCodeLine{00301\ \ \ clear\_proxy();}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00303\ \ \ \textcolor{keywordtype}{string}\ trim\_proxy\_spec\ =\ \mbox{\hyperlink{string__utils_8cxx_a3101bc0142a49d9d11ad3f8cac766a2d}{trim}}(proxy\_spec);}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \textcolor{comment}{//\ Tokenize\ the\ string\ based\ on\ the\ semicolons.}}
+\DoxyCodeLine{00306\ \ \ \textcolor{keywordflow}{if}\ (!trim\_proxy\_spec.empty())\ \{}
+\DoxyCodeLine{00307\ \ \ \ \ vector\_string\ proxies;}
+\DoxyCodeLine{00308\ \ \ \ \ \mbox{\hyperlink{string__utils_8cxx_afcc82a47a52a95f3b9f10cbd16a8f575}{tokenize}}(trim\_proxy\_spec,\ proxies,\ \textcolor{stringliteral}{"{};"{}});}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{keywordflow}{for}\ (vector\_string::const\_iterator\ pi\ =\ proxies.begin();}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \ pi\ !=\ proxies.end();}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \ ++pi)\ \{}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&spec\ =\ (*pi);}
+\DoxyCodeLine{00314\ }
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \textcolor{comment}{//\ Divide\ out\ the\ scheme\ and\ the\ hostname.}}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ scheme;}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ proxy;}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ equals\ =\ spec.find(\textcolor{charliteral}{'='});}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (equals\ ==\ string::npos)\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ scheme\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ proxy\ =\ \mbox{\hyperlink{string__utils_8cxx_a3101bc0142a49d9d11ad3f8cac766a2d}{trim}}(spec);}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ scheme\ =\ \mbox{\hyperlink{string__utils_8cxx_a3101bc0142a49d9d11ad3f8cac766a2d}{trim}}(spec.substr(0,\ equals));}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ proxy\ =\ \mbox{\hyperlink{string__utils_8cxx_a3101bc0142a49d9d11ad3f8cac766a2d}{trim}}(spec.substr(equals\ +\ 1));}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00326\ }
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (proxy\ ==\ \textcolor{stringliteral}{"{}DIRECT"{}}\ ||\ proxy.empty())\ \{}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \ \ add\_proxy(scheme,\ \mbox{\hyperlink{classURLSpec}{URLSpec}}());}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ add\_proxy(scheme,\ \mbox{\hyperlink{classURLSpec}{URLSpec}}(proxy,\ \textcolor{keyword}{true}));}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00332\ \ \ \ \ \}}
+\DoxyCodeLine{00333\ \ \ \}}
+\DoxyCodeLine{00334\ \}}
+\DoxyCodeLine{00335\ }
+\DoxyCodeLine{00343\ \textcolor{keywordtype}{string}\ HTTPClient::}
+\DoxyCodeLine{00344\ get\_proxy\_spec()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00345\ \ \ \textcolor{keywordtype}{string}\ result;}
+\DoxyCodeLine{00346\ }
+\DoxyCodeLine{00347\ \ \ ProxiesByScheme::const\_iterator\ si;}
+\DoxyCodeLine{00348\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_proxies\_by\_scheme.begin();\ si\ !=\ \_proxies\_by\_scheme.end();\ ++si)\ \{}
+\DoxyCodeLine{00349\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&scheme\ =\ (*si).first;}
+\DoxyCodeLine{00350\ \ \ \ \ \textcolor{keyword}{const}\ Proxies\ \&proxies\ =\ (*si).second;}
+\DoxyCodeLine{00351\ \ \ \ \ Proxies::const\_iterator\ pi;}
+\DoxyCodeLine{00352\ \ \ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ proxies.begin();\ pi\ !=\ proxies.end();\ ++pi)\ \{}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url\ =\ (*pi);}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!result.empty())\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ result\ +=\ \textcolor{stringliteral}{"{};"{}};}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!scheme.empty())\ \{}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ result\ +=\ scheme;}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \ \ result\ +=\ \textcolor{stringliteral}{"{}="{}};}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (url.empty())\ \{}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \ \ result\ +=\ \textcolor{stringliteral}{"{}DIRECT"{}};}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ result\ +=\ url.get\_url();}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00366\ \ \ \ \ \}}
+\DoxyCodeLine{00367\ \ \ \}}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00369\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00370\ \}}
+\DoxyCodeLine{00371\ }
+\DoxyCodeLine{00377\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00378\ set\_direct\_host\_spec(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&direct\_host\_spec)\ \{}
+\DoxyCodeLine{00379\ \ \ clear\_direct\_host();}
+\DoxyCodeLine{00380\ }
+\DoxyCodeLine{00381\ \ \ \textcolor{comment}{//\ Tokenize\ the\ string\ based\ on\ the\ semicolons.}}
+\DoxyCodeLine{00382\ \ \ vector\_string\ hosts;}
+\DoxyCodeLine{00383\ \ \ \mbox{\hyperlink{string__utils_8cxx_afcc82a47a52a95f3b9f10cbd16a8f575}{tokenize}}(direct\_host\_spec,\ hosts,\ \textcolor{stringliteral}{"{};"{}});}
+\DoxyCodeLine{00384\ }
+\DoxyCodeLine{00385\ \ \ \textcolor{keywordflow}{for}\ (vector\_string::const\_iterator\ hi\ =\ hosts.begin();}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \ hi\ !=\ hosts.end();}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \ ++hi)\ \{}
+\DoxyCodeLine{00388\ \ \ \ \ \textcolor{keywordtype}{string}\ spec\ =\ \mbox{\hyperlink{string__utils_8cxx_a3101bc0142a49d9d11ad3f8cac766a2d}{trim}}(*hi);}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \ \ \textcolor{comment}{//\ We\ should\ be\ careful\ to\ avoid\ adding\ any\ empty\ hostnames\ to\ the\ list.}}
+\DoxyCodeLine{00391\ \ \ \ \ \textcolor{comment}{//\ In\ particular,\ we\ will\ get\ one\ empty\ hostname\ if\ the\ direct\_host\_spec}}
+\DoxyCodeLine{00392\ \ \ \ \ \textcolor{comment}{//\ is\ empty.}}
+\DoxyCodeLine{00393\ \ \ \ \ \textcolor{keywordflow}{if}\ (!spec.empty())\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ add\_direct\_host(spec);}
+\DoxyCodeLine{00395\ \ \ \ \ \}}
+\DoxyCodeLine{00396\ \ \ \}}
+\DoxyCodeLine{00397\ \}}
+\DoxyCodeLine{00398\ }
+\DoxyCodeLine{00404\ \textcolor{keywordtype}{string}\ HTTPClient::}
+\DoxyCodeLine{00405\ get\_direct\_host\_spec()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00406\ \ \ \textcolor{keywordtype}{string}\ result;}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00408\ \ \ DirectHosts::const\_iterator\ si;}
+\DoxyCodeLine{00409\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_direct\_hosts.begin();\ si\ !=\ \_direct\_hosts.end();\ ++si)\ \{}
+\DoxyCodeLine{00410\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGlobPattern}{GlobPattern}}\ \&host\ =\ (*si);}
+\DoxyCodeLine{00411\ }
+\DoxyCodeLine{00412\ \ \ \ \ \textcolor{keywordflow}{if}\ (!result.empty())\ \{}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ result\ +=\ \textcolor{stringliteral}{"{};"{}};}
+\DoxyCodeLine{00414\ \ \ \ \ \}}
+\DoxyCodeLine{00415\ \ \ \ \ result\ +=\ host.get\_pattern();}
+\DoxyCodeLine{00416\ \ \ \}}
+\DoxyCodeLine{00417\ }
+\DoxyCodeLine{00418\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00419\ \}}
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00425\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00426\ clear\_proxy()\ \{}
+\DoxyCodeLine{00427\ \ \ \_proxies\_by\_scheme.clear();}
+\DoxyCodeLine{00428\ \}}
+\DoxyCodeLine{00429\ }
+\DoxyCodeLine{00436\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00437\ add\_proxy(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&scheme,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&proxy)\ \{}
+\DoxyCodeLine{00438\ \ \ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ proxy\_url(proxy);}
+\DoxyCodeLine{00439\ }
+\DoxyCodeLine{00440\ \ \ \textcolor{comment}{//\ The\ scheme\ is\ always\ converted\ to\ lowercase.}}
+\DoxyCodeLine{00441\ \ \ \textcolor{keywordtype}{string}\ lc\_scheme;}
+\DoxyCodeLine{00442\ \ \ lc\_scheme.reserve(scheme.length());}
+\DoxyCodeLine{00443\ \ \ string::const\_iterator\ si;}
+\DoxyCodeLine{00444\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ scheme.begin();\ si\ !=\ scheme.end();\ ++si)\ \{}
+\DoxyCodeLine{00445\ \ \ \ \ lc\_scheme\ +=\ tolower(*si);}
+\DoxyCodeLine{00446\ \ \ \}}
+\DoxyCodeLine{00447\ }
+\DoxyCodeLine{00448\ \ \ \textcolor{comment}{//\ Remove\ the\ trailing\ colon,\ if\ there\ is\ one.}}
+\DoxyCodeLine{00449\ \ \ \textcolor{keywordflow}{if}\ (!lc\_scheme.empty()\ \&\&\ lc\_scheme[lc\_scheme.length()\ -\/\ 1]\ ==\ \textcolor{charliteral}{':'})\ \{}
+\DoxyCodeLine{00450\ \ \ \ \ lc\_scheme\ =\ lc\_scheme.substr(0,\ lc\_scheme.length()\ -\/\ 1);}
+\DoxyCodeLine{00451\ \ \ \}}
+\DoxyCodeLine{00452\ }
+\DoxyCodeLine{00453\ \ \ \textcolor{keywordflow}{if}\ (!proxy\_url.empty())\ \{}
+\DoxyCodeLine{00454\ \ \ \ \ \textcolor{comment}{//\ Enforce\ the\ scheme\ that\ we\ use\ to\ communicate\ to\ the\ proxy\ itself.}}
+\DoxyCodeLine{00455\ \ \ \ \ \textcolor{comment}{//\ This\ is\ not\ the\ same\ as\ lc\_scheme,\ which\ is\ the\ scheme\ of\ the\ requested}}
+\DoxyCodeLine{00456\ \ \ \ \ \textcolor{comment}{//\ connection.\ \ Generally,\ all\ proxies\ speak\ HTTP,\ except\ for\ Socks}}
+\DoxyCodeLine{00457\ \ \ \ \ \textcolor{comment}{//\ proxies.}}
+\DoxyCodeLine{00458\ }
+\DoxyCodeLine{00459\ \ \ \ \ \textcolor{keywordflow}{if}\ (lc\_scheme\ ==\ \textcolor{stringliteral}{"{}socks"{}})\ \{}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ \textcolor{comment}{//\ Scheme\ "{}socks"{}\ implies\ we\ talk\ to\ the\ proxy\ via\ the\ "{}socks"{}\ scheme,}}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \textcolor{comment}{//\ no\ matter\ what\ scheme\ the\ user\ actually\ specified.}}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ proxy\_url.set\_scheme(\textcolor{stringliteral}{"{}socks"{}});}
+\DoxyCodeLine{00463\ }
+\DoxyCodeLine{00464\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!proxy\_url.has\_scheme())\ \{}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ if\ the\ user\ didn't\ specify\ a\ scheme\ to\ talk\ to\ the\ proxy,}}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ default\ is\ "{}http"{}.}}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ proxy\_url.set\_scheme(\textcolor{stringliteral}{"{}http"{}});}
+\DoxyCodeLine{00468\ \ \ \ \ \}}
+\DoxyCodeLine{00469\ \ \ \}}
+\DoxyCodeLine{00470\ }
+\DoxyCodeLine{00471\ \ \ \_proxies\_by\_scheme[lc\_scheme].push\_back(proxy\_url);}
+\DoxyCodeLine{00472\ \}}
+\DoxyCodeLine{00473\ }
+\DoxyCodeLine{00479\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00480\ clear\_direct\_host()\ \{}
+\DoxyCodeLine{00481\ \ \ \_direct\_hosts.clear();}
+\DoxyCodeLine{00482\ \}}
+\DoxyCodeLine{00483\ }
+\DoxyCodeLine{00489\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00490\ add\_direct\_host(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&hostname)\ \{}
+\DoxyCodeLine{00491\ \ \ \textcolor{comment}{//\ The\ hostname\ is\ always\ converted\ to\ lowercase.}}
+\DoxyCodeLine{00492\ \ \ \textcolor{keywordtype}{string}\ lc\_hostname;}
+\DoxyCodeLine{00493\ \ \ lc\_hostname.reserve(hostname.length());}
+\DoxyCodeLine{00494\ \ \ \textcolor{keywordflow}{for}\ (string::const\_iterator\ si\ =\ hostname.begin();}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \ si\ !=\ hostname.end();}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \ ++si)\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ lc\_hostname\ +=\ tolower(*si);}
+\DoxyCodeLine{00498\ \ \ \}}
+\DoxyCodeLine{00499\ }
+\DoxyCodeLine{00500\ \ \ \_direct\_hosts.push\_back(\mbox{\hyperlink{classGlobPattern}{GlobPattern}}(lc\_hostname));}
+\DoxyCodeLine{00501\ \}}
+\DoxyCodeLine{00502\ }
+\DoxyCodeLine{00512\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00513\ get\_proxies\_for\_url(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url,\ \mbox{\hyperlink{classpvector}{pvector<URLSpec>}}\ \&proxies)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00514\ \ \ \textcolor{comment}{//\ First,\ check\ if\ the\ hostname\ matches\ any\ listed\ in\ direct\_hosts.}}
+\DoxyCodeLine{00515\ \ \ \textcolor{keywordtype}{string}\ hostname\ =\ url.get\_server();}
+\DoxyCodeLine{00516\ }
+\DoxyCodeLine{00517\ \ \ \textcolor{comment}{//\ If\ the\ hostname\ is\ empty,\ treat\ it\ as\ a\ special\ case:\ we\ don't\ match\ any}}
+\DoxyCodeLine{00518\ \ \ \textcolor{comment}{//\ of\ the\ hostnames\ listed\ in\ direct\_hosts\ (even\ "{}*"{}).}}
+\DoxyCodeLine{00519\ \ \ \textcolor{keywordflow}{if}\ (!hostname.empty())\ \{}
+\DoxyCodeLine{00520\ \ \ \ \ DirectHosts::const\_iterator\ si;}
+\DoxyCodeLine{00521\ \ \ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_direct\_hosts.begin();\ si\ !=\ \_direct\_hosts.end();\ ++si)\ \{}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((*si).matches(hostname))\ \{}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ It\ matches,\ so\ don't\ use\ any\ proxies.}}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \ \ proxies.push\_back(\mbox{\hyperlink{classURLSpec}{URLSpec}}());}
+\DoxyCodeLine{00525\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00527\ \ \ \ \ \}}
+\DoxyCodeLine{00528\ \ \ \}}
+\DoxyCodeLine{00529\ }
+\DoxyCodeLine{00530\ \ \ \textcolor{comment}{//\ Build\ our\ list\ of\ proxies\ into\ a\ temporary\ vector,\ so\ we\ can\ pull\ out}}
+\DoxyCodeLine{00531\ \ \ \textcolor{comment}{//\ duplicates\ later.}}
+\DoxyCodeLine{00532\ \ \ \mbox{\hyperlink{classpvector}{pvector<URLSpec>}}\ temp\_list;}
+\DoxyCodeLine{00533\ }
+\DoxyCodeLine{00534\ \ \ \textcolor{comment}{//\ Now\ choose\ the\ appropriate\ proxy\ based\ on\ the\ scheme.}}
+\DoxyCodeLine{00535\ \ \ \textcolor{keywordtype}{string}\ scheme\ =\ url.get\_scheme();}
+\DoxyCodeLine{00536\ \ \ \textcolor{keywordtype}{bool}\ got\_any\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00537\ }
+\DoxyCodeLine{00538\ \ \ \textcolor{keywordflow}{if}\ (!scheme.empty())\ \{}
+\DoxyCodeLine{00539\ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ a\ scheme,\ try\ to\ match\ it.}}
+\DoxyCodeLine{00540\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_proxies\_for\_scheme(scheme,\ temp\_list))\ \{}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ got\_any\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00542\ \ \ \ \ \}}
+\DoxyCodeLine{00543\ \ \ \}}
+\DoxyCodeLine{00544\ }
+\DoxyCodeLine{00545\ \ \ \textcolor{keywordflow}{if}\ (!got\_any\ \&\&\ (scheme.empty()\ ||\ url.is\_ssl()))\ \{}
+\DoxyCodeLine{00546\ \ \ \ \ \textcolor{comment}{//\ An\ empty\ scheme\ (or\ an\ ssl-\/style\ scheme)\ implies\ we\ will\ need\ to\ make\ a}}
+\DoxyCodeLine{00547\ \ \ \ \ \textcolor{comment}{//\ direct\ connection,\ so\ fallback\ to\ a\ socks-\/style\ andor\ https-\/style}}
+\DoxyCodeLine{00548\ \ \ \ \ \textcolor{comment}{//\ scheme.}}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00550\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_proxies\_for\_scheme(\textcolor{stringliteral}{"{}socks"{}},\ temp\_list))\ \{}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ got\_any\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00552\ \ \ \ \ \}}
+\DoxyCodeLine{00553\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_proxies\_for\_scheme(\textcolor{stringliteral}{"{}https"{}},\ temp\_list))\ \{}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ got\_any\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00555\ \ \ \ \ \}}
+\DoxyCodeLine{00556\ \ \ \}}
+\DoxyCodeLine{00557\ }
+\DoxyCodeLine{00558\ \ \ \textcolor{keywordflow}{if}\ (!got\_any)\ \{}
+\DoxyCodeLine{00559\ \ \ \ \ \textcolor{comment}{//\ If\ we\ didn't\ find\ our\ scheme\ of\ choice,\ fall\ back\ to\ the\ default\ proxy}}
+\DoxyCodeLine{00560\ \ \ \ \ \textcolor{comment}{//\ type,\ if\ we've\ got\ one.}}
+\DoxyCodeLine{00561\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_proxies\_for\_scheme(\textcolor{stringliteral}{"{}"{}},\ temp\_list))\ \{}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ got\_any\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00563\ \ \ \ \ \}}
+\DoxyCodeLine{00564\ \ \ \}}
+\DoxyCodeLine{00565\ }
+\DoxyCodeLine{00566\ \ \ \textcolor{keywordflow}{if}\ (\_try\_all\_direct)\ \{}
+\DoxyCodeLine{00567\ \ \ \ \ \textcolor{comment}{//\ We\ may\ try\ a\ direct\ connection\ if\ all\ else\ fails.}}
+\DoxyCodeLine{00568\ \ \ \ \ temp\_list.push\_back(\mbox{\hyperlink{classURLSpec}{URLSpec}}());}
+\DoxyCodeLine{00569\ \ \ \}}
+\DoxyCodeLine{00570\ }
+\DoxyCodeLine{00571\ \ \ \textcolor{comment}{//\ Finally,\ as\ a\ very\ last\ resort,\ fall\ back\ to\ the\ HTTP\ proxy.}}
+\DoxyCodeLine{00572\ \ \ \textcolor{keywordflow}{if}\ (!got\_any)\ \{}
+\DoxyCodeLine{00573\ \ \ \ \ get\_proxies\_for\_scheme(\textcolor{stringliteral}{"{}http"{}},\ temp\_list);}
+\DoxyCodeLine{00574\ \ \ \}}
+\DoxyCodeLine{00575\ }
+\DoxyCodeLine{00576\ \ \ \textcolor{comment}{//\ Now\ remove\ duplicate\ entries\ as\ we\ copy\ the\ resulting\ list\ out.}}
+\DoxyCodeLine{00577\ \ \ \mbox{\hyperlink{classpvector}{pvector<URLSpec>::iterator}}\ pi;}
+\DoxyCodeLine{00578\ \ \ \mbox{\hyperlink{classpset}{pset<URLSpec>}}\ used;}
+\DoxyCodeLine{00579\ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ temp\_list.begin();\ pi\ !=\ temp\_list.end();\ ++pi)\ \{}
+\DoxyCodeLine{00580\ \ \ \ \ \textcolor{keywordflow}{if}\ (used.insert(*pi).second)\ \{}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ a\ unique\ one.}}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ proxies.push\_back(*pi);}
+\DoxyCodeLine{00583\ \ \ \ \ \}}
+\DoxyCodeLine{00584\ \ \ \}}
+\DoxyCodeLine{00585\ \}}
+\DoxyCodeLine{00586\ }
+\DoxyCodeLine{00592\ \textcolor{keywordtype}{string}\ HTTPClient::}
+\DoxyCodeLine{00593\ get\_proxies\_for\_url(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00594\ \ \ \mbox{\hyperlink{classpvector}{pvector<URLSpec>}}\ proxies;}
+\DoxyCodeLine{00595\ \ \ get\_proxies\_for\_url(url,\ proxies);}
+\DoxyCodeLine{00596\ }
+\DoxyCodeLine{00597\ \ \ \textcolor{keywordtype}{string}\ result;}
+\DoxyCodeLine{00598\ \ \ \textcolor{keywordflow}{if}\ (!proxies.empty())\ \{}
+\DoxyCodeLine{00599\ \ \ \ \ \mbox{\hyperlink{classpvector}{pvector<URLSpec>::const\_iterator}}\ pi\ =\ proxies.begin();}
+\DoxyCodeLine{00600\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*pi).get\_url().empty())\ \{}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ result\ +=\ \textcolor{stringliteral}{"{}DIRECT"{}};}
+\DoxyCodeLine{00602\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ result\ +=\ (*pi).get\_url();}
+\DoxyCodeLine{00604\ \ \ \ \ \}}
+\DoxyCodeLine{00605\ \ \ \ \ ++pi;}
+\DoxyCodeLine{00606\ }
+\DoxyCodeLine{00607\ \ \ \ \ \textcolor{keywordflow}{while}\ (pi\ !=\ proxies.end())\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ result\ +=\ \textcolor{stringliteral}{"{};"{}};}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((*pi).get\_url().empty())\ \{}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \ \ result\ +=\ \textcolor{stringliteral}{"{}DIRECT"{}};}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ result\ +=\ (*pi).get\_url();}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ ++pi;}
+\DoxyCodeLine{00615\ \ \ \ \ \}}
+\DoxyCodeLine{00616\ \ \ \}}
+\DoxyCodeLine{00617\ }
+\DoxyCodeLine{00618\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00619\ \}}
+\DoxyCodeLine{00620\ }
+\DoxyCodeLine{00630\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00631\ set\_username(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&server,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&realm,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&username)\ \{}
+\DoxyCodeLine{00632\ \ \ \textcolor{keywordtype}{string}\ key\ =\ server\ +\ \textcolor{stringliteral}{"{}:"{}}\ +\ realm;}
+\DoxyCodeLine{00633\ \ \ \textcolor{keywordflow}{if}\ (username.empty())\ \{}
+\DoxyCodeLine{00634\ \ \ \ \ \_usernames.erase(key);}
+\DoxyCodeLine{00635\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00636\ \ \ \ \ \_usernames[key]\ =\ username;}
+\DoxyCodeLine{00637\ \ \ \}}
+\DoxyCodeLine{00638\ \}}
+\DoxyCodeLine{00639\ }
+\DoxyCodeLine{00644\ \textcolor{keywordtype}{string}\ HTTPClient::}
+\DoxyCodeLine{00645\ get\_username(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&server,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&realm)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00646\ \ \ \textcolor{keywordtype}{string}\ key\ =\ server\ +\ \textcolor{stringliteral}{"{}:"{}}\ +\ realm;}
+\DoxyCodeLine{00647\ \ \ Usernames::const\_iterator\ ui;}
+\DoxyCodeLine{00648\ \ \ ui\ =\ \_usernames.find(key);}
+\DoxyCodeLine{00649\ \ \ \textcolor{keywordflow}{if}\ (ui\ !=\ \_usernames.end())\ \{}
+\DoxyCodeLine{00650\ \ \ \ \ \textcolor{keywordflow}{return}\ (*ui).second;}
+\DoxyCodeLine{00651\ \ \ \}}
+\DoxyCodeLine{00652\ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00653\ \}}
+\DoxyCodeLine{00654\ }
+\DoxyCodeLine{00659\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00660\ set\_cookie(\textcolor{keyword}{const}\ HTTPCookie\ \&cookie)\ \{}
+\DoxyCodeLine{00661\ \ \ \textcolor{keywordflow}{if}\ (cookie.is\_expired())\ \{}
+\DoxyCodeLine{00662\ \ \ \ \ clear\_cookie(cookie);}
+\DoxyCodeLine{00663\ }
+\DoxyCodeLine{00664\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00665\ \ \ \ \ std::pair<Cookies::iterator,\ bool>\ result\ =\ \_cookies.insert(cookie);}
+\DoxyCodeLine{00666\ \ \ \ \ \textcolor{keywordflow}{if}\ (!result.second)\ \{}
+\DoxyCodeLine{00667\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ already\ had\ a\ cookie\ matching\ the\ supplied\ domainpathname,\ so}}
+\DoxyCodeLine{00668\ \ \ \ \ \ \ \textcolor{comment}{//\ replace\ it.}}
+\DoxyCodeLine{00669\ \ \ \ \ \ \ \textcolor{keyword}{const}\ HTTPCookie\ \&orig\_cookie\ =\ *result.first;}
+\DoxyCodeLine{00670\ \ \ \ \ \ \ ((HTTPCookie\ \&)orig\_cookie).update\_from(cookie);}
+\DoxyCodeLine{00671\ \ \ \ \ \}}
+\DoxyCodeLine{00672\ \ \ \}}
+\DoxyCodeLine{00673\ \}}
+\DoxyCodeLine{00674\ }
+\DoxyCodeLine{00680\ \textcolor{keywordtype}{bool}\ HTTPClient::}
+\DoxyCodeLine{00681\ clear\_cookie(\textcolor{keyword}{const}\ HTTPCookie\ \&cookie)\ \{}
+\DoxyCodeLine{00682\ \ \ Cookies::iterator\ ci\ =\ \_cookies.find(cookie);}
+\DoxyCodeLine{00683\ \ \ \textcolor{keywordflow}{if}\ (ci\ !=\ \_cookies.end())\ \{}
+\DoxyCodeLine{00684\ \ \ \ \ \_cookies.erase(ci);}
+\DoxyCodeLine{00685\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00686\ \ \ \}}
+\DoxyCodeLine{00687\ }
+\DoxyCodeLine{00688\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00689\ \}}
+\DoxyCodeLine{00690\ }
+\DoxyCodeLine{00694\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00695\ clear\_all\_cookies()\ \{}
+\DoxyCodeLine{00696\ \ \ \_cookies.clear();}
+\DoxyCodeLine{00697\ \}}
+\DoxyCodeLine{00698\ }
+\DoxyCodeLine{00703\ \textcolor{keywordtype}{bool}\ HTTPClient::}
+\DoxyCodeLine{00704\ has\_cookie(\textcolor{keyword}{const}\ HTTPCookie\ \&cookie)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00705\ \ \ Cookies::const\_iterator\ ci\ =\ \_cookies.find(cookie);}
+\DoxyCodeLine{00706\ \ \ \textcolor{keywordflow}{return}\ (ci\ !=\ \_cookies.end());}
+\DoxyCodeLine{00707\ \}}
+\DoxyCodeLine{00708\ }
+\DoxyCodeLine{00713\ HTTPCookie\ HTTPClient::}
+\DoxyCodeLine{00714\ get\_cookie(\textcolor{keyword}{const}\ HTTPCookie\ \&cookie)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00715\ \ \ Cookies::const\_iterator\ ci\ =\ \_cookies.find(cookie);}
+\DoxyCodeLine{00716\ \ \ \textcolor{keywordflow}{if}\ (ci\ !=\ \_cookies.end())\ \{}
+\DoxyCodeLine{00717\ \ \ \ \ \textcolor{keywordflow}{return}\ (*ci);}
+\DoxyCodeLine{00718\ \ \ \}}
+\DoxyCodeLine{00719\ }
+\DoxyCodeLine{00720\ \ \ \textcolor{keywordflow}{return}\ HTTPCookie();}
+\DoxyCodeLine{00721\ \}}
+\DoxyCodeLine{00722\ }
+\DoxyCodeLine{00728\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00729\ copy\_cookies\_from(\textcolor{keyword}{const}\ HTTPClient\ \&other)\ \{}
+\DoxyCodeLine{00730\ \ \ Cookies::const\_iterator\ ci;}
+\DoxyCodeLine{00731\ \ \ \textcolor{keywordflow}{for}\ (ci\ =\ other.\_cookies.begin();\ ci\ !=\ other.\_cookies.end();\ ++ci)\ \{}
+\DoxyCodeLine{00732\ \ \ \ \ set\_cookie(*ci);}
+\DoxyCodeLine{00733\ \ \ \}}
+\DoxyCodeLine{00734\ \}}
+\DoxyCodeLine{00735\ }
+\DoxyCodeLine{00741\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00742\ write\_cookies(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00743\ \ \ Cookies::const\_iterator\ ci;}
+\DoxyCodeLine{00744\ \ \ \textcolor{keywordflow}{for}\ (ci\ =\ \_cookies.begin();\ ci\ !=\ \_cookies.end();\ ++ci)\ \{}
+\DoxyCodeLine{00745\ \ \ \ \ out\ <<\ *ci\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00746\ \ \ \}}
+\DoxyCodeLine{00747\ \}}
+\DoxyCodeLine{00748\ }
+\DoxyCodeLine{00754\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00755\ send\_cookies(std::ostream\ \&out,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url)\ \{}
+\DoxyCodeLine{00756\ \ \ \mbox{\hyperlink{classHTTPDate}{HTTPDate}}\ now\ =\ HTTPDate::now();}
+\DoxyCodeLine{00757\ \ \ \textcolor{keywordtype}{bool}\ any\_expired\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00758\ \ \ \textcolor{keywordtype}{bool}\ first\_cookie\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00759\ }
+\DoxyCodeLine{00760\ \ \ Cookies::const\_iterator\ ci;}
+\DoxyCodeLine{00761\ \ \ \textcolor{keywordflow}{for}\ (ci\ =\ \_cookies.begin();\ ci\ !=\ \_cookies.end();\ ++ci)\ \{}
+\DoxyCodeLine{00762\ \ \ \ \ \textcolor{keyword}{const}\ HTTPCookie\ \&cookie\ =\ (*ci);}
+\DoxyCodeLine{00763\ \ \ \ \ \textcolor{keywordflow}{if}\ (cookie.is\_expired(now))\ \{}
+\DoxyCodeLine{00764\ \ \ \ \ \ \ any\_expired\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00765\ }
+\DoxyCodeLine{00766\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cookie.matches\_url(url))\ \{}
+\DoxyCodeLine{00767\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (first\_cookie)\ \{}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}Cookie:\ "{}};}
+\DoxyCodeLine{00769\ \ \ \ \ \ \ \ \ first\_cookie\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00770\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00771\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{};\ "{}};}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00773\ \ \ \ \ \ \ out\ <<\ cookie.get\_name()\ <<\ \textcolor{stringliteral}{"{}="{}}\ <<\ cookie.get\_value();}
+\DoxyCodeLine{00774\ \ \ \ \ \}}
+\DoxyCodeLine{00775\ \ \ \}}
+\DoxyCodeLine{00776\ }
+\DoxyCodeLine{00777\ \ \ \textcolor{keywordflow}{if}\ (!first\_cookie)\ \{}
+\DoxyCodeLine{00778\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)r\(\backslash\)n"{}};}
+\DoxyCodeLine{00779\ \ \ \}}
+\DoxyCodeLine{00780\ }
+\DoxyCodeLine{00781\ \ \ \textcolor{keywordflow}{if}\ (any\_expired)\ \{}
+\DoxyCodeLine{00782\ \ \ \ \ Cookies\ new\_cookies;}
+\DoxyCodeLine{00783\ \ \ \ \ Cookies::const\_iterator\ ci;}
+\DoxyCodeLine{00784\ \ \ \ \ \textcolor{keywordflow}{for}\ (ci\ =\ \_cookies.begin();\ ci\ !=\ \_cookies.end();\ ++ci)\ \{}
+\DoxyCodeLine{00785\ \ \ \ \ \ \ \textcolor{keyword}{const}\ HTTPCookie\ \&cookie\ =\ (*ci);}
+\DoxyCodeLine{00786\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!cookie.is\_expired(now))\ \{}
+\DoxyCodeLine{00787\ \ \ \ \ \ \ \ \ new\_cookies.insert(new\_cookies.end(),\ cookie);}
+\DoxyCodeLine{00788\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00789\ \ \ \ \ \}}
+\DoxyCodeLine{00790\ \ \ \ \ \_cookies.swap(new\_cookies);}
+\DoxyCodeLine{00791\ \ \ \}}
+\DoxyCodeLine{00792\ \}}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00802\ \textcolor{keywordtype}{bool}\ HTTPClient::}
+\DoxyCodeLine{00803\ load\_client\_certificate()\ \{}
+\DoxyCodeLine{00804\ \ \ \textcolor{keywordflow}{if}\ (!\_client\_certificate\_loaded)\ \{}
+\DoxyCodeLine{00805\ \ \ \ \ \_client\_certificate\_loaded\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00806\ }
+\DoxyCodeLine{00807\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_client\_certificate\_filename.empty())\ \{}
+\DoxyCodeLine{00808\ \ \ \ \ \ \ \_client\_certificate\_filename.set\_text();}
+\DoxyCodeLine{00809\ }
+\DoxyCodeLine{00810\ \ \ \ \ \ \ \textcolor{comment}{//\ First,\ read\ the\ complete\ file\ into\ memory.}}
+\DoxyCodeLine{00811\ \ \ \ \ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00812\ }
+\DoxyCodeLine{00813\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>read\_file(\_client\_certificate\_filename,}
+\DoxyCodeLine{00814\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_client\_certificate\_pem,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00815\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Could\ not\ find\ or\ read\ file.}}
+\DoxyCodeLine{00816\ \ \ \ \ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{00817\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ "{}}\ <<\ \_client\_certificate\_filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00818\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00819\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00820\ \ \ \ \ \}}
+\DoxyCodeLine{00821\ }
+\DoxyCodeLine{00822\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_client\_certificate\_pem.empty())\ \{}
+\DoxyCodeLine{00823\ \ \ \ \ \ \ \textcolor{comment}{//\ Create\ an\ in-\/memory\ BIO\ to\ read\ the\ "{}file"{}\ from\ the\ memory\ buffer,}}
+\DoxyCodeLine{00824\ \ \ \ \ \ \ \textcolor{comment}{//\ and\ call\ the\ low-\/level\ routines\ to\ read\ the\ keys\ from\ the\ BIO.}}
+\DoxyCodeLine{00825\ \ \ \ \ \ \ BIO\ *mbio\ =\ BIO\_new\_mem\_buf((\textcolor{keywordtype}{void}\ *)\_client\_certificate\_pem.data(),}
+\DoxyCodeLine{00826\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_client\_certificate\_pem.length());}
+\DoxyCodeLine{00827\ }
+\DoxyCodeLine{00828\ \ \ \ \ \ \ ERR\_clear\_error();}
+\DoxyCodeLine{00829\ \ \ \ \ \ \ \_client\_certificate\_priv\ =}
+\DoxyCodeLine{00830\ \ \ \ \ \ \ \ \ PEM\_read\_bio\_PrivateKey(mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},}
+\DoxyCodeLine{00831\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{char}\ *)\_client\_certificate\_passphrase.c\_str());}
+\DoxyCodeLine{00832\ }
+\DoxyCodeLine{00833\ \ \ \ \ \ \ \textcolor{comment}{//\ Rewind\ the\ "{}file"{}\ to\ the\ beginning\ in\ order\ to\ read\ the\ public\ key}}
+\DoxyCodeLine{00834\ \ \ \ \ \ \ \textcolor{comment}{//\ (which\ might\ appear\ first\ in\ the\ file).}}
+\DoxyCodeLine{00835\ \ \ \ \ \ \ (void)BIO\_reset(mbio);}
+\DoxyCodeLine{00836\ }
+\DoxyCodeLine{00837\ \ \ \ \ \ \ ERR\_clear\_error();}
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \_client\_certificate\_pub\ =}
+\DoxyCodeLine{00839\ \ \ \ \ \ \ \ \ PEM\_read\_bio\_X509(mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00840\ }
+\DoxyCodeLine{00841\ \ \ \ \ \ \ BIO\_free(mbio);}
+\DoxyCodeLine{00842\ }
+\DoxyCodeLine{00843\ }
+\DoxyCodeLine{00844\ \ \ \ \ \ \ NotifySeverity\ sev\ =\ NS\_debug;}
+\DoxyCodeLine{00845\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ source\ =\ \textcolor{stringliteral}{"{}memory"{}};}
+\DoxyCodeLine{00846\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_client\_certificate\_filename.empty())\ \{}
+\DoxyCodeLine{00847\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Only\ report\ status\ to\ "{}info"{}\ severity\ if\ we\ have\ read\ the}}
+\DoxyCodeLine{00848\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ certificate\ from\ a\ file.\ \ If\ it\ came\ from\ an\ in-\/memory\ image,\ a}}
+\DoxyCodeLine{00849\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ failure\ will\ presumably\ be\ handled\ by\ whoever\ set\ the\ image.}}
+\DoxyCodeLine{00850\ \ \ \ \ \ \ \ \ sev\ =\ NS\_info;}
+\DoxyCodeLine{00851\ \ \ \ \ \ \ \ \ source\ =\ \_client\_certificate\_filename;}
+\DoxyCodeLine{00852\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00853\ }
+\DoxyCodeLine{00854\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_on(sev))\ \{}
+\DoxyCodeLine{00855\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_client\_certificate\_priv\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{00856\ \ \ \ \ \ \ \ \ \ \ \ \ \_client\_certificate\_pub\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00857\ \ \ \ \ \ \ \ \ \ \ downloader\_cat.out(sev)}
+\DoxyCodeLine{00858\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Read\ client\ certificate\ from\ "{}}\ <<\ source\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00859\ }
+\DoxyCodeLine{00860\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00861\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_client\_certificate\_priv\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00862\ \ \ \ \ \ \ \ \ \ \ \ \ downloader\_cat.out(sev)}
+\DoxyCodeLine{00863\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ private\ key\ from\ "{}}\ <<\ source\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00865\ }
+\DoxyCodeLine{00866\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_client\_certificate\_pub\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00867\ \ \ \ \ \ \ \ \ \ \ \ \ downloader\_cat.out(sev)}
+\DoxyCodeLine{00868\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ public\ key\ from\ "{}}\ <<\ source\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00869\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00870\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00871\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00872\ \ \ \ \ \}}
+\DoxyCodeLine{00873\ \ \ \}}
+\DoxyCodeLine{00874\ }
+\DoxyCodeLine{00875\ \ \ \textcolor{keywordflow}{return}\ (\_client\_certificate\_priv\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{00876\ \ \ \ \ \ \ \ \ \ \ \_client\_certificate\_pub\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00877\ \}}
+\DoxyCodeLine{00878\ }
+\DoxyCodeLine{00891\ \textcolor{keywordtype}{bool}\ HTTPClient::}
+\DoxyCodeLine{00892\ add\_preapproved\_server\_certificate\_filename(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{00893\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00894\ \ \ \textcolor{keywordtype}{string}\ pem;}
+\DoxyCodeLine{00895\ }
+\DoxyCodeLine{00896\ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>read\_file(filename,\ pem,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00897\ \ \ \ \ \textcolor{comment}{//\ Could\ not\ find\ or\ read\ file.}}
+\DoxyCodeLine{00898\ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{00899\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00900\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00901\ \ \ \}}
+\DoxyCodeLine{00902\ }
+\DoxyCodeLine{00903\ \ \ \textcolor{keywordflow}{return}\ add\_preapproved\_server\_certificate\_pem(url,\ pem);}
+\DoxyCodeLine{00904\ \}}
+\DoxyCodeLine{00905\ }
+\DoxyCodeLine{00918\ \textcolor{keywordtype}{bool}\ HTTPClient::}
+\DoxyCodeLine{00919\ add\_preapproved\_server\_certificate\_pem(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&pem)\ \{}
+\DoxyCodeLine{00920\ \ \ \textcolor{comment}{//\ Create\ an\ in-\/memory\ BIO\ to\ read\ the\ "{}file"{}\ from\ the\ memory\ buffer,\ and}}
+\DoxyCodeLine{00921\ \ \ \textcolor{comment}{//\ call\ the\ low-\/level\ routine\ to\ read\ the\ cert\ from\ the\ BIO.}}
+\DoxyCodeLine{00922\ \ \ BIO\ *mbio\ =\ BIO\_new\_mem\_buf((\textcolor{keywordtype}{void}\ *)pem.data(),\ pem.length());}
+\DoxyCodeLine{00923\ }
+\DoxyCodeLine{00924\ \ \ ERR\_clear\_error();}
+\DoxyCodeLine{00925\ \ \ X509\ *cert\ =\ PEM\_read\_bio\_X509(mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00926\ \ \ BIO\_free(mbio);}
+\DoxyCodeLine{00927\ }
+\DoxyCodeLine{00928\ \ \ \textcolor{keywordflow}{if}\ (cert\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00929\ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{00930\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ parse\ PEM\ data\(\backslash\)n"{}};}
+\DoxyCodeLine{00931\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00932\ \ \ \}}
+\DoxyCodeLine{00933\ }
+\DoxyCodeLine{00934\ \ \ \textcolor{keywordtype}{string}\ server\_and\_port\ =\ url.get\_server\_and\_port();}
+\DoxyCodeLine{00935\ \ \ PreapprovedServerCerts::iterator\ psci\ =}
+\DoxyCodeLine{00936\ \ \ \ \ \_preapproved\_server\_certs.insert(PreapprovedServerCerts::value\_type(server\_and\_port,\ PreapprovedServerCert())).first;}
+\DoxyCodeLine{00937\ }
+\DoxyCodeLine{00938\ \ \ PreapprovedServerCert\ \&psc\ =\ (*psci).second;}
+\DoxyCodeLine{00939\ \ \ psc.\_certs.push\_back(cert);}
+\DoxyCodeLine{00940\ }
+\DoxyCodeLine{00941\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00942\ \}}
+\DoxyCodeLine{00943\ }
+\DoxyCodeLine{00964\ \textcolor{keywordtype}{bool}\ HTTPClient::}
+\DoxyCodeLine{00965\ add\_preapproved\_server\_certificate\_name(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name)\ \{}
+\DoxyCodeLine{00966\ \ \ X509\_NAME\ *cert\_name\ =\ parse\_x509\_name(name);}
+\DoxyCodeLine{00967\ \ \ \textcolor{keywordflow}{if}\ (cert\_name\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00968\ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{00969\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ parse\ certificate\ name\ "{}}\ <<\ name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00970\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00971\ \ \ \}}
+\DoxyCodeLine{00972\ }
+\DoxyCodeLine{00973\ \ \ \textcolor{keywordtype}{string}\ server\_and\_port\ =\ url.get\_server\_and\_port();}
+\DoxyCodeLine{00974\ \ \ PreapprovedServerCerts::iterator\ psci\ =}
+\DoxyCodeLine{00975\ \ \ \ \ \_preapproved\_server\_certs.insert(PreapprovedServerCerts::value\_type(server\_and\_port,\ PreapprovedServerCert())).first;}
+\DoxyCodeLine{00976\ }
+\DoxyCodeLine{00977\ \ \ PreapprovedServerCert\ \&psc\ =\ (*psci).second;}
+\DoxyCodeLine{00978\ \ \ psc.\_cert\_names.push\_back(cert\_name);}
+\DoxyCodeLine{00979\ }
+\DoxyCodeLine{00980\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00981\ \}}
+\DoxyCodeLine{00982\ }
+\DoxyCodeLine{00987\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00988\ clear\_preapproved\_server\_certificates(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url)\ \{}
+\DoxyCodeLine{00989\ \ \ \textcolor{keywordtype}{string}\ server\_and\_port\ =\ url.get\_server\_and\_port();}
+\DoxyCodeLine{00990\ \ \ \_preapproved\_server\_certs.erase(server\_and\_port);}
+\DoxyCodeLine{00991\ \}}
+\DoxyCodeLine{00992\ }
+\DoxyCodeLine{00996\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{00997\ clear\_all\_preapproved\_server\_certificates()\ \{}
+\DoxyCodeLine{00998\ \ \ \_preapproved\_server\_certs.clear();}
+\DoxyCodeLine{00999\ \}}
+\DoxyCodeLine{01000\ }
+\DoxyCodeLine{01005\ \textcolor{keywordtype}{string}\ HTTPClient::}
+\DoxyCodeLine{01006\ get\_http\_version\_string()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01007\ \ \ \textcolor{keywordflow}{switch}\ (\_http\_version)\ \{}
+\DoxyCodeLine{01008\ \ \ \textcolor{keywordflow}{case}\ HTTPEnum::HV\_09:}
+\DoxyCodeLine{01009\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}HTTP/0.9"{}};}
+\DoxyCodeLine{01010\ }
+\DoxyCodeLine{01011\ \ \ \textcolor{keywordflow}{case}\ HTTPEnum::HV\_10:}
+\DoxyCodeLine{01012\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}HTTP/1.0"{}};}
+\DoxyCodeLine{01013\ }
+\DoxyCodeLine{01014\ \ \ \textcolor{keywordflow}{case}\ HTTPEnum::HV\_11:}
+\DoxyCodeLine{01015\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}HTTP/1.1"{}};}
+\DoxyCodeLine{01016\ }
+\DoxyCodeLine{01017\ \ \ \textcolor{keywordflow}{case}\ HTTPEnum::HV\_other:}
+\DoxyCodeLine{01018\ \ \ \ \ \textcolor{comment}{//\ Report\ the\ best\ we\ can\ do.}}
+\DoxyCodeLine{01019\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}HTTP/1.1"{}};}
+\DoxyCodeLine{01020\ \ \ \}}
+\DoxyCodeLine{01021\ }
+\DoxyCodeLine{01022\ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}unknown"{}};}
+\DoxyCodeLine{01023\ \}}
+\DoxyCodeLine{01024\ }
+\DoxyCodeLine{01030\ HTTPEnum::HTTPVersion\ HTTPClient::}
+\DoxyCodeLine{01031\ parse\_http\_version\_string(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&version)\ \{}
+\DoxyCodeLine{01032\ \ \ \textcolor{keywordflow}{if}\ (version\ ==\ \textcolor{stringliteral}{"{}HTTP/1.0"{}})\ \{}
+\DoxyCodeLine{01033\ \ \ \ \ \textcolor{keywordflow}{return}\ HTTPEnum::HV\_10;}
+\DoxyCodeLine{01034\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (version\ ==\ \textcolor{stringliteral}{"{}HTTP/1.1"{}})\ \{}
+\DoxyCodeLine{01035\ \ \ \ \ \textcolor{keywordflow}{return}\ HTTPEnum::HV\_11;}
+\DoxyCodeLine{01036\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (version.substr(0,\ 6)\ ==\ \textcolor{stringliteral}{"{}HTTP/0"{}})\ \{}
+\DoxyCodeLine{01037\ \ \ \ \ \textcolor{keywordflow}{return}\ HTTPEnum::HV\_09;}
+\DoxyCodeLine{01038\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01039\ \ \ \ \ \textcolor{keywordflow}{return}\ HTTPEnum::HV\_other;}
+\DoxyCodeLine{01040\ \ \ \}}
+\DoxyCodeLine{01041\ \}}
+\DoxyCodeLine{01042\ }
+\DoxyCodeLine{01049\ \textcolor{keywordtype}{bool}\ HTTPClient::}
+\DoxyCodeLine{01050\ load\_certificates(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{01051\ \ \ OpenSSLWrapper\ *sslw\ =\ OpenSSLWrapper::get\_global\_ptr();}
+\DoxyCodeLine{01052\ \ \ \textcolor{keywordflow}{return}\ (sslw-\/>load\_certificates(filename)\ !=\ 0);}
+\DoxyCodeLine{01053\ \}}
+\DoxyCodeLine{01054\ }
+\DoxyCodeLine{01070\ PT(HTTPChannel)\ HTTPClient::}
+\DoxyCodeLine{01071\ make\_channel(\textcolor{keywordtype}{bool}\ persistent\_connection)\ \{}
+\DoxyCodeLine{01072\ \ \ PT(HTTPChannel)\ doc\ =\ \textcolor{keyword}{new}\ HTTPChannel(\textcolor{keyword}{this});}
+\DoxyCodeLine{01073\ \ \ doc-\/>set\_persistent\_connection(persistent\_connection);}
+\DoxyCodeLine{01074\ \ \ \textcolor{keywordflow}{return}\ doc;}
+\DoxyCodeLine{01075\ \}}
+\DoxyCodeLine{01076\ }
+\DoxyCodeLine{01083\ PT(HTTPChannel)\ HTTPClient::}
+\DoxyCodeLine{01084\ post\_form(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&body)\ \{}
+\DoxyCodeLine{01085\ \ \ PT(HTTPChannel)\ doc\ =\ \textcolor{keyword}{new}\ HTTPChannel(\textcolor{keyword}{this});}
+\DoxyCodeLine{01086\ \ \ doc-\/>post\_form(url,\ body);}
+\DoxyCodeLine{01087\ \ \ \textcolor{keywordflow}{return}\ doc;}
+\DoxyCodeLine{01088\ \}}
+\DoxyCodeLine{01089\ }
+\DoxyCodeLine{01095\ PT(HTTPChannel)\ HTTPClient::}
+\DoxyCodeLine{01096\ get\_document(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url)\ \{}
+\DoxyCodeLine{01097\ \ \ PT(HTTPChannel)\ doc\ =\ \textcolor{keyword}{new}\ HTTPChannel(\textcolor{keyword}{this});}
+\DoxyCodeLine{01098\ \ \ doc-\/>get\_document(url);}
+\DoxyCodeLine{01099\ \ \ \textcolor{keywordflow}{return}\ doc;}
+\DoxyCodeLine{01100\ \}}
+\DoxyCodeLine{01101\ }
+\DoxyCodeLine{01108\ PT(HTTPChannel)\ HTTPClient::}
+\DoxyCodeLine{01109\ get\_header(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url)\ \{}
+\DoxyCodeLine{01110\ \ \ PT(HTTPChannel)\ doc\ =\ \textcolor{keyword}{new}\ HTTPChannel(\textcolor{keyword}{this});}
+\DoxyCodeLine{01111\ \ \ doc-\/>get\_header(url);}
+\DoxyCodeLine{01112\ \ \ \textcolor{keywordflow}{return}\ doc;}
+\DoxyCodeLine{01113\ \}}
+\DoxyCodeLine{01114\ }
+\DoxyCodeLine{01118\ HTTPClient\ *HTTPClient::}
+\DoxyCodeLine{01119\ get\_global\_ptr()\ \{}
+\DoxyCodeLine{01120\ \ \ \textcolor{keywordflow}{if}\ (\_global\_ptr\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01121\ \ \ \ \ \_global\_ptr\ =\ \textcolor{keyword}{new}\ HTTPClient;}
+\DoxyCodeLine{01122\ \ \ \}}
+\DoxyCodeLine{01123\ \ \ \textcolor{keywordflow}{return}\ \_global\_ptr;}
+\DoxyCodeLine{01124\ \}}
+\DoxyCodeLine{01125\ }
+\DoxyCodeLine{01126\ }
+\DoxyCodeLine{01130\ SSL\_CTX\ *HTTPClient::}
+\DoxyCodeLine{01131\ get\_ssl\_ctx()\ \{}
+\DoxyCodeLine{01132\ \ \ \textcolor{keywordflow}{if}\ (\_ssl\_ctx\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01133\ \ \ \ \ \textcolor{keywordflow}{return}\ \_ssl\_ctx;}
+\DoxyCodeLine{01134\ \ \ \}}
+\DoxyCodeLine{01135\ }
+\DoxyCodeLine{01136\ \ \ init\_random\_seed();}
+\DoxyCodeLine{01137\ }
+\DoxyCodeLine{01138\ \ \ \_ssl\_ctx\ =\ SSL\_CTX\_new(SSLv23\_client\_method());}
+\DoxyCodeLine{01139\ }
+\DoxyCodeLine{01140\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{01141\ \ \ \textcolor{comment}{//\ If\ we\ have\ debugging\ enabled,\ set\ a\ callback\ that\ allows\ us\ to\ report\ the}}
+\DoxyCodeLine{01142\ \ \ \textcolor{comment}{//\ SSL\ messages\ as\ they\ are\ sent\ and\ received.}}
+\DoxyCodeLine{01143\ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01144\ \ \ \ \ SSL\_CTX\_set\_msg\_callback(\_ssl\_ctx,\ ssl\_msg\_callback);}
+\DoxyCodeLine{01145\ \ \ \}}
+\DoxyCodeLine{01146\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01147\ }
+\DoxyCodeLine{01148\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ error\ strings\ are\ loaded.}}
+\DoxyCodeLine{01149\ \ \ OpenSSLWrapper\ *sslw\ =\ OpenSSLWrapper::get\_global\_ptr();}
+\DoxyCodeLine{01150\ \ \ sslw-\/>notify\_ssl\_errors();}
+\DoxyCodeLine{01151\ }
+\DoxyCodeLine{01152\ \ \ X509\_STORE\ *store\ =\ sslw-\/>get\_x509\_store();}
+\DoxyCodeLine{01153\ \textcolor{preprocessor}{\#if\ OPENSSL\_VERSION\_NUMBER\ >=\ 0x10100000}}
+\DoxyCodeLine{01154\ \ \ \textcolor{keywordflow}{if}\ (store\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01155\ \ \ \ \ X509\_STORE\_up\_ref(store);}
+\DoxyCodeLine{01156\ \ \ \}}
+\DoxyCodeLine{01157\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01158\ \ \ SSL\_CTX\_set\_cert\_store(\_ssl\_ctx,\ store);}
+\DoxyCodeLine{01159\ }
+\DoxyCodeLine{01160\ \ \ \textcolor{keywordflow}{return}\ \_ssl\_ctx;}
+\DoxyCodeLine{01161\ \}}
+\DoxyCodeLine{01162\ }
+\DoxyCodeLine{01178\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{01179\ check\_preapproved\_server\_certificate(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url,\ X509\ *cert,}
+\DoxyCodeLine{01180\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ \&cert\_preapproved,\ \textcolor{keywordtype}{bool}\ \&cert\_name\_preapproved)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01181\ \ \ cert\_preapproved\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01182\ \ \ cert\_name\_preapproved\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01183\ }
+\DoxyCodeLine{01184\ \ \ \textcolor{keywordtype}{string}\ server\_and\_port\ =\ url.get\_server\_and\_port();}
+\DoxyCodeLine{01185\ \ \ PreapprovedServerCerts::const\_iterator\ psci\ =}
+\DoxyCodeLine{01186\ \ \ \ \ \_preapproved\_server\_certs.find(server\_and\_port);}
+\DoxyCodeLine{01187\ }
+\DoxyCodeLine{01188\ \ \ \textcolor{keywordflow}{if}\ (psci\ ==\ \_preapproved\_server\_certs.end())\ \{}
+\DoxyCodeLine{01189\ \ \ \ \ \textcolor{comment}{//\ No\ preapproved\ certs\ defined\ for\ this\ server.}}
+\DoxyCodeLine{01190\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01191\ \ \ \}}
+\DoxyCodeLine{01192\ }
+\DoxyCodeLine{01193\ \ \ \textcolor{keyword}{const}\ PreapprovedServerCert\ \&psc\ =\ (*psci).second;}
+\DoxyCodeLine{01194\ }
+\DoxyCodeLine{01195\ \ \ \textcolor{comment}{//\ See\ if\ we\ have\ an\ exact\ match\ on\ the\ cert\ itself.}}
+\DoxyCodeLine{01196\ \ \ ServerCerts::const\_iterator\ sci;}
+\DoxyCodeLine{01197\ \ \ \textcolor{keywordflow}{for}\ (sci\ =\ psc.\_certs.begin();\ sci\ !=\ psc.\_certs.end();\ ++sci)\ \{}
+\DoxyCodeLine{01198\ \ \ \ \ \textcolor{keywordflow}{if}\ (X509\_cmp(cert,\ *sci)\ ==\ 0)\ \{}
+\DoxyCodeLine{01199\ \ \ \ \ \ \ cert\_preapproved\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01200\ \ \ \ \ \ \ cert\_name\_preapproved\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01201\ \ \ \ \ \ \ downloader\_cat.info()}
+\DoxyCodeLine{01202\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Server\ certificate\ is\ pre-\/approved.\(\backslash\)n"{}};}
+\DoxyCodeLine{01203\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01204\ \ \ \ \ \}}
+\DoxyCodeLine{01205\ \ \ \}}
+\DoxyCodeLine{01206\ }
+\DoxyCodeLine{01207\ \ \ \textcolor{comment}{//\ OK,\ look\ for\ a\ match\ on\ the\ cert's\ name\ only.}}
+\DoxyCodeLine{01208\ \ \ X509\_NAME\ *subject\ =\ X509\_get\_subject\_name(cert);}
+\DoxyCodeLine{01209\ \ \ ServerCertNames::const\_iterator\ scni;}
+\DoxyCodeLine{01210\ \ \ \textcolor{keywordflow}{for}\ (scni\ =\ psc.\_cert\_names.begin();\ scni\ !=\ psc.\_cert\_names.end();\ ++scni)\ \{}
+\DoxyCodeLine{01211\ \ \ \ \ X509\_NAME\ *cert\_name\ =\ (*scni);}
+\DoxyCodeLine{01212\ \ \ \ \ \textcolor{keywordflow}{if}\ (x509\_name\_subset(cert\_name,\ subject))\ \{}
+\DoxyCodeLine{01213\ \ \ \ \ \ \ downloader\_cat.info()}
+\DoxyCodeLine{01214\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Server\ certificate\ name\ is\ pre-\/approved.\(\backslash\)n"{}};}
+\DoxyCodeLine{01215\ \ \ \ \ \ \ cert\_name\_preapproved\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01216\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01217\ \ \ \ \ \}}
+\DoxyCodeLine{01218\ \ \ \}}
+\DoxyCodeLine{01219\ }
+\DoxyCodeLine{01220\ \ \ \textcolor{comment}{//\ Didn't\ find\ any\ match.}}
+\DoxyCodeLine{01221\ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01222\ \}}
+\DoxyCodeLine{01223\ }
+\DoxyCodeLine{01228\ \textcolor{keywordtype}{bool}\ HTTPClient::}
+\DoxyCodeLine{01229\ get\_proxies\_for\_scheme(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&scheme,\ \mbox{\hyperlink{classpvector}{pvector<URLSpec>}}\ \&proxies)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01230\ \ \ ProxiesByScheme::const\_iterator\ si\ =\ \_proxies\_by\_scheme.find(scheme);}
+\DoxyCodeLine{01231\ \ \ \textcolor{keywordflow}{if}\ (si\ ==\ \_proxies\_by\_scheme.end())\ \{}
+\DoxyCodeLine{01232\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01233\ \ \ \}}
+\DoxyCodeLine{01234\ \ \ \textcolor{keyword}{const}\ Proxies\ \&scheme\_proxies\ =\ (*si).second;}
+\DoxyCodeLine{01235\ \ \ \textcolor{keywordflow}{if}\ (scheme\_proxies.empty())\ \{}
+\DoxyCodeLine{01236\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01237\ \ \ \}}
+\DoxyCodeLine{01238\ }
+\DoxyCodeLine{01239\ \ \ Proxies::const\_iterator\ pi;}
+\DoxyCodeLine{01240\ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ scheme\_proxies.begin();\ pi\ !=\ scheme\_proxies.end();\ ++pi)\ \{}
+\DoxyCodeLine{01241\ \ \ \ \ proxies.push\_back(*pi);}
+\DoxyCodeLine{01242\ \ \ \}}
+\DoxyCodeLine{01243\ }
+\DoxyCodeLine{01244\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01245\ \}}
+\DoxyCodeLine{01246\ }
+\DoxyCodeLine{01252\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{01253\ add\_http\_username(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&http\_username)\ \{}
+\DoxyCodeLine{01254\ \ \ \textcolor{keywordtype}{size\_t}\ c1\ =\ http\_username.find(\textcolor{charliteral}{':'});}
+\DoxyCodeLine{01255\ \ \ \textcolor{keywordflow}{if}\ (c1\ !=\ string::npos)\ \{}
+\DoxyCodeLine{01256\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ c2\ =\ http\_username.find(\textcolor{charliteral}{':'},\ c1\ +\ 1);}
+\DoxyCodeLine{01257\ \ \ \ \ \textcolor{keywordflow}{if}\ (c2\ !=\ string::npos)\ \{}
+\DoxyCodeLine{01258\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ c3\ =\ http\_username.find(\textcolor{charliteral}{':'},\ c2\ +\ 1);}
+\DoxyCodeLine{01259\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (c3\ !=\ string::npos)\ \{}
+\DoxyCodeLine{01260\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ c4\ =\ http\_username.find(\textcolor{charliteral}{':'},\ c3\ +\ 1);}
+\DoxyCodeLine{01261\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (c4\ !=\ string::npos)\ \{}
+\DoxyCodeLine{01262\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Oops,\ we\ have\ five?\ \ Problem.}}
+\DoxyCodeLine{01263\ \ \ \ \ \ \ \ \ \ \ downloader\_cat.error()}
+\DoxyCodeLine{01264\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ http-\/username\ "{}}\ <<\ http\_username\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01265\ }
+\DoxyCodeLine{01266\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01267\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Ok,\ we\ have\ four.}}
+\DoxyCodeLine{01268\ \ \ \ \ \ \ \ \ \ \ set\_username(http\_username.substr(0,\ c1),}
+\DoxyCodeLine{01269\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ http\_username.substr(c1\ +\ 1,\ c2\ -\/\ (c1\ +\ 1)),}
+\DoxyCodeLine{01270\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ http\_username.substr(c2\ +\ 1));}
+\DoxyCodeLine{01271\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01272\ }
+\DoxyCodeLine{01273\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01274\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ have\ only\ three.}}
+\DoxyCodeLine{01275\ \ \ \ \ \ \ \ \ set\_username(\textcolor{keywordtype}{string}(),}
+\DoxyCodeLine{01276\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ http\_username.substr(0,\ c1),}
+\DoxyCodeLine{01277\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ http\_username.substr(c1\ +\ 1));}
+\DoxyCodeLine{01278\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01279\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01280\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ have\ only\ two.}}
+\DoxyCodeLine{01281\ \ \ \ \ \ \ set\_username(\textcolor{keywordtype}{string}(),\ \textcolor{keywordtype}{string}(),\ http\_username);}
+\DoxyCodeLine{01282\ \ \ \ \ \}}
+\DoxyCodeLine{01283\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01284\ \ \ \ \ \textcolor{comment}{//\ We\ have\ only\ one?\ \ Problem.}}
+\DoxyCodeLine{01285\ \ \ \ \ downloader\_cat.error()}
+\DoxyCodeLine{01286\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ http-\/username\ "{}}\ <<\ http\_username\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01287\ \ \ \}}
+\DoxyCodeLine{01288\ \}}
+\DoxyCodeLine{01289\ }
+\DoxyCodeLine{01293\ \textcolor{keywordtype}{string}\ HTTPClient::}
+\DoxyCodeLine{01294\ select\_username(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url,\ \textcolor{keywordtype}{bool}\ is\_proxy,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&realm)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01295\ \ \ \textcolor{keywordtype}{string}\ username;}
+\DoxyCodeLine{01296\ }
+\DoxyCodeLine{01297\ \ \ \textcolor{comment}{//\ Look\ in\ several\ places\ in\ order\ to\ find\ the\ matching\ username.}}
+\DoxyCodeLine{01298\ }
+\DoxyCodeLine{01299\ \ \ \textcolor{comment}{//\ Fist,\ if\ there's\ a\ username\ on\ the\ URL,\ that\ always\ wins\ (except\ when\ we}}
+\DoxyCodeLine{01300\ \ \ \textcolor{comment}{//\ are\ looking\ for\ a\ proxy\ username).}}
+\DoxyCodeLine{01301\ \ \ \textcolor{keywordflow}{if}\ (url.has\_username()\ \&\&\ !is\_proxy)\ \{}
+\DoxyCodeLine{01302\ \ \ \ \ username\ =\ url.get\_username();}
+\DoxyCodeLine{01303\ \ \ \}}
+\DoxyCodeLine{01304\ }
+\DoxyCodeLine{01305\ \ \ \textcolor{comment}{//\ Otherwise,\ start\ looking\ on\ the\ HTTPClient.}}
+\DoxyCodeLine{01306\ \ \ \textcolor{keywordflow}{if}\ (is\_proxy)\ \{}
+\DoxyCodeLine{01307\ \ \ \ \ \textcolor{keywordflow}{if}\ (username.empty())\ \{}
+\DoxyCodeLine{01308\ \ \ \ \ \ \ \textcolor{comment}{//\ Try\ the\ *proxyrealm.}}
+\DoxyCodeLine{01309\ \ \ \ \ \ \ username\ =\ get\_username(\textcolor{stringliteral}{"{}*proxy"{}},\ realm);}
+\DoxyCodeLine{01310\ \ \ \ \ \}}
+\DoxyCodeLine{01311\ \ \ \ \ \textcolor{keywordflow}{if}\ (username.empty())\ \{}
+\DoxyCodeLine{01312\ \ \ \ \ \ \ \textcolor{comment}{//\ Then,\ try\ *proxyany\ realm.}}
+\DoxyCodeLine{01313\ \ \ \ \ \ \ username\ =\ get\_username(\textcolor{stringliteral}{"{}*proxy"{}},\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{01314\ \ \ \ \ \}}
+\DoxyCodeLine{01315\ \ \ \}}
+\DoxyCodeLine{01316\ \ \ \textcolor{keywordflow}{if}\ (username.empty())\ \{}
+\DoxyCodeLine{01317\ \ \ \ \ \textcolor{comment}{//\ Try\ the\ specific\ serverrealm.}}
+\DoxyCodeLine{01318\ \ \ \ \ username\ =\ get\_username(url.get\_server(),\ realm);}
+\DoxyCodeLine{01319\ \ \ \}}
+\DoxyCodeLine{01320\ \ \ \textcolor{keywordflow}{if}\ (username.empty())\ \{}
+\DoxyCodeLine{01321\ \ \ \ \ \textcolor{comment}{//\ Then,\ try\ the\ specific\ serverany\ realm.}}
+\DoxyCodeLine{01322\ \ \ \ \ username\ =\ get\_username(url.get\_server(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{01323\ \ \ \}}
+\DoxyCodeLine{01324\ \ \ \textcolor{keywordflow}{if}\ (username.empty())\ \{}
+\DoxyCodeLine{01325\ \ \ \ \ \textcolor{comment}{//\ Then,\ try\ any\ server\ with\ this\ realm.}}
+\DoxyCodeLine{01326\ \ \ \ \ username\ =\ get\_username(\textcolor{keywordtype}{string}(),\ realm);}
+\DoxyCodeLine{01327\ \ \ \}}
+\DoxyCodeLine{01328\ \ \ \textcolor{keywordflow}{if}\ (username.empty())\ \{}
+\DoxyCodeLine{01329\ \ \ \ \ \textcolor{comment}{//\ Then,\ take\ the\ general\ password.}}
+\DoxyCodeLine{01330\ \ \ \ \ username\ =\ get\_username(\textcolor{keywordtype}{string}(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{01331\ \ \ \}}
+\DoxyCodeLine{01332\ }
+\DoxyCodeLine{01333\ \ \ \textcolor{keywordflow}{return}\ username;}
+\DoxyCodeLine{01334\ \}}
+\DoxyCodeLine{01335\ }
+\DoxyCodeLine{01340\ HTTPAuthorization\ *HTTPClient::}
+\DoxyCodeLine{01341\ select\_auth(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url,\ \textcolor{keywordtype}{bool}\ is\_proxy,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&last\_realm)\ \{}
+\DoxyCodeLine{01342\ \ \ Domains\ \&domains\ =\ is\_proxy\ ?\ \_proxy\_domains\ :\ \_www\_domains;}
+\DoxyCodeLine{01343\ \ \ \textcolor{keywordtype}{string}\ canon\ =\ HTTPAuthorization::get\_canonical\_url(url).get\_url();}
+\DoxyCodeLine{01344\ }
+\DoxyCodeLine{01345\ \ \ \textcolor{comment}{//\ Look\ for\ the\ longest\ domain\ string\ that\ is\ a\ prefix\ of\ our\ canonical\ URL.}}
+\DoxyCodeLine{01346\ \ \ \textcolor{comment}{//\ We\ have\ to\ make\ a\ linear\ scan\ through\ the\ list.}}
+\DoxyCodeLine{01347\ \ \ Domains::const\_iterator\ best\_di\ =\ domains.end();}
+\DoxyCodeLine{01348\ \ \ \textcolor{keywordtype}{size\_t}\ longest\_length\ =\ 0;}
+\DoxyCodeLine{01349\ \ \ Domains::const\_iterator\ di;}
+\DoxyCodeLine{01350\ \ \ \textcolor{keywordflow}{for}\ (di\ =\ domains.begin();\ di\ !=\ domains.end();\ ++di)\ \{}
+\DoxyCodeLine{01351\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&domain\ =\ (*di).first;}
+\DoxyCodeLine{01352\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ length\ =\ domain.length();}
+\DoxyCodeLine{01353\ \ \ \ \ \textcolor{keywordflow}{if}\ (domain\ ==\ canon.substr(0,\ length))\ \{}
+\DoxyCodeLine{01354\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ domain\ string\ matches.\ \ Is\ it\ the\ longest?}}
+\DoxyCodeLine{01355\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (length\ >\ longest\_length)\ \{}
+\DoxyCodeLine{01356\ \ \ \ \ \ \ \ \ best\_di\ =\ di;}
+\DoxyCodeLine{01357\ \ \ \ \ \ \ \ \ longest\_length\ =\ length;}
+\DoxyCodeLine{01358\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01359\ \ \ \ \ \}}
+\DoxyCodeLine{01360\ \ \ \}}
+\DoxyCodeLine{01361\ }
+\DoxyCodeLine{01362\ \ \ \textcolor{keywordflow}{if}\ (best\_di\ !=\ domains.end())\ \{}
+\DoxyCodeLine{01363\ \ \ \ \ \textcolor{comment}{//\ Ok,\ we\ found\ a\ matching\ domain.\ \ Use\ it.}}
+\DoxyCodeLine{01364\ \ \ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01365\ \ \ \ \ \ \ downloader\_cat.spam()}
+\DoxyCodeLine{01366\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Choosing\ domain\ "{}}\ <<\ (*best\_di).first\ <<\ \textcolor{stringliteral}{"{}\ for\ "{}}\ <<\ url\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01367\ \ \ \ \ \}}
+\DoxyCodeLine{01368\ \ \ \ \ \textcolor{keyword}{const}\ Realms\ \&realms\ =\ (*best\_di).second.\_realms;}
+\DoxyCodeLine{01369\ \ \ \ \ \textcolor{comment}{//\ First,\ try\ our\ last\ realm.}}
+\DoxyCodeLine{01370\ \ \ \ \ Realms::const\_iterator\ ri;}
+\DoxyCodeLine{01371\ \ \ \ \ ri\ =\ realms.find(last\_realm);}
+\DoxyCodeLine{01372\ \ \ \ \ \textcolor{keywordflow}{if}\ (ri\ !=\ realms.end())\ \{}
+\DoxyCodeLine{01373\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ (*ri).second;}
+\DoxyCodeLine{01374\ \ \ \ \ \}}
+\DoxyCodeLine{01375\ }
+\DoxyCodeLine{01376\ \ \ \ \ \textcolor{keywordflow}{if}\ (!realms.empty())\ \{}
+\DoxyCodeLine{01377\ \ \ \ \ \ \ \textcolor{comment}{//\ Oh\ well,\ just\ return\ the\ first\ realm.}}
+\DoxyCodeLine{01378\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ (*realms.begin()).second;}
+\DoxyCodeLine{01379\ \ \ \ \ \}}
+\DoxyCodeLine{01380\ \ \ \}}
+\DoxyCodeLine{01381\ }
+\DoxyCodeLine{01382\ \ \ \textcolor{comment}{//\ No\ matching\ domains.}}
+\DoxyCodeLine{01383\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01384\ \}}
+\DoxyCodeLine{01385\ }
+\DoxyCodeLine{01392\ PT(HTTPAuthorization)\ HTTPClient::}
+\DoxyCodeLine{01393\ generate\_auth(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url,\ \textcolor{keywordtype}{bool}\ is\_proxy,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&challenge)\ \{}
+\DoxyCodeLine{01394\ \ \ HTTPAuthorization::AuthenticationSchemes\ schemes;}
+\DoxyCodeLine{01395\ \ \ HTTPAuthorization::parse\_authentication\_schemes(schemes,\ challenge);}
+\DoxyCodeLine{01396\ }
+\DoxyCodeLine{01397\ \ \ PT(HTTPAuthorization)\ auth;}
+\DoxyCodeLine{01398\ \ \ HTTPAuthorization::AuthenticationSchemes::iterator\ si;}
+\DoxyCodeLine{01399\ }
+\DoxyCodeLine{01400\ \ \ si\ =\ schemes.find(\textcolor{stringliteral}{"{}digest"{}});}
+\DoxyCodeLine{01401\ \ \ \textcolor{keywordflow}{if}\ (si\ !=\ schemes.end())\ \{}
+\DoxyCodeLine{01402\ \ \ \ \ auth\ =\ \textcolor{keyword}{new}\ HTTPDigestAuthorization((*si).second,\ url,\ is\_proxy);}
+\DoxyCodeLine{01403\ \ \ \}}
+\DoxyCodeLine{01404\ }
+\DoxyCodeLine{01405\ \ \ \textcolor{keywordflow}{if}\ (auth\ ==\ \textcolor{keyword}{nullptr}\ ||\ !auth-\/>is\_valid())\ \{}
+\DoxyCodeLine{01406\ \ \ \ \ si\ =\ schemes.find(\textcolor{stringliteral}{"{}basic"{}});}
+\DoxyCodeLine{01407\ \ \ \ \ \textcolor{keywordflow}{if}\ (si\ !=\ schemes.end())\ \{}
+\DoxyCodeLine{01408\ \ \ \ \ \ \ auth\ =\ \textcolor{keyword}{new}\ HTTPBasicAuthorization((*si).second,\ url,\ is\_proxy);}
+\DoxyCodeLine{01409\ \ \ \ \ \}}
+\DoxyCodeLine{01410\ \ \ \}}
+\DoxyCodeLine{01411\ }
+\DoxyCodeLine{01412\ \ \ \textcolor{keywordflow}{if}\ (auth\ ==\ \textcolor{keyword}{nullptr}\ ||\ !auth-\/>is\_valid())\ \{}
+\DoxyCodeLine{01413\ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{01414\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Don't\ know\ how\ to\ use\ any\ of\ the\ server's\ available\ authorization\ schemes:\(\backslash\)n"{}};}
+\DoxyCodeLine{01415\ \ \ \ \ \textcolor{keywordflow}{for}\ (si\ =\ schemes.begin();\ si\ !=\ schemes.end();\ ++si)\ \{}
+\DoxyCodeLine{01416\ \ \ \ \ \ \ downloader\_cat.warning()\ <<\ (*si).first\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01417\ \ \ \ \ \}}
+\DoxyCodeLine{01418\ }
+\DoxyCodeLine{01419\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01420\ \ \ \ \ \textcolor{comment}{//\ Now\ that\ we've\ got\ an\ authorization,\ store\ it\ under\ under\ each\ of\ its}}
+\DoxyCodeLine{01421\ \ \ \ \ \textcolor{comment}{//\ suggested\ domains\ for\ future\ use.}}
+\DoxyCodeLine{01422\ \ \ \ \ Domains\ \&domains\ =\ is\_proxy\ ?\ \_proxy\_domains\ :\ \_www\_domains;}
+\DoxyCodeLine{01423\ \ \ \ \ \textcolor{keyword}{const}\ vector\_string\ \&domain\ =\ auth-\/>get\_domain();}
+\DoxyCodeLine{01424\ \ \ \ \ vector\_string::const\_iterator\ si;}
+\DoxyCodeLine{01425\ \ \ \ \ \textcolor{keywordflow}{for}\ (si\ =\ domain.begin();\ si\ !=\ domain.end();\ ++si)\ \{}
+\DoxyCodeLine{01426\ \ \ \ \ \ \ domains[(*si)].\_realms[auth-\/>get\_realm()]\ =\ auth;}
+\DoxyCodeLine{01427\ \ \ \ \ \}}
+\DoxyCodeLine{01428\ \ \ \}}
+\DoxyCodeLine{01429\ }
+\DoxyCodeLine{01430\ \ \ \textcolor{keywordflow}{return}\ auth;}
+\DoxyCodeLine{01431\ \}}
+\DoxyCodeLine{01432\ }
+\DoxyCodeLine{01437\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{01438\ unload\_client\_certificate()\ \{}
+\DoxyCodeLine{01439\ \ \ \textcolor{keywordflow}{if}\ (\_client\_certificate\_priv\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01440\ \ \ \ \ EVP\_PKEY\_free(\_client\_certificate\_priv);}
+\DoxyCodeLine{01441\ \ \ \ \ \_client\_certificate\_priv\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01442\ \ \ \}}
+\DoxyCodeLine{01443\ }
+\DoxyCodeLine{01444\ \ \ \textcolor{keywordflow}{if}\ (\_client\_certificate\_pub\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01445\ \ \ \ \ X509\_free(\_client\_certificate\_pub);}
+\DoxyCodeLine{01446\ \ \ \ \ \_client\_certificate\_pub\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01447\ \ \ \}}
+\DoxyCodeLine{01448\ }
+\DoxyCodeLine{01449\ \ \ \_client\_certificate\_loaded\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01450\ \}}
+\DoxyCodeLine{01451\ }
+\DoxyCodeLine{01456\ X509\_NAME\ *HTTPClient::}
+\DoxyCodeLine{01457\ parse\_x509\_name(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&source)\ \{}
+\DoxyCodeLine{01458\ \ \ X509\_NAME\ *result\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01459\ }
+\DoxyCodeLine{01460\ \ \ result\ =\ X509\_NAME\_new();}
+\DoxyCodeLine{01461\ \ \ \textcolor{keywordtype}{bool}\ added\_any\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01462\ }
+\DoxyCodeLine{01463\ \ \ string::const\_iterator\ si;}
+\DoxyCodeLine{01464\ \ \ si\ =\ source.begin();}
+\DoxyCodeLine{01465\ \ \ \textcolor{keywordflow}{while}\ (si\ !=\ source.end())\ \{}
+\DoxyCodeLine{01466\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*si)\ ==\ \textcolor{charliteral}{'/'})\ \{}
+\DoxyCodeLine{01467\ \ \ \ \ \ \ \textcolor{comment}{//\ Skip\ a\ slash\ delimiter.}}
+\DoxyCodeLine{01468\ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{01469\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01470\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ type;}
+\DoxyCodeLine{01471\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (si\ !=\ source.end()\ \&\&\ (*si)\ !=\ \textcolor{charliteral}{'='}\ \&\&\ (*si)\ !=\ \textcolor{charliteral}{'/'})\ \{}
+\DoxyCodeLine{01472\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((*si)\ ==\ \textcolor{charliteral}{'\(\backslash\)\(\backslash\)'})\ \{}
+\DoxyCodeLine{01473\ \ \ \ \ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{01474\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (si\ !=\ source.end())\ \{}
+\DoxyCodeLine{01475\ \ \ \ \ \ \ \ \ \ \ \ \ type\ +=\ (*si);}
+\DoxyCodeLine{01476\ \ \ \ \ \ \ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{01477\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01478\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01479\ \ \ \ \ \ \ \ \ \ \ type\ +=\ (*si);}
+\DoxyCodeLine{01480\ \ \ \ \ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{01481\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01482\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01483\ }
+\DoxyCodeLine{01484\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ nid\ =\ OBJ\_txt2nid((\textcolor{keywordtype}{char}\ *)type.c\_str());}
+\DoxyCodeLine{01485\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (nid\ ==\ NID\_undef)\ \{}
+\DoxyCodeLine{01486\ \ \ \ \ \ \ \ \ downloader\_cat.info()}
+\DoxyCodeLine{01487\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unknown\ type\ "{}}\ <<\ type\ <<\ \textcolor{stringliteral}{"{}\ in\ X509\ name:\ "{}}\ <<\ source}
+\DoxyCodeLine{01488\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01489\ \ \ \ \ \ \ \ \ X509\_NAME\_free(result);}
+\DoxyCodeLine{01490\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01491\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01492\ }
+\DoxyCodeLine{01493\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ value;}
+\DoxyCodeLine{01494\ }
+\DoxyCodeLine{01495\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (si\ !=\ source.end()\ \&\&\ (*si)\ ==\ \textcolor{charliteral}{'='})\ \{}
+\DoxyCodeLine{01496\ \ \ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{01497\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (si\ !=\ source.end()\ \&\&\ (*si)\ !=\ \textcolor{charliteral}{'/'})\ \{}
+\DoxyCodeLine{01498\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((*si)\ ==\ \textcolor{charliteral}{'\(\backslash\)\(\backslash\)'})\ \{}
+\DoxyCodeLine{01499\ \ \ \ \ \ \ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{01500\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (si\ !=\ source.end())\ \{}
+\DoxyCodeLine{01501\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ value\ +=\ (*si);}
+\DoxyCodeLine{01502\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{01503\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01504\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01505\ \ \ \ \ \ \ \ \ \ \ \ \ value\ +=\ (*si);}
+\DoxyCodeLine{01506\ \ \ \ \ \ \ \ \ \ \ \ \ ++si;}
+\DoxyCodeLine{01507\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01508\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01509\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01510\ }
+\DoxyCodeLine{01511\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!value.empty())\ \{}
+\DoxyCodeLine{01512\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ add\_result\ =}
+\DoxyCodeLine{01513\ \ \ \ \ \ \ \ \ \ \ X509\_NAME\_add\_entry\_by\_NID(result,\ nid,\ V\_ASN1\_APP\_CHOOSE,}
+\DoxyCodeLine{01514\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)value.c\_str(),\ -\/1,\ -\/1,\ 0);}
+\DoxyCodeLine{01515\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!add\_result)\ \{}
+\DoxyCodeLine{01516\ \ \ \ \ \ \ \ \ \ \ downloader\_cat.info()}
+\DoxyCodeLine{01517\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ add\ "{}}\ <<\ type\ <<\ \textcolor{stringliteral}{"{}="{}}\ <<\ value\ <<\ \textcolor{stringliteral}{"{}\ in\ X509\ name:\ "{}}}
+\DoxyCodeLine{01518\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ source\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01519\ \ \ \ \ \ \ \ \ \ \ X509\_NAME\_free(result);}
+\DoxyCodeLine{01520\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01521\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01522\ \ \ \ \ \ \ \ \ added\_any\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01523\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01524\ \ \ \ \ \}}
+\DoxyCodeLine{01525\ \ \ \}}
+\DoxyCodeLine{01526\ }
+\DoxyCodeLine{01527\ \ \ \textcolor{keywordflow}{if}\ (!added\_any)\ \{}
+\DoxyCodeLine{01528\ \ \ \ \ downloader\_cat.info()}
+\DoxyCodeLine{01529\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ empty\ X509\ name:\ "{}}\ <<\ source\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01530\ \ \ \ \ X509\_NAME\_free(result);}
+\DoxyCodeLine{01531\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01532\ \ \ \}}
+\DoxyCodeLine{01533\ }
+\DoxyCodeLine{01534\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{01535\ \}}
+\DoxyCodeLine{01536\ }
+\DoxyCodeLine{01541\ \textcolor{keywordtype}{bool}\ HTTPClient::}
+\DoxyCodeLine{01542\ x509\_name\_subset(X509\_NAME\ *name\_a,\ X509\_NAME\ *name\_b)\ \{}
+\DoxyCodeLine{01543\ \ \ \textcolor{keywordtype}{int}\ count\_a\ =\ X509\_NAME\_entry\_count(name\_a);}
+\DoxyCodeLine{01544\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ai\ =\ 0;\ ai\ <\ count\_a;\ ai++)\ \{}
+\DoxyCodeLine{01545\ \ \ \ \ X509\_NAME\_ENTRY\ *na\ =\ X509\_NAME\_get\_entry(name\_a,\ ai);}
+\DoxyCodeLine{01546\ }
+\DoxyCodeLine{01547\ \ \ \ \ \textcolor{keywordtype}{int}\ bi\ =\ X509\_NAME\_get\_index\_by\_OBJ(name\_b,\ X509\_NAME\_ENTRY\_get\_object(na),\ -\/1);}
+\DoxyCodeLine{01548\ \ \ \ \ \textcolor{keywordflow}{if}\ (bi\ <\ 0)\ \{}
+\DoxyCodeLine{01549\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ entry\ in\ name\_a\ is\ not\ defined\ in\ name\_b.}}
+\DoxyCodeLine{01550\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01551\ \ \ \ \ \}}
+\DoxyCodeLine{01552\ }
+\DoxyCodeLine{01553\ \ \ \ \ X509\_NAME\_ENTRY\ *nb\ =\ X509\_NAME\_get\_entry(name\_b,\ bi);}
+\DoxyCodeLine{01554\ \ \ \ \ ASN1\_STRING\ *na\_value\ =\ X509\_NAME\_ENTRY\_get\_data(na);}
+\DoxyCodeLine{01555\ \ \ \ \ ASN1\_STRING\ *nb\_value\ =\ X509\_NAME\_ENTRY\_get\_data(nb);}
+\DoxyCodeLine{01556\ \ \ \ \ \textcolor{keywordflow}{if}\ (na\_value-\/>length\ !=\ nb\_value-\/>length\ ||}
+\DoxyCodeLine{01557\ \ \ \ \ \ \ \ \ memcmp(na\_value-\/>data,\ nb\_value-\/>data,\ na\_value-\/>length)\ !=\ 0)\ \{}
+\DoxyCodeLine{01558\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ entry\ in\ name\_a\ doesn't\ match\ that\ of\ name\_b.}}
+\DoxyCodeLine{01559\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01560\ \ \ \ \ \}}
+\DoxyCodeLine{01561\ \ \ \}}
+\DoxyCodeLine{01562\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01563\ \}}
+\DoxyCodeLine{01564\ }
+\DoxyCodeLine{01568\ \textcolor{keywordtype}{void}\ HTTPClient::}
+\DoxyCodeLine{01569\ split\_whitespace(\textcolor{keywordtype}{string}\ \&a,\ \textcolor{keywordtype}{string}\ \&b,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&c)\ \{}
+\DoxyCodeLine{01570\ \ \ \textcolor{keywordtype}{size\_t}\ p\ =\ 0;}
+\DoxyCodeLine{01571\ }
+\DoxyCodeLine{01572\ \ \ \textcolor{comment}{//\ Skip\ initial\ whitespace}}
+\DoxyCodeLine{01573\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ c.length()\ \&\&\ isspace(c[p]))\ \{}
+\DoxyCodeLine{01574\ \ \ \ \ ++p;}
+\DoxyCodeLine{01575\ \ \ \}}
+\DoxyCodeLine{01576\ }
+\DoxyCodeLine{01577\ \ \ \textcolor{comment}{//\ Find\ the\ length\ of\ the\ first\ word}}
+\DoxyCodeLine{01578\ \ \ \textcolor{keywordtype}{size\_t}\ q\ =\ p;}
+\DoxyCodeLine{01579\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ c.length()\ \&\&\ !isspace(c[p]))\ \{}
+\DoxyCodeLine{01580\ \ \ \ \ ++p;}
+\DoxyCodeLine{01581\ \ \ \}}
+\DoxyCodeLine{01582\ }
+\DoxyCodeLine{01583\ \ \ a\ =\ c.substr(q,\ p\ -\/\ q);}
+\DoxyCodeLine{01584\ }
+\DoxyCodeLine{01585\ \ \ \textcolor{comment}{//\ Skip\ whitespace\ between\ words}}
+\DoxyCodeLine{01586\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ c.length()\ \&\&\ isspace(c[p]))\ \{}
+\DoxyCodeLine{01587\ \ \ \ \ ++p;}
+\DoxyCodeLine{01588\ \ \ \}}
+\DoxyCodeLine{01589\ \ \ b\ =\ c.substr(p);}
+\DoxyCodeLine{01590\ \}}
+\DoxyCodeLine{01591\ }
+\DoxyCodeLine{01595\ HTTPClient::PreapprovedServerCert::}
+\DoxyCodeLine{01596\ \string~PreapprovedServerCert()\ \{}
+\DoxyCodeLine{01597\ \ \ ServerCerts::const\_iterator\ sci;}
+\DoxyCodeLine{01598\ \ \ \textcolor{keywordflow}{for}\ (sci\ =\ \_certs.begin();\ sci\ !=\ \_certs.end();\ ++sci)\ \{}
+\DoxyCodeLine{01599\ \ \ \ \ X509\_free(*sci);}
+\DoxyCodeLine{01600\ \ \ \}}
+\DoxyCodeLine{01601\ }
+\DoxyCodeLine{01602\ \ \ ServerCertNames::const\_iterator\ scni;}
+\DoxyCodeLine{01603\ \ \ \textcolor{keywordflow}{for}\ (scni\ =\ \_cert\_names.begin();\ scni\ !=\ \_cert\_names.end();\ ++scni)\ \{}
+\DoxyCodeLine{01604\ \ \ \ \ X509\_NAME\_free(*scni);}
+\DoxyCodeLine{01605\ \ \ \}}
+\DoxyCodeLine{01606\ \}}
+\DoxyCodeLine{01607\ }
+\DoxyCodeLine{01608\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+
+\end{DoxyCode}

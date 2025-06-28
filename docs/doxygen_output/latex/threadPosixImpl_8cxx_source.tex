@@ -1,0 +1,323 @@
+\doxysection{thread\+Posix\+Impl.\+cxx}
+\hypertarget{threadPosixImpl_8cxx_source}{}\label{threadPosixImpl_8cxx_source}\index{panda/src/pipeline/threadPosixImpl.cxx@{panda/src/pipeline/threadPosixImpl.cxx}}
+\mbox{\hyperlink{threadPosixImpl_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{threadPosixImpl_8h}{threadPosixImpl.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{selectThreadImpl_8h}{selectThreadImpl.h}}"{}}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#ifdef\ THREAD\_POSIX\_IMPL}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pointerTo_8h}{pointerTo.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pipeline_8h}{config\_pipeline.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ <sched.h>}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{comment}{//\ Used\ for\ getrusage().}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <sys/types.h>}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ <sys/time.h>}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ <sys/resource.h>}}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#ifdef\ ANDROID}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__express_8h}{config\_express.h}}"{}}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ <jni.h>}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{keyword}{static}\ JavaVM\ *java\_vm\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \_\_thread\ \mbox{\hyperlink{classThread}{Thread}}\ *ThreadPosixImpl::\_current\_thread\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00037\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classpatomic__flag}{patomic\_flag}}\ \_main\_thread\_known\ =\ ATOMIC\_FLAG\_INIT;}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00042\ ThreadPosixImpl::}
+\DoxyCodeLine{00043\ \string~ThreadPosixImpl()\ \{}
+\DoxyCodeLine{00044\ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00045\ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Deleting\ thread\ "{}}\ <<\ \_parent\_obj-\/>get\_name()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00047\ \ \ \}}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \ \ \_mutex.lock();}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \ \ \textcolor{keywordflow}{if}\ (!\_detached)\ \{}
+\DoxyCodeLine{00052\ \ \ \ \ pthread\_detach(\_thread);}
+\DoxyCodeLine{00053\ \ \ \ \ \_detached\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00054\ \ \ \}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \ \ \_mutex.unlock();}
+\DoxyCodeLine{00057\ \}}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00063\ \textcolor{keywordtype}{void}\ ThreadPosixImpl::}
+\DoxyCodeLine{00064\ setup\_main\_thread()\ \{}
+\DoxyCodeLine{00065\ \ \ \_status\ =\ S\_running;}
+\DoxyCodeLine{00066\ \ \ \_thread\ =\ pthread\_self();}
+\DoxyCodeLine{00067\ \}}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00072\ \textcolor{keywordtype}{bool}\ ThreadPosixImpl::}
+\DoxyCodeLine{00073\ start(ThreadPriority\ priority,\ \textcolor{keywordtype}{bool}\ joinable)\ \{}
+\DoxyCodeLine{00074\ \ \ \_mutex.lock();}
+\DoxyCodeLine{00075\ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00076\ \ \ \ \ thread\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}Starting\ "{}}\ <<\ *\_parent\_obj\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00077\ \ \ \}}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00079\ \ \ nassertd(\_status\ ==\ S\_new)\ \{}
+\DoxyCodeLine{00080\ \ \ \ \ \_mutex.unlock();}
+\DoxyCodeLine{00081\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00082\ \ \ \}}
+\DoxyCodeLine{00083\ }
+\DoxyCodeLine{00084\ \ \ \_joinable\ =\ joinable;}
+\DoxyCodeLine{00085\ \ \ \_status\ =\ S\_start\_called;}
+\DoxyCodeLine{00086\ \ \ \_detached\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00088\ \ \ pthread\_attr\_t\ attr;}
+\DoxyCodeLine{00089\ \ \ pthread\_attr\_init(\&attr);}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \ \ \textcolor{keywordflow}{if}\ (!\_joinable)\ \{}
+\DoxyCodeLine{00092\ \ \ \ \ pthread\_attr\_setdetachstate(\&attr,\ PTHREAD\_CREATE\_DETACHED);}
+\DoxyCodeLine{00093\ \ \ \ \ \_detached\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00094\ \ \ \}}
+\DoxyCodeLine{00095\ }
+\DoxyCodeLine{00096\ \ \ \textcolor{keywordtype}{int}\ result\ =\ pthread\_attr\_setstacksize(\&attr,\ thread\_stack\_size);}
+\DoxyCodeLine{00097\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00098\ \ \ \ \ thread\_cat-\/>warning()}
+\DoxyCodeLine{00099\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ set\ stack\ size.\(\backslash\)n"{}};}
+\DoxyCodeLine{00100\ \ \ \}}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \ \ \textcolor{comment}{//\ Ensure\ the\ thread\ has\ "{}system"{}\ scope,\ which\ should\ ensure\ it\ can\ run\ in}}
+\DoxyCodeLine{00103\ \ \ \textcolor{comment}{//\ parallel\ with\ other\ threads.}}
+\DoxyCodeLine{00104\ \ \ result\ =\ pthread\_attr\_setscope(\&attr,\ PTHREAD\_SCOPE\_SYSTEM);}
+\DoxyCodeLine{00105\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00106\ \ \ \ \ thread\_cat-\/>warning()}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ set\ system\ scope.\(\backslash\)n"{}};}
+\DoxyCodeLine{00108\ \ \ \}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ \textcolor{keyword}{struct\ }sched\_param\ param;}
+\DoxyCodeLine{00111\ \ \ \textcolor{keywordtype}{int}\ current\_policy\ =\ SCHED\_OTHER;}
+\DoxyCodeLine{00112\ \ \ result\ =\ pthread\_attr\_setschedpolicy(\&attr,\ current\_policy);}
+\DoxyCodeLine{00113\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00114\ \ \ \ \ thread\_cat-\/>warning()}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ set\ scheduling\ policy.\(\backslash\)n"{}};}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00117\ \ \ \}}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ result\ =\ 0;}
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{switch}\ (priority)\ \{}
+\DoxyCodeLine{00121\ \ \ \textcolor{keywordflow}{case}\ TP\_low:}
+\DoxyCodeLine{00122\ \ \ \ \ param.sched\_priority\ =\ sched\_get\_priority\_min(current\_policy);}
+\DoxyCodeLine{00123\ \ \ \ \ result\ =\ pthread\_attr\_setschedparam(\&attr,\ \&param);}
+\DoxyCodeLine{00124\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \ \ \textcolor{keywordflow}{case}\ TP\_high:}
+\DoxyCodeLine{00127\ \ \ \textcolor{keywordflow}{case}\ TP\_urgent:}
+\DoxyCodeLine{00128\ \ \ \ \ param.sched\_priority\ =\ sched\_get\_priority\_max(current\_policy);}
+\DoxyCodeLine{00129\ \ \ \ \ result\ =\ pthread\_attr\_setschedparam(\&attr,\ \&param);}
+\DoxyCodeLine{00130\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ \ \ \textcolor{keywordflow}{case}\ TP\_normal:}
+\DoxyCodeLine{00133\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00135\ \ \ \}}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00138\ \ \ \ \ thread\_cat-\/>warning()}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ specify\ thread\ priority.\(\backslash\)n"{}};}
+\DoxyCodeLine{00140\ \ \ \}}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00142\ \ \ \textcolor{comment}{//\ Increment\ the\ parent\ object's\ reference\ count\ first.\ \ The\ thread\ will}}
+\DoxyCodeLine{00143\ \ \ \textcolor{comment}{//\ eventually\ decrement\ it\ when\ it\ terminates.}}
+\DoxyCodeLine{00144\ \ \ \_parent\_obj-\/>ref();}
+\DoxyCodeLine{00145\ \ \ result\ =\ pthread\_create(\&\_thread,\ \&attr,\ \&root\_func,\ (\textcolor{keywordtype}{void}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00147\ \ \ pthread\_attr\_destroy(\&attr);}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{comment}{//\ Oops,\ we\ couldn't\ start\ the\ thread.\ \ Be\ sure\ to\ decrement\ the\ reference}}
+\DoxyCodeLine{00151\ \ \ \ \ \textcolor{comment}{//\ count\ we\ incremented\ above,\ and\ return\ false\ to\ indicate\ failure.}}
+\DoxyCodeLine{00152\ \ \ \ \ unref\_delete(\_parent\_obj);}
+\DoxyCodeLine{00153\ \ \ \ \ \_mutex.unlock();}
+\DoxyCodeLine{00154\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00155\ \ \ \}}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00157\ \ \ \textcolor{comment}{//\ Thread\ was\ successfully\ started.}}
+\DoxyCodeLine{00158\ \ \ \_mutex.unlock();}
+\DoxyCodeLine{00159\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00160\ \}}
+\DoxyCodeLine{00161\ }
+\DoxyCodeLine{00166\ \textcolor{keywordtype}{void}\ ThreadPosixImpl::}
+\DoxyCodeLine{00167\ join()\ \{}
+\DoxyCodeLine{00168\ \ \ \_mutex.lock();}
+\DoxyCodeLine{00169\ \ \ \textcolor{keywordflow}{if}\ (!\_detached)\ \{}
+\DoxyCodeLine{00170\ \ \ \ \ \_mutex.unlock();}
+\DoxyCodeLine{00171\ \ \ \ \ \textcolor{keywordtype}{void}\ *return\_val;}
+\DoxyCodeLine{00172\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ pthread\_join(\_thread,\ \&return\_val);}
+\DoxyCodeLine{00173\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ thread\_cat.error()}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ join\ thread\ "{}}\ <<\ \_parent\_obj-\/>get\_name()}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ strerror(result)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00177\ \ \ \ \ \}}
+\DoxyCodeLine{00178\ \ \ \ \ \_detached\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00179\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00180\ \ \ \}}
+\DoxyCodeLine{00181\ \ \ \_mutex.unlock();}
+\DoxyCodeLine{00182\ \}}
+\DoxyCodeLine{00183\ }
+\DoxyCodeLine{00187\ std::string\ ThreadPosixImpl::}
+\DoxyCodeLine{00188\ get\_unique\_id()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00189\ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ strm;}
+\DoxyCodeLine{00190\ \ \ strm\ <<\ getpid()\ <<\ \textcolor{stringliteral}{"{}."{}}\ <<\ (uintptr\_t)\_thread;}
+\DoxyCodeLine{00191\ }
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordflow}{return}\ strm.str();}
+\DoxyCodeLine{00193\ \}}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00200\ \mbox{\hyperlink{classThread}{Thread}}\ *ThreadPosixImpl::}
+\DoxyCodeLine{00201\ bind\_thread(\mbox{\hyperlink{classThread}{Thread}}\ *thread)\ \{}
+\DoxyCodeLine{00202\ \ \ \textcolor{keywordflow}{if}\ (\_current\_thread\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \textcolor{keywordflow}{return}\ \_current\_thread;}
+\DoxyCodeLine{00204\ \ \ \}}
+\DoxyCodeLine{00205\ \ \ \textcolor{keywordflow}{if}\ (thread\ ==\ Thread::get\_main\_thread())\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \_main\_thread\_known.test\_and\_set(std::memory\_order\_relaxed);}
+\DoxyCodeLine{00207\ \ \ \}}
+\DoxyCodeLine{00208\ \ \ \_current\_thread\ =\ thread;}
+\DoxyCodeLine{00209\ \textcolor{preprocessor}{\#ifdef\ ANDROID}}
+\DoxyCodeLine{00210\ \ \ bind\_java\_thread();}
+\DoxyCodeLine{00211\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00212\ \ \ \textcolor{keywordflow}{return}\ thread;}
+\DoxyCodeLine{00213\ \}}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \textcolor{preprocessor}{\#ifdef\ ANDROID}}
+\DoxyCodeLine{00220\ \textcolor{keywordtype}{bool}\ ThreadPosixImpl::}
+\DoxyCodeLine{00221\ attach\_java\_vm()\ \{}
+\DoxyCodeLine{00222\ \ \ assert(java\_vm\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00224\ \ \ JNIEnv\ *env;}
+\DoxyCodeLine{00225\ \ \ std::string\ thread\_name\ =\ \_parent\_obj-\/>get\_name();}
+\DoxyCodeLine{00226\ \ \ JavaVMAttachArgs\ args;}
+\DoxyCodeLine{00227\ \ \ args.version\ =\ JNI\_VERSION\_1\_2;}
+\DoxyCodeLine{00228\ \ \ args.name\ =\ thread\_name.c\_str();}
+\DoxyCodeLine{00229\ \ \ args.group\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00230\ \ \ \textcolor{keywordflow}{if}\ (java\_vm-\/>AttachCurrentThread(\&env,\ \&args)\ !=\ 0)\ \{}
+\DoxyCodeLine{00231\ \ \ \ \ thread\_cat.error()}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ attach\ Java\ VM\ to\ thread\ "{}}}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ <<\ \_parent\_obj-\/>get\_name()\ <<\ \textcolor{stringliteral}{"{}!\(\backslash\)n"{}};}
+\DoxyCodeLine{00234\ \ \ \ \ \_jni\_env\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00235\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00236\ \ \ \}}
+\DoxyCodeLine{00237\ \ \ \_jni\_env\ =\ env;}
+\DoxyCodeLine{00238\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00239\ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00245\ \textcolor{keywordtype}{void}\ ThreadPosixImpl::}
+\DoxyCodeLine{00246\ bind\_java\_thread()\ \{}
+\DoxyCodeLine{00247\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00248\ \ \ nassertv(thread\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00250\ \ \ assert(java\_vm\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \ \ \textcolor{comment}{//\ Get\ the\ JNIEnv\ for\ this\ Java\ thread,\ and\ store\ it\ on\ the\ corresponding}}
+\DoxyCodeLine{00253\ \ \ \textcolor{comment}{//\ Panda\ thread\ object.}}
+\DoxyCodeLine{00254\ \ \ JNIEnv\ *env;}
+\DoxyCodeLine{00255\ \ \ \textcolor{keywordflow}{if}\ (java\_vm-\/>GetEnv((\textcolor{keywordtype}{void}\ **)\&env,\ JNI\_VERSION\_1\_4)\ ==\ JNI\_OK)\ \{}
+\DoxyCodeLine{00256\ \ \ \ \ nassertv(thread-\/>\_impl.\_jni\_env\ ==\ \textcolor{keyword}{nullptr}\ ||\ thread-\/>\_impl.\_jni\_env\ ==\ env);}
+\DoxyCodeLine{00257\ \ \ \ \ thread-\/>\_impl.\_jni\_env\ =\ env;}
+\DoxyCodeLine{00258\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00259\ \ \ \ \ thread\_cat-\/>error()}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Called\ bind\_java\_thread()\ on\ thread\ "{}}}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ <<\ *thread\ <<\ \textcolor{stringliteral}{"{},\ which\ is\ not\ attached\ to\ Java\ VM!\(\backslash\)n"{}};}
+\DoxyCodeLine{00262\ \ \ \}}
+\DoxyCodeLine{00263\ \}}
+\DoxyCodeLine{00264\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ ANDROID}}
+\DoxyCodeLine{00265\ }
+\DoxyCodeLine{00273\ \textcolor{keywordtype}{bool}\ ThreadPosixImpl::}
+\DoxyCodeLine{00274\ get\_context\_switches(\textcolor{keywordtype}{size\_t}\ \&total,\ \textcolor{keywordtype}{size\_t}\ \&involuntary)\ \{}
+\DoxyCodeLine{00275\ \textcolor{preprocessor}{\#ifdef\ RUSAGE\_THREAD}}
+\DoxyCodeLine{00276\ \ \ \textcolor{keyword}{struct\ }rusage\ usage;}
+\DoxyCodeLine{00277\ \ \ \textcolor{keywordflow}{if}\ (getrusage(RUSAGE\_THREAD,\ \&usage)\ ==\ 0)\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ total\ =\ (size\_t)usage.ru\_nvcsw;}
+\DoxyCodeLine{00279\ \ \ \ \ involuntary\ =\ (size\_t)usage.ru\_nivcsw;}
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00281\ \ \ \}}
+\DoxyCodeLine{00282\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00283\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00284\ \}}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00289\ \textcolor{keywordtype}{void}\ *ThreadPosixImpl::}
+\DoxyCodeLine{00290\ root\_func(\textcolor{keywordtype}{void}\ *data)\ \{}
+\DoxyCodeLine{00291\ \ \ TAU\_REGISTER\_THREAD();}
+\DoxyCodeLine{00292\ \ \ \{}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{comment}{//\ TAU\_PROFILE("{}void\ ThreadPosixImpl::root\_func()"{},\ "{}\ "{},\ TAU\_USER);}}
+\DoxyCodeLine{00294\ }
+\DoxyCodeLine{00295\ \ \ \ \ ThreadPosixImpl\ *self\ =\ (ThreadPosixImpl\ *)data;}
+\DoxyCodeLine{00296\ \ \ \ \ \_current\_thread\ =\ self-\/>\_parent\_obj;}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \ \ \ \ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ self-\/>\_mutex.lock();}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ nassertd(self-\/>\_status\ ==\ S\_start\_called)\ \{}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ self-\/>\_mutex.unlock();}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \ \ \ \ self-\/>\_status\ =\ S\_running;}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ self-\/>\_mutex.unlock();}
+\DoxyCodeLine{00307\ \ \ \ \ \}}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00309\ \textcolor{preprocessor}{\#ifdef\ ANDROID}}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{comment}{//\ Attach\ the\ Java\ VM\ to\ allow\ calling\ Java\ functions\ in\ this\ thread.}}
+\DoxyCodeLine{00311\ \ \ \ \ self-\/>attach\_java\_vm();}
+\DoxyCodeLine{00312\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00314\ \ \ \ \ self-\/>\_parent\_obj-\/>thread\_main();}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Terminating\ thread\ "{}}\ <<\ self-\/>\_parent\_obj-\/>get\_name()}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ count\ =\ "{}}\ <<\ self-\/>\_parent\_obj-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00320\ \ \ \ \ \}}
+\DoxyCodeLine{00321\ }
+\DoxyCodeLine{00322\ \ \ \ \ \{}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ self-\/>\_mutex.lock();}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ nassertd(self-\/>\_status\ ==\ S\_running)\ \{}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ self-\/>\_mutex.unlock();}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ self-\/>\_status\ =\ S\_finished;}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ self-\/>\_mutex.unlock();}
+\DoxyCodeLine{00330\ \ \ \ \ \}}
+\DoxyCodeLine{00331\ }
+\DoxyCodeLine{00332\ \textcolor{preprocessor}{\#ifdef\ ANDROID}}
+\DoxyCodeLine{00333\ \ \ \ \ \textcolor{comment}{//\ We\ cannot\ let\ the\ thread\ end\ without\ detaching\ it.}}
+\DoxyCodeLine{00334\ \ \ \ \ \textcolor{keywordflow}{if}\ (self-\/>\_jni\_env\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ java\_vm-\/>DetachCurrentThread();}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ self-\/>\_jni\_env\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00337\ \ \ \ \ \}}
+\DoxyCodeLine{00338\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00340\ \ \ \ \ \textcolor{comment}{//\ Now\ drop\ the\ parent\ object\ reference\ that\ we\ grabbed\ in\ start().\ This}}
+\DoxyCodeLine{00341\ \ \ \ \ \textcolor{comment}{//\ might\ delete\ the\ parent\ object,\ and\ in\ turn,\ delete\ the\ ThreadPosixImpl}}
+\DoxyCodeLine{00342\ \ \ \ \ \textcolor{comment}{//\ object.}}
+\DoxyCodeLine{00343\ \ \ \ \ unref\_delete(self-\/>\_parent\_obj);}
+\DoxyCodeLine{00344\ \ \ \}}
+\DoxyCodeLine{00345\ }
+\DoxyCodeLine{00346\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00347\ \}}
+\DoxyCodeLine{00348\ }
+\DoxyCodeLine{00353\ \mbox{\hyperlink{classThread}{Thread}}\ *ThreadPosixImpl::}
+\DoxyCodeLine{00354\ init\_current\_thread()\ \{}
+\DoxyCodeLine{00355\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *thread\ =\ \_current\_thread;}
+\DoxyCodeLine{00356\ \ \ \textcolor{keywordflow}{if}\ (!\_main\_thread\_known.test\_and\_set(std::memory\_order\_relaxed))\ \{}
+\DoxyCodeLine{00357\ \ \ \ \ thread\ =\ Thread::get\_main\_thread();}
+\DoxyCodeLine{00358\ \ \ \ \ \_current\_thread\ =\ thread;}
+\DoxyCodeLine{00359\ \ \ \}}
+\DoxyCodeLine{00360\ \ \ \textcolor{keywordflow}{return}\ thread;}
+\DoxyCodeLine{00361\ \}}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00363\ \textcolor{preprocessor}{\#ifdef\ ANDROID}}
+\DoxyCodeLine{00367\ jint\ \mbox{\hyperlink{config__android_8cxx_aac186441c8ba05258b9e1ee3e8e669f8}{JNI\_OnLoad}}(JavaVM\ *jvm,\ \textcolor{keywordtype}{void}\ *reserved)\ \{}
+\DoxyCodeLine{00368\ \ \ \textcolor{comment}{//\ Store\ the\ JVM\ pointer\ globally.}}
+\DoxyCodeLine{00369\ \ \ java\_vm\ =\ jvm;}
+\DoxyCodeLine{00370\ }
+\DoxyCodeLine{00371\ \ \ ThreadPosixImpl::bind\_java\_thread();}
+\DoxyCodeLine{00372\ \ \ \textcolor{keywordflow}{return}\ JNI\_VERSION\_1\_4;}
+\DoxyCodeLine{00373\ \}}
+\DoxyCodeLine{00374\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ ANDROID}}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00376\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREAD\_POSIX\_IMPL}}
+
+\end{DoxyCode}

@@ -1,0 +1,359 @@
+\doxysection{geom\+Munger.\+cxx}
+\hypertarget{geomMunger_8cxx_source}{}\label{geomMunger_8cxx_source}\index{panda/src/gobj/geomMunger.cxx@{panda/src/gobj/geomMunger.cxx}}
+\mbox{\hyperlink{geomMunger_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomMunger_8h}{geomMunger.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geom_8h}{geom.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomCacheManager_8h}{geomCacheManager.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightMutexHolder_8h}{lightMutexHolder.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightReMutexHolder_8h}{lightReMutexHolder.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimer_8h}{pStatTimer.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ GeomMunger::Registry\ *GeomMunger::\_registry\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00022\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ GeomMunger::\_type\_handle;}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ GeomMunger::\_munge\_pcollector(\textcolor{stringliteral}{"{}*:Munge"{}});}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00029\ GeomMunger::}
+\DoxyCodeLine{00030\ GeomMunger(\mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg)\ :}
+\DoxyCodeLine{00031\ \ \ \_gsg(gsg),}
+\DoxyCodeLine{00032\ \ \ \_is\_registered(false)}
+\DoxyCodeLine{00033\ \{}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00035\ \ \ Registry\ *registry\ =\ get\_registry();}
+\DoxyCodeLine{00036\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(registry-\/>\_registry\_lock);}
+\DoxyCodeLine{00037\ \ \ \_registered\_key\ =\ registry-\/>\_mungers.end();}
+\DoxyCodeLine{00038\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00039\ \}}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00044\ GeomMunger::}
+\DoxyCodeLine{00045\ GeomMunger(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomMunger}{GeomMunger}}\ \&copy)\ :}
+\DoxyCodeLine{00046\ \ \ \_is\_registered(false)}
+\DoxyCodeLine{00047\ \{}
+\DoxyCodeLine{00048\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00049\ \ \ Registry\ *registry\ =\ get\_registry();}
+\DoxyCodeLine{00050\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(registry-\/>\_registry\_lock);}
+\DoxyCodeLine{00051\ \ \ \_registered\_key\ =\ registry-\/>\_mungers.end();}
+\DoxyCodeLine{00052\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00053\ \}}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00058\ \textcolor{keywordtype}{void}\ GeomMunger::}
+\DoxyCodeLine{00059\ operator\ =\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomMunger}{GeomMunger}}\ \&copy)\ \{}
+\DoxyCodeLine{00060\ \ \ nassertv(!\_is\_registered);}
+\DoxyCodeLine{00061\ \}}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00066\ GeomMunger::}
+\DoxyCodeLine{00067\ \string~GeomMunger()\ \{}
+\DoxyCodeLine{00068\ \ \ unregister\_myself();}
+\DoxyCodeLine{00069\ \ \ nassertv(\_formats\_by\_animation.empty());}
+\DoxyCodeLine{00070\ \}}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00075\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomMunger_a84219534198ffe227c3a70d94197b4bb}{GeomMunger::}}}
+\DoxyCodeLine{00076\ \mbox{\hyperlink{classGeomMunger_a84219534198ffe227c3a70d94197b4bb}{remove\_data}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}\ *data)\ \{}
+\DoxyCodeLine{00077\ \ \ \textcolor{comment}{//\ If\ this\ assertion\ is\ triggered,\ maybe\ we\ accidentally\ deleted\ a}}
+\DoxyCodeLine{00078\ \ \ \textcolor{comment}{//\ GeomVertexData\ while\ we\ were\ in\ the\ process\ of\ unregistering,\ causing\ a}}
+\DoxyCodeLine{00079\ \ \ \textcolor{comment}{//\ recursive\ re-\/entry.}}
+\DoxyCodeLine{00080\ \ \ nassertv(\_is\_registered);}
+\DoxyCodeLine{00081\ \}}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00094\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classGeomMunger_a737e22598517a47a514941afcbb09e86}{GeomMunger::}}}
+\DoxyCodeLine{00095\ \mbox{\hyperlink{classGeomMunger_a737e22598517a47a514941afcbb09e86}{munge\_geom}}(CPT(\mbox{\hyperlink{classGeom}{Geom}})\ \&geom,\ CPT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ \&data,}
+\DoxyCodeLine{00096\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ force,\ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00098\ \ \ \textcolor{comment}{//\ Look\ up\ the\ munger\ in\ the\ geom's\ cache-\/-\/maybe\ we've\ recently\ applied\ it.}}
+\DoxyCodeLine{00099\ \ \ PT(\mbox{\hyperlink{classGeom_1_1CacheEntry}{Geom::CacheEntry}})\ entry;}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \ \ \mbox{\hyperlink{classGeom_1_1CacheKey}{Geom::CacheKey}}\ key(data,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00103\ \ \ geom-\/>\_cache\_lock.acquire();}
+\DoxyCodeLine{00104\ \ \ Geom::Cache::const\_iterator\ ci\ =\ geom-\/>\_cache.find(\&key);}
+\DoxyCodeLine{00105\ \ \ \textcolor{keywordflow}{if}\ (ci\ ==\ geom-\/>\_cache.end())\ \{}
+\DoxyCodeLine{00106\ \ \ \ \ geom-\/>\_cache\_lock.release();}
+\DoxyCodeLine{00107\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00108\ \ \ \ \ entry\ =\ (*ci).second;}
+\DoxyCodeLine{00109\ \ \ \ \ geom-\/>\_cache\_lock.release();}
+\DoxyCodeLine{00110\ \ \ \ \ nassertr(entry-\/>\_source\ ==\ geom,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \ \ \textcolor{comment}{//\ Here's\ an\ element\ in\ the\ cache\ for\ this\ computation.\ \ Record\ a\ cache}}
+\DoxyCodeLine{00113\ \ \ \ \ \textcolor{comment}{//\ hit,\ so\ this\ element\ will\ stay\ in\ the\ cache\ a\ while\ longer.}}
+\DoxyCodeLine{00114\ \ \ \ \ entry-\/>refresh(current\_thread);}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ \ \ \textcolor{comment}{//\ Now\ check\ that\ it's\ fresh.}}
+\DoxyCodeLine{00117\ \ \ \ \ \mbox{\hyperlink{classCycleDataReader}{Geom::CDCacheReader}}\ cdata(entry-\/>\_cycler,\ current\_thread);}
+\DoxyCodeLine{00118\ \ \ \ \ \textcolor{keywordflow}{if}\ (cdata-\/>\_source\ ==\ geom\ \&\&}
+\DoxyCodeLine{00119\ \ \ \ \ \ \ \ \ cdata-\/>\_geom\_result\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \ \ geom-\/>get\_modified(current\_thread)\ <=\ cdata-\/>\_geom\_result-\/>get\_modified(current\_thread)\ \&\&}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \ \ data-\/>get\_modified(current\_thread)\ <=\ cdata-\/>\_data\_result-\/>get\_modified(current\_thread))\ \{}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ cache\ entry\ is\ still\ good;\ use\ it.}}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \ \ \ \ \ \ geom\ =\ cdata-\/>\_geom\_result;}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ data\ =\ cdata-\/>\_data\_result;}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00127\ \ \ \ \ \}}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00129\ \ \ \ \ \textcolor{comment}{//\ The\ cache\ entry\ is\ stale,\ but\ we'll\ recompute\ it\ below.\ \ Note\ that}}
+\DoxyCodeLine{00130\ \ \ \ \ \textcolor{comment}{//\ there's\ a\ small\ race\ condition\ here;\ another\ thread\ might\ recompute\ the}}
+\DoxyCodeLine{00131\ \ \ \ \ \textcolor{comment}{//\ cache\ at\ the\ same\ time.\ \ No\ big\ deal,\ since\ it'll\ compute\ the\ same}}
+\DoxyCodeLine{00132\ \ \ \ \ \textcolor{comment}{//\ result.}}
+\DoxyCodeLine{00133\ \ \ \}}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00135\ \ \ \textcolor{keywordflow}{if}\ (!force\ \&\&\ (!geom-\/>\mbox{\hyperlink{classGeom_a0976aeabd60be19dbb92506f57d3a536}{request\_resident}}()\ ||\ !data-\/>request\_resident()))\ \{}
+\DoxyCodeLine{00136\ \ \ \ \ \textcolor{comment}{//\ Oh\ dear,\ the\ data\ isn't\ resident.\ \ We\ can't\ munge\ it,\ so\ give\ up.}}
+\DoxyCodeLine{00137\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00138\ \ \ \}}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ \ \ \textcolor{comment}{//\ Ok,\ invoke\ the\ munger.}}
+\DoxyCodeLine{00141\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_munge\_pcollector,\ current\_thread);}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00143\ \ \ PT(\mbox{\hyperlink{classGeom}{Geom}})\ orig\_geom\ =\ (\mbox{\hyperlink{classGeom}{Geom}}\ *)geom.p();}
+\DoxyCodeLine{00144\ \ \ data\ =\ munge\_data(data);}
+\DoxyCodeLine{00145\ \ \ \mbox{\hyperlink{classGeomMunger_abfbe87f1c1d2e767b32bdc520413c0d0}{munge\_geom\_impl}}(geom,\ data,\ current\_thread);}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00147\ \ \ \textcolor{comment}{//\ Record\ the\ new\ result\ in\ the\ cache.}}
+\DoxyCodeLine{00148\ \ \ \textcolor{keywordflow}{if}\ (entry\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00149\ \ \ \ \ \textcolor{comment}{//\ Create\ a\ new\ entry\ for\ the\ result.}}
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{comment}{//\ We\ don't\ need\ the\ key\ anymore,\ move\ the\ pointers\ into\ the\ CacheEntry.}}
+\DoxyCodeLine{00151\ \ \ \ \ entry\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeom_1_1CacheEntry}{Geom::CacheEntry}}(orig\_geom,\ std::move(key));}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ \ \ \ \ \{}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(orig\_geom-\/>\_cache\_lock);}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ inserted\ =\ orig\_geom-\/>\_cache.insert(Geom::Cache::value\_type(\&entry-\/>\_key,\ entry)).second;}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!inserted)\ \{}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Some\ other\ thread\ must\ have\ beat\ us\ to\ the\ punch.\ \ Never\ mind.}}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00160\ \ \ \ \ \}}
+\DoxyCodeLine{00161\ }
+\DoxyCodeLine{00162\ \ \ \ \ \textcolor{comment}{//\ And\ tell\ the\ cache\ manager\ about\ the\ new\ entry.\ \ (It\ might\ immediately}}
+\DoxyCodeLine{00163\ \ \ \ \ \textcolor{comment}{//\ request\ a\ delete\ from\ the\ cache\ of\ the\ thing\ we\ just\ added.)}}
+\DoxyCodeLine{00164\ \ \ \ \ entry-\/>record(current\_thread);}
+\DoxyCodeLine{00165\ \ \ \}}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00167\ \ \ \textcolor{comment}{//\ Finally,\ store\ the\ cached\ result\ on\ the\ entry.}}
+\DoxyCodeLine{00168\ \ \ \mbox{\hyperlink{classCycleDataWriter}{Geom::CDCacheWriter}}\ cdata(entry-\/>\_cycler,\ \textcolor{keyword}{true},\ current\_thread);}
+\DoxyCodeLine{00169\ \ \ cdata-\/>\_source\ =\ (\mbox{\hyperlink{classGeom}{Geom}}\ *)orig\_geom.p();}
+\DoxyCodeLine{00170\ \ \ cdata-\/>set\_result(geom,\ data);}
+\DoxyCodeLine{00171\ }
+\DoxyCodeLine{00172\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00173\ \}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00179\ CPT(\mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}})\ GeomMunger::}
+\DoxyCodeLine{00180\ do\_munge\_format(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}}\ *format,}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexAnimationSpec}{GeomVertexAnimationSpec}}\ \&animation)\ \{}
+\DoxyCodeLine{00182\ \ \ nassertr(\_is\_registered,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00183\ \ \ nassertr(format-\/>is\_registered(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00184\ }
+\DoxyCodeLine{00185\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_formats\_lock);}
+\DoxyCodeLine{00186\ }
+\DoxyCodeLine{00187\ \ \ Formats\ \&formats\ =\ \_formats\_by\_animation[animation];}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \ \ Formats::iterator\ fi;}
+\DoxyCodeLine{00190\ \ \ fi\ =\ formats.find(format);}
+\DoxyCodeLine{00191\ \ \ \textcolor{keywordflow}{if}\ (fi\ !=\ formats.end())\ \{}
+\DoxyCodeLine{00192\ \ \ \ \ \textcolor{comment}{//\ This\ format\ was\ previously\ munged,\ so\ the\ answer\ will\ be\ the\ same.}}
+\DoxyCodeLine{00193\ \ \ \ \ \textcolor{keywordflow}{return}\ (*fi).second;}
+\DoxyCodeLine{00194\ \ \ \}}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ \textcolor{comment}{//\ We\ have\ to\ munge\ this\ format\ for\ the\ first\ time.}}
+\DoxyCodeLine{00197\ \ \ CPT(\mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}})\ derived\_format\ =\ munge\_format\_impl(format,\ animation);}
+\DoxyCodeLine{00198\ \ \ nassertr(derived\_format-\/>is\_registered(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00200\ \ \ \textcolor{comment}{//\ Store\ the\ answer\ in\ the\ map,\ so\ we\ can\ quickly\ get\ it\ next\ time.}}
+\DoxyCodeLine{00201\ \ \ \textcolor{keywordtype}{bool}\ inserted\ =\ formats.insert(Formats::value\_type(format,\ derived\_format)).second;}
+\DoxyCodeLine{00202\ \ \ nassertr(inserted,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00204\ \ \ \textcolor{keywordflow}{return}\ derived\_format;}
+\DoxyCodeLine{00205\ \}}
+\DoxyCodeLine{00206\ }
+\DoxyCodeLine{00211\ CPT(\mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}})\ GeomMunger::}
+\DoxyCodeLine{00212\ munge\_format\_impl(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}}\ *orig,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexAnimationSpec}{GeomVertexAnimationSpec}}\ \&)\ \{}
+\DoxyCodeLine{00213\ \ \ \textcolor{keywordflow}{return}\ orig;}
+\DoxyCodeLine{00214\ \}}
+\DoxyCodeLine{00215\ }
+\DoxyCodeLine{00219\ CPT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ GeomMunger::}
+\DoxyCodeLine{00220\ munge\_data\_impl(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}\ *data)\ \{}
+\DoxyCodeLine{00221\ \ \ nassertr(\_is\_registered,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00223\ \ \ CPT(\mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}})\ orig\_format\ =\ data-\/>get\_format();}
+\DoxyCodeLine{00224\ \ \ CPT(\mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}})\ new\_format\ =}
+\DoxyCodeLine{00225\ \ \ \ \ munge\_format(orig\_format,\ orig\_format-\/>get\_animation());}
+\DoxyCodeLine{00226\ }
+\DoxyCodeLine{00227\ \ \ \textcolor{keywordflow}{if}\ (new\_format\ ==\ orig\_format)\ \{}
+\DoxyCodeLine{00228\ \ \ \ \ \textcolor{comment}{//\ Trivial\ case.}}
+\DoxyCodeLine{00229\ \ \ \ \ \textcolor{keywordflow}{return}\ data;}
+\DoxyCodeLine{00230\ \ \ \}}
+\DoxyCodeLine{00231\ }
+\DoxyCodeLine{00232\ \ \ \textcolor{keywordflow}{return}\ data-\/>convert\_to(new\_format);}
+\DoxyCodeLine{00233\ \}}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00238\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomMunger_abfbe87f1c1d2e767b32bdc520413c0d0}{GeomMunger::}}}
+\DoxyCodeLine{00239\ \mbox{\hyperlink{classGeomMunger_abfbe87f1c1d2e767b32bdc520413c0d0}{munge\_geom\_impl}}(CPT(\mbox{\hyperlink{classGeom}{Geom}})\ \&,\ CPT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ \&,\ \mbox{\hyperlink{classThread}{Thread}}\ *)\ \{}
+\DoxyCodeLine{00240\ \ \ \textcolor{comment}{//\ The\ default\ implementation\ does\ nothing\ (the\ work\ has\ already\ been\ done}}
+\DoxyCodeLine{00241\ \ \ \textcolor{comment}{//\ in\ munge\_format\_impl()\ and\ munge\_data\_impl()).}}
+\DoxyCodeLine{00242\ \}}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00248\ CPT(\mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}})\ GeomMunger::}
+\DoxyCodeLine{00249\ do\_premunge\_format(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}}\ *format)\ \{}
+\DoxyCodeLine{00250\ \ \ nassertr(\_is\_registered,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00251\ \ \ nassertr(format-\/>is\_registered(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_formats\_lock);}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \ \ Formats::iterator\ fi;}
+\DoxyCodeLine{00256\ \ \ fi\ =\ \_premunge\_formats.find(format);}
+\DoxyCodeLine{00257\ \ \ \textcolor{keywordflow}{if}\ (fi\ !=\ \_premunge\_formats.end())\ \{}
+\DoxyCodeLine{00258\ \ \ \ \ \textcolor{comment}{//\ This\ format\ was\ previously\ munged,\ so\ the\ answer\ will\ be\ the\ same.}}
+\DoxyCodeLine{00259\ \ \ \ \ \textcolor{keywordflow}{return}\ (*fi).second;}
+\DoxyCodeLine{00260\ \ \ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \ \ \textcolor{comment}{//\ We\ have\ to\ munge\ this\ format\ for\ the\ first\ time.}}
+\DoxyCodeLine{00263\ \ \ CPT(\mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}})\ derived\_format\ =\ premunge\_format\_impl(format);}
+\DoxyCodeLine{00264\ \ \ nassertr(derived\_format-\/>is\_registered(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00265\ }
+\DoxyCodeLine{00266\ \ \ \textcolor{comment}{//\ Store\ the\ answer\ in\ the\ map,\ so\ we\ can\ quickly\ get\ it\ next\ time.}}
+\DoxyCodeLine{00267\ \ \ \textcolor{keywordtype}{bool}\ inserted\ =\ \_premunge\_formats.insert(Formats::value\_type(format,\ derived\_format)).second;}
+\DoxyCodeLine{00268\ \ \ nassertr(inserted,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00269\ }
+\DoxyCodeLine{00270\ \ \ \textcolor{keywordflow}{return}\ derived\_format;}
+\DoxyCodeLine{00271\ \}}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00277\ CPT(\mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}})\ GeomMunger::}
+\DoxyCodeLine{00278\ premunge\_format\_impl(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}}\ *orig)\ \{}
+\DoxyCodeLine{00279\ \ \ \textcolor{keywordflow}{return}\ orig;}
+\DoxyCodeLine{00280\ \}}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00285\ CPT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ GeomMunger::}
+\DoxyCodeLine{00286\ premunge\_data\_impl(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}\ *data)\ \{}
+\DoxyCodeLine{00287\ \ \ nassertr(\_is\_registered,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ CPT(\mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}})\ orig\_format\ =\ data-\/>get\_format();}
+\DoxyCodeLine{00290\ \ \ CPT(\mbox{\hyperlink{classGeomVertexFormat}{GeomVertexFormat}})\ new\_format\ =\ premunge\_format(orig\_format);}
+\DoxyCodeLine{00291\ }
+\DoxyCodeLine{00292\ \ \ \textcolor{keywordflow}{if}\ (new\_format\ ==\ orig\_format)\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{comment}{//\ Trivial\ case.}}
+\DoxyCodeLine{00294\ \ \ \ \ \textcolor{keywordflow}{return}\ data;}
+\DoxyCodeLine{00295\ \ \ \}}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \ \ \textcolor{keywordflow}{return}\ data-\/>convert\_to(new\_format);}
+\DoxyCodeLine{00298\ \}}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00303\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGeomMunger_a1ecea017037a99bd1c51c612f95e7f45}{GeomMunger::}}}
+\DoxyCodeLine{00304\ \mbox{\hyperlink{classGeomMunger_a1ecea017037a99bd1c51c612f95e7f45}{premunge\_geom\_impl}}(CPT(\mbox{\hyperlink{classGeom}{Geom}})\ \&,\ CPT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ \&)\ \{}
+\DoxyCodeLine{00305\ \ \ \textcolor{comment}{//\ The\ default\ implementation\ does\ nothing\ (the\ work\ has\ already\ been\ done}}
+\DoxyCodeLine{00306\ \ \ \textcolor{comment}{//\ in\ premunge\_format\_impl()\ and\ premunge\_data\_impl()).}}
+\DoxyCodeLine{00307\ \}}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00314\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classGeomMunger_a08cc48a352adfc29adf729cdc2bd78e3}{GeomMunger::}}}
+\DoxyCodeLine{00315\ \mbox{\hyperlink{classGeomMunger_a08cc48a352adfc29adf729cdc2bd78e3}{compare\_to\_impl}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomMunger}{GeomMunger}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00316\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00317\ \}}
+\DoxyCodeLine{00318\ }
+\DoxyCodeLine{00325\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classGeomMunger_ae18d632da14b4e08f7789fd4d8517310}{GeomMunger::}}}
+\DoxyCodeLine{00326\ \mbox{\hyperlink{classGeomMunger_ae18d632da14b4e08f7789fd4d8517310}{geom\_compare\_to\_impl}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomMunger}{GeomMunger}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00327\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00328\ \}}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00333\ \textcolor{keywordtype}{void}\ GeomMunger::}
+\DoxyCodeLine{00334\ make\_registry()\ \{}
+\DoxyCodeLine{00335\ \ \ \textcolor{keywordflow}{if}\ (\_registry\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00336\ \ \ \ \ \_registry\ =\ \textcolor{keyword}{new}\ Registry;}
+\DoxyCodeLine{00337\ \ \ \}}
+\DoxyCodeLine{00338\ \}}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00343\ \textcolor{keywordtype}{void}\ GeomMunger::}
+\DoxyCodeLine{00344\ do\_register(\mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00345\ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00346\ \ \ \ \ gobj\_cat.debug()}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}GeomMunger::do\_register():\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00348\ \ \ \}}
+\DoxyCodeLine{00349\ \ \ nassertv(!\_is\_registered);}
+\DoxyCodeLine{00350\ \ \ nassertv(\_formats\_by\_animation.empty());}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ \ \ \textcolor{comment}{//\ Tell\ the\ cache\ manager\ to\ hang\ on\ to\ this\ new\ GeomMunger,\ so\ we\ don't}}
+\DoxyCodeLine{00353\ \ \ \textcolor{comment}{//\ waste\ our\ time\ re-\/registering\ the\ same\ GeomMunger\ over\ and\ over\ again.}}
+\DoxyCodeLine{00354\ \ \ CacheEntry\ *entry\ =\ \textcolor{keyword}{new}\ CacheEntry;}
+\DoxyCodeLine{00355\ \ \ entry-\/>\_munger\ =\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00356\ \ \ entry-\/>record(current\_thread);}
+\DoxyCodeLine{00357\ }
+\DoxyCodeLine{00358\ \ \ \_is\_registered\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00359\ \}}
+\DoxyCodeLine{00360\ }
+\DoxyCodeLine{00364\ \textcolor{keywordtype}{void}\ GeomMunger::}
+\DoxyCodeLine{00365\ do\_unregister()\ \{}
+\DoxyCodeLine{00366\ \ \ \textcolor{keywordflow}{if}\ (gobj\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00367\ \ \ \ \ gobj\_cat.debug()}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}GeomMunger::do\_unregister():\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00369\ \ \ \}}
+\DoxyCodeLine{00370\ \ \ nassertv(\_is\_registered);}
+\DoxyCodeLine{00371\ \ \ \_is\_registered\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00372\ }
+\DoxyCodeLine{00373\ \ \ \textcolor{comment}{//\ Unregistering\ means\ we\ should\ blow\ away\ the\ cache.}}
+\DoxyCodeLine{00374\ \ \ \_formats\_by\_animation.clear();}
+\DoxyCodeLine{00375\ \}}
+\DoxyCodeLine{00376\ }
+\DoxyCodeLine{00380\ \textcolor{keywordtype}{void}\ GeomMunger::CacheEntry::}
+\DoxyCodeLine{00381\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00382\ \ \ out\ <<\ \textcolor{stringliteral}{"{}munger\ "{}}\ <<\ \_munger;}
+\DoxyCodeLine{00383\ \}}
+\DoxyCodeLine{00384\ }
+\DoxyCodeLine{00388\ GeomMunger::Registry::}
+\DoxyCodeLine{00389\ Registry()\ \{}
+\DoxyCodeLine{00390\ \}}
+\DoxyCodeLine{00391\ }
+\DoxyCodeLine{00402\ PT(\mbox{\hyperlink{classGeomMunger}{GeomMunger}})\ GeomMunger::Registry::}
+\DoxyCodeLine{00403\ register\_munger(\mbox{\hyperlink{classGeomMunger}{GeomMunger}}\ *munger,\ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00404\ \ \ \textcolor{keywordflow}{if}\ (munger-\/>is\_registered())\ \{}
+\DoxyCodeLine{00405\ \ \ \ \ \textcolor{keywordflow}{return}\ munger;}
+\DoxyCodeLine{00406\ \ \ \}}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00408\ \ \ \textcolor{comment}{//\ Save\ the\ incoming\ pointer\ in\ a\ local\ PointerTo,\ so\ that\ if\ it\ has\ a\ zero}}
+\DoxyCodeLine{00409\ \ \ \textcolor{comment}{//\ reference\ count\ and\ is\ not\ added\ into\ the\ map\ below,\ it\ will\ be}}
+\DoxyCodeLine{00410\ \ \ \textcolor{comment}{//\ automatically\ deleted\ when\ this\ function\ returns.}}
+\DoxyCodeLine{00411\ \ \ PT(\mbox{\hyperlink{classGeomMunger}{GeomMunger}})\ pt\_munger\ =\ munger;}
+\DoxyCodeLine{00412\ }
+\DoxyCodeLine{00413\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(\_registry\_lock);}
+\DoxyCodeLine{00414\ }
+\DoxyCodeLine{00415\ \ \ Mungers::iterator\ mi\ =\ \_mungers.insert(munger).first;}
+\DoxyCodeLine{00416\ \ \ \mbox{\hyperlink{classGeomMunger}{GeomMunger}}\ *new\_munger\ =\ (*mi);}
+\DoxyCodeLine{00417\ \ \ \textcolor{keywordflow}{if}\ (!new\_munger-\/>is\_registered())\ \{}
+\DoxyCodeLine{00418\ \ \ \ \ new\_munger-\/>\_registered\_key\ =\ mi;}
+\DoxyCodeLine{00419\ \ \ \ \ new\_munger-\/>do\_register(current\_thread);}
+\DoxyCodeLine{00420\ \ \ \}}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00422\ \ \ \textcolor{keywordflow}{return}\ new\_munger;}
+\DoxyCodeLine{00423\ \}}
+\DoxyCodeLine{00424\ }
+\DoxyCodeLine{00429\ \textcolor{keywordtype}{void}\ GeomMunger::Registry::}
+\DoxyCodeLine{00430\ unregister\_munger(\mbox{\hyperlink{classGeomMunger}{GeomMunger}}\ *munger)\ \{}
+\DoxyCodeLine{00431\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(\_registry\_lock);}
+\DoxyCodeLine{00432\ }
+\DoxyCodeLine{00433\ \ \ nassertv(munger-\/>is\_registered());}
+\DoxyCodeLine{00434\ \ \ nassertv(munger-\/>\_registered\_key\ !=\ \_mungers.end());}
+\DoxyCodeLine{00435\ \ \ \_mungers.erase(munger-\/>\_registered\_key);}
+\DoxyCodeLine{00436\ \ \ munger-\/>\_registered\_key\ =\ \_mungers.end();}
+\DoxyCodeLine{00437\ \ \ munger-\/>do\_unregister();}
+\DoxyCodeLine{00438\ \}}
+\DoxyCodeLine{00439\ }
+\DoxyCodeLine{00444\ \textcolor{keywordtype}{void}\ GeomMunger::Registry::}
+\DoxyCodeLine{00445\ unregister\_mungers\_for\_gsg(\mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg)\ \{}
+\DoxyCodeLine{00446\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(\_registry\_lock);}
+\DoxyCodeLine{00447\ }
+\DoxyCodeLine{00448\ \ \ Mungers::iterator\ mi\ =\ \_mungers.begin();}
+\DoxyCodeLine{00449\ \ \ \textcolor{keywordflow}{while}\ (mi\ !=\ \_mungers.end())\ \{}
+\DoxyCodeLine{00450\ \ \ \ \ \mbox{\hyperlink{classGeomMunger}{GeomMunger}}\ *munger\ =\ (*mi);}
+\DoxyCodeLine{00451\ \ \ \ \ Mungers::iterator\ mnext\ =\ mi;}
+\DoxyCodeLine{00452\ \ \ \ \ ++mnext;}
+\DoxyCodeLine{00453\ }
+\DoxyCodeLine{00454\ \ \ \ \ \textcolor{keywordflow}{if}\ (munger-\/>get\_gsg()\ ==\ gsg)\ \{}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ nassertv(mi\ ==\ munger-\/>\_registered\_key);}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \_mungers.erase(mi);}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ munger-\/>\_registered\_key\ =\ \_mungers.end();}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ munger-\/>do\_unregister();}
+\DoxyCodeLine{00459\ \ \ \ \ \}}
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00461\ \ \ \ \ mi\ =\ mnext;}
+\DoxyCodeLine{00462\ \ \ \}}
+\DoxyCodeLine{00463\ \}}
+
+\end{DoxyCode}

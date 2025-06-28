@@ -1,0 +1,146 @@
+\doxysection{deleted\+Buffer\+Chain.\+cxx}
+\hypertarget{deletedBufferChain_8cxx_source}{}\label{deletedBufferChain_8cxx_source}\index{dtool/src/dtoolbase/deletedBufferChain.cxx@{dtool/src/dtoolbase/deletedBufferChain.cxx}}
+\mbox{\hyperlink{deletedBufferChain_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{deletedBufferChain_8h}{deletedBufferChain.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{memoryHook_8h}{memoryHook.h}}"{}}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ <set>}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{comment}{//\ This\ array\ stores\ the\ deleted\ chains\ for\ smaller\ sizes,\ starting\ with}}
+\DoxyCodeLine{00020\ \textcolor{comment}{//\ sizeof(void\ *)\ and\ increasing\ in\ multiples\ thereof.}}
+\DoxyCodeLine{00021\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ num\_small\_deleted\_chains\ =\ 24;}
+\DoxyCodeLine{00022\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classDeletedBufferChain}{DeletedBufferChain}}\ small\_deleted\_chains[num\_small\_deleted\_chains]\ =\ \{\};}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00028\ \textcolor{keywordtype}{void}\ *\mbox{\hyperlink{classDeletedBufferChain_aa22019ecd5f9488eff7846fcac6a7928}{DeletedBufferChain::}}}
+\DoxyCodeLine{00029\ \mbox{\hyperlink{classDeletedBufferChain_aa22019ecd5f9488eff7846fcac6a7928}{allocate}}(\textcolor{keywordtype}{size\_t}\ size,\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type\_handle)\ \{}
+\DoxyCodeLine{00030\ \ \ assert(\_buffer\_size\ >\ 0);}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#ifdef\ USE\_DELETED\_CHAIN}}
+\DoxyCodeLine{00033\ \ \ \textcolor{comment}{//\ TAU\_PROFILE("{}void\ *DeletedBufferChain::allocate(size\_t,\ TypeHandle)"{},\ "{}}}
+\DoxyCodeLine{00034\ \ \ \textcolor{comment}{//\ "{},\ TAU\_USER);}}
+\DoxyCodeLine{00035\ \ \ \textcolor{comment}{//\ If\ this\ triggers,\ maybe\ you\ forgot\ ALLOC\_DELETED\_CHAIN\ in\ a\ subclass?}}
+\DoxyCodeLine{00036\ \ \ assert(size\ <=\ \_buffer\_size);}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \ \ \textcolor{comment}{//\ Determine\ how\ much\ space\ to\ allocate.}}
+\DoxyCodeLine{00039\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ alloc\_size\ =\ \_buffer\_size\ +\ flag\_reserved\_bytes\ +\ MEMORY\_HOOK\_ALIGNMENT\ -\/\ 1;}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00041\ \ \ ObjectNode\ *obj;}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \ \ \_lock.lock();}
+\DoxyCodeLine{00044\ \ \ \textcolor{keywordflow}{if}\ (\_deleted\_chain\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00045\ \ \ \ \ obj\ =\ \_deleted\_chain;}
+\DoxyCodeLine{00046\ \ \ \ \ \_deleted\_chain\ =\ \_deleted\_chain-\/>\_next;}
+\DoxyCodeLine{00047\ \ \ \ \ \_lock.unlock();}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \textcolor{preprocessor}{\#ifdef\ USE\_DELETEDCHAINFLAG}}
+\DoxyCodeLine{00050\ \ \ \ \ DeletedChainFlag\ orig\_flag\ =\ obj-\/>\_flag.exchange(DCF\_alive,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00051\ \ \ \ \ assert(orig\_flag\ ==\ DCF\_deleted);}
+\DoxyCodeLine{00052\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ USE\_DELETEDCHAINFLAG}}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \ \ \ \ \textcolor{keywordtype}{void}\ *ptr\ =\ node\_to\_buffer(obj);}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00057\ \ \ \ \ \textcolor{comment}{//\ type\_handle.dec\_memory\_usage(TypeHandle::MC\_deleted\_chain\_inactive,}}
+\DoxyCodeLine{00058\ \ \ \ \ \textcolor{comment}{//\ alloc\_size);}}
+\DoxyCodeLine{00059\ \ \ \ \ type\_handle.inc\_memory\_usage(TypeHandle::MC\_deleted\_chain\_active,\ alloc\_size);}
+\DoxyCodeLine{00060\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00062\ \ \ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00063\ \ \ \}}
+\DoxyCodeLine{00064\ \ \ \_lock.unlock();}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \ \ \textcolor{comment}{//\ If\ we\ get\ here,\ the\ deleted\_chain\ is\ empty;\ we\ have\ to\ allocate\ a\ new}}
+\DoxyCodeLine{00067\ \ \ \textcolor{comment}{//\ object\ from\ the\ system\ pool.}}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00069\ \ \ \textcolor{comment}{//\ Allocate\ memory,\ and\ make\ sure\ the\ object\ starts\ at\ the\ proper\ alignment.}}
+\DoxyCodeLine{00070\ \ \ \textcolor{keywordtype}{void}\ *mem\ =\ NeverFreeMemory::alloc(alloc\_size);}
+\DoxyCodeLine{00071\ \ \ uintptr\_t\ aligned\ =\ ((uintptr\_t)mem\ +\ flag\_reserved\_bytes\ +\ MEMORY\_HOOK\_ALIGNMENT\ -\/\ 1)\ \&\ \string~(MEMORY\_HOOK\_ALIGNMENT\ -\/\ 1);}
+\DoxyCodeLine{00072\ \ \ obj\ =\ (ObjectNode\ *)(aligned\ -\/\ flag\_reserved\_bytes);}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00074\ \textcolor{preprocessor}{\#ifdef\ USE\_DELETEDCHAINFLAG}}
+\DoxyCodeLine{00075\ \ \ obj-\/>\_flag.store(DCF\_alive,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00076\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ USE\_DELETEDCHAINFLAG}}
+\DoxyCodeLine{00077\ }
+\DoxyCodeLine{00078\ \ \ \textcolor{keywordtype}{void}\ *ptr\ =\ node\_to\_buffer(obj);}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00081\ \ \ assert(((uintptr\_t)ptr\ \%\ MEMORY\_HOOK\_ALIGNMENT)\ ==\ 0);}
+\DoxyCodeLine{00082\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00083\ }
+\DoxyCodeLine{00084\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00085\ \ \ type\_handle.inc\_memory\_usage(TypeHandle::MC\_deleted\_chain\_active,\ alloc\_size);}
+\DoxyCodeLine{00086\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00088\ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00090\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ USE\_DELETED\_CHAIN}}
+\DoxyCodeLine{00091\ \ \ \textcolor{keywordflow}{return}\ PANDA\_MALLOC\_SINGLE(\_buffer\_size);}
+\DoxyCodeLine{00092\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ USE\_DELETED\_CHAIN}}
+\DoxyCodeLine{00093\ \}}
+\DoxyCodeLine{00094\ }
+\DoxyCodeLine{00098\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDeletedBufferChain_a3a669a743fc06e3a75dfceda11d063b8}{DeletedBufferChain::}}}
+\DoxyCodeLine{00099\ \mbox{\hyperlink{classDeletedBufferChain_a3a669a743fc06e3a75dfceda11d063b8}{deallocate}}(\textcolor{keywordtype}{void}\ *ptr,\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type\_handle)\ \{}
+\DoxyCodeLine{00100\ \textcolor{preprocessor}{\#ifdef\ USE\_DELETED\_CHAIN}}
+\DoxyCodeLine{00101\ \ \ \textcolor{comment}{//\ TAU\_PROFILE("{}void\ DeletedBufferChain::deallocate(void\ *,\ TypeHandle)"{},\ "{}}}
+\DoxyCodeLine{00102\ \ \ \textcolor{comment}{//\ "{},\ TAU\_USER);}}
+\DoxyCodeLine{00103\ \ \ assert(ptr\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00104\ }
+\DoxyCodeLine{00105\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00106\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ alloc\_size\ =\ \_buffer\_size\ +\ flag\_reserved\_bytes\ +\ MEMORY\_HOOK\_ALIGNMENT\ -\/\ 1;}
+\DoxyCodeLine{00107\ \ \ type\_handle.dec\_memory\_usage(TypeHandle::MC\_deleted\_chain\_active,\ alloc\_size);}
+\DoxyCodeLine{00108\ \ \ \textcolor{comment}{//\ type\_handle.inc\_memory\_usage(TypeHandle::MC\_deleted\_chain\_inactive,}}
+\DoxyCodeLine{00109\ \ \ \textcolor{comment}{//\ \_buffer\_size\ +\ flag\_reserved\_bytes);}}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00113\ \ \ ObjectNode\ *obj\ =\ buffer\_to\_node(ptr);}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \textcolor{preprocessor}{\#ifdef\ USE\_DELETEDCHAINFLAG}}
+\DoxyCodeLine{00116\ \ \ DeletedChainFlag\ orig\_flag\ =\ DCF\_alive;}
+\DoxyCodeLine{00117\ \ \ \textcolor{keywordflow}{if}\ (UNLIKELY(!obj-\/>\_flag.compare\_exchange\_strong(orig\_flag,\ DCF\_deleted,}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ std::memory\_order\_relaxed)))\ \{}
+\DoxyCodeLine{00119\ \ \ \ \ \textcolor{comment}{//\ If\ this\ assertion\ is\ triggered,\ you\ double-\/deleted\ an\ object.}}
+\DoxyCodeLine{00120\ \ \ \ \ assert(orig\_flag\ !=\ DCF\_deleted);}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00122\ \ \ \ \ \textcolor{comment}{//\ If\ this\ assertion\ is\ triggered,\ you\ tried\ to\ delete\ an\ object\ that\ was}}
+\DoxyCodeLine{00123\ \ \ \ \ \textcolor{comment}{//\ never\ allocated,\ or\ you\ have\ heap\ corruption.}}
+\DoxyCodeLine{00124\ \ \ \ \ assert(orig\_flag\ ==\ DCF\_alive);}
+\DoxyCodeLine{00125\ \ \ \}}
+\DoxyCodeLine{00126\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ USE\_DELETEDCHAINFLAG}}
+\DoxyCodeLine{00127\ }
+\DoxyCodeLine{00128\ \ \ \_lock.lock();}
+\DoxyCodeLine{00129\ }
+\DoxyCodeLine{00130\ \ \ obj-\/>\_next\ =\ \_deleted\_chain;}
+\DoxyCodeLine{00131\ \ \ \_deleted\_chain\ =\ obj;}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \ \ \_lock.unlock();}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00135\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ USE\_DELETED\_CHAIN}}
+\DoxyCodeLine{00136\ \ \ PANDA\_FREE\_SINGLE(ptr);}
+\DoxyCodeLine{00137\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ USE\_DELETED\_CHAIN}}
+\DoxyCodeLine{00138\ \}}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00143\ \mbox{\hyperlink{classDeletedBufferChain}{DeletedBufferChain}}\ *\mbox{\hyperlink{classDeletedBufferChain_a744f74f62c24c3cf5ecad02d373df333}{DeletedBufferChain::}}}
+\DoxyCodeLine{00144\ \mbox{\hyperlink{classDeletedBufferChain_a744f74f62c24c3cf5ecad02d373df333}{get\_deleted\_chain}}(\textcolor{keywordtype}{size\_t}\ buffer\_size)\ \{}
+\DoxyCodeLine{00145\ \ \ \textcolor{comment}{//\ Common,\ smaller\ sized\ chains\ avoid\ the\ expensive\ locking\ and\ set}}
+\DoxyCodeLine{00146\ \ \ \textcolor{comment}{//\ manipulation\ code\ further\ down.}}
+\DoxyCodeLine{00147\ \ \ \textcolor{keywordtype}{size\_t}\ index\ =\ ((buffer\_size\ +\ \textcolor{keyword}{sizeof}(\textcolor{keywordtype}{void}\ *)\ -\/\ 1)\ /\ \textcolor{keyword}{sizeof}(\textcolor{keywordtype}{void}\ *));}
+\DoxyCodeLine{00148\ \ \ buffer\_size\ =\ index\ *\ \textcolor{keyword}{sizeof}(\textcolor{keywordtype}{void}\ *);}
+\DoxyCodeLine{00149\ \ \ index-\/-\/;}
+\DoxyCodeLine{00150\ \ \ \textcolor{keywordflow}{if}\ (index\ <\ num\_small\_deleted\_chains)\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ \mbox{\hyperlink{classDeletedBufferChain}{DeletedBufferChain}}\ *chain\ =\ \&small\_deleted\_chains[index];}
+\DoxyCodeLine{00152\ \ \ \ \ chain-\/>\_buffer\_size\ =\ buffer\_size;}
+\DoxyCodeLine{00153\ \ \ \ \ \textcolor{keywordflow}{return}\ chain;}
+\DoxyCodeLine{00154\ \ \ \}}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00156\ \ \ \textcolor{keyword}{static}\ \mbox{\hyperlink{classMutexDummyImpl}{MutexImpl}}\ lock;}
+\DoxyCodeLine{00157\ \ \ lock.lock();}
+\DoxyCodeLine{00158\ \ \ \textcolor{keyword}{static}\ std::set<DeletedBufferChain>\ deleted\_chains;}
+\DoxyCodeLine{00159\ \ \ \mbox{\hyperlink{classDeletedBufferChain}{DeletedBufferChain}}\ *result\ =\ (\mbox{\hyperlink{classDeletedBufferChain}{DeletedBufferChain}}\ *)\&*deleted\_chains.insert(\mbox{\hyperlink{classDeletedBufferChain}{DeletedBufferChain}}(buffer\_size)).first;}
+\DoxyCodeLine{00160\ \ \ lock.unlock();}
+\DoxyCodeLine{00161\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00162\ \}}
+
+\end{DoxyCode}

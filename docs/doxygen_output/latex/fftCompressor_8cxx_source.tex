@@ -1,0 +1,954 @@
+\doxysection{fft\+Compressor.\+cxx}
+\hypertarget{fftCompressor_8cxx_source}{}\label{fftCompressor_8cxx_source}\index{panda/src/mathutil/fftCompressor.cxx@{panda/src/mathutil/fftCompressor.cxx}}
+\mbox{\hyperlink{fftCompressor_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{fftCompressor_8h}{fftCompressor.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__mathutil_8h}{config\_mathutil.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__linmath_8h}{config\_linmath.h}}"{}}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagram_8h}{datagram.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagramIterator_8h}{datagramIterator.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{compose__matrix_8h}{compose\_matrix.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pmap_8h}{pmap.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{math_8h}{math.h}}>}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#ifdef\ HAVE\_FFTW}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \textcolor{comment}{//\ hack.....\ this\ is\ a\ hack\ to\ help\ interrogate\ sort\ out\ a\ macro\ in\ the\ system}}
+\DoxyCodeLine{00027\ \textcolor{comment}{//\ poll\ and\ select\ definitions}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#ifdef\ howmany}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#undef\ howmany}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ <fftw3.h>}}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{comment}{//\ These\ FFTW\ support\ objects\ can\ only\ be\ defined\ if\ we\ actually\ have\ the\ FFTW}}
+\DoxyCodeLine{00035\ \textcolor{comment}{//\ library\ available.}}
+\DoxyCodeLine{00036\ \textcolor{keyword}{static}\ fftw\_plan\ get\_real\_compress\_plan(\textcolor{keywordtype}{int}\ length);}
+\DoxyCodeLine{00037\ \textcolor{keyword}{static}\ fftw\_plan\ get\_real\_decompress\_plan(\textcolor{keywordtype}{int}\ length);}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \textcolor{keyword}{typedef}\ \mbox{\hyperlink{classpmap}{pmap<int,\ fftw\_plan>}}\ RealPlans;}
+\DoxyCodeLine{00040\ \textcolor{keyword}{static}\ RealPlans\ \_real\_compress\_plans;}
+\DoxyCodeLine{00041\ \textcolor{keyword}{static}\ RealPlans\ \_real\_decompress\_plans;}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00048\ \mbox{\hyperlink{classFFTCompressor_a2c387817f720cd3c24d4b3da4f0efb8f}{FFTCompressor::}}}
+\DoxyCodeLine{00049\ \mbox{\hyperlink{classFFTCompressor_a2c387817f720cd3c24d4b3da4f0efb8f}{FFTCompressor}}()\ \{}
+\DoxyCodeLine{00050\ \ \ \_bam\_minor\_version\ =\ 0;}
+\DoxyCodeLine{00051\ \ \ \mbox{\hyperlink{classFFTCompressor_a53b0db870b069e6bd5513963af476fe2}{set\_quality}}(-\/1);}
+\DoxyCodeLine{00052\ \ \ \_use\_error\_threshold\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00053\ \ \ \_transpose\_quats\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00054\ \}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00063\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFFTCompressor_adaa64eb86e996609d2f7b3dcc9c47abe}{FFTCompressor::}}}
+\DoxyCodeLine{00064\ \mbox{\hyperlink{classFFTCompressor_adaa64eb86e996609d2f7b3dcc9c47abe}{is\_compression\_available}}()\ \{}
+\DoxyCodeLine{00065\ \textcolor{preprocessor}{\#ifndef\ HAVE\_FFTW}}
+\DoxyCodeLine{00066\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00067\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00068\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00069\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00070\ \}}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00088\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFFTCompressor_a53b0db870b069e6bd5513963af476fe2}{FFTCompressor::}}}
+\DoxyCodeLine{00089\ \mbox{\hyperlink{classFFTCompressor_a53b0db870b069e6bd5513963af476fe2}{set\_quality}}(\textcolor{keywordtype}{int}\ quality)\ \{}
+\DoxyCodeLine{00090\ \textcolor{preprocessor}{\#ifndef\ HAVE\_FFTW}}
+\DoxyCodeLine{00091\ \ \ \textcolor{comment}{//\ If\ we\ don't\ actually\ have\ FFTW,\ we\ can't\ really\ compress\ anything.}}
+\DoxyCodeLine{00092\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ <=\ 100)\ \{}
+\DoxyCodeLine{00093\ \ \ \ \ mathutil\_cat.warning()}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}FFTW\ library\ is\ not\ available;\ generating\ uncompressed\ output.\(\backslash\)n"{}};}
+\DoxyCodeLine{00095\ \ \ \}}
+\DoxyCodeLine{00096\ \ \ \_quality\ =\ 101;}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00098\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00099\ \ \ \_quality\ =\ quality;}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ <\ 0)\ \{}
+\DoxyCodeLine{00102\ \ \ \ \ \textcolor{comment}{//\ A\ negative\ quality\ indicates\ we\ should\ read\ the\ various\ parameters\ from}}
+\DoxyCodeLine{00103\ \ \ \ \ \textcolor{comment}{//\ individual\ config\ variables.}}
+\DoxyCodeLine{00104\ \ \ \ \ \_fft\_offset\ =\ fft\_offset;}
+\DoxyCodeLine{00105\ \ \ \ \ \_fft\_factor\ =\ fft\_factor;}
+\DoxyCodeLine{00106\ \ \ \ \ \_fft\_exponent\ =\ fft\_exponent;}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00108\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_quality\ <\ 40)\ \{}
+\DoxyCodeLine{00109\ \ \ \ \ \textcolor{comment}{//\ 0\ -\/\ 40\ :\ fft-\/offset\ 1.0\ -\/\ 0.001\ fft-\/factor\ 1.0\ fft-\/exponent\ 4.0}}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ \ \ \textcolor{keywordtype}{double}\ t\ =\ (double)\_quality\ /\ 40.0;}
+\DoxyCodeLine{00112\ \ \ \ \ \_fft\_offset\ =\ interpolate(t,\ 1.0,\ 0.001);}
+\DoxyCodeLine{00113\ \ \ \ \ \_fft\_factor\ =\ 1.0;}
+\DoxyCodeLine{00114\ \ \ \ \ \_fft\_exponent\ =\ 4.0;}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_quality\ <\ 95)\ \{}
+\DoxyCodeLine{00117\ \ \ \ \ \textcolor{comment}{//\ 40\ -\/\ 95:\ fft-\/offset\ 0.001\ fft-\/factor\ 1.0\ -\/\ 0.1\ fft-\/exponent\ 4.0}}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ \ \ \textcolor{keywordtype}{double}\ t\ =\ (double)(\_quality\ -\/\ 40)\ /\ 55.0;}
+\DoxyCodeLine{00120\ \ \ \ \ \_fft\_offset\ =\ 0.001;}
+\DoxyCodeLine{00121\ \ \ \ \ \_fft\_factor\ =\ interpolate(t,\ 1.0,\ 0.1);}
+\DoxyCodeLine{00122\ \ \ \ \ \_fft\_exponent\ =\ 4.0;}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00125\ \ \ \ \ \textcolor{comment}{//\ 95\ -\/\ 100:\ fft-\/offset\ 0.001\ fft-\/factor\ 0.1\ -\/\ 0.0\ fft-\/exponent\ 4.0}}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00127\ \ \ \ \ \textcolor{keywordtype}{double}\ t\ =\ (double)(\_quality\ -\/\ 95)\ /\ 5.0;}
+\DoxyCodeLine{00128\ \ \ \ \ \_fft\_offset\ =\ 0.001;}
+\DoxyCodeLine{00129\ \ \ \ \ \_fft\_factor\ =\ interpolate(t,\ 0.1,\ 0.0);}
+\DoxyCodeLine{00130\ \ \ \ \ \_fft\_exponent\ =\ 4.0;}
+\DoxyCodeLine{00131\ \ \ \}}
+\DoxyCodeLine{00132\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00133\ \}}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00138\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classFFTCompressor_ac230e4f377b5de19957e3f71a1d17912}{FFTCompressor::}}}
+\DoxyCodeLine{00139\ \mbox{\hyperlink{classFFTCompressor_ac230e4f377b5de19957e3f71a1d17912}{get\_quality}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00140\ \ \ \textcolor{keywordflow}{return}\ \_quality;}
+\DoxyCodeLine{00141\ \}}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00151\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFFTCompressor_a1ee5f3c053b9f9e3909bd9411ac471d9}{FFTCompressor::}}}
+\DoxyCodeLine{00152\ \mbox{\hyperlink{classFFTCompressor_a1ee5f3c053b9f9e3909bd9411ac471d9}{set\_use\_error\_threshold}}(\textcolor{keywordtype}{bool}\ use\_error\_threshold)\ \{}
+\DoxyCodeLine{00153\ \ \ \_use\_error\_threshold\ =\ use\_error\_threshold;}
+\DoxyCodeLine{00154\ \}}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00160\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFFTCompressor_a4fcfc32194b0a5aa3334b271596f28f1}{FFTCompressor::}}}
+\DoxyCodeLine{00161\ \mbox{\hyperlink{classFFTCompressor_a4fcfc32194b0a5aa3334b271596f28f1}{get\_use\_error\_threshold}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00162\ \ \ \textcolor{keywordflow}{return}\ \_use\_error\_threshold;}
+\DoxyCodeLine{00163\ \}}
+\DoxyCodeLine{00164\ }
+\DoxyCodeLine{00170\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFFTCompressor_a237e1c694f1765f3f33e30e76e62763c}{FFTCompressor::}}}
+\DoxyCodeLine{00171\ \mbox{\hyperlink{classFFTCompressor_a237e1c694f1765f3f33e30e76e62763c}{set\_transpose\_quats}}(\textcolor{keywordtype}{bool}\ flag)\ \{}
+\DoxyCodeLine{00172\ \ \ \_transpose\_quats\ =\ flag;}
+\DoxyCodeLine{00173\ \}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00178\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFFTCompressor_afb43202cf6584a4d164dbb954e1a5e1b}{FFTCompressor::}}}
+\DoxyCodeLine{00179\ \mbox{\hyperlink{classFFTCompressor_afb43202cf6584a4d164dbb954e1a5e1b}{get\_transpose\_quats}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00180\ \ \ \textcolor{keywordflow}{return}\ \_transpose\_quats;}
+\DoxyCodeLine{00181\ \}}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00188\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFFTCompressor_ae4cae5073d6e047daeb3a2ed61a32838}{FFTCompressor::}}}
+\DoxyCodeLine{00189\ \mbox{\hyperlink{classFFTCompressor_ae4cae5073d6e047daeb3a2ed61a32838}{write\_header}}(\mbox{\hyperlink{classDatagram}{Datagram}}\ \&datagram)\ \{}
+\DoxyCodeLine{00190\ \ \ datagram.add\_int8(\_quality);}
+\DoxyCodeLine{00191\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ <\ 0)\ \{}
+\DoxyCodeLine{00192\ \ \ \ \ datagram.add\_float64(\_fft\_offset);}
+\DoxyCodeLine{00193\ \ \ \ \ datagram.add\_float64(\_fft\_factor);}
+\DoxyCodeLine{00194\ \ \ \ \ datagram.add\_float64(\_fft\_exponent);}
+\DoxyCodeLine{00195\ \ \ \}}
+\DoxyCodeLine{00196\ \}}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00201\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{FFTCompressor::}}}
+\DoxyCodeLine{00202\ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(\mbox{\hyperlink{classDatagram}{Datagram}}\ \&datagram,\ \textcolor{keyword}{const}\ PN\_stdfloat\ *array,\ \textcolor{keywordtype}{int}\ length)\ \{}
+\DoxyCodeLine{00203\ \ \ datagram.add\_int32(length);}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00205\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ >\ 100)\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \textcolor{comment}{//\ Special\ case:\ lossless\ output.}}
+\DoxyCodeLine{00207\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ datagram.add\_stdfloat(array[i]);}
+\DoxyCodeLine{00209\ \ \ \ \ \}}
+\DoxyCodeLine{00210\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00211\ \ \ \}}
+\DoxyCodeLine{00212\ }
+\DoxyCodeLine{00213\ \textcolor{preprocessor}{\#ifndef\ HAVE\_FFTW}}
+\DoxyCodeLine{00214\ \ \ \textcolor{comment}{//\ If\ we\ don't\ have\ FFTW,\ we\ shouldn't\ get\ here.}}
+\DoxyCodeLine{00215\ \ \ nassertv(\textcolor{keyword}{false});}
+\DoxyCodeLine{00216\ }
+\DoxyCodeLine{00217\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00219\ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0)\ \{}
+\DoxyCodeLine{00220\ \ \ \ \ \textcolor{comment}{//\ Special\ case:\ do\ nothing.}}
+\DoxyCodeLine{00221\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00222\ \ \ \}}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00224\ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 1)\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \textcolor{comment}{//\ Special\ case:\ just\ write\ out\ the\ one\ number.}}
+\DoxyCodeLine{00226\ \ \ \ \ datagram.add\_stdfloat(array[0]);}
+\DoxyCodeLine{00227\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00228\ \ \ \}}
+\DoxyCodeLine{00229\ }
+\DoxyCodeLine{00230\ \ \ \textcolor{comment}{//\ Normal\ case:\ FFT\ the\ array,\ and\ write\ that\ out.}}
+\DoxyCodeLine{00231\ }
+\DoxyCodeLine{00232\ \ \ \textcolor{comment}{//\ First,\ check\ the\ compressability.}}
+\DoxyCodeLine{00233\ \ \ \textcolor{keywordtype}{bool}\ reject\_compression\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00235\ \ \ \textcolor{comment}{//\ This\ logic\ needs\ a\ closer\ examination.\ \ Not\ sure\ it's\ useful\ as-\/is.}}
+\DoxyCodeLine{00236\ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00237\ \textcolor{comment}{\ \ if\ (\_use\_error\_threshold)\ \{}}
+\DoxyCodeLine{00238\ \textcolor{comment}{\ \ \ \ //\ Don't\ encode\ the\ data\ if\ it\ moves\ too\ erratically.}}
+\DoxyCodeLine{00239\ \textcolor{comment}{\ \ \ \ PN\_stdfloat\ error\ =\ get\_compressability(array,\ length);}}
+\DoxyCodeLine{00240\ \textcolor{comment}{\ \ \ \ if\ (error\ >\ fft\_error\_threshold)\ \{}}
+\DoxyCodeLine{00241\ \textcolor{comment}{\ \ \ \ \ \ //\ No\ good:\ the\ data\ probably\ won't\ compress\ well.\ \ Just\ write\ out}}
+\DoxyCodeLine{00242\ \textcolor{comment}{\ \ \ \ \ \ //\ lossless\ data.}}
+\DoxyCodeLine{00243\ \textcolor{comment}{\ \ \ \ \ \ reject\_compression\ =\ true;}}
+\DoxyCodeLine{00244\ \textcolor{comment}{\ \ \ \ \}}}
+\DoxyCodeLine{00245\ \textcolor{comment}{\ \ \}}}
+\DoxyCodeLine{00246\ \textcolor{comment}{\ \ */}}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \ \ datagram.add\_bool(reject\_compression);}
+\DoxyCodeLine{00249\ \ \ \textcolor{keywordflow}{if}\ (reject\_compression)\ \{}
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{keywordflow}{if}\ (mathutil\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ mathutil\_cat.debug()}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Writing\ stream\ of\ "{}}\ <<\ length\ <<\ \textcolor{stringliteral}{"{}\ numbers\ uncompressed.\(\backslash\)n"{}};}
+\DoxyCodeLine{00253\ \ \ \ \ \}}
+\DoxyCodeLine{00254\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ datagram.add\_stdfloat(array[i]);}
+\DoxyCodeLine{00256\ \ \ \ \ \}}
+\DoxyCodeLine{00257\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00258\ \ \ \}}
+\DoxyCodeLine{00259\ }
+\DoxyCodeLine{00260\ \ \ \textcolor{comment}{//\ Now\ generate\ the\ Fourier\ transform.}}
+\DoxyCodeLine{00261\ \ \ \textcolor{keywordtype}{int}\ fft\_length\ =\ length\ /\ 2\ +\ 1;}
+\DoxyCodeLine{00262\ \ \ fftw\_complex\ *fft\_bins\ =\ (fftw\_complex\ *)alloca(fft\_length\ *\ \textcolor{keyword}{sizeof}(fftw\_complex));}
+\DoxyCodeLine{00263\ }
+\DoxyCodeLine{00264\ \ \ \textcolor{comment}{//\ This\ is\ for\ an\ in-\/place\ transform.\ It\ doesn't\ violate\ strict\ aliasing}}
+\DoxyCodeLine{00265\ \ \ \textcolor{comment}{//\ rules\ because\ \&fft\_bins[0][0]\ is\ still\ a\ double\ pointer.\ This\ saves\ on}}
+\DoxyCodeLine{00266\ \ \ \textcolor{comment}{//\ precious\ stack\ space.}}
+\DoxyCodeLine{00267\ \ \ \textcolor{keywordtype}{double}\ *data\ =\ \&fft\_bins[0][0];}
+\DoxyCodeLine{00268\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00269\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ data[i]\ =\ array[i];}
+\DoxyCodeLine{00271\ \ \ \}}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00273\ \ \ \textcolor{comment}{//\ Note:\ This\ is\ an\ in-\/place\ DFT.\ \`{}data`\ and\ \`{}fft\_bins`\ are\ aliases.}}
+\DoxyCodeLine{00274\ \ \ fftw\_plan\ plan\ =\ get\_real\_compress\_plan(length);}
+\DoxyCodeLine{00275\ \ \ fftw\_execute\_dft\_r2c(plan,\ data,\ fft\_bins);}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \textcolor{comment}{//\ Now\ encode\ the\ numbers,\ run-\/length\ encoded\ by\ size,\ so\ we\ only\ write\ out}}
+\DoxyCodeLine{00279\ \ \ \textcolor{comment}{//\ the\ number\ of\ bits\ we\ need\ for\ each\ number.}}
+\DoxyCodeLine{00280\ \ \ \textcolor{comment}{//\ Note\ that\ Panda3D\ has\ conventionally\ always\ used\ FFTW2's\ halfcomplex}}
+\DoxyCodeLine{00281\ \ \ \textcolor{comment}{//\ format\ for\ serializing\ the\ bins.\ In\ short,\ this\ means\ that\ for\ an\ n-\/length}}
+\DoxyCodeLine{00282\ \ \ \textcolor{comment}{//\ FFT,\ it\ stores:}}
+\DoxyCodeLine{00283\ \ \ \textcolor{comment}{//\ 1)\ The\ real\ components\ for\ bins\ 0\ through\ floor(n/2),\ followed\ by...}}
+\DoxyCodeLine{00284\ \ \ \textcolor{comment}{//\ 2)\ The\ imaginary\ components\ for\ bins\ floor((n+1)/2)-\/1\ through\ 1.}}
+\DoxyCodeLine{00285\ \ \ \textcolor{comment}{//\ \ \ \ (Imaginary\ component\ for\ bin\ 0\ is\ never\ stored,\ as\ that's\ always\ zero.)}}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \ \ vector\_double\ run;}
+\DoxyCodeLine{00288\ \ \ RunWidth\ run\_width\ =\ RW\_invalid;}
+\DoxyCodeLine{00289\ \ \ \textcolor{keywordtype}{int}\ num\_written\ =\ 0;}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00291\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ max\_range\_32\ =\ 2147483647.0;}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ max\_range\_16\ =\ 32767.0;}
+\DoxyCodeLine{00294\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ max\_range\_8\ =\ 127.0;}
+\DoxyCodeLine{00295\ }
+\DoxyCodeLine{00296\ \ \ \ \ \textcolor{keywordtype}{int}\ bin;\ \textcolor{comment}{//\ which\ FFT\ bin\ we're\ storing}}
+\DoxyCodeLine{00297\ \ \ \ \ \textcolor{keywordtype}{int}\ j;\ \textcolor{comment}{//\ 0=real;\ 1=imag}}
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ <\ fft\_length)\ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ bin\ =\ i;}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ j\ =\ 0;}
+\DoxyCodeLine{00301\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ bin\ =\ length\ -\/\ i;}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ j\ =\ 1;}
+\DoxyCodeLine{00304\ \ \ \ \ \}}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00306\ \ \ \ \ \textcolor{keywordtype}{double}\ scale\_factor\ =\ get\_scale\_factor(bin,\ fft\_length);}
+\DoxyCodeLine{00307\ \ \ \ \ \textcolor{keywordtype}{double}\ num\ =\ cfloor(fft\_bins[bin][j]\ /\ scale\_factor\ +\ 0.5);}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{comment}{//\ How\ many\ bits\ do\ we\ need\ to\ encode\ this\ integer?}}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{keywordtype}{double}\ a\ =\ fabs(num);}
+\DoxyCodeLine{00311\ \ \ \ \ RunWidth\ num\_width;}
+\DoxyCodeLine{00312\ }
+\DoxyCodeLine{00313\ \ \ \ \ \textcolor{keywordflow}{if}\ (a\ ==\ 0.0)\ \{}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ num\_width\ =\ RW\_0;}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (a\ <=\ max\_range\_8)\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ num\_width\ =\ RW\_8;}
+\DoxyCodeLine{00318\ }
+\DoxyCodeLine{00319\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (a\ <=\ max\_range\_16)\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ num\_width\ =\ RW\_16;}
+\DoxyCodeLine{00321\ }
+\DoxyCodeLine{00322\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (a\ <=\ max\_range\_32)\ \{}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ num\_width\ =\ RW\_32;}
+\DoxyCodeLine{00324\ }
+\DoxyCodeLine{00325\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ num\_width\ =\ RW\_double;}
+\DoxyCodeLine{00327\ \ \ \ \ \}}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00329\ \ \ \ \ \textcolor{comment}{//\ A\ special\ case:\ if\ we're\ writing\ a\ string\ of\ one-\/byters\ and\ we\ come}}
+\DoxyCodeLine{00330\ \ \ \ \ \textcolor{comment}{//\ across\ a\ single\ intervening\ zero,\ don't\ interrupt\ the\ run\ just\ for}}
+\DoxyCodeLine{00331\ \ \ \ \ \textcolor{comment}{//\ that.}}
+\DoxyCodeLine{00332\ \ \ \ \ \textcolor{keywordflow}{if}\ (run\_width\ ==\ RW\_8\ \&\&\ num\_width\ ==\ RW\_0)\ \{}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (run.back()\ !=\ 0)\ \{}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ num\_width\ =\ RW\_8;}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00336\ \ \ \ \ \}}
+\DoxyCodeLine{00337\ }
+\DoxyCodeLine{00338\ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_width\ !=\ run\_width)\ \{}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ we\ need\ to\ flush\ the\ last\ run.}}
+\DoxyCodeLine{00340\ }
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \textcolor{comment}{//\ First,\ however,\ take\ care\ of\ the\ special\ case\ above:\ if\ we're}}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \textcolor{comment}{//\ switching\ from\ RW\_8\ to\ RW\_0,\ there\ could\ be\ a\ zero\ at\ the\ end,\ which}}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \textcolor{comment}{//\ should\ be\ reclaimed\ into\ the\ RW\_0\ run.}}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ reclaimed\_zero\ =\ (run\_width\ ==\ RW\_8\ \&\&\ num\_width\ ==\ RW\_0\ \&\&}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ run.back()\ ==\ 0);}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (reclaimed\_zero)\ \{}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ run.pop\_back();}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00349\ }
+\DoxyCodeLine{00350\ \ \ \ \ \ \ num\_written\ +=\ write\_run(datagram,\ run\_width,\ run);}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ run.clear();}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ run\_width\ =\ num\_width;}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (reclaimed\_zero)\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ run.push\_back(0);}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00357\ \ \ \ \ \}}
+\DoxyCodeLine{00358\ }
+\DoxyCodeLine{00359\ \ \ \ \ run.push\_back(num);}
+\DoxyCodeLine{00360\ \ \ \}}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ num\_written\ +=\ write\_run(datagram,\ run\_width,\ run);}
+\DoxyCodeLine{00363\ \ \ nassertv(num\_written\ ==\ length);}
+\DoxyCodeLine{00364\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00365\ \}}
+\DoxyCodeLine{00366\ }
+\DoxyCodeLine{00370\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFFTCompressor_aedf56c07b9bf59a1abeba6cb65b73dfe}{FFTCompressor::}}}
+\DoxyCodeLine{00371\ \mbox{\hyperlink{classFFTCompressor_aedf56c07b9bf59a1abeba6cb65b73dfe}{write\_hprs}}(\mbox{\hyperlink{classDatagram}{Datagram}}\ \&datagram,\ \textcolor{keyword}{const}\ LVecBase3\ *array,\ \textcolor{keywordtype}{int}\ length)\ \{}
+\DoxyCodeLine{00372\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00373\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ >=\ 104)\ \{}
+\DoxyCodeLine{00374\ \ \ \ \ \textcolor{comment}{//\ If\ quality\ level\ is\ at\ least\ 104,\ we\ don't\ even\ convert\ hpr\ at\ all.}}
+\DoxyCodeLine{00375\ \ \ \ \ \textcolor{comment}{//\ This\ is\ just\ for\ debugging.}}
+\DoxyCodeLine{00376\ \ \ \ \ vector\_stdfloat\ h,\ p,\ r;}
+\DoxyCodeLine{00377\ }
+\DoxyCodeLine{00378\ \ \ \ \ h.reserve(length);}
+\DoxyCodeLine{00379\ \ \ \ \ p.reserve(length);}
+\DoxyCodeLine{00380\ \ \ \ \ r.reserve(length);}
+\DoxyCodeLine{00381\ }
+\DoxyCodeLine{00382\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ h.push\_back(array[i][0]);}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ p.push\_back(array[i][1]);}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ r.push\_back(array[i][2]);}
+\DoxyCodeLine{00386\ \ \ \ \ \}}
+\DoxyCodeLine{00387\ }
+\DoxyCodeLine{00388\ \ \ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0)\ \{}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00392\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&h[0],\ length);}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&p[0],\ length);}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&r[0],\ length);}
+\DoxyCodeLine{00396\ \ \ \ \ \}}
+\DoxyCodeLine{00397\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00398\ \ \ \}}
+\DoxyCodeLine{00399\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ >=\ 103)\ \{}
+\DoxyCodeLine{00400\ \ \ \ \ \textcolor{comment}{//\ If\ quality\ level\ is\ 103,\ we\ convert\ hpr\ to\ a\ table\ of\ matrices.\ \ This}}
+\DoxyCodeLine{00401\ \ \ \ \ \textcolor{comment}{//\ is\ just\ for\ debugging.}}
+\DoxyCodeLine{00402\ \ \ \ \ vector\_stdfloat}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ m00,\ m01,\ m02,}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ m10,\ m11,\ m12,}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ m20,\ m21,\ m22;}
+\DoxyCodeLine{00406\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ LMatrix3\ mat;}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \mbox{\hyperlink{compose__matrix__src_8cxx_aa46bdf9de1e1e04a5e2cdd7af6b39c64}{compose\_matrix}}(mat,\ LVecBase3(1.0,\ 1.0,\ 1.0),\ LVecBase3(0.0,\ 0.0,\ 0.0),}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ array[i]);}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ m00.push\_back(mat(0,\ 0));}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ m01.push\_back(mat(0,\ 1));}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ m02.push\_back(mat(0,\ 2));}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ m10.push\_back(mat(1,\ 0));}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ m11.push\_back(mat(1,\ 1));}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ m12.push\_back(mat(1,\ 2));}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ m20.push\_back(mat(2,\ 0));}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ m21.push\_back(mat(2,\ 1));}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ m22.push\_back(mat(2,\ 2));}
+\DoxyCodeLine{00419\ \ \ \ \ \}}
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00421\ \ \ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0)\ \{}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00425\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00426\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00430\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00431\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&m00[0],\ length);}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&m01[0],\ length);}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&m02[0],\ length);}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&m10[0],\ length);}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&m11[0],\ length);}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&m12[0],\ length);}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&m20[0],\ length);}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&m21[0],\ length);}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&m22[0],\ length);}
+\DoxyCodeLine{00441\ \ \ \ \ \}}
+\DoxyCodeLine{00442\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00443\ \ \ \}}
+\DoxyCodeLine{00444\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00445\ }
+\DoxyCodeLine{00446\ \ \ \textcolor{comment}{//\ First,\ convert\ the\ HPR's\ to\ quats.\ \ We\ expect\ quats\ to\ have\ better\ FFT}}
+\DoxyCodeLine{00447\ \ \ \textcolor{comment}{//\ consistency,\ and\ therefore\ compress\ better,\ even\ though\ they\ have\ an}}
+\DoxyCodeLine{00448\ \ \ \textcolor{comment}{//\ extra\ component.}}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00450\ \ \ \textcolor{comment}{//\ However,\ because\ the\ quaternion\ will\ be\ normalized,\ we\ don't\ even\ have\ to}}
+\DoxyCodeLine{00451\ \ \ \textcolor{comment}{//\ write\ out\ all\ three\ components;\ any\ three\ can\ be\ used\ to\ determine\ the}}
+\DoxyCodeLine{00452\ \ \ \textcolor{comment}{//\ fourth\ (provided\ we\ ensure\ consistency\ of\ sign).}}
+\DoxyCodeLine{00453\ }
+\DoxyCodeLine{00454\ \ \ vector\_stdfloat\ qr,\ qi,\ qj,\ qk;}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00456\ \ \ qr.reserve(length);}
+\DoxyCodeLine{00457\ \ \ qi.reserve(length);}
+\DoxyCodeLine{00458\ \ \ qj.reserve(length);}
+\DoxyCodeLine{00459\ \ \ qk.reserve(length);}
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00461\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00462\ \ \ \ \ LMatrix3\ mat;}
+\DoxyCodeLine{00463\ \ \ \ \ \mbox{\hyperlink{compose__matrix__src_8cxx_aa46bdf9de1e1e04a5e2cdd7af6b39c64}{compose\_matrix}}(mat,\ LVecBase3(1.0,\ 1.0,\ 1.0),\ LVecBase3(0.0,\ 0.0,\ 0.0),}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ array[i]);}
+\DoxyCodeLine{00465\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_transpose\_quats)\ \{}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ mat.transpose\_in\_place();}
+\DoxyCodeLine{00467\ \ \ \ \ \}}
+\DoxyCodeLine{00468\ }
+\DoxyCodeLine{00469\ \ \ \ \ LOrientation\ rot(mat);}
+\DoxyCodeLine{00470\ \ \ \ \ rot.normalize();\ \ \textcolor{comment}{//\ This\ may\ not\ be\ necessary,\ but\ let's\ not\ take\ chances.}}
+\DoxyCodeLine{00471\ }
+\DoxyCodeLine{00472\ \ \ \ \ \textcolor{keywordflow}{if}\ (rot.get\_r()\ <\ 0)\ \{}
+\DoxyCodeLine{00473\ \ \ \ \ \ \ \textcolor{comment}{//\ Since\ rot\ ==\ -\/rot,\ we\ can\ flip\ the\ quarternion\ if\ need\ be\ to\ keep\ the}}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ \textcolor{comment}{//\ r\ component\ positive.\ \ This\ has\ two\ advantages.\ \ One,\ it\ makes\ it}}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ \textcolor{comment}{//\ possible\ to\ infer\ r\ completely\ given\ i,\ j,\ and\ k\ (since\ we\ know\ it}}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \textcolor{comment}{//\ must\ be\ >=\ 0),\ and\ two,\ it\ helps\ protect\ against\ poor\ continuity}}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ \textcolor{comment}{//\ caused\ by\ inadvertent\ flipping\ of\ the\ quarternion's\ sign\ between}}
+\DoxyCodeLine{00478\ \ \ \ \ \ \ \textcolor{comment}{//\ frames.}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ choice\ of\ leaving\ r\ implicit\ rather\ than\ any\ of\ the\ other\ three}}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ \textcolor{comment}{//\ seems\ to\ work\ the\ best\ in\ terms\ of\ guaranteeing\ continuity.}}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ rot.set(-\/rot.get\_r(),\ -\/rot.get\_i(),\ -\/rot.get\_j(),\ -\/rot.get\_k());}
+\DoxyCodeLine{00483\ \ \ \ \ \}}
+\DoxyCodeLine{00484\ }
+\DoxyCodeLine{00485\ \textcolor{preprocessor}{\#ifdef\ NOTIFY\_DEBUG}}
+\DoxyCodeLine{00486\ \ \ \ \ \textcolor{keywordflow}{if}\ (mathutil\_cat.is\_warning())\ \{}
+\DoxyCodeLine{00487\ \ \ \ \ \ \ LMatrix3\ mat2;}
+\DoxyCodeLine{00488\ \ \ \ \ \ \ rot.extract\_to\_matrix(mat2);}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!mat.almost\_equal(mat2,\ 0.0001))\ \{}
+\DoxyCodeLine{00490\ \ \ \ \ \ \ \ \ LVecBase3\ hpr1,\ hpr2;}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \ \ LVecBase3\ scale,\ shear;}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{compose__matrix__src_8cxx_a499c787e84555f9a09c93f526b7dbc0d}{decompose\_matrix}}(mat,\ scale,\ shear,\ hpr1);}
+\DoxyCodeLine{00493\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{compose__matrix__src_8cxx_a499c787e84555f9a09c93f526b7dbc0d}{decompose\_matrix}}(mat2,\ scale,\ shear,\ hpr2);}
+\DoxyCodeLine{00494\ \ \ \ \ \ \ \ \ mathutil\_cat.warning()}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Converted\ hpr\ to\ quaternion\ incorrectly!\(\backslash\)n"{}}}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ Source\ hpr:\ "{}}\ <<\ array[i]\ <<\ \textcolor{stringliteral}{"{},\ or\ "{}}\ <<\ hpr1\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \ \ mathutil\_cat.warning(\textcolor{keyword}{false})}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ Quaternion:\ "{}}\ <<\ rot\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}}}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ Which\ represents:\ hpr\ "{}}\ <<\ hpr2\ <<\ \textcolor{stringliteral}{"{}\ scale\ "{}}}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ \ \ \ \ <<\ scale\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00502\ \ \ \ \ \}}
+\DoxyCodeLine{00503\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00504\ }
+\DoxyCodeLine{00505\ \ \ \ \ qr.push\_back(rot.get\_r());}
+\DoxyCodeLine{00506\ \ \ \ \ qi.push\_back(rot.get\_i());}
+\DoxyCodeLine{00507\ \ \ \ \ qj.push\_back(rot.get\_j());}
+\DoxyCodeLine{00508\ \ \ \ \ qk.push\_back(rot.get\_k());}
+\DoxyCodeLine{00509\ \ \ \}}
+\DoxyCodeLine{00510\ }
+\DoxyCodeLine{00511\ \ \ \textcolor{comment}{//\ If\ quality\ is\ at\ least\ 102,\ we\ write\ all\ four\ quat\ components,\ instead\ of}}
+\DoxyCodeLine{00512\ \ \ \textcolor{comment}{//\ just\ the\ three.\ \ This\ is\ just\ for\ debugging.}}
+\DoxyCodeLine{00513\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00514\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ >=\ 102)\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0)\ \{}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00517\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&qr[0],\ length);}
+\DoxyCodeLine{00519\ \ \ \ \ \}}
+\DoxyCodeLine{00520\ \ \ \}}
+\DoxyCodeLine{00521\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00522\ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0)\ \{}
+\DoxyCodeLine{00523\ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00524\ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00525\ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \textcolor{keyword}{nullptr},\ length);}
+\DoxyCodeLine{00526\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00527\ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&qi[0],\ length);}
+\DoxyCodeLine{00528\ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&qj[0],\ length);}
+\DoxyCodeLine{00529\ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_ae97e74c103db5941590843c2cc88bcab}{write\_reals}}(datagram,\ \&qk[0],\ length);}
+\DoxyCodeLine{00530\ \ \ \}}
+\DoxyCodeLine{00531\ \}}
+\DoxyCodeLine{00532\ }
+\DoxyCodeLine{00540\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFFTCompressor_a67f6b46d2ee1d06ad4549eabdcc2c439}{FFTCompressor::}}}
+\DoxyCodeLine{00541\ \mbox{\hyperlink{classFFTCompressor_a67f6b46d2ee1d06ad4549eabdcc2c439}{read\_header}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&di,\ \textcolor{keywordtype}{int}\ bam\_minor\_version)\ \{}
+\DoxyCodeLine{00542\ \ \ \_bam\_minor\_version\ =\ bam\_minor\_version;}
+\DoxyCodeLine{00543\ \ \ \_quality\ =\ di.get\_int8();}
+\DoxyCodeLine{00544\ }
+\DoxyCodeLine{00545\ \ \ \textcolor{keywordflow}{if}\ (mathutil\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00546\ \ \ \ \ mathutil\_cat.debug()}
+\DoxyCodeLine{00547\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Found\ compressed\ data\ at\ quality\ level\ "{}}\ <<\ \_quality\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00548\ \ \ \}}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00550\ \textcolor{preprocessor}{\#ifndef\ HAVE\_FFTW}}
+\DoxyCodeLine{00551\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ <=\ 100)\ \{}
+\DoxyCodeLine{00552\ \ \ \ \ mathutil\_cat.error()}
+\DoxyCodeLine{00553\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}FFTW\ library\ is\ not\ available;\ cannot\ read\ compressed\ data.\(\backslash\)n"{}};}
+\DoxyCodeLine{00554\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00555\ \ \ \}}
+\DoxyCodeLine{00556\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00557\ }
+\DoxyCodeLine{00558\ \ \ \mbox{\hyperlink{classFFTCompressor_a53b0db870b069e6bd5513963af476fe2}{set\_quality}}(\_quality);}
+\DoxyCodeLine{00559\ }
+\DoxyCodeLine{00560\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ <\ 0)\ \{}
+\DoxyCodeLine{00561\ \ \ \ \ \_fft\_offset\ =\ di.get\_float64();}
+\DoxyCodeLine{00562\ \ \ \ \ \_fft\_factor\ =\ di.get\_float64();}
+\DoxyCodeLine{00563\ \ \ \ \ \_fft\_exponent\ =\ di.get\_float64();}
+\DoxyCodeLine{00564\ \ \ \}}
+\DoxyCodeLine{00565\ }
+\DoxyCodeLine{00566\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00567\ \}}
+\DoxyCodeLine{00568\ }
+\DoxyCodeLine{00575\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{FFTCompressor::}}}
+\DoxyCodeLine{00576\ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&di,\ vector\_stdfloat\ \&array)\ \{}
+\DoxyCodeLine{00577\ \ \ \textcolor{keywordtype}{int}\ length\ =\ di.get\_int32();}
+\DoxyCodeLine{00578\ }
+\DoxyCodeLine{00579\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ >\ 100)\ \{}
+\DoxyCodeLine{00580\ \ \ \ \ array.reserve(array.size()\ +\ length);}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ \ \ \textcolor{comment}{//\ Special\ case:\ lossless\ output.}}
+\DoxyCodeLine{00583\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ array.push\_back(di.get\_stdfloat());}
+\DoxyCodeLine{00585\ \ \ \ \ \}}
+\DoxyCodeLine{00586\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00587\ \ \ \}}
+\DoxyCodeLine{00588\ }
+\DoxyCodeLine{00589\ \textcolor{preprocessor}{\#ifndef\ HAVE\_FFTW}}
+\DoxyCodeLine{00590\ \ \ \textcolor{comment}{//\ If\ we\ don't\ have\ FFTW,\ we\ shouldn't\ get\ here.}}
+\DoxyCodeLine{00591\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00592\ }
+\DoxyCodeLine{00593\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00594\ }
+\DoxyCodeLine{00595\ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0)\ \{}
+\DoxyCodeLine{00596\ \ \ \ \ \textcolor{comment}{//\ Special\ case:\ do\ nothing.}}
+\DoxyCodeLine{00597\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00598\ \ \ \}}
+\DoxyCodeLine{00599\ }
+\DoxyCodeLine{00600\ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 1)\ \{}
+\DoxyCodeLine{00601\ \ \ \ \ \textcolor{comment}{//\ Special\ case:\ just\ read\ in\ the\ one\ number.}}
+\DoxyCodeLine{00602\ \ \ \ \ array.push\_back(di.get\_stdfloat());}
+\DoxyCodeLine{00603\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00604\ \ \ \}}
+\DoxyCodeLine{00605\ }
+\DoxyCodeLine{00606\ \ \ \textcolor{comment}{//\ Normal\ case:\ read\ in\ the\ FFT\ array,\ and\ convert\ it\ back\ to\ (nearly)\ the}}
+\DoxyCodeLine{00607\ \ \ \textcolor{comment}{//\ original\ numbers.}}
+\DoxyCodeLine{00608\ }
+\DoxyCodeLine{00609\ \ \ \textcolor{comment}{//\ First,\ check\ the\ reject\_compression\ flag.\ \ If\ it's\ set,\ we\ decided\ to}}
+\DoxyCodeLine{00610\ \ \ \textcolor{comment}{//\ just\ write\ out\ the\ stream\ uncompressed.}}
+\DoxyCodeLine{00611\ \ \ \textcolor{keywordtype}{bool}\ reject\_compression\ =\ di.get\_bool();}
+\DoxyCodeLine{00612\ \ \ \textcolor{keywordflow}{if}\ (reject\_compression)\ \{}
+\DoxyCodeLine{00613\ \ \ \ \ array.reserve(array.size()\ +\ length);}
+\DoxyCodeLine{00614\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00615\ \ \ \ \ \ \ array.push\_back(di.get\_stdfloat());}
+\DoxyCodeLine{00616\ \ \ \ \ \}}
+\DoxyCodeLine{00617\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00618\ \ \ \}}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00620\ \ \ vector\_double\ half\_complex;}
+\DoxyCodeLine{00621\ \ \ half\_complex.reserve(length);}
+\DoxyCodeLine{00622\ \ \ \textcolor{keywordtype}{int}\ num\_read\ =\ 0;}
+\DoxyCodeLine{00623\ \ \ \textcolor{keywordflow}{while}\ (num\_read\ <\ length)\ \{}
+\DoxyCodeLine{00624\ \ \ \ \ num\_read\ +=\ read\_run(di,\ half\_complex);}
+\DoxyCodeLine{00625\ \ \ \}}
+\DoxyCodeLine{00626\ \ \ nassertr(num\_read\ ==\ length,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00627\ \ \ nassertr((\textcolor{keywordtype}{int})half\_complex.size()\ ==\ length,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00628\ }
+\DoxyCodeLine{00629\ \ \ \textcolor{keywordtype}{int}\ fft\_length\ =\ length\ /\ 2\ +\ 1;}
+\DoxyCodeLine{00630\ \ \ fftw\_complex\ *fft\_bins\ =\ (fftw\_complex\ *)alloca(fft\_length\ *\ \textcolor{keyword}{sizeof}(fftw\_complex));}
+\DoxyCodeLine{00631\ }
+\DoxyCodeLine{00632\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00633\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ fft\_length;\ i++)\ \{}
+\DoxyCodeLine{00634\ \ \ \ \ \textcolor{keywordtype}{double}\ scale\_factor\ =\ get\_scale\_factor(i,\ fft\_length);}
+\DoxyCodeLine{00635\ }
+\DoxyCodeLine{00636\ \ \ \ \ \textcolor{comment}{//\ For\ an\ explanation\ of\ this,\ see\ the\ compression\ code's\ comment\ about\ the}}
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{comment}{//\ halfcomplex\ format.}}
+\DoxyCodeLine{00638\ }
+\DoxyCodeLine{00639\ \ \ \ \ fft\_bins[i][0]\ =\ half\_complex[i]\ *\ scale\_factor;}
+\DoxyCodeLine{00640\ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ ==\ 0)\ \{}
+\DoxyCodeLine{00641\ \ \ \ \ \ \ \textcolor{comment}{//\ First\ bin\ doesn't\ store\ imaginary\ component}}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ fft\_bins[i][1]\ =\ 0.0;}
+\DoxyCodeLine{00643\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((i\ ==\ fft\_length\ -\/\ 1)\ \&\&\ !(length\ \&\ 1))\ \{}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ \textcolor{comment}{//\ Last\ bin\ doesn't\ store\ imaginary\ component\ with\ even\ lengths}}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ fft\_bins[i][1]\ =\ 0.0;}
+\DoxyCodeLine{00646\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ fft\_bins[i][1]\ =\ half\_complex[length\ -\/\ i]\ *\ scale\_factor;}
+\DoxyCodeLine{00648\ \ \ \ \ \}}
+\DoxyCodeLine{00649\ \ \ \}}
+\DoxyCodeLine{00650\ }
+\DoxyCodeLine{00651\ \ \ \textcolor{comment}{//\ This\ is\ for\ an\ in-\/place\ transform.\ It\ doesn't\ violate\ strict\ aliasing}}
+\DoxyCodeLine{00652\ \ \ \textcolor{comment}{//\ rules\ because\ \&fft\_bins[0][0]\ is\ still\ a\ double\ pointer.\ This\ saves\ on}}
+\DoxyCodeLine{00653\ \ \ \textcolor{comment}{//\ precious\ stack\ space.}}
+\DoxyCodeLine{00654\ \ \ \textcolor{keywordtype}{double}\ *data\ =\ \&fft\_bins[0][0];}
+\DoxyCodeLine{00655\ }
+\DoxyCodeLine{00656\ \ \ \textcolor{comment}{//\ Note:\ This\ is\ an\ in-\/place\ DFT.\ \`{}data`\ and\ \`{}fft\_bins`\ are\ aliases.}}
+\DoxyCodeLine{00657\ \ \ fftw\_plan\ plan\ =\ get\_real\_decompress\_plan(length);}
+\DoxyCodeLine{00658\ \ \ fftw\_execute\_dft\_c2r(plan,\ fft\_bins,\ data);}
+\DoxyCodeLine{00659\ }
+\DoxyCodeLine{00660\ \ \ \textcolor{keywordtype}{double}\ scale\ =\ 1.0\ /\ (double)length;}
+\DoxyCodeLine{00661\ \ \ array.reserve(array.size()\ +\ length);}
+\DoxyCodeLine{00662\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00663\ \ \ \ \ array.push\_back(data[i]\ *\ scale);}
+\DoxyCodeLine{00664\ \ \ \}}
+\DoxyCodeLine{00665\ }
+\DoxyCodeLine{00666\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00667\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00668\ \}}
+\DoxyCodeLine{00669\ }
+\DoxyCodeLine{00680\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFFTCompressor_a2e5f1f242aa11d39af0a111739d8c3da}{FFTCompressor::}}}
+\DoxyCodeLine{00681\ \mbox{\hyperlink{classFFTCompressor_a2e5f1f242aa11d39af0a111739d8c3da}{read\_hprs}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&di,\ \mbox{\hyperlink{classpvector}{pvector<LVecBase3>}}\ \&array,\ \textcolor{keywordtype}{bool}\ new\_hpr)\ \{}
+\DoxyCodeLine{00682\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00683\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ >=\ 104)\ \{}
+\DoxyCodeLine{00684\ \ \ \ \ \textcolor{comment}{//\ If\ quality\ level\ is\ at\ least\ 104,\ we\ don't\ even\ convert\ hpr\ to\ quat.}}
+\DoxyCodeLine{00685\ \ \ \ \ \textcolor{comment}{//\ This\ is\ just\ for\ debugging.}}
+\DoxyCodeLine{00686\ \ \ \ \ vector\_stdfloat\ h,\ p,\ r;}
+\DoxyCodeLine{00687\ \ \ \ \ \textcolor{keywordtype}{bool}\ okflag\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00688\ \ \ \ \ okflag\ =}
+\DoxyCodeLine{00689\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ h)\ \&\&}
+\DoxyCodeLine{00690\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ p)\ \&\&}
+\DoxyCodeLine{00691\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ r);}
+\DoxyCodeLine{00692\ }
+\DoxyCodeLine{00693\ \ \ \ \ \textcolor{keywordflow}{if}\ (okflag)\ \{}
+\DoxyCodeLine{00694\ \ \ \ \ \ \ nassertr(h.size()\ ==\ p.size()\ \&\&\ p.size()\ ==\ r.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (int)h.size();\ i++)\ \{}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ \ \ array.push\_back(LVecBase3(h[i],\ p[i],\ r[i]));}
+\DoxyCodeLine{00697\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00698\ \ \ \ \ \}}
+\DoxyCodeLine{00699\ }
+\DoxyCodeLine{00700\ \ \ \ \ \textcolor{keywordflow}{return}\ okflag;}
+\DoxyCodeLine{00701\ \ \ \}}
+\DoxyCodeLine{00702\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ >=\ 103)\ \{}
+\DoxyCodeLine{00703\ \ \ \ \ \textcolor{comment}{//\ If\ quality\ level\ is\ 103,\ we\ read\ in\ a\ table\ of\ 3x3\ rotation\ matrices.}}
+\DoxyCodeLine{00704\ \ \ \ \ \textcolor{comment}{//\ This\ is\ just\ for\ debugging.}}
+\DoxyCodeLine{00705\ \ \ \ \ vector\_stdfloat}
+\DoxyCodeLine{00706\ \ \ \ \ \ \ m00,\ m01,\ m02,}
+\DoxyCodeLine{00707\ \ \ \ \ \ \ m10,\ m11,\ m12,}
+\DoxyCodeLine{00708\ \ \ \ \ \ \ m20,\ m21,\ m22;}
+\DoxyCodeLine{00709\ \ \ \ \ \textcolor{keywordtype}{bool}\ okflag\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00710\ \ \ \ \ okflag\ =}
+\DoxyCodeLine{00711\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ m00)\ \&\&}
+\DoxyCodeLine{00712\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ m01)\ \&\&}
+\DoxyCodeLine{00713\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ m02)\ \&\&}
+\DoxyCodeLine{00714\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ m10)\ \&\&}
+\DoxyCodeLine{00715\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ m11)\ \&\&}
+\DoxyCodeLine{00716\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ m12)\ \&\&}
+\DoxyCodeLine{00717\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ m20)\ \&\&}
+\DoxyCodeLine{00718\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ m21)\ \&\&}
+\DoxyCodeLine{00719\ \ \ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ m22);}
+\DoxyCodeLine{00720\ }
+\DoxyCodeLine{00721\ \ \ \ \ \textcolor{keywordflow}{if}\ (okflag)\ \{}
+\DoxyCodeLine{00722\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (int)m00.size();\ i++)\ \{}
+\DoxyCodeLine{00723\ \ \ \ \ \ \ \ \ LMatrix3\ mat(m00[i],\ m01[i],\ m02[i],}
+\DoxyCodeLine{00724\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ m10[i],\ m11[i],\ m12[i],}
+\DoxyCodeLine{00725\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ m20[i],\ m21[i],\ m22[i]);}
+\DoxyCodeLine{00726\ \ \ \ \ \ \ \ \ LVecBase3\ scale,\ shear,\ hpr;}
+\DoxyCodeLine{00727\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_hpr)\ \{}
+\DoxyCodeLine{00728\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{compose__matrix__src_8cxx_a499c787e84555f9a09c93f526b7dbc0d}{decompose\_matrix}}(mat,\ scale,\ shear,\ hpr);}
+\DoxyCodeLine{00729\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00730\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{compose__matrix__src_8cxx_a3b7d21ab923581cf44804fdbbd5debab}{decompose\_matrix\_old\_hpr}}(mat,\ scale,\ shear,\ hpr);}
+\DoxyCodeLine{00731\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00732\ \ \ \ \ \ \ \ \ array.push\_back(hpr);}
+\DoxyCodeLine{00733\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00734\ \ \ \ \ \}}
+\DoxyCodeLine{00735\ }
+\DoxyCodeLine{00736\ \ \ \ \ \textcolor{keywordflow}{return}\ okflag;}
+\DoxyCodeLine{00737\ \ \ \}}
+\DoxyCodeLine{00738\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00739\ }
+\DoxyCodeLine{00740\ \ \ vector\_stdfloat\ qr,\ qi,\ qj,\ qk;}
+\DoxyCodeLine{00741\ }
+\DoxyCodeLine{00742\ \ \ \textcolor{keywordtype}{bool}\ okflag\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00743\ }
+\DoxyCodeLine{00744\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00745\ \ \ \textcolor{keywordflow}{if}\ (\_quality\ >=\ 102)\ \{}
+\DoxyCodeLine{00746\ \ \ \ \ okflag\ =\ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ qr);}
+\DoxyCodeLine{00747\ \ \ \}}
+\DoxyCodeLine{00748\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00749\ }
+\DoxyCodeLine{00750\ \ \ okflag\ =}
+\DoxyCodeLine{00751\ \ \ \ \ okflag\ \&\&}
+\DoxyCodeLine{00752\ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ qi)\ \&\&}
+\DoxyCodeLine{00753\ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ qj)\ \&\&}
+\DoxyCodeLine{00754\ \ \ \ \ \mbox{\hyperlink{classFFTCompressor_a1be8ffd0b57154f9e36b163ebb85f2d0}{read\_reals}}(di,\ qk);}
+\DoxyCodeLine{00755\ }
+\DoxyCodeLine{00756\ \ \ \textcolor{keywordflow}{if}\ (okflag)\ \{}
+\DoxyCodeLine{00757\ \ \ \ \ nassertr(qi.size()\ ==\ qj.size()\ \&\&\ qj.size()\ ==\ qk.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00758\ }
+\DoxyCodeLine{00759\ \ \ \ \ array.reserve(array.size()\ +\ qi.size());}
+\DoxyCodeLine{00760\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (int)qi.size();\ i++)\ \{}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ LOrientation\ rot;}
+\DoxyCodeLine{00762\ }
+\DoxyCodeLine{00763\ \ \ \ \ \ \ \textcolor{comment}{//\ Infer\ the\ r\ component\ from\ the\ remaining\ three.}}
+\DoxyCodeLine{00764\ \ \ \ \ \ \ PN\_stdfloat\ qr2\ =\ 1.0\ -\/\ (qi[i]\ *\ qi[i]\ +\ qj[i]\ *\ qj[i]\ +\ qk[i]\ *\ qk[i]);}
+\DoxyCodeLine{00765\ \ \ \ \ \ \ PN\_stdfloat\ qr1\ =\ qr2\ <\ 0.0\ ?\ 0.0\ :\ sqrtf(qr2);}
+\DoxyCodeLine{00766\ }
+\DoxyCodeLine{00767\ \ \ \ \ \ \ rot.set(qr1,\ qi[i],\ qj[i],\ qk[i]);}
+\DoxyCodeLine{00768\ }
+\DoxyCodeLine{00769\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00770\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_quality\ >=\ 102)\ \{}
+\DoxyCodeLine{00771\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ written\ out\ all\ four\ components,\ use\ them.}}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \ \ rot[0]\ =\ qr[i];}
+\DoxyCodeLine{00773\ }
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!IS\_THRESHOLD\_EQUAL(qr[i],\ qr1,\ 0.001))\ \{}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ \ \ \ \ mathutil\_cat.warning()}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}qr["{}}\ <<\ i\ <<\ \textcolor{stringliteral}{"{}]\ =\ "{}}\ <<\ qr[i]\ <<\ \textcolor{stringliteral}{"{},\ qr1\ =\ "{}}\ <<\ qr1}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ diff\ is\ "{}}\ <<\ qr1\ -\/\ qr[i]\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00778\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00779\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00780\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00781\ }
+\DoxyCodeLine{00782\ \ \ \ \ \ \ rot.normalize();\ \ \ \ \ \ \textcolor{comment}{//\ Just\ for\ good\ measure.}}
+\DoxyCodeLine{00783\ }
+\DoxyCodeLine{00784\ \ \ \ \ \ \ LMatrix3\ mat;}
+\DoxyCodeLine{00785\ \ \ \ \ \ \ rot.extract\_to\_matrix(mat);}
+\DoxyCodeLine{00786\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_transpose\_quats)\ \{}
+\DoxyCodeLine{00787\ \ \ \ \ \ \ \ \ mat.transpose\_in\_place();}
+\DoxyCodeLine{00788\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00789\ \ \ \ \ \ \ LVecBase3\ scale,\ shear,\ hpr;}
+\DoxyCodeLine{00790\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_hpr)\ \{}
+\DoxyCodeLine{00791\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{compose__matrix__src_8cxx_a499c787e84555f9a09c93f526b7dbc0d}{decompose\_matrix}}(mat,\ scale,\ shear,\ hpr);}
+\DoxyCodeLine{00792\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00793\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{compose__matrix__src_8cxx_a3b7d21ab923581cf44804fdbbd5debab}{decompose\_matrix\_old\_hpr}}(mat,\ scale,\ shear,\ hpr);}
+\DoxyCodeLine{00794\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00795\ \ \ \ \ \ \ array.push\_back(hpr);}
+\DoxyCodeLine{00796\ \ \ \ \ \}}
+\DoxyCodeLine{00797\ \ \ \}}
+\DoxyCodeLine{00798\ }
+\DoxyCodeLine{00799\ \ \ \textcolor{keywordflow}{return}\ okflag;}
+\DoxyCodeLine{00800\ \}}
+\DoxyCodeLine{00801\ }
+\DoxyCodeLine{00807\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFFTCompressor_a2e5f1f242aa11d39af0a111739d8c3da}{FFTCompressor::}}}
+\DoxyCodeLine{00808\ \mbox{\hyperlink{classFFTCompressor_a2e5f1f242aa11d39af0a111739d8c3da}{read\_hprs}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&di,\ \mbox{\hyperlink{classpvector}{pvector<LVecBase3>}}\ \&array)\ \{}
+\DoxyCodeLine{00809\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classFFTCompressor_a2e5f1f242aa11d39af0a111739d8c3da}{read\_hprs}}(di,\ array,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00810\ \}}
+\DoxyCodeLine{00811\ }
+\DoxyCodeLine{00812\ }
+\DoxyCodeLine{00819\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFFTCompressor_a14c0fe73ea0e578b85e1ecdb3f33f936}{FFTCompressor::}}}
+\DoxyCodeLine{00820\ \mbox{\hyperlink{classFFTCompressor_a14c0fe73ea0e578b85e1ecdb3f33f936}{free\_storage}}()\ \{}
+\DoxyCodeLine{00821\ \textcolor{preprocessor}{\#ifdef\ HAVE\_FFTW}}
+\DoxyCodeLine{00822\ \ \ RealPlans::iterator\ pi;}
+\DoxyCodeLine{00823\ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ \_real\_compress\_plans.begin();}
+\DoxyCodeLine{00824\ \ \ \ \ \ \ \ pi\ !=\ \_real\_compress\_plans.end();}
+\DoxyCodeLine{00825\ \ \ \ \ \ \ \ ++pi)\ \{}
+\DoxyCodeLine{00826\ \ \ \ \ fftw\_destroy\_plan((*pi).second);}
+\DoxyCodeLine{00827\ \ \ \}}
+\DoxyCodeLine{00828\ \ \ \_real\_compress\_plans.clear();}
+\DoxyCodeLine{00829\ }
+\DoxyCodeLine{00830\ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ \_real\_decompress\_plans.begin();}
+\DoxyCodeLine{00831\ \ \ \ \ \ \ \ pi\ !=\ \_real\_decompress\_plans.end();}
+\DoxyCodeLine{00832\ \ \ \ \ \ \ \ ++pi)\ \{}
+\DoxyCodeLine{00833\ \ \ \ \ fftw\_destroy\_plan((*pi).second);}
+\DoxyCodeLine{00834\ \ \ \}}
+\DoxyCodeLine{00835\ \ \ \_real\_decompress\_plans.clear();}
+\DoxyCodeLine{00836\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00837\ \}}
+\DoxyCodeLine{00838\ }
+\DoxyCodeLine{00843\ \textcolor{keywordtype}{int}\ FFTCompressor::}
+\DoxyCodeLine{00844\ write\_run(\mbox{\hyperlink{classDatagram}{Datagram}}\ \&datagram,\ FFTCompressor::RunWidth\ run\_width,}
+\DoxyCodeLine{00845\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ vector\_double\ \&run)\ \{}
+\DoxyCodeLine{00846\ \ \ \textcolor{keywordflow}{if}\ (run.empty())\ \{}
+\DoxyCodeLine{00847\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00848\ \ \ \}}
+\DoxyCodeLine{00849\ \ \ nassertr(run\_width\ !=\ RW\_invalid,\ 0);}
+\DoxyCodeLine{00850\ }
+\DoxyCodeLine{00851\ \ \ \textcolor{keywordflow}{if}\ (run\_width\ !=\ RW\_double)\ \{}
+\DoxyCodeLine{00852\ \ \ \ \ \textcolor{comment}{//\ If\ the\ width\ is\ anything\ other\ than\ RW\_double,\ we\ write\ a\ single\ byte}}
+\DoxyCodeLine{00853\ \ \ \ \ \textcolor{comment}{//\ indicating\ the\ width\ and\ length\ of\ the\ upcoming\ run.}}
+\DoxyCodeLine{00854\ }
+\DoxyCodeLine{00855\ \ \ \ \ \textcolor{keywordflow}{if}\ (run.size()\ <=\ RW\_length\_mask\ \&\&}
+\DoxyCodeLine{00856\ \ \ \ \ \ \ \ \ ((\textcolor{keywordtype}{int})run\_width\ |\ run.size())\ !=\ RW\_double)\ \{}
+\DoxyCodeLine{00857\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ there\ are\ enough\ bits\ remaining\ in\ the\ byte,\ use\ them\ to\ indicate}}
+\DoxyCodeLine{00858\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ length\ of\ the\ run.\ \ We\ have\ to\ be\ a\ little\ careful,\ however,\ not}}
+\DoxyCodeLine{00859\ \ \ \ \ \ \ \textcolor{comment}{//\ to\ accidentally\ write\ a\ byte\ that\ looks\ like\ an\ RW\_double\ flag.}}
+\DoxyCodeLine{00860\ \ \ \ \ \ \ datagram.add\_uint8((\textcolor{keywordtype}{int})run\_width\ |\ run.size());}
+\DoxyCodeLine{00861\ }
+\DoxyCodeLine{00862\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00863\ \ \ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ write\ zero\ as\ the\ length,\ to\ indicate\ that\ we'll\ write\ the}}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ \textcolor{comment}{//\ actual\ length\ in\ the\ following\ 16-\/bit\ word.}}
+\DoxyCodeLine{00865\ \ \ \ \ \ \ datagram.add\_uint8(run\_width);}
+\DoxyCodeLine{00866\ }
+\DoxyCodeLine{00867\ \ \ \ \ \ \ \textcolor{comment}{//\ Assuming,\ of\ course,\ that\ the\ length\ fits\ within\ 16\ bits.}}
+\DoxyCodeLine{00868\ \ \ \ \ \ \ nassertr(run.size()\ <\ 65536,\ 0);}
+\DoxyCodeLine{00869\ \ \ \ \ \ \ nassertr(run.size()\ !=\ 0,\ 0);}
+\DoxyCodeLine{00870\ }
+\DoxyCodeLine{00871\ \ \ \ \ \ \ datagram.add\_uint16(run.size());}
+\DoxyCodeLine{00872\ \ \ \ \ \}}
+\DoxyCodeLine{00873\ \ \ \}}
+\DoxyCodeLine{00874\ }
+\DoxyCodeLine{00875\ \ \ \textcolor{comment}{//\ Now\ write\ the\ data\ itself.}}
+\DoxyCodeLine{00876\ \ \ vector\_double::const\_iterator\ ri;}
+\DoxyCodeLine{00877\ \ \ \textcolor{keywordflow}{switch}\ (run\_width)\ \{}
+\DoxyCodeLine{00878\ \ \ \textcolor{keywordflow}{case}\ RW\_0:}
+\DoxyCodeLine{00879\ \ \ \ \ \textcolor{comment}{//\ If\ it's\ a\ string\ of\ zeroes,\ we're\ done!}}
+\DoxyCodeLine{00880\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00881\ }
+\DoxyCodeLine{00882\ \ \ \textcolor{keywordflow}{case}\ RW\_8:}
+\DoxyCodeLine{00883\ \ \ \ \ \textcolor{keywordflow}{for}\ (ri\ =\ run.begin();\ ri\ !=\ run.end();\ ++ri)\ \{}
+\DoxyCodeLine{00884\ \ \ \ \ \ \ datagram.add\_int8((\textcolor{keywordtype}{int})*ri);}
+\DoxyCodeLine{00885\ \ \ \ \ \}}
+\DoxyCodeLine{00886\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00887\ }
+\DoxyCodeLine{00888\ \ \ \textcolor{keywordflow}{case}\ RW\_16:}
+\DoxyCodeLine{00889\ \ \ \ \ \textcolor{keywordflow}{for}\ (ri\ =\ run.begin();\ ri\ !=\ run.end();\ ++ri)\ \{}
+\DoxyCodeLine{00890\ \ \ \ \ \ \ datagram.add\_int16((\textcolor{keywordtype}{int})*ri);}
+\DoxyCodeLine{00891\ \ \ \ \ \}}
+\DoxyCodeLine{00892\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00893\ }
+\DoxyCodeLine{00894\ \ \ \textcolor{keywordflow}{case}\ RW\_32:}
+\DoxyCodeLine{00895\ \ \ \ \ \textcolor{keywordflow}{for}\ (ri\ =\ run.begin();\ ri\ !=\ run.end();\ ++ri)\ \{}
+\DoxyCodeLine{00896\ \ \ \ \ \ \ datagram.add\_int32((\textcolor{keywordtype}{int})*ri);}
+\DoxyCodeLine{00897\ \ \ \ \ \}}
+\DoxyCodeLine{00898\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00899\ }
+\DoxyCodeLine{00900\ \ \ \textcolor{keywordflow}{case}\ RW\_double:}
+\DoxyCodeLine{00901\ \ \ \ \ \textcolor{keywordflow}{for}\ (ri\ =\ run.begin();\ ri\ !=\ run.end();\ ++ri)\ \{}
+\DoxyCodeLine{00902\ \ \ \ \ \ \ \textcolor{comment}{//\ In\ the\ case\ of\ RW\_double,\ we\ only\ write\ the\ numbers\ one\ at\ a\ time,}}
+\DoxyCodeLine{00903\ \ \ \ \ \ \ \textcolor{comment}{//\ each\ time\ preceded\ by\ the\ RW\_double\ flag.\ \ Hopefully\ this\ will\ happen}}
+\DoxyCodeLine{00904\ \ \ \ \ \ \ \textcolor{comment}{//\ only\ rarely.}}
+\DoxyCodeLine{00905\ \ \ \ \ \ \ datagram.add\_int8((int8\_t)RW\_double);}
+\DoxyCodeLine{00906\ \ \ \ \ \ \ datagram.add\_float64(*ri);}
+\DoxyCodeLine{00907\ \ \ \ \ \}}
+\DoxyCodeLine{00908\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00909\ }
+\DoxyCodeLine{00910\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00911\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00912\ \ \ \}}
+\DoxyCodeLine{00913\ }
+\DoxyCodeLine{00914\ \ \ \textcolor{keywordflow}{return}\ run.size();}
+\DoxyCodeLine{00915\ \}}
+\DoxyCodeLine{00916\ }
+\DoxyCodeLine{00923\ \textcolor{keywordtype}{int}\ FFTCompressor::}
+\DoxyCodeLine{00924\ read\_run(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&di,\ vector\_double\ \&run)\ \{}
+\DoxyCodeLine{00925\ \ \ uint8\_t\ start\ =\ di.get\_uint8();}
+\DoxyCodeLine{00926\ \ \ RunWidth\ run\_width;}
+\DoxyCodeLine{00927\ \ \ \textcolor{keywordtype}{int}\ length;}
+\DoxyCodeLine{00928\ }
+\DoxyCodeLine{00929\ \ \ \textcolor{keywordflow}{if}\ ((start\ \&\ 0xff)\ ==\ RW\_double)\ \{}
+\DoxyCodeLine{00930\ \ \ \ \ \textcolor{comment}{//\ RW\_double\ is\ a\ special\ case,\ and\ requires\ the\ whole\ byte.\ \ In\ this}}
+\DoxyCodeLine{00931\ \ \ \ \ \textcolor{comment}{//\ case,\ we\ don't\ encode\ a\ length,\ but\ assume\ it's\ only\ one.}}
+\DoxyCodeLine{00932\ \ \ \ \ run\_width\ =\ RW\_double;}
+\DoxyCodeLine{00933\ \ \ \ \ length\ =\ 1;}
+\DoxyCodeLine{00934\ }
+\DoxyCodeLine{00935\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00936\ \ \ \ \ run\_width\ =\ (RunWidth)(start\ \&\ RW\_width\_mask);}
+\DoxyCodeLine{00937\ \ \ \ \ length\ =\ start\ \&\ RW\_length\_mask;}
+\DoxyCodeLine{00938\ \ \ \}}
+\DoxyCodeLine{00939\ }
+\DoxyCodeLine{00940\ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0)\ \{}
+\DoxyCodeLine{00941\ \ \ \ \ \textcolor{comment}{//\ If\ the\ length\ was\ zero,\ it\ means\ the\ actual\ length\ follows\ as\ a\ 16-\/bit}}
+\DoxyCodeLine{00942\ \ \ \ \ \textcolor{comment}{//\ word.}}
+\DoxyCodeLine{00943\ \ \ \ \ length\ =\ di.get\_uint16();}
+\DoxyCodeLine{00944\ \ \ \}}
+\DoxyCodeLine{00945\ \ \ nassertr(length\ !=\ 0,\ 0);}
+\DoxyCodeLine{00946\ }
+\DoxyCodeLine{00947\ \ \ run.reserve(run.size()\ +\ length);}
+\DoxyCodeLine{00948\ }
+\DoxyCodeLine{00949\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00950\ \ \ \textcolor{keywordflow}{switch}\ (run\_width)\ \{}
+\DoxyCodeLine{00951\ \ \ \textcolor{keywordflow}{case}\ RW\_0:}
+\DoxyCodeLine{00952\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00953\ \ \ \ \ \ \ run.push\_back(0.0);}
+\DoxyCodeLine{00954\ \ \ \ \ \}}
+\DoxyCodeLine{00955\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00956\ }
+\DoxyCodeLine{00957\ \ \ \textcolor{keywordflow}{case}\ RW\_8:}
+\DoxyCodeLine{00958\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00959\ \ \ \ \ \ \ run.push\_back((\textcolor{keywordtype}{double})(\textcolor{keywordtype}{int})di.get\_int8());}
+\DoxyCodeLine{00960\ \ \ \ \ \}}
+\DoxyCodeLine{00961\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00962\ }
+\DoxyCodeLine{00963\ \ \ \textcolor{keywordflow}{case}\ RW\_16:}
+\DoxyCodeLine{00964\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00965\ \ \ \ \ \ \ run.push\_back((\textcolor{keywordtype}{double})(\textcolor{keywordtype}{int})di.get\_int16());}
+\DoxyCodeLine{00966\ \ \ \ \ \}}
+\DoxyCodeLine{00967\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00968\ }
+\DoxyCodeLine{00969\ \ \ \textcolor{keywordflow}{case}\ RW\_32:}
+\DoxyCodeLine{00970\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00971\ \ \ \ \ \ \ run.push\_back((\textcolor{keywordtype}{double})(\textcolor{keywordtype}{int})di.get\_int32());}
+\DoxyCodeLine{00972\ \ \ \ \ \}}
+\DoxyCodeLine{00973\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00974\ }
+\DoxyCodeLine{00975\ \ \ \textcolor{keywordflow}{case}\ RW\_double:}
+\DoxyCodeLine{00976\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{00977\ \ \ \ \ \ \ run.push\_back(di.get\_float64());}
+\DoxyCodeLine{00978\ \ \ \ \ \}}
+\DoxyCodeLine{00979\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00980\ }
+\DoxyCodeLine{00981\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00982\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00983\ \ \ \}}
+\DoxyCodeLine{00984\ }
+\DoxyCodeLine{00985\ \ \ \textcolor{keywordflow}{return}\ length;}
+\DoxyCodeLine{00986\ \}}
+\DoxyCodeLine{00987\ }
+\DoxyCodeLine{00995\ \textcolor{keywordtype}{double}\ FFTCompressor::}
+\DoxyCodeLine{00996\ get\_scale\_factor(\textcolor{keywordtype}{int}\ i,\ \textcolor{keywordtype}{int}\ length)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00997\ \ \ nassertr(i\ <\ length,\ 1.0);}
+\DoxyCodeLine{00998\ }
+\DoxyCodeLine{00999\ \ \ \textcolor{keywordflow}{return}\ \_fft\_offset\ +}
+\DoxyCodeLine{01000\ \ \ \ \ \_fft\_factor\ *\ pow((\textcolor{keywordtype}{double})(length\ -\/\ i)\ /\ (\textcolor{keywordtype}{double})(length),\ \_fft\_exponent);}
+\DoxyCodeLine{01001\ \}}
+\DoxyCodeLine{01002\ }
+\DoxyCodeLine{01007\ \textcolor{keywordtype}{double}\ FFTCompressor::}
+\DoxyCodeLine{01008\ interpolate(\textcolor{keywordtype}{double}\ t,\ \textcolor{keywordtype}{double}\ a,\ \textcolor{keywordtype}{double}\ b)\ \{}
+\DoxyCodeLine{01009\ \ \ \textcolor{keywordflow}{return}\ a\ +\ t\ *\ (b\ -\/\ a);}
+\DoxyCodeLine{01010\ \}}
+\DoxyCodeLine{01011\ }
+\DoxyCodeLine{01017\ PN\_stdfloat\ FFTCompressor::}
+\DoxyCodeLine{01018\ get\_compressability(\textcolor{keyword}{const}\ PN\_stdfloat\ *data,\ \textcolor{keywordtype}{int}\ length)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01019\ \ \ \textcolor{comment}{//\ The\ result\ returned\ is\ actually\ the\ standard\ deviation\ of\ the\ table\ of}}
+\DoxyCodeLine{01020\ \ \ \textcolor{comment}{//\ deltas\ between\ consecutive\ frames.\ \ This\ number\ is\ larger\ if\ the\ frames}}
+\DoxyCodeLine{01021\ \ \ \textcolor{comment}{//\ have\ wildly\ different\ values.}}
+\DoxyCodeLine{01022\ }
+\DoxyCodeLine{01023\ \ \ \textcolor{keywordflow}{if}\ (length\ <=\ 2)\ \{}
+\DoxyCodeLine{01024\ \ \ \ \ \textcolor{keywordflow}{return}\ 0.0;}
+\DoxyCodeLine{01025\ \ \ \}}
+\DoxyCodeLine{01026\ }
+\DoxyCodeLine{01027\ \ \ PN\_stdfloat\ sum\ =\ 0.0;}
+\DoxyCodeLine{01028\ \ \ PN\_stdfloat\ sum2\ =\ 0.0;}
+\DoxyCodeLine{01029\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 1;\ i\ <\ length;\ i++)\ \{}
+\DoxyCodeLine{01030\ \ \ \ \ PN\_stdfloat\ delta\ =\ data[i]\ -\/\ data[i\ -\/\ 1];}
+\DoxyCodeLine{01031\ }
+\DoxyCodeLine{01032\ \ \ \ \ sum\ +=\ delta;}
+\DoxyCodeLine{01033\ \ \ \ \ sum2\ +=\ delta\ *\ delta;}
+\DoxyCodeLine{01034\ \ \ \}}
+\DoxyCodeLine{01035\ \ \ PN\_stdfloat\ variance\ =\ (sum2\ -\/\ (sum\ *\ sum)\ /\ (length\ -\/\ 1))\ /\ (length\ -\/\ 2);}
+\DoxyCodeLine{01036\ \ \ \textcolor{keywordflow}{if}\ (variance\ <\ 0.0)\ \{}
+\DoxyCodeLine{01037\ \ \ \ \ \textcolor{comment}{//\ This\ can\ only\ happen\ due\ to\ tiny\ roundoff\ error.}}
+\DoxyCodeLine{01038\ \ \ \ \ \textcolor{keywordflow}{return}\ 0.0;}
+\DoxyCodeLine{01039\ \ \ \}}
+\DoxyCodeLine{01040\ }
+\DoxyCodeLine{01041\ \ \ PN\_stdfloat\ std\_deviation\ =\ csqrt(variance);}
+\DoxyCodeLine{01042\ }
+\DoxyCodeLine{01043\ \ \ \textcolor{keywordflow}{return}\ std\_deviation;}
+\DoxyCodeLine{01044\ \}}
+\DoxyCodeLine{01045\ }
+\DoxyCodeLine{01046\ }
+\DoxyCodeLine{01047\ }
+\DoxyCodeLine{01048\ \textcolor{preprocessor}{\#ifdef\ HAVE\_FFTW}}
+\DoxyCodeLine{01049\ }
+\DoxyCodeLine{01054\ \textcolor{keyword}{static}\ fftw\_plan}
+\DoxyCodeLine{01055\ get\_real\_compress\_plan(\textcolor{keywordtype}{int}\ length)\ \{}
+\DoxyCodeLine{01056\ \ \ RealPlans::iterator\ pi;}
+\DoxyCodeLine{01057\ \ \ pi\ =\ \_real\_compress\_plans.find(length);}
+\DoxyCodeLine{01058\ \ \ \textcolor{keywordflow}{if}\ (pi\ !=\ \_real\_compress\_plans.end())\ \{}
+\DoxyCodeLine{01059\ \ \ \ \ \textcolor{keywordflow}{return}\ (*pi).second;}
+\DoxyCodeLine{01060\ \ \ \}}
+\DoxyCodeLine{01061\ }
+\DoxyCodeLine{01062\ \ \ fftw\_plan\ plan;}
+\DoxyCodeLine{01063\ \ \ plan\ =\ fftw\_plan\_dft\_r2c\_1d(length,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ FFTW\_ESTIMATE);}
+\DoxyCodeLine{01064\ \ \ \_real\_compress\_plans.insert(RealPlans::value\_type(length,\ plan));}
+\DoxyCodeLine{01065\ }
+\DoxyCodeLine{01066\ \ \ \textcolor{keywordflow}{return}\ plan;}
+\DoxyCodeLine{01067\ \}}
+\DoxyCodeLine{01068\ }
+\DoxyCodeLine{01073\ \textcolor{keyword}{static}\ fftw\_plan}
+\DoxyCodeLine{01074\ get\_real\_decompress\_plan(\textcolor{keywordtype}{int}\ length)\ \{}
+\DoxyCodeLine{01075\ \ \ RealPlans::iterator\ pi;}
+\DoxyCodeLine{01076\ \ \ pi\ =\ \_real\_decompress\_plans.find(length);}
+\DoxyCodeLine{01077\ \ \ \textcolor{keywordflow}{if}\ (pi\ !=\ \_real\_decompress\_plans.end())\ \{}
+\DoxyCodeLine{01078\ \ \ \ \ \textcolor{keywordflow}{return}\ (*pi).second;}
+\DoxyCodeLine{01079\ \ \ \}}
+\DoxyCodeLine{01080\ }
+\DoxyCodeLine{01081\ \ \ fftw\_plan\ plan;}
+\DoxyCodeLine{01082\ \ \ plan\ =\ fftw\_plan\_dft\_c2r\_1d(length,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ FFTW\_ESTIMATE);}
+\DoxyCodeLine{01083\ \ \ \_real\_decompress\_plans.insert(RealPlans::value\_type(length,\ plan));}
+\DoxyCodeLine{01084\ }
+\DoxyCodeLine{01085\ \ \ \textcolor{keywordflow}{return}\ plan;}
+\DoxyCodeLine{01086\ \}}
+\DoxyCodeLine{01087\ }
+\DoxyCodeLine{01088\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

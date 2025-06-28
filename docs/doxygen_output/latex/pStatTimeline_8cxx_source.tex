@@ -1,0 +1,827 @@
+\doxysection{p\+Stat\+Timeline.\+cxx}
+\hypertarget{pStatTimeline_8cxx_source}{}\label{pStatTimeline_8cxx_source}\index{pandatool/src/pstatserver/pStatTimeline.cxx@{pandatool/src/pstatserver/pStatTimeline.cxx}}
+\mbox{\hyperlink{pStatTimeline_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimeline_8h}{pStatTimeline.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatFrameData_8h}{pStatFrameData.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatCollectorDef_8h}{pStatCollectorDef.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{string__utils_8h}{string\_utils.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pstatclient_8h}{config\_pstatclient.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00026\ PStatTimeline::}
+\DoxyCodeLine{00027\ PStatTimeline(\mbox{\hyperlink{classPStatMonitor}{PStatMonitor}}\ *monitor,\ \textcolor{keywordtype}{int}\ xsize,\ \textcolor{keywordtype}{int}\ ysize)\ :}
+\DoxyCodeLine{00028\ \ \ \mbox{\hyperlink{classPStatGraph}{PStatGraph}}(monitor,\ xsize,\ ysize)}
+\DoxyCodeLine{00029\ \{}
+\DoxyCodeLine{00030\ \ \ \textcolor{comment}{//\ Default\ to\ 1\ millisecond\ per\ 10\ pixels.}}
+\DoxyCodeLine{00031\ \ \ \_time\_scale\ =\ 1\ /\ 10000.0;}
+\DoxyCodeLine{00032\ \ \ \_target\_time\_scale\ =\ \_time\_scale;}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \ \ \_guide\_bar\_units\ =\ GBU\_ms\ |\ GBU\_show\_units;}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \ \ \textcolor{comment}{//\ Load\ in\ the\ initial\ data,\ so\ that\ the\ user\ can\ see\ everything\ back\ to\ the}}
+\DoxyCodeLine{00037\ \ \ \textcolor{comment}{//\ beginning\ (or\ as\ far\ as\ pstats-\/history\ goes\ back\ to).}}
+\DoxyCodeLine{00038\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00039\ \ \ \textcolor{keywordflow}{if}\ (client\_data\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00040\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ row\_offset\ =\ 0;}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ \ \ \ \ \textcolor{comment}{//\ Ignore\ this\ nasty\ "{}inverted"{}\ collector,\ which\ messes\ up\ everything.}}
+\DoxyCodeLine{00043\ \ \ \ \ \_app\_collector\_index\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a4e9c17e266b3d4f9ff6ca8100eb9c85a}{find\_collector}}(\textcolor{stringliteral}{"{}App:Show\ code:General"{}});}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ thread\_index\ =\ 0;\ thread\_index\ <\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a37f031ee8fbaaa8c139ada02d19a1926}{get\_num\_threads}}();\ ++thread\_index)\ \{}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ \_threads.emplace\_back();}
+\DoxyCodeLine{00047\ \ \ \ \ \ \ ThreadRow\ \&thread\_row\ =\ \_threads.back();}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ thread\_row.\_row\_offset\ =\ row\_offset;}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!client\_data-\/>\mbox{\hyperlink{classPStatClientData_a191b7fe1a56515271c5829d870e48192}{has\_thread}}(thread\_index))\ \{}
+\DoxyCodeLine{00051\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00052\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00053\ \ \ \ \ \ \ thread\_row.\_visible\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00055\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatThreadData}{PStatThreadData}}\ *thread\_data\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a46e69042db6f96f3c5eb00990c904dc8}{get\_thread\_data}}(thread\_index);}
+\DoxyCodeLine{00056\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_data\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00057\ \ \ \ \ \ \ \ \ \_threads\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!thread\_data-\/>is\_empty())\ \{}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ oldest\_frame\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a89dad002af95b70bc102133dba62210c}{get\_oldest\_frame\_number}}();}
+\DoxyCodeLine{00061\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ latest\_frame\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a69bcce3d1e7df55590225f42c70d815c}{get\_latest\_frame\_number}}();}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00063\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ oldest\_start\_time\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a5530a369c1f4400afdbbb2659cdd99f2}{get\_frame}}(oldest\_frame).get\_start();}
+\DoxyCodeLine{00064\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ latest\_end\_time\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a5530a369c1f4400afdbbb2659cdd99f2}{get\_frame}}(latest\_frame).get\_end();}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_have\_start\_time)\ \{}
+\DoxyCodeLine{00067\ \ \ \ \ \ \ \ \ \ \ \ \ \_have\_start\_time\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \ \ \ \ \ \ \_lowest\_start\_time\ =\ oldest\_start\_time;}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \ \ \ \ \ \ \_lowest\_start\_time\ =\ std::min(\_lowest\_start\_time,\ oldest\_start\_time);}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ \ \ \ \ \_highest\_end\_time\ =\ std::max(\_highest\_end\_time,\ latest\_end\_time\ +\ \_clock\_skew);}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ frame\ =\ oldest\_frame;\ frame\ <=\ latest\_frame;\ ++frame)\ \{}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a4a22d1791dc1b5a468ba25810709e2bc}{has\_frame}}(frame))\ \{}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ update\_bars(thread\_index,\ frame);}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00083\ \ \ \ \ \ \ row\_offset\ +=\ thread\_row.\_rows.size()\ +\ 1;}
+\DoxyCodeLine{00084\ \ \ \ \ \}}
+\DoxyCodeLine{00085\ \ \ \}}
+\DoxyCodeLine{00086\ }
+\DoxyCodeLine{00087\ \ \ \_start\_time\ =\ \_lowest\_start\_time;}
+\DoxyCodeLine{00088\ \ \ \_target\_start\_time\ =\ \_start\_time;}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00090\ \ \ monitor-\/>\_timelines.insert(\textcolor{keyword}{this});}
+\DoxyCodeLine{00091\ \}}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00096\ PStatTimeline::}
+\DoxyCodeLine{00097\ \string~PStatTimeline()\ \{}
+\DoxyCodeLine{00098\ \ \ \_monitor-\/>\_timelines.erase(\textcolor{keyword}{this});}
+\DoxyCodeLine{00099\ \}}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00107\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_aebb2abcbcf418ce72ce39cb920abfd20}{PStatTimeline::}}}
+\DoxyCodeLine{00108\ \mbox{\hyperlink{classPStatTimeline_aebb2abcbcf418ce72ce39cb920abfd20}{new\_data}}(\textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{int}\ frame\_number)\ \{}
+\DoxyCodeLine{00109\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ \textcolor{keywordflow}{if}\ (client\_data\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00112\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatThreadData}{PStatThreadData}}\ *thread\_data\ =}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a46e69042db6f96f3c5eb00990c904dc8}{get\_thread\_data}}(thread\_index);}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_data\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a4a22d1791dc1b5a468ba25810709e2bc}{has\_frame}}(frame\_number))\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatFrameData}{PStatFrameData}}\ \&frame\_data\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a5530a369c1f4400afdbbb2659cdd99f2}{get\_frame}}(frame\_number);}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ frame\_start\ =\ frame\_data.get\_start()\ +\ \_clock\_skew;}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ frame\_end\ =\ frame\_data.get\_end()\ +\ \_clock\_skew;}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ ==\ 0\ \&\&\ \_app\_collector\_index\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \ \ \_app\_collector\_index\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a4e9c17e266b3d4f9ff6ca8100eb9c85a}{find\_collector}}(\textcolor{stringliteral}{"{}App:Show\ code:General"{}});}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_have\_start\_time)\ \{}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ \_start\_time\ =\ frame\_start;}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \ \ \_have\_start\_time\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \ \ \_lowest\_start\_time\ =\ \_start\_time;}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_start\_time\ <\ \_lowest\_start\_time)\ \{}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \ \ \_lowest\_start\_time\ =\ \_start\_time;}
+\DoxyCodeLine{00131\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (frame\_end\ >\ \_highest\_end\_time)\ \{}
+\DoxyCodeLine{00133\ \ \ \ \ \ \ \ \ \_highest\_end\_time\ =\ frame\_end;}
+\DoxyCodeLine{00134\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00136\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (thread\_index\ >=\ (\textcolor{keywordtype}{int})\_threads.size())\ \{}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \ \ \_threads\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_threads.size()\ ==\ 0)\ \{}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ \ \ \_threads.resize(1);}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ \ \ \_threads.resize(\_threads.size()\ +\ 1);}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \ \ \_threads[\_threads.size()\ -\/\ 1].\_row\_offset\ =}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \ \ \ \ \_threads[\_threads.size()\ -\/\ 2].\_row\_offset;}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_threads[\_threads.size()\ -\/\ 2].\_visible)\ \{}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \ \ \ \ \_threads[\_threads.size()\ -\/\ 1].\_row\_offset\ +=}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_threads[\_threads.size()\ -\/\ 2].\_rows.size()\ +\ 1;}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classPStatTimeline_a4f63e6a31db446dec7800d1041fac5c9}{update\_bars}}(thread\_index,\ frame\_number))\ \{}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ number\ of\ rows\ was\ changed.}}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Change\ the\ offset\ of\ all\ subsequent\ ThreadRows.}}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_1_1ThreadRow}{ThreadRow}}\ \&thread\_row\ =\ \_threads[thread\_index];}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ offset\ =\ thread\_row.\_row\_offset\ +\ thread\_row.\_rows.size()\ +\ 1;}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ ti\ =\ (\textcolor{keywordtype}{size\_t})(thread\_index\ +\ 1);\ ti\ <\ \_threads.size();\ ++ti)\ \{}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \ \ \_threads[ti].\_row\_offset\ =\ offset;}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_threads[ti].\_visible)\ \{}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \ \ \ \ offset\ +=\ \_threads[ti].\_rows.size()\ +\ 1;}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ \_threads\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_aefd1e4ff52de3ed11b1796f11e93f5b1}{normal\_guide\_bars}}();}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_a13943da3c863d75c1806c3dd7696c08e}{force\_redraw}}();}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (frame\_end\ >=\ \_start\_time\ ||\ frame\_start\ <=\ \_start\_time\ +\ get\_horizontal\_scale())\ \{}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_aefd1e4ff52de3ed11b1796f11e93f5b1}{normal\_guide\_bars}}();}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_affdf2cde98ec4fe9feb34369715131c4}{begin\_draw}}();}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ draw\_thread(thread\_index,\ frame\_start,\ frame\_end);}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_aed4e686a85add3c2d37170df3e21c3c2}{end\_draw}}();}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00172\ \ \ \ \ \}}
+\DoxyCodeLine{00173\ \ \ \}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00175\ \ \ \mbox{\hyperlink{classPStatTimeline_a718f5ba06d409c2336fd071b6bde8237}{idle}}();}
+\DoxyCodeLine{00176\ \}}
+\DoxyCodeLine{00177\ }
+\DoxyCodeLine{00183\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPStatTimeline_a4f63e6a31db446dec7800d1041fac5c9}{PStatTimeline::}}}
+\DoxyCodeLine{00184\ \mbox{\hyperlink{classPStatTimeline_a4f63e6a31db446dec7800d1041fac5c9}{update\_bars}}(\textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{int}\ frame\_number)\ \{}
+\DoxyCodeLine{00185\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00186\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatThreadData}{PStatThreadData}}\ *thread\_data\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a46e69042db6f96f3c5eb00990c904dc8}{get\_thread\_data}}(thread\_index);}
+\DoxyCodeLine{00187\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatFrameData}{PStatFrameData}}\ \&frame\_data\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a5530a369c1f4400afdbbb2659cdd99f2}{get\_frame}}(frame\_number);}
+\DoxyCodeLine{00188\ \ \ \mbox{\hyperlink{classPStatTimeline_1_1ThreadRow}{ThreadRow}}\ \&thread\_row\ =\ \_threads[thread\_index];}
+\DoxyCodeLine{00189\ \ \ thread\_row.\_label\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a5b905293fa940d70742612a4ec5a87f6}{get\_thread\_name}}(thread\_index);}
+\DoxyCodeLine{00190\ \ \ \textcolor{keywordtype}{bool}\ changed\_num\_rows\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00191\ }
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordflow}{if}\ (!thread\_row.\_visible)\ \{}
+\DoxyCodeLine{00193\ \ \ \ \ thread\_row.\_visible\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00194\ \ \ \ \ changed\_num\_rows\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00195\ \ \ \}}
+\DoxyCodeLine{00196\ }
+\DoxyCodeLine{00197\ \ \ \textcolor{comment}{//\ pair<int\ collector\_index,\ double\ start\_time>}}
+\DoxyCodeLine{00198\ \ \ \mbox{\hyperlink{classpvector}{pvector<std::pair<int,\ double>}}\ >\ stack;}
+\DoxyCodeLine{00199\ \ \ \textcolor{keywordtype}{bool}\ had\_children\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ \textcolor{keywordtype}{double}\ frame\_start\ =\ frame\_data.get\_start()\ +\ \_clock\_skew;}
+\DoxyCodeLine{00202\ \ \ \textcolor{keywordtype}{double}\ prev\ =\ frame\_start;}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00204\ \ \ \textcolor{comment}{//\ There\ may\ still\ be\ open\ collectors\ from\ the\ previous\ frame.\ \ Rebuild\ the}}
+\DoxyCodeLine{00205\ \ \ \textcolor{comment}{//\ stack\ based\ on\ that\ so\ we\ can\ close\ them\ properly.}}
+\DoxyCodeLine{00206\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ thread\_row.\_rows.size();\ ++i)\ \{}
+\DoxyCodeLine{00207\ \ \ \ \ \mbox{\hyperlink{classpvector}{Row}}\ \&row\ =\ thread\_row.\_rows[i];}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00209\ \ \ \ \ \textcolor{comment}{//\ Keep\ iterating\ from\ the\ back\ until\ we\ get\ to\ the\ previous\ frame.}}
+\DoxyCodeLine{00210\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ j\ =\ 0;\ j\ <\ row.size();\ ++j)\ \{}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_1_1ColorBar}{ColorBar}}\ \&bar\ =\ row[row.size()\ -\/\ j\ -\/\ 1];}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bar.\_frame\_number\ <\ frame\_number)\ \{}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Was\ this\ collector\ left\ unstopped\ at\ the\ end\ of\ the\ last\ frame?}}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bar.\_open\_end\ \&\&\ bar.\_frame\_number\ ==\ frame\_number\ -\/\ 1)\ \{}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ >=\ stack.size())\ \{}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \ \ \ \ stack.resize(i\ +\ 1,\ std::make\_pair(-\/1,\ 0.0));}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \ \ \ \ stack[i]\ =\ std::make\_pair(bar.\_collector\_index,\ bar.\_start);}
+\DoxyCodeLine{00219\ }
+\DoxyCodeLine{00220\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Remove\ this\ bar\ for\ now,\ we'll\ recreate\ it\ when\ we\ close\ it.}}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \ \ \ \ row.erase(row.begin()\ +\ (row.size()\ -\/\ j\ -\/\ 1));}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00225\ \ \ \ \ \}}
+\DoxyCodeLine{00226\ \ \ \}}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordtype}{size\_t}\ num\_events\ =\ frame\_data.get\_num\_events();}
+\DoxyCodeLine{00229\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ num\_events;\ ++i)\ \{}
+\DoxyCodeLine{00230\ \ \ \ \ \textcolor{keywordtype}{int}\ collector\_index\ =\ frame\_data.get\_time\_collector(i);}
+\DoxyCodeLine{00231\ \ \ \ \ \textcolor{keywordtype}{double}\ time\ =\ frame\_data.get\_time(i)\ +\ \_clock\_skew;}
+\DoxyCodeLine{00232\ }
+\DoxyCodeLine{00233\ \ \ \ \ \textcolor{keywordflow}{if}\ (time\ <\ prev)\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \textcolor{comment}{//\ Apparently,\ it\ is\ too\ hard\ to\ ask\ for\ monotonically\ increasing\ time}}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \textcolor{comment}{//\ values!\ \ Don't\ be\ tempted\ to\ sort\ the\ values,\ or\ think\ this\ is\ a\ bug,}}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ client\ can\ arbitrarily\ move\ back\ the\ clock\ if\ it\ feels\ like\ it!}}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \textcolor{comment}{//\ I\ had\ some\ fancy\ mechanism\ that\ handled\ clock\ skew\ properly\ for}}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \textcolor{comment}{//\ multiple\ out-\/of-\/order\ frames,\ but\ I\ gave\ up\ when\ I\ realised\ it's\ not}}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \textcolor{comment}{//\ possible\ to\ solve\ this\ problem\ for\ multiple\ threads,\ so\ we\ just\ assume}}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \textcolor{comment}{//\ this\ is\ done\ just\ once\ at\ startup\ before\ the\ other\ threads\ exist.}}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ delta\ =\ prev\ -\/\ time;}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \_clock\_skew\ +=\ delta;}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \_highest\_end\_time\ +=\ delta;}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ time\ =\ prev;}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}Correcting\ for\ clock\ skew\ of\ "{}}}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ \ \ \ <<\ \mbox{\hyperlink{classPStatGraph_aa9829b73ad4d9ce79092eafcb3202b57}{format\_number}}(delta,\ GBU\_show\_units\ |\ GBU\_ms)}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ in\ frame\ "{}}\ <<\ frame\_number\ <<\ \textcolor{stringliteral}{"{}\ of\ thread\ "{}}}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \ \ \ \ \ <<\ thread\_index\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \textcolor{comment}{//\ Move\ all\ bars\ after\ this\ frame\ to\ the\ right\ by\ this\ amount.}}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classPStatTimeline_1_1ThreadRow}{ThreadRow}}\ \&thread\_row\ :\ \_threads)\ \{}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classpvector}{Row}}\ \&row\ :\ thread\_row.\_rows)\ \{}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classPStatTimeline_1_1ColorBar}{ColorBar}}\ \&bar\ :\ row)\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bar.\_frame\_number\ >\ frame\_number)\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ bar.\_start\ +=\ delta;}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ bar.\_end\ +=\ delta;}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00261\ \ \ \ \ \}}
+\DoxyCodeLine{00262\ \ \ \ \ prev\ =\ time;}
+\DoxyCodeLine{00263\ }
+\DoxyCodeLine{00264\ \ \ \ \ \textcolor{keywordflow}{if}\ (collector\_index\ ==\ \_app\_collector\_index)\ \{}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00266\ \ \ \ \ \}}
+\DoxyCodeLine{00267\ }
+\DoxyCodeLine{00268\ \ \ \ \ \textcolor{keywordflow}{if}\ (frame\_data.is\_start(i))\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (collector\_index\ ==\ 0\ \&\&\ !stack.empty())\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Collector\ 0\ always\ goes\ at\ the\ top,\ no\ matter\ what.}}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ stack[0].first\ =\ 0;}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ stack[0].second\ =\ std::max(time,\ \_start\_time);}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \ \ stack.push\_back(std::make\_pair(collector\_index,\ std::max(time,\ \_start\_time)));}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (stack.size()\ >\ thread\_row.\_rows.size())\ \{}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \ \ \ \ thread\_row.\_rows.resize(stack.size());}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ \ \ \ \ changed\_num\_rows\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \ \ had\_children\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00281\ \ \ \ \ \}}
+\DoxyCodeLine{00282\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!stack.empty()\ \&\&\ stack.back().first\ ==\ collector\_index)\ \{}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \textcolor{comment}{//\ Most\ likely\ case,\ ending\ the\ most\ recent\ collector\ that\ is\ still\ open.}}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ start\_time\ =\ stack.back().second;}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ stack.pop\_back();}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ thread\_row.\_rows[stack.size()].push\_back(\{}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ start\_time,\ time,\ collector\_index,\ thread\_index,\ frame\_number,\ \textcolor{keyword}{false},\ \textcolor{keyword}{false}\});}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \textcolor{comment}{//\ Pop\ off\ stack\ levels\ for\ prematurely\ ended\ collectors\ (see\ below).}}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (!stack.empty()\ \&\&\ stack.back().first\ <\ 0)\ \{}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \ \ stack.pop\_back();}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ had\_children\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00294\ \ \ \ \ \}}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \textcolor{comment}{//\ Unlikely\ case:\ ending\ a\ collector\ before\ a\ "{}child"{}\ has\ ended.}}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \textcolor{comment}{//\ Go\ back\ and\ clear\ the\ row\ where\ this\ collector\ started.}}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ \textcolor{comment}{//\ Don't\ decrement\ the\ row\ index.}}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ stack.size();\ ++i)\ \{}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ \&item\ =\ stack[stack.size()\ -\/\ 1\ -\/\ i];}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (item.first\ ==\ collector\_index)\ \{}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \ \ \ \ thread\_row.\_rows[stack.size()\ -\/\ 1\ -\/\ i].push\_back(\{}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ \ \ \ \ item.second,\ time,\ collector\_index,\ thread\_index,\ frame\_number,\ \textcolor{keyword}{false},\ \textcolor{keyword}{false}\});}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \ \ \ \ item.first\ =\ -\/1;}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ ==\ stack.size())\ \{}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ stopped\ a\ collector\ that\ wasn't\ started\ at\ all.\ \ That\ means\ it}}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ must\ have\ already\ been\ running\ when\ this\ frame\ started,\ which\ we}}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ normally\ handle\ by\ pre-\/populating\ the\ stack\ with\ the\ open\ collectors}}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ from\ last\ frame,\ but\ maybe\ we\ didn't\ get\ the\ last\ frame\ (yet).}}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Unfortunately\ we\ need\ to\ add\ it\ above\ any\ bars\ we've\ already\ started}}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ and\ stopped,\ which\ means\ we\ need\ to\ shift\ everything\ down\ belonging}}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ to\ this\ frame,\ except\ for\ the\ top-\/level\ Frame\ collector.\ \ This\ is}}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ probably\ pretty\ inefficient,\ but\ it\ should\ be\ pretty\ rare\ for\ frames}}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ to\ arrive\ out-\/of-\/order\ in\ this\ manner.}}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ nassertd(!stack.empty())\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ stack.insert(stack.begin()\ +\ 1,\ std::make\_pair(-\/1,\ 0.0));}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ num\_rows\ =\ thread\_row.\_rows.size();}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ j\ =\ num\_rows\ -\/\ 1;\ j\ >=\ 1;\ -\/-\/j)\ \{}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ row\_size\ =\ thread\_row.\_rows[j].size();}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ k\ =\ row\_size;\ k\ >\ 0;\ -\/-\/k)\ \{}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpvector}{Row}}\ \&row\ =\ thread\_row.\_rows[j];}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_1_1ColorBar}{ColorBar}}\ bar\ =\ row[k\ -\/\ 1];}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bar.\_frame\_number\ ==\ frame\_number)\ \{}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ row.erase(row.begin()\ +\ (k\ -\/\ 1));}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (j\ +\ 1\ >=\ thread\_row.\_rows.size())\ \{}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ thread\_row.\_rows.resize(j\ +\ 2);}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ changed\_num\_rows\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00335\ }
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Insert\ it\ into\ the\ row\ below\ while\ retaining\ sorting.}}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpvector}{Row}}\ \&row2\ =\ thread\_row.\_rows[j\ +\ 1];}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ row2.insert(std::upper\_bound(row2.begin(),\ row2.end(),\ bar),\ bar);}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (bar.\_frame\_number\ <\ frame\_number)\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00345\ }
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ insert\ the\ bar,\ just\ below\ Frame\ level.}}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_row.\_rows.size()\ <\ 2)\ \{}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ \ \ thread\_row.\_rows.resize(2);}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ \ \ changed\_num\_rows\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \ \ thread\_row.\_rows[1].push\_back(\{}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \ \ \ \ frame\_start,\ time,\ collector\_index,\ thread\_index,}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \ \ \ \ frame\_number,\ \textcolor{keyword}{true},\ \textcolor{keyword}{false}\});}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (i\ >\ 0\ \&\&\ !had\_children)\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Figure\ out\ if\ the\ currently\ active\ collector\ could\ actually\ be}}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ slotted\ higher.\ \ This\ prevents\ the\ staircase\ effect\ where}}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ overlapping\ collectors\ will\ cause\ the\ number\ of\ rows\ to\ continue}}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ to\ grow\ at\ every\ overlap.\ \ We\ only\ do\ this\ if\ the\ current}}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ collector\ has\ not\ had\ children\ yet,\ that'd\ be\ too\ confusing.}}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ j\ =\ stack.size()\ -\/\ 3;}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (j\ >\ 0)\ \{}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ \&item\ =\ stack[j];}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (item.first\ >=\ 0)\ \{}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Nope,\ can't\ do.}}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Yes,\ does\ this\ row\ have\ enough\ space?}}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpvector}{Row}}\ \&row\ =\ thread\_row.\_rows[j];}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (row.empty()\ ||\ row.back().\_end\ <\ stack.back().second)\ \{}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ It\ does.}}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \ \ \ \ item\ =\ std::move(stack.back());}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ \ \ \ \ stack.pop\_back();}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (!stack.empty()\ \&\&\ stack.back().first\ <\ 0)\ \{}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ stack.pop\_back();}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ -\/-\/j;}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00382\ \ \ \ \ \}}
+\DoxyCodeLine{00383\ \ \ \}}
+\DoxyCodeLine{00384\ }
+\DoxyCodeLine{00385\ \ \ \textcolor{comment}{//\ Add\ all\ unclosed\ bars,\ marking\ them\ as\ open-\/ended,\ for\ later\ gluing.}}
+\DoxyCodeLine{00386\ \ \ \textcolor{keywordflow}{while}\ (!stack.empty())\ \{}
+\DoxyCodeLine{00387\ \ \ \ \ \textcolor{keywordtype}{int}\ collector\_index\ =\ stack.back().first;}
+\DoxyCodeLine{00388\ \ \ \ \ \textcolor{keywordflow}{if}\ (collector\_index\ >=\ 0)\ \{}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ start\_time\ =\ stack.back().second;}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ thread\_row.\_rows[stack.size()\ -\/\ 1].push\_back(\{}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ start\_time,\ frame\_data.get\_end()\ +\ \_clock\_skew,}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ collector\_index,\ thread\_index,\ frame\_number,\ \textcolor{keyword}{false},\ \textcolor{keyword}{true},}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \});}
+\DoxyCodeLine{00394\ \ \ \ \ \}}
+\DoxyCodeLine{00395\ \ \ \ \ stack.pop\_back();}
+\DoxyCodeLine{00396\ \ \ \}}
+\DoxyCodeLine{00397\ }
+\DoxyCodeLine{00398\ \ \ \textcolor{keywordflow}{if}\ (thread\_row.\_last\_frame\ >=\ 0\ \&\&\ frame\_number\ <\ thread\_row.\_last\_frame)\ \{}
+\DoxyCodeLine{00399\ \ \ \ \ \textcolor{comment}{//\ Added\ a\ frame\ out\ of\ order.}}
+\DoxyCodeLine{00400\ \ \ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classpvector}{Row}}\ \&row\ :\ thread\_row.\_rows)\ \{}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \textcolor{comment}{//\ Sort\ by\ end\ time.}}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ std::sort(row.begin(),\ row.end());}
+\DoxyCodeLine{00403\ }
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \textcolor{comment}{//\ Glue\ together\ open\ ends\ and\ beginnings\ that\ match\ up.}}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ end\ =\ row.size()\ -\/\ 1;}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ end;)\ \{}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_1_1ColorBar}{ColorBar}}\ \&left\ =\ row[i];}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_1_1ColorBar}{ColorBar}}\ \&right\ =\ row[i\ +\ 1];}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (left.\_collector\_index\ ==\ right.\_collector\_index\ \&\&}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \ \ \ \ left.\_frame\_number\ +\ 1\ ==\ right.\_frame\_number\ \&\&}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ \ \ \ \ left.\_open\_end\ \&\&\ right.\_open\_begin)\ \{}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Erase\ the\ left\ one,\ to\ maintain\ the\ sorting\ by\ end\ time.}}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \ \ \ \ right.\_open\_begin\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ \ \ right.\_start\ =\ left.\_start;}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \ \ \ \ row.erase(row.begin()\ +\ i);}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \ \ \ \ -\/-\/end;}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \ \ ++i;}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00421\ \ \ \ \ \}}
+\DoxyCodeLine{00422\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00423\ \ \ \ \ thread\_row.\_last\_frame\ =\ frame\_number;}
+\DoxyCodeLine{00424\ \ \ \}}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ \textcolor{keywordflow}{return}\ changed\_num\_rows;}
+\DoxyCodeLine{00427\ \}}
+\DoxyCodeLine{00428\ }
+\DoxyCodeLine{00433\ std::string\ \mbox{\hyperlink{classPStatTimeline_ab138ad122f3c31ffbe334a65458baf20}{PStatTimeline::}}}
+\DoxyCodeLine{00434\ \mbox{\hyperlink{classPStatTimeline_ab138ad122f3c31ffbe334a65458baf20}{get\_bar\_tooltip}}(\textcolor{keywordtype}{int}\ row,\ \textcolor{keywordtype}{int}\ x)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00435\ \ \ \mbox{\hyperlink{classPStatTimeline_1_1ColorBar}{ColorBar}}\ bar;}
+\DoxyCodeLine{00436\ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classPStatTimeline_a88c95e4a4620491da72dd2cf551b04b3}{find\_bar}}(row,\ x,\ bar))\ \{}
+\DoxyCodeLine{00437\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00438\ \ \ \ \ \textcolor{keywordflow}{if}\ (client\_data\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_aa9e2c591cab46b192ff3aa9409e1f681}{has\_collector}}(bar.\_collector\_index))\ \{}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ text;}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ text\ <<\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a108bc9bffd81beda32f1c783860d2366}{get\_collector\_fullname}}(bar.\_collector\_index);}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ text\ <<\ \textcolor{stringliteral}{"{}\ ("{}};}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bar.\_open\_begin\ ||\ bar.\_open\_end)\ \{}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \ \ text\ <<\ \textcolor{stringliteral}{"{}at\ least\ "{}};}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ text\ <<\ \mbox{\hyperlink{classPStatGraph_aa9829b73ad4d9ce79092eafcb3202b57}{format\_number}}(bar.\_end\ -\/\ bar.\_start,\ GBU\_show\_units\ |\ GBU\_ms)\ <<\ \textcolor{stringliteral}{"{})"{}};}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ text.str();}
+\DoxyCodeLine{00447\ \ \ \ \ \}}
+\DoxyCodeLine{00448\ \ \ \}}
+\DoxyCodeLine{00449\ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{00450\ \}}
+\DoxyCodeLine{00451\ }
+\DoxyCodeLine{00455\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_a839ea6eeec8eee7e5d65af69786b77c2}{PStatTimeline::}}}
+\DoxyCodeLine{00456\ \mbox{\hyperlink{classPStatTimeline_a839ea6eeec8eee7e5d65af69786b77c2}{write\_datagram}}(\mbox{\hyperlink{classDatagram}{Datagram}}\ \&dg)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00457\ \ \ dg.add\_float64(\_time\_scale);}
+\DoxyCodeLine{00458\ \ \ dg.add\_float64(\_start\_time);}
+\DoxyCodeLine{00459\ \ \ dg.add\_float64(\_lowest\_start\_time);}
+\DoxyCodeLine{00460\ \ \ dg.add\_float64(\_highest\_end\_time);}
+\DoxyCodeLine{00461\ }
+\DoxyCodeLine{00462\ \ \ \mbox{\hyperlink{classPStatGraph_aa70e909c8ffac3abd11933f296b1562f}{PStatGraph::write\_datagram}}(dg);}
+\DoxyCodeLine{00463\ \}}
+\DoxyCodeLine{00464\ }
+\DoxyCodeLine{00468\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_ab1c65ec2931f02033779449a5d70043b}{PStatTimeline::}}}
+\DoxyCodeLine{00469\ \mbox{\hyperlink{classPStatTimeline_ab1c65ec2931f02033779449a5d70043b}{read\_datagram}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan)\ \{}
+\DoxyCodeLine{00470\ \ \ \_time\_scale\ =\ scan.get\_float64();}
+\DoxyCodeLine{00471\ \ \ \_start\_time\ =\ scan.get\_float64();}
+\DoxyCodeLine{00472\ \ \ \_lowest\_start\_time\ =\ scan.get\_float64();}
+\DoxyCodeLine{00473\ \ \ \_highest\_end\_time\ =\ scan.get\_float64();}
+\DoxyCodeLine{00474\ }
+\DoxyCodeLine{00475\ \ \ \_scroll\_speed\ =\ 0.0;}
+\DoxyCodeLine{00476\ \ \ \_zoom\_speed\ =\ 0.0;}
+\DoxyCodeLine{00477\ }
+\DoxyCodeLine{00478\ \ \ \_have\_start\_time\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00479\ \ \ \_target\_start\_time\ =\ \_start\_time;}
+\DoxyCodeLine{00480\ \ \ \_target\_time\_scale\ =\ \_time\_scale;}
+\DoxyCodeLine{00481\ }
+\DoxyCodeLine{00482\ \ \ \mbox{\hyperlink{classPStatGraph_aae84b504720083c677534f2c444f6632}{PStatGraph::read\_datagram}}(scan);}
+\DoxyCodeLine{00483\ }
+\DoxyCodeLine{00484\ \ \ \mbox{\hyperlink{classPStatTimeline_aefd1e4ff52de3ed11b1796f11e93f5b1}{normal\_guide\_bars}}();}
+\DoxyCodeLine{00485\ \ \ \mbox{\hyperlink{classPStatTimeline_a13943da3c863d75c1806c3dd7696c08e}{force\_redraw}}();}
+\DoxyCodeLine{00486\ \}}
+\DoxyCodeLine{00487\ }
+\DoxyCodeLine{00493\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_a83ea1b01bb9cc013b99cc5c775516869}{PStatTimeline::}}}
+\DoxyCodeLine{00494\ \mbox{\hyperlink{classPStatTimeline_a83ea1b01bb9cc013b99cc5c775516869}{changed\_size}}(\textcolor{keywordtype}{int}\ xsize,\ \textcolor{keywordtype}{int}\ ysize)\ \{}
+\DoxyCodeLine{00495\ \ \ \textcolor{keywordflow}{if}\ (xsize\ !=\ \_xsize\ ||\ ysize\ !=\ \_ysize)\ \{}
+\DoxyCodeLine{00496\ \ \ \ \ \_xsize\ =\ xsize;}
+\DoxyCodeLine{00497\ \ \ \ \ \_ysize\ =\ ysize;}
+\DoxyCodeLine{00498\ }
+\DoxyCodeLine{00499\ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_aefd1e4ff52de3ed11b1796f11e93f5b1}{normal\_guide\_bars}}();}
+\DoxyCodeLine{00500\ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_a13943da3c863d75c1806c3dd7696c08e}{force\_redraw}}();}
+\DoxyCodeLine{00501\ \ \ \}}
+\DoxyCodeLine{00502\ \}}
+\DoxyCodeLine{00503\ }
+\DoxyCodeLine{00508\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_a13943da3c863d75c1806c3dd7696c08e}{PStatTimeline::}}}
+\DoxyCodeLine{00509\ \mbox{\hyperlink{classPStatTimeline_a13943da3c863d75c1806c3dd7696c08e}{force\_redraw}}()\ \{}
+\DoxyCodeLine{00510\ \ \ \mbox{\hyperlink{classPStatTimeline_ae5a97073757ab11c3507e17d57a00a33}{clear\_region}}();}
+\DoxyCodeLine{00511\ }
+\DoxyCodeLine{00512\ \ \ \mbox{\hyperlink{classPStatTimeline_affdf2cde98ec4fe9feb34369715131c4}{begin\_draw}}();}
+\DoxyCodeLine{00513\ }
+\DoxyCodeLine{00514\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatGraph_1_1GuideBar}{GuideBar}}\ \&bar\ :\ \_guide\_bars)\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \textcolor{keywordtype}{int}\ x\ =\ timestamp\_to\_pixel(bar.\_height);}
+\DoxyCodeLine{00516\ \ \ \ \ \textcolor{keywordflow}{if}\ (x\ >\ 0\ \&\&\ x\ <\ get\_xsize()\ -\/\ 1)\ \{}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_a38eedeec00bc9b2eb2d2016c8b60b039}{draw\_guide\_bar}}(x,\ bar.\_style);}
+\DoxyCodeLine{00518\ \ \ \ \ \}}
+\DoxyCodeLine{00519\ \ \ \}}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ \ \ \textcolor{keywordtype}{double}\ start\_time\ =\ \_start\_time;}
+\DoxyCodeLine{00522\ \ \ \textcolor{keywordtype}{double}\ end\_time\ =\ start\_time\ +\ get\_horizontal\_scale();}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00524\ \ \ \textcolor{keywordtype}{int}\ num\_rows\ =\ 0;}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00526\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ ti\ =\ 0;\ ti\ <\ \_threads.size();\ ++ti)\ \{}
+\DoxyCodeLine{00527\ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_1_1ThreadRow}{ThreadRow}}\ \&thread\_row\ =\ \_threads[ti];}
+\DoxyCodeLine{00528\ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_row.\_visible)\ \{}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ ri\ =\ 0;\ ri\ <\ thread\_row.\_rows.size();\ ++ri)\ \{}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ \ \ draw\_row((\textcolor{keywordtype}{int})ti,\ (\textcolor{keywordtype}{int})ri,\ start\_time,\ end\_time);}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ \ \ ++num\_rows;}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00533\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_a24ebd53559f5f228900f06fa22ab785e}{draw\_separator}}(num\_rows++);}
+\DoxyCodeLine{00534\ \ \ \ \ \}}
+\DoxyCodeLine{00535\ \ \ \}}
+\DoxyCodeLine{00536\ }
+\DoxyCodeLine{00537\ \ \ \mbox{\hyperlink{classPStatTimeline_aed4e686a85add3c2d37170df3e21c3c2}{end\_draw}}();}
+\DoxyCodeLine{00538\ \}}
+\DoxyCodeLine{00539\ }
+\DoxyCodeLine{00544\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_a13943da3c863d75c1806c3dd7696c08e}{PStatTimeline::}}}
+\DoxyCodeLine{00545\ \mbox{\hyperlink{classPStatTimeline_a13943da3c863d75c1806c3dd7696c08e}{force\_redraw}}(\textcolor{keywordtype}{int}\ row,\ \textcolor{keywordtype}{int}\ from\_x,\ \textcolor{keywordtype}{int}\ to\_x)\ \{}
+\DoxyCodeLine{00546\ \ \ \textcolor{keywordtype}{double}\ start\_time\ =\ std::max(\_start\_time,\ pixel\_to\_timestamp(from\_x));}
+\DoxyCodeLine{00547\ \ \ \textcolor{keywordtype}{double}\ end\_time\ =\ std::min(\_start\_time\ +\ get\_horizontal\_scale(),\ pixel\_to\_timestamp(to\_x));}
+\DoxyCodeLine{00548\ }
+\DoxyCodeLine{00549\ \ \ \mbox{\hyperlink{classPStatTimeline_affdf2cde98ec4fe9feb34369715131c4}{begin\_draw}}();}
+\DoxyCodeLine{00550\ }
+\DoxyCodeLine{00551\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ ti\ =\ 0;\ ti\ <\ \_threads.size();\ ++ti)\ \{}
+\DoxyCodeLine{00552\ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_1_1ThreadRow}{ThreadRow}}\ \&thread\_row\ =\ \_threads[ti];}
+\DoxyCodeLine{00553\ \ \ \ \ \textcolor{keywordflow}{if}\ (!thread\_row.\_visible\ ||\ (\textcolor{keywordtype}{int})thread\_row.\_row\_offset\ >\ row)\ \{}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00555\ \ \ \ \ \}}
+\DoxyCodeLine{00556\ }
+\DoxyCodeLine{00557\ \ \ \ \ \textcolor{keywordtype}{int}\ row\_index\ =\ row\ -\/\ (int)thread\_row.\_row\_offset;}
+\DoxyCodeLine{00558\ \ \ \ \ \textcolor{keywordflow}{if}\ (row\_index\ <\ (\textcolor{keywordtype}{int})thread\_row.\_rows.size())\ \{}
+\DoxyCodeLine{00559\ \ \ \ \ \ \ draw\_row((\textcolor{keywordtype}{int})ti,\ row\_index,\ start\_time,\ end\_time);}
+\DoxyCodeLine{00560\ \ \ \ \ \}}
+\DoxyCodeLine{00561\ \ \ \}}
+\DoxyCodeLine{00562\ }
+\DoxyCodeLine{00563\ \ \ \mbox{\hyperlink{classPStatTimeline_aed4e686a85add3c2d37170df3e21c3c2}{end\_draw}}();}
+\DoxyCodeLine{00564\ \}}
+\DoxyCodeLine{00565\ }
+\DoxyCodeLine{00569\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_aefd1e4ff52de3ed11b1796f11e93f5b1}{PStatTimeline::}}}
+\DoxyCodeLine{00570\ \mbox{\hyperlink{classPStatTimeline_aefd1e4ff52de3ed11b1796f11e93f5b1}{normal\_guide\_bars}}()\ \{}
+\DoxyCodeLine{00571\ \ \ \textcolor{keywordtype}{double}\ start\_time\ =\ get\_horizontal\_scroll();}
+\DoxyCodeLine{00572\ \ \ \textcolor{keywordtype}{double}\ time\_width\ =\ get\_horizontal\_scale();}
+\DoxyCodeLine{00573\ \ \ \textcolor{keywordtype}{double}\ end\_time\ =\ start\_time\ +\ time\_width;}
+\DoxyCodeLine{00574\ }
+\DoxyCodeLine{00575\ \ \ \textcolor{comment}{//\ We\ want\ vaguely\ 150\ pixels\ between\ guide\ bars.}}
+\DoxyCodeLine{00576\ \ \ \textcolor{keywordtype}{int}\ max\_frames\ =\ get\_xsize()\ /\ 100;}
+\DoxyCodeLine{00577\ \ \ \textcolor{keywordtype}{int}\ l\ =\ (int)std::floor(3.0\ *\ log10(pixel\_to\_height(150))\ +\ 0.5);}
+\DoxyCodeLine{00578\ \ \ \textcolor{keywordtype}{double}\ interval\ =\ pow(10.0,\ std::ceil(l\ /\ 3.0));}
+\DoxyCodeLine{00579\ \ \ \textcolor{keywordflow}{if}\ ((l\ +\ 3000)\ \%\ 3\ ==\ 1)\ \{}
+\DoxyCodeLine{00580\ \ \ \ \ interval\ /=\ 5;}
+\DoxyCodeLine{00581\ \ \ \}}
+\DoxyCodeLine{00582\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((l\ +\ 3000)\ \%\ 3\ ==\ 2)\ \{}
+\DoxyCodeLine{00583\ \ \ \ \ interval\ /=\ 2;}
+\DoxyCodeLine{00584\ \ \ \}}
+\DoxyCodeLine{00585\ }
+\DoxyCodeLine{00586\ \ \ \_guide\_bars.clear();}
+\DoxyCodeLine{00587\ }
+\DoxyCodeLine{00588\ \ \ \textcolor{comment}{//\ Rather\ than\ getting\ the\ client\ data,\ we\ look\ in\ the\ color\ bar\ data\ for}}
+\DoxyCodeLine{00589\ \ \ \textcolor{comment}{//\ the\ first\ row,\ because\ the\ client\ data\ gets\ wiped\ after\ a\ while.}}
+\DoxyCodeLine{00590\ \ \ \textcolor{keywordflow}{if}\ (!\_threads.empty()\ \&\&\ !\_threads[0].\_rows.empty())\ \{}
+\DoxyCodeLine{00591\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classpvector}{Row}}\ \&row\ =\ \_threads[0].\_rows[0];}
+\DoxyCodeLine{00592\ }
+\DoxyCodeLine{00593\ \ \ \ \ \textcolor{comment}{//\ Look\ for\ the\ last\ Frame\ bar\ with\ end\ time\ lower\ than\ our\ start\ time.}}
+\DoxyCodeLine{00594\ \ \ \ \ Row::const\_iterator\ it\ =\ std::lower\_bound(row.begin(),\ row.end(),\ \mbox{\hyperlink{classPStatTimeline_1_1ColorBar}{ColorBar}}\ \{0.0,\ start\_time\});}
+\DoxyCodeLine{00595\ \ \ \ \ \textcolor{keywordflow}{while}\ (it\ !=\ row.end()\ \&\&\ it-\/>\_collector\_index\ !=\ 0)\ \{}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ ++it;}
+\DoxyCodeLine{00597\ \ \ \ \ \}}
+\DoxyCodeLine{00598\ }
+\DoxyCodeLine{00599\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_frames\ =\ 0;}
+\DoxyCodeLine{00600\ }
+\DoxyCodeLine{00601\ \ \ \ \ \textcolor{keywordflow}{while}\ (it\ !=\ row.end()\ \&\&\ it-\/>\_start\ <=\ end\_time)\ \{}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ frame\_start\ =\ it-\/>\_start;}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ frame\_end\ =\ it-\/>\_end;}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ frame\_number\ =\ it-\/>\_frame\_number;}
+\DoxyCodeLine{00605\ }
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (frame\_start\ >\ start\_time)\ \{}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_guide\_bars.empty()\ \&\&\ height\_to\_pixel(frame\_start\ -\/\ \_guide\_bars.back().\_height)\ <\ 30)\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Get\ rid\ of\ last\ label,\ it\ is\ in\ the\ way.}}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \ \ \ \ \_guide\_bars.back().\_label.clear();}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ std::string\ label\ =\ \textcolor{stringliteral}{"{}\#"{}};}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ label\ +=\ format\_string(frame\_number);}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \ \ \_guide\_bars.push\_back(\mbox{\hyperlink{classPStatGraph_1_1GuideBar}{GuideBar}}(frame\_start,\ label,\ GBS\_frame));}
+\DoxyCodeLine{00614\ }
+\DoxyCodeLine{00615\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (++num\_frames\ >\ max\_frames)\ \{}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Forget\ it,\ this\ is\ becoming\ too\ many\ lines.}}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \ \ \ \ \_guide\_bars.clear();}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00621\ }
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00623\ \ \ \ \ \ \ \ \ ++it;}
+\DoxyCodeLine{00624\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00625\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (it\ !=\ row.end()\ \&\&\ it-\/>\_collector\_index\ !=\ 0);}
+\DoxyCodeLine{00626\ }
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ frame\_width;}
+\DoxyCodeLine{00628\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (it\ !=\ row.end())\ \{}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Only\ go\ up\ to\ the\ start\ of\ the\ next\ frame,\ limiting\ to\ however\ much}}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ fits\ in\ the\ graph.}}
+\DoxyCodeLine{00631\ \ \ \ \ \ \ \ \ frame\_width\ =\ std::min(frame\_end\ -\/\ frame\_start,\ end\_time\ -\/\ frame\_start);}
+\DoxyCodeLine{00632\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00633\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Reached\ the\ end;\ just\ continue\ to\ the\ end\ of\ the\ graph.}}
+\DoxyCodeLine{00634\ \ \ \ \ \ \ \ \ frame\_width\ =\ end\_time\ -\/\ frame\_start;}
+\DoxyCodeLine{00635\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00636\ }
+\DoxyCodeLine{00637\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (interval\ >\ 0.0)\ \{}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ first\_bar\ =\ std::max((\textcolor{keywordtype}{int})((start\_time\ -\/\ frame\_start)\ /\ interval),\ 1);}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_bars\ =\ (int)std::round(frame\_width\ /\ interval);}
+\DoxyCodeLine{00640\ }
+\DoxyCodeLine{00641\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ first\_bar;\ i\ <\ num\_bars;\ ++i)\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ offset\ =\ i\ *\ interval;}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \ \ \ \ std::string\ label\ =\ \textcolor{stringliteral}{"{}+"{}};}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ \ \ \ \ label\ +=\ \mbox{\hyperlink{classPStatGraph_aa9829b73ad4d9ce79092eafcb3202b57}{format\_number}}(offset,\ GBU\_show\_units\ |\ GBU\_ms);}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \ \ \ \ \_guide\_bars.push\_back(\mbox{\hyperlink{classPStatGraph_1_1GuideBar}{GuideBar}}(frame\_start\ +\ offset,\ label,\ GBS\_normal));}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00648\ }
+\DoxyCodeLine{00649\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ there's\ a\ gap\ between\ frames,\ add\ another\ line.}}
+\DoxyCodeLine{00650\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (it-\/>\_start\ >\ frame\_end\ \&\&\ it-\/>\_frame\_number\ >\ frame\_number\ +\ 1)\ \{}
+\DoxyCodeLine{00651\ \ \ \ \ \ \ \ \ std::string\ label;}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (it-\/>\_start\ -\/\ frame\_end\ >=\ interval)\ \{}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \ \ \ \ label\ =\ \textcolor{stringliteral}{"{}\#"{}}\ +\ format\_string(frame\_number\ +\ 1);}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (it-\/>\_frame\_number\ >\ frame\_number\ +\ 2)\ \{}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ \ \ \ \ \ \ label\ +=\ \textcolor{stringliteral}{"{}-\/"{}}\ +\ format\_string(it-\/>\_frame\_number\ -\/\ 1);}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \ \ \ \ label\ +=\ \textcolor{stringliteral}{"{}\ (dropped)"{}};}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00659\ \ \ \ \ \ \ \ \ \_guide\_bars.push\_back(\mbox{\hyperlink{classPStatGraph_1_1GuideBar}{GuideBar}}(frame\_end,\ label,\ GBS\_frame));}
+\DoxyCodeLine{00660\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00661\ \ \ \ \ \}}
+\DoxyCodeLine{00662\ \ \ \}}
+\DoxyCodeLine{00663\ }
+\DoxyCodeLine{00664\ \ \ \textcolor{keywordflow}{if}\ (\_guide\_bars.empty()\ \&\&\ interval\ >\ 0.0)\ \{}
+\DoxyCodeLine{00665\ \ \ \ \ \textcolor{keywordtype}{int}\ first\_bar\ =\ std::max((\textcolor{keywordtype}{int})(start\_time\ /\ interval),\ 1);}
+\DoxyCodeLine{00666\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_bars\ =\ (int)std::round(end\_time\ /\ interval);}
+\DoxyCodeLine{00667\ }
+\DoxyCodeLine{00668\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ first\_bar;\ i\ <\ num\_bars;\ ++i)\ \{}
+\DoxyCodeLine{00669\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ time\ =\ i\ *\ interval;}
+\DoxyCodeLine{00670\ \ \ \ \ \ \ std::string\ label\ =\ \mbox{\hyperlink{classPStatGraph_aa9829b73ad4d9ce79092eafcb3202b57}{format\_number}}(time,\ GBU\_show\_units\ |\ GBU\_ms);}
+\DoxyCodeLine{00671\ \ \ \ \ \ \ \_guide\_bars.push\_back(\mbox{\hyperlink{classPStatGraph_1_1GuideBar}{GuideBar}}(time,\ label,\ GBS\_frame));}
+\DoxyCodeLine{00672\ \ \ \ \ \}}
+\DoxyCodeLine{00673\ \ \ \}}
+\DoxyCodeLine{00674\ }
+\DoxyCodeLine{00675\ \ \ \_guide\_bars\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00676\ \}}
+\DoxyCodeLine{00677\ }
+\DoxyCodeLine{00682\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_ae5a97073757ab11c3507e17d57a00a33}{PStatTimeline::}}}
+\DoxyCodeLine{00683\ \mbox{\hyperlink{classPStatTimeline_ae5a97073757ab11c3507e17d57a00a33}{clear\_region}}()\ \{}
+\DoxyCodeLine{00684\ \}}
+\DoxyCodeLine{00685\ }
+\DoxyCodeLine{00690\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_affdf2cde98ec4fe9feb34369715131c4}{PStatTimeline::}}}
+\DoxyCodeLine{00691\ \mbox{\hyperlink{classPStatTimeline_affdf2cde98ec4fe9feb34369715131c4}{begin\_draw}}()\ \{}
+\DoxyCodeLine{00692\ \}}
+\DoxyCodeLine{00693\ }
+\DoxyCodeLine{00697\ \textcolor{keywordtype}{void}\ PStatTimeline::}
+\DoxyCodeLine{00698\ draw\_thread(\textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{double}\ start\_time,\ \textcolor{keywordtype}{double}\ end\_time)\ \{}
+\DoxyCodeLine{00699\ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ <\ 0\ ||\ (\textcolor{keywordtype}{size\_t})thread\_index\ >\ \_threads.size())\ \{}
+\DoxyCodeLine{00700\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00701\ \ \ \}}
+\DoxyCodeLine{00702\ }
+\DoxyCodeLine{00703\ \ \ ThreadRow\ \&thread\_row\ =\ \_threads[(size\_t)thread\_index];}
+\DoxyCodeLine{00704\ \ \ \textcolor{keywordflow}{if}\ (thread\_row.\_visible)\ \{}
+\DoxyCodeLine{00705\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ ri\ =\ 0;\ ri\ <\ thread\_row.\_rows.size();\ ++ri)\ \{}
+\DoxyCodeLine{00706\ \ \ \ \ \ \ draw\_row(thread\_index,\ (\textcolor{keywordtype}{int})ri,\ start\_time,\ end\_time);}
+\DoxyCodeLine{00707\ \ \ \ \ \}}
+\DoxyCodeLine{00708\ \ \ \}}
+\DoxyCodeLine{00709\ \}}
+\DoxyCodeLine{00710\ }
+\DoxyCodeLine{00714\ \textcolor{keywordtype}{void}\ PStatTimeline::}
+\DoxyCodeLine{00715\ draw\_row(\textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{int}\ row\_index,\ \textcolor{keywordtype}{double}\ start\_time,\ \textcolor{keywordtype}{double}\ end\_time)\ \{}
+\DoxyCodeLine{00716\ \ \ ThreadRow\ \&thread\_row\ =\ \_threads[thread\_index];}
+\DoxyCodeLine{00717\ \ \ Row\ \&row\ =\ thread\_row.\_rows[row\_index];}
+\DoxyCodeLine{00718\ }
+\DoxyCodeLine{00719\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00720\ }
+\DoxyCodeLine{00721\ \ \ \textcolor{comment}{//\ Find\ the\ first\ element\ whose\ end\ time\ is\ larger\ than\ our\ start\ time.}}
+\DoxyCodeLine{00722\ \ \ \textcolor{comment}{//\ Then\ iterate\ until\ at\ least\ the\ end\ of\ the\ frame.}}
+\DoxyCodeLine{00723\ \ \ Row::iterator\ it\ =\ std::lower\_bound(row.begin(),\ row.end(),\ ColorBar\ \{0.0,\ start\_time\});}
+\DoxyCodeLine{00724\ \ \ \textcolor{keywordflow}{if}\ (it\ ==\ row.end())\ \{}
+\DoxyCodeLine{00725\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00726\ \ \ \}}
+\DoxyCodeLine{00727\ }
+\DoxyCodeLine{00728\ \ \ \textcolor{keywordtype}{int}\ frame\_number\ =\ it-\/>\_frame\_number;}
+\DoxyCodeLine{00729\ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00730\ \ \ \ \ ColorBar\ \&bar\ =\ *it;}
+\DoxyCodeLine{00731\ }
+\DoxyCodeLine{00732\ \ \ \ \ \textcolor{keywordtype}{int}\ from\_x\ =\ timestamp\_to\_pixel(bar.\_start);}
+\DoxyCodeLine{00733\ \ \ \ \ \textcolor{keywordtype}{int}\ to\_x\ =\ timestamp\_to\_pixel(bar.\_end);}
+\DoxyCodeLine{00734\ }
+\DoxyCodeLine{00735\ \ \ \ \ \textcolor{keywordflow}{if}\ (to\_x\ >=\ 0\ \&\&\ to\_x\ >\ from\_x\ \&\&\ from\_x\ <\ get\_xsize())\ \{}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bar.\_collector\_index\ !=\ 0)\ \{}
+\DoxyCodeLine{00737\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatCollectorDef}{PStatCollectorDef}}\ \&def\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a24e17a5885214596815115a8bb768e2a}{get\_collector\_def}}(bar.\_collector\_index);}
+\DoxyCodeLine{00738\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (to\_x\ -\/\ from\_x\ >=\ 32\ \&\&\ def.\_parent\_index\ >\ 0)\ \{}
+\DoxyCodeLine{00739\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Try\ including\ the\ parent\ name.}}
+\DoxyCodeLine{00740\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatCollectorDef}{PStatCollectorDef}}\ \&parent\_def\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a24e17a5885214596815115a8bb768e2a}{get\_collector\_def}}(def.\_parent\_index);}
+\DoxyCodeLine{00741\ \ \ \ \ \ \ \ \ \ \ std::string\ long\_name\ =\ parent\_def.\_name\ +\ \textcolor{stringliteral}{"{}:"{}}\ +\ def.\_name;}
+\DoxyCodeLine{00742\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_acd0fb59248c94f553337b4ab64847aac}{draw\_bar}}(thread\_row.\_row\_offset\ +\ row\_index,\ from\_x,\ to\_x,}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ bar.\_collector\_index,\ long\_name);}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_acd0fb59248c94f553337b4ab64847aac}{draw\_bar}}(thread\_row.\_row\_offset\ +\ row\_index,\ from\_x,\ to\_x,}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ bar.\_collector\_index,\ def.\_name);}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimeline_acd0fb59248c94f553337b4ab64847aac}{draw\_bar}}(thread\_row.\_row\_offset\ +\ row\_index,\ from\_x,\ to\_x,}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ bar.\_collector\_index,}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ std::string(\textcolor{stringliteral}{"{}Frame\ "{}})\ +\ format\_string(bar.\_frame\_number));}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00753\ \ \ \ \ \}}
+\DoxyCodeLine{00754\ }
+\DoxyCodeLine{00755\ \ \ \ \ ++it;}
+\DoxyCodeLine{00756\ \ \ \}}
+\DoxyCodeLine{00757\ \ \ \textcolor{keywordflow}{while}\ (it\ !=\ row.end()\ \&\&\ (it-\/>\_start\ <=\ end\_time\ ||\ it-\/>\_frame\_number\ ==\ frame\_number));}
+\DoxyCodeLine{00758\ \}}
+\DoxyCodeLine{00759\ }
+\DoxyCodeLine{00763\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_a24ebd53559f5f228900f06fa22ab785e}{PStatTimeline::}}}
+\DoxyCodeLine{00764\ \mbox{\hyperlink{classPStatTimeline_a24ebd53559f5f228900f06fa22ab785e}{draw\_separator}}(\textcolor{keywordtype}{int})\ \{}
+\DoxyCodeLine{00765\ \}}
+\DoxyCodeLine{00766\ }
+\DoxyCodeLine{00770\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_a38eedeec00bc9b2eb2d2016c8b60b039}{PStatTimeline::}}}
+\DoxyCodeLine{00771\ \mbox{\hyperlink{classPStatTimeline_a38eedeec00bc9b2eb2d2016c8b60b039}{draw\_guide\_bar}}(\textcolor{keywordtype}{int}\ x,\ GuideBarStyle\ style)\ \{}
+\DoxyCodeLine{00772\ \}}
+\DoxyCodeLine{00773\ }
+\DoxyCodeLine{00778\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_acd0fb59248c94f553337b4ab64847aac}{PStatTimeline::}}}
+\DoxyCodeLine{00779\ \mbox{\hyperlink{classPStatTimeline_acd0fb59248c94f553337b4ab64847aac}{draw\_bar}}(\textcolor{keywordtype}{int},\ \textcolor{keywordtype}{int},\ \textcolor{keywordtype}{int},\ \textcolor{keywordtype}{int},\ \textcolor{keyword}{const}\ std::string\ \&)\ \{}
+\DoxyCodeLine{00780\ \}}
+\DoxyCodeLine{00781\ }
+\DoxyCodeLine{00786\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_aed4e686a85add3c2d37170df3e21c3c2}{PStatTimeline::}}}
+\DoxyCodeLine{00787\ \mbox{\hyperlink{classPStatTimeline_aed4e686a85add3c2d37170df3e21c3c2}{end\_draw}}()\ \{}
+\DoxyCodeLine{00788\ \}}
+\DoxyCodeLine{00789\ }
+\DoxyCodeLine{00794\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatTimeline_a718f5ba06d409c2336fd071b6bde8237}{PStatTimeline::}}}
+\DoxyCodeLine{00795\ \mbox{\hyperlink{classPStatTimeline_a718f5ba06d409c2336fd071b6bde8237}{idle}}()\ \{}
+\DoxyCodeLine{00796\ \}}
+\DoxyCodeLine{00797\ }
+\DoxyCodeLine{00802\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPStatTimeline_a4bb82d0d67715053beebb23a8dc8589d}{PStatTimeline::}}}
+\DoxyCodeLine{00803\ \mbox{\hyperlink{classPStatTimeline_a4bb82d0d67715053beebb23a8dc8589d}{animate}}(\textcolor{keywordtype}{double}\ time,\ \textcolor{keywordtype}{double}\ dt)\ \{}
+\DoxyCodeLine{00804\ \ \ \textcolor{keywordtype}{int}\ hmove\ =\ ((\_keys\_held\ \&\ (F\_right\ |\ F\_d))\ !=\ 0)}
+\DoxyCodeLine{00805\ \ \ \ \ \ \ \ \ \ \ \ \ -\/\ ((\_keys\_held\ \&\ (F\_left\ |\ F\_a))\ !=\ 0);}
+\DoxyCodeLine{00806\ \ \ \textcolor{keywordtype}{int}\ vmove\ =\ ((\_keys\_held\ \&\ F\_w)\ !=\ 0)}
+\DoxyCodeLine{00807\ \ \ \ \ \ \ \ \ \ \ \ \ -\/\ ((\_keys\_held\ \&\ F\_s)\ !=\ 0);}
+\DoxyCodeLine{00808\ }
+\DoxyCodeLine{00809\ \ \ \textcolor{keywordflow}{if}\ (hmove\ >\ 0)\ \{}
+\DoxyCodeLine{00810\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_scroll\_speed\ <\ 0)\ \{}
+\DoxyCodeLine{00811\ \ \ \ \ \ \ \_scroll\_speed\ =\ 1.0;}
+\DoxyCodeLine{00812\ \ \ \ \ \}}
+\DoxyCodeLine{00813\ \ \ \ \ \_scroll\_speed\ +=\ 1.0;}
+\DoxyCodeLine{00814\ \ \ \}}
+\DoxyCodeLine{00815\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (hmove\ <\ 0)\ \{}
+\DoxyCodeLine{00816\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_scroll\_speed\ >\ 0)\ \{}
+\DoxyCodeLine{00817\ \ \ \ \ \ \ \_scroll\_speed\ =\ -\/1.0;}
+\DoxyCodeLine{00818\ \ \ \ \ \}}
+\DoxyCodeLine{00819\ \ \ \ \ \_scroll\_speed\ -\/=\ 1.0;}
+\DoxyCodeLine{00820\ \ \ \}}
+\DoxyCodeLine{00821\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_scroll\_speed\ !=\ 0.0)\ \{}
+\DoxyCodeLine{00822\ \ \ \ \ \_scroll\_speed\ *=\ std::exp(-\/12.0\ *\ dt);}
+\DoxyCodeLine{00823\ \ \ \ \ \textcolor{keywordflow}{if}\ (std::abs(\_scroll\_speed)\ <\ 0.2)\ \{}
+\DoxyCodeLine{00824\ \ \ \ \ \ \ \_scroll\_speed\ =\ 0.0;}
+\DoxyCodeLine{00825\ \ \ \ \ \}}
+\DoxyCodeLine{00826\ \ \ \}}
+\DoxyCodeLine{00827\ }
+\DoxyCodeLine{00828\ \ \ \textcolor{keywordflow}{if}\ (vmove\ >\ 0)\ \{}
+\DoxyCodeLine{00829\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_zoom\_speed\ <\ 0)\ \{}
+\DoxyCodeLine{00830\ \ \ \ \ \ \ \_zoom\_speed\ =\ 1.0;}
+\DoxyCodeLine{00831\ \ \ \ \ \}}
+\DoxyCodeLine{00832\ \ \ \ \ \_zoom\_speed\ +=\ 1.0;}
+\DoxyCodeLine{00833\ \ \ \}}
+\DoxyCodeLine{00834\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (vmove\ <\ 0)\ \{}
+\DoxyCodeLine{00835\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_zoom\_speed\ >\ 0)\ \{}
+\DoxyCodeLine{00836\ \ \ \ \ \ \ \_zoom\_speed\ =\ -\/1.0;}
+\DoxyCodeLine{00837\ \ \ \ \ \}}
+\DoxyCodeLine{00838\ \ \ \ \ \_zoom\_speed\ -\/=\ 1.0;}
+\DoxyCodeLine{00839\ \ \ \}}
+\DoxyCodeLine{00840\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_zoom\_speed\ !=\ 0.0)\ \{}
+\DoxyCodeLine{00841\ \ \ \ \ \_zoom\_speed\ *=\ std::exp(-\/12.0\ *\ dt);}
+\DoxyCodeLine{00842\ \ \ \ \ \textcolor{keywordflow}{if}\ (std::abs(\_zoom\_speed)\ <\ 0.2)\ \{}
+\DoxyCodeLine{00843\ \ \ \ \ \ \ \_zoom\_speed\ =\ 0.0;}
+\DoxyCodeLine{00844\ \ \ \ \ \}}
+\DoxyCodeLine{00845\ \ \ \}}
+\DoxyCodeLine{00846\ }
+\DoxyCodeLine{00847\ \ \ \textcolor{keywordflow}{if}\ (\_zoom\_speed\ !=\ 0.0)\ \{}
+\DoxyCodeLine{00848\ \ \ \ \ zoom\_to(get\_horizontal\_scale()\ *\ pow(0.5,\ \_zoom\_speed\ *\ dt),\ \_zoom\_center);}
+\DoxyCodeLine{00849\ \ \ \}}
+\DoxyCodeLine{00850\ }
+\DoxyCodeLine{00851\ \ \ \textcolor{keywordflow}{if}\ (\_scroll\_speed\ !=\ 0.0)\ \{}
+\DoxyCodeLine{00852\ \ \ \ \ scroll\_by(\_scroll\_speed\ *\ 300\ *\ \_time\_scale\ *\ dt);}
+\DoxyCodeLine{00853\ \ \ \}}
+\DoxyCodeLine{00854\ }
+\DoxyCodeLine{00855\ \ \ \textcolor{keywordflow}{if}\ (\_target\_start\_time\ !=\ \_start\_time)\ \{}
+\DoxyCodeLine{00856\ \ \ \ \ \textcolor{keywordtype}{double}\ dist\ =\ \_target\_start\_time\ -\/\ \_start\_time;}
+\DoxyCodeLine{00857\ \ \ \ \ \textcolor{comment}{//\ When\ the\ difference\ is\ less\ than\ 2\ pixels,\ snap\ to\ target\ position.}}
+\DoxyCodeLine{00858\ \ \ \ \ \textcolor{keywordflow}{if}\ (std::abs(dist)\ <\ \_time\_scale\ *\ 2)\ \{}
+\DoxyCodeLine{00859\ \ \ \ \ \ \ \_start\_time\ =\ \_target\_start\_time;}
+\DoxyCodeLine{00860\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00861\ \ \ \ \ \ \ dist\ *=\ 1.0\ -\/\ std::exp(-\/12.0\ *\ dt);}
+\DoxyCodeLine{00862\ \ \ \ \ \ \ \_start\_time\ +=\ dist;}
+\DoxyCodeLine{00863\ \ \ \ \ \}}
+\DoxyCodeLine{00864\ \ \ \}}
+\DoxyCodeLine{00865\ }
+\DoxyCodeLine{00866\ \ \ \textcolor{keywordflow}{if}\ (\_target\_time\_scale\ !=\ \_time\_scale)\ \{}
+\DoxyCodeLine{00867\ \ \ \ \ \textcolor{comment}{//double\ dist\ =\ std::log(\_target\_time\_scale)\ -\/\ std::log(\_time\_scale);}}
+\DoxyCodeLine{00868\ \ \ \ \ \textcolor{keywordtype}{double}\ dist\ =\ \_target\_time\_scale\ -\/\ \_time\_scale;}
+\DoxyCodeLine{00869\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_target\_start\_time\ ==\ \_start\_time\ \&\&\ std::abs(dist)\ <\ 0.01)\ \{}
+\DoxyCodeLine{00870\ \ \ \ \ \ \ \_time\_scale\ =\ \_target\_time\_scale;}
+\DoxyCodeLine{00871\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00872\ \ \ \ \ \ \ dist\ *=\ 1.0\ -\/\ std::exp(-\/12.0\ *\ dt);}
+\DoxyCodeLine{00873\ \ \ \ \ \ \ \textcolor{comment}{//\_time\_scale\ *=\ std::exp(dist);}}
+\DoxyCodeLine{00874\ \ \ \ \ \ \ \_time\_scale\ +=\ dist;}
+\DoxyCodeLine{00875\ \ \ \ \ \}}
+\DoxyCodeLine{00876\ \ \ \}}
+\DoxyCodeLine{00877\ }
+\DoxyCodeLine{00878\ \ \ \mbox{\hyperlink{classPStatTimeline_aefd1e4ff52de3ed11b1796f11e93f5b1}{normal\_guide\_bars}}();}
+\DoxyCodeLine{00879\ \ \ \mbox{\hyperlink{classPStatTimeline_a13943da3c863d75c1806c3dd7696c08e}{force\_redraw}}();}
+\DoxyCodeLine{00880\ }
+\DoxyCodeLine{00881\ \ \ \textcolor{comment}{//\ Stop\ the\ animation\ when\ the\ speed\ is\ 0\ and\ no\ key\ is\ still\ held.}}
+\DoxyCodeLine{00882\ \ \ \textcolor{keywordflow}{return}\ \_keys\_held\ !=\ 0}
+\DoxyCodeLine{00883\ \ \ \ \ \ \ ||\ \_scroll\_speed\ !=\ 0}
+\DoxyCodeLine{00884\ \ \ \ \ \ \ ||\ \_zoom\_speed\ !=\ 0}
+\DoxyCodeLine{00885\ \ \ \ \ \ \ ||\ \_target\_start\_time\ !=\ \_start\_time}
+\DoxyCodeLine{00886\ \ \ \ \ \ \ ||\ \_target\_time\_scale\ !=\ \_time\_scale;}
+\DoxyCodeLine{00887\ \}}
+\DoxyCodeLine{00888\ }
+\DoxyCodeLine{00892\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPStatTimeline_a88c95e4a4620491da72dd2cf551b04b3}{PStatTimeline::}}}
+\DoxyCodeLine{00893\ \mbox{\hyperlink{classPStatTimeline_a88c95e4a4620491da72dd2cf551b04b3}{find\_bar}}(\textcolor{keywordtype}{int}\ row,\ \textcolor{keywordtype}{int}\ x,\ \mbox{\hyperlink{classPStatTimeline_1_1ColorBar}{ColorBar}}\ \&bar)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00894\ \ \ \textcolor{keywordtype}{double}\ time\ =\ pixel\_to\_timestamp(x);}
+\DoxyCodeLine{00895\ }
+\DoxyCodeLine{00896\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ ti\ =\ 0;\ ti\ <\ \_threads.size();\ ++ti)\ \{}
+\DoxyCodeLine{00897\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatTimeline_1_1ThreadRow}{ThreadRow}}\ \&thread\_row\ =\ \_threads[ti];}
+\DoxyCodeLine{00898\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{int})thread\_row.\_row\_offset\ >\ row)\ \{}
+\DoxyCodeLine{00899\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00900\ \ \ \ \ \}}
+\DoxyCodeLine{00901\ }
+\DoxyCodeLine{00902\ \ \ \ \ \textcolor{keywordtype}{int}\ row\_index\ =\ row\ -\/\ (int)thread\_row.\_row\_offset;}
+\DoxyCodeLine{00903\ \ \ \ \ \textcolor{keywordflow}{if}\ (row\_index\ <\ (\textcolor{keywordtype}{int})thread\_row.\_rows.size())\ \{}
+\DoxyCodeLine{00904\ \ \ \ \ \ \ \textcolor{comment}{//\ Find\ the\ first\ element\ whose\ end\ time\ is\ larger\ than\ the\ given\ time.}}
+\DoxyCodeLine{00905\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classpvector}{Row}}\ \&bars\ =\ thread\_row.\_rows[row\_index];}
+\DoxyCodeLine{00906\ \ \ \ \ \ \ Row::const\_iterator\ it\ =\ std::lower\_bound(bars.begin(),\ bars.end(),\ \mbox{\hyperlink{classPStatTimeline_1_1ColorBar}{ColorBar}}\ \{time,\ time\});}
+\DoxyCodeLine{00907\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (it\ !=\ bars.end()\ \&\&\ it-\/>\_start\ <=\ time)\ \{}
+\DoxyCodeLine{00908\ \ \ \ \ \ \ \ \ bar\ =\ *it;}
+\DoxyCodeLine{00909\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00910\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00911\ \ \ \ \ \}}
+\DoxyCodeLine{00912\ \ \ \}}
+\DoxyCodeLine{00913\ }
+\DoxyCodeLine{00914\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00915\ \}}
+
+\end{DoxyCode}

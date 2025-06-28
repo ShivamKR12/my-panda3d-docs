@@ -1,0 +1,757 @@
+\doxysection{io\+Kit\+Input\+Device.\+cxx}
+\hypertarget{ioKitInputDevice_8cxx_source}{}\label{ioKitInputDevice_8cxx_source}\index{panda/src/device/ioKitInputDevice.cxx@{panda/src/device/ioKitInputDevice.cxx}}
+\mbox{\hyperlink{ioKitInputDevice_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{ioKitInputDevice_8h}{ioKitInputDevice.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#if\ defined(\_\_APPLE\_\_)\ \&\&\ !defined(CPPPARSER)}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ <IOKit/hid/IOHIDLib.h>}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ <IOKit/hid/IOHIDElement.h>}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{inputDeviceManager_8h}{inputDeviceManager.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{keyboardButton_8h}{keyboardButton.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{gamepadButton_8h}{gamepadButton.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{mouseButton_8h}{mouseButton.h}}"{}}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00029\ IOKitInputDevice::}
+\DoxyCodeLine{00030\ IOKitInputDevice(IOHIDDeviceRef\ device)\ :}
+\DoxyCodeLine{00031\ \ \ \_device(device),}
+\DoxyCodeLine{00032\ \ \ \_hat\_element(nullptr),}
+\DoxyCodeLine{00033\ \ \ \_pointer\_x(nullptr),}
+\DoxyCodeLine{00034\ \ \ \_pointer\_y(nullptr),}
+\DoxyCodeLine{00035\ \ \ \_scroll\_wheel(nullptr),}
+\DoxyCodeLine{00036\ \ \ \_pointer\_x\_timestamp(0),}
+\DoxyCodeLine{00037\ \ \ \_pointer\_y\_timestamp(0),}
+\DoxyCodeLine{00038\ \ \ \_scroll\_wheel\_timestamp(0)\ \{}
+\DoxyCodeLine{00039\ \ \ nassertv(device);}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00041\ \ \ \textcolor{keywordtype}{char}\ buffer[4096];}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \ \ CFStringRef\ name\ =\ (CFStringRef)IOHIDDeviceGetProperty(device,\ CFSTR(kIOHIDProductKey));}
+\DoxyCodeLine{00044\ \ \ \textcolor{keywordflow}{if}\ (name)\ \{}
+\DoxyCodeLine{00045\ \ \ \ \ buffer[0]\ =\ 0;}
+\DoxyCodeLine{00046\ \ \ \ \ CFStringGetCString(name,\ buffer,\ \textcolor{keyword}{sizeof}(buffer),\ kCFStringEncodingUTF8);}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00048\ \ \ \ \ \textcolor{comment}{//\ Strip\ trailing\ spaces.}}
+\DoxyCodeLine{00049\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ len\ =\ strlen(buffer);}
+\DoxyCodeLine{00050\ \ \ \ \ \textcolor{keywordflow}{while}\ (isspace(buffer[len\ -\/\ 1]))\ \{}
+\DoxyCodeLine{00051\ \ \ \ \ \ \ -\/-\/len;}
+\DoxyCodeLine{00052\ \ \ \ \ \}}
+\DoxyCodeLine{00053\ \ \ \ \ \_name.assign(buffer,\ len);}
+\DoxyCodeLine{00054\ \ \ \}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \ \ CFStringRef\ mfg\ =\ (CFStringRef)IOHIDDeviceGetProperty(device,\ CFSTR(kIOHIDManufacturerKey));}
+\DoxyCodeLine{00057\ \ \ \textcolor{keywordflow}{if}\ (mfg)\ \{}
+\DoxyCodeLine{00058\ \ \ \ \ CFStringGetCString(mfg,\ buffer,\ \textcolor{keyword}{sizeof}(buffer),\ kCFStringEncodingUTF8);}
+\DoxyCodeLine{00059\ \ \ \ \ \_manufacturer\ =\ buffer;}
+\DoxyCodeLine{00060\ \ \ \}}
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00062\ \ \ CFStringRef\ serial\ =\ (CFStringRef)IOHIDDeviceGetProperty(device,\ CFSTR(kIOHIDSerialNumberKey));}
+\DoxyCodeLine{00063\ \ \ \textcolor{keywordflow}{if}\ (serial)\ \{}
+\DoxyCodeLine{00064\ \ \ \ \ CFStringGetCString(serial,\ buffer,\ \textcolor{keyword}{sizeof}(buffer),\ kCFStringEncodingUTF8);}
+\DoxyCodeLine{00065\ \ \ \ \ \_serial\_number\ =\ buffer;}
+\DoxyCodeLine{00066\ \ \ \}}
+\DoxyCodeLine{00067\ }
+\DoxyCodeLine{00068\ \ \ CFNumberRef\ vendor\ =\ (CFNumberRef)IOHIDDeviceGetProperty(device,\ CFSTR(kIOHIDVendorIDKey));}
+\DoxyCodeLine{00069\ \ \ \textcolor{keywordflow}{if}\ (vendor)\ \{}
+\DoxyCodeLine{00070\ \ \ \ \ int32\_t\ value\ =\ 0;}
+\DoxyCodeLine{00071\ \ \ \ \ CFNumberGetValue(vendor,\ kCFNumberSInt32Type,\ \&value);}
+\DoxyCodeLine{00072\ \ \ \ \ \_vendor\_id\ =\ (\textcolor{keywordtype}{unsigned}\ short)value;}
+\DoxyCodeLine{00073\ \ \ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ CFNumberRef\ product\ =\ (CFNumberRef)IOHIDDeviceGetProperty(device,\ CFSTR(kIOHIDProductIDKey));}
+\DoxyCodeLine{00076\ \ \ \textcolor{keywordflow}{if}\ (product)\ \{}
+\DoxyCodeLine{00077\ \ \ \ \ int32\_t\ value\ =\ 0;}
+\DoxyCodeLine{00078\ \ \ \ \ CFNumberGetValue(product,\ kCFNumberSInt32Type,\ \&value);}
+\DoxyCodeLine{00079\ \ \ \ \ \_product\_id\ =\ (\textcolor{keywordtype}{unsigned}\ short)value;}
+\DoxyCodeLine{00080\ \ \ \}}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00082\ \ \ \textcolor{keywordflow}{if}\ (IOHIDDeviceConformsTo(device,\ kHIDPage\_GenericDesktop,\ kHIDUsage\_GD\_Mouse))\ \{}
+\DoxyCodeLine{00083\ \ \ \ \ \_device\_class\ =\ DeviceClass::MOUSE;}
+\DoxyCodeLine{00084\ \ \ \}}
+\DoxyCodeLine{00085\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (IOHIDDeviceConformsTo(device,\ kHIDPage\_GenericDesktop,\ kHIDUsage\_GD\_Keyboard))\ \{}
+\DoxyCodeLine{00086\ \ \ \ \ \_device\_class\ =\ DeviceClass::KEYBOARD;}
+\DoxyCodeLine{00087\ \ \ \}}
+\DoxyCodeLine{00088\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (IOHIDDeviceConformsTo(device,\ kHIDPage\_GenericDesktop,\ kHIDUsage\_GD\_GamePad))\ \{}
+\DoxyCodeLine{00089\ \ \ \ \ \_device\_class\ =\ DeviceClass::GAMEPAD;}
+\DoxyCodeLine{00090\ \ \ \}}
+\DoxyCodeLine{00091\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (IOHIDDeviceConformsTo(device,\ kHIDPage\_Simulation,\ kHIDUsage\_Sim\_FlightStick))\ \{}
+\DoxyCodeLine{00092\ \ \ \ \ \_device\_class\ =\ DeviceClass::FLIGHT\_STICK;}
+\DoxyCodeLine{00093\ \ \ \}}
+\DoxyCodeLine{00094\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (IOHIDDeviceConformsTo(device,\ kHIDPage\_Simulation,\ kHIDUsage\_GD\_Joystick))\ \{}
+\DoxyCodeLine{00095\ \ \ \ \ \_device\_class\ =\ DeviceClass::FLIGHT\_STICK;}
+\DoxyCodeLine{00096\ \ \ \}}
+\DoxyCodeLine{00097\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_vendor\_id\ ==\ 0x044f\ \&\&\ \_product\_id\ ==\ 0xb108)\ \{}
+\DoxyCodeLine{00098\ \ \ \ \ \textcolor{comment}{//\ T.Flight\ Hotas\ X}}
+\DoxyCodeLine{00099\ \ \ \ \ \_device\_class\ =\ DeviceClass::FLIGHT\_STICK;}
+\DoxyCodeLine{00100\ \ \ \}}
+\DoxyCodeLine{00101\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_vendor\_id\ ==\ 0x046d\ \&\&}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ (\_product\_id\ ==\ 0xc623\ ||}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \ \_product\_id\ ==\ 0xc625\ ||}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ \ \_product\_id\ ==\ 0xc626\ ||}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \ \_product\_id\ ==\ 0xc627\ ||}
+\DoxyCodeLine{00106\ \ \ \ \ \ \ \ \_product\_id\ ==\ 0xc628\ ||}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ \ \_product\_id\ ==\ 0xc629\ ||}
+\DoxyCodeLine{00108\ \ \ \ \ \ \ \ \_product\_id\ ==\ 0xc62b))\ \{}
+\DoxyCodeLine{00109\ \ \ \ \ \textcolor{comment}{//\ 3Dconnexion\ SpaceNavigator\ and\ friends.}}
+\DoxyCodeLine{00110\ \ \ \ \ \_device\_class\ =\ DeviceClass::SPATIAL\_MOUSE;}
+\DoxyCodeLine{00111\ \ \ \}}
+\DoxyCodeLine{00112\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_name\ ==\ \textcolor{stringliteral}{"{}usb\ gamepad"{}})\ \{}
+\DoxyCodeLine{00113\ \ \ \ \ \_device\_class\ =\ DeviceClass::GAMEPAD;}
+\DoxyCodeLine{00114\ \ \ \}}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ CFArrayRef\ elements\ =\ IOHIDDeviceCopyMatchingElements(device,\ \textcolor{keyword}{nullptr},\ 0);}
+\DoxyCodeLine{00117\ \ \ \textcolor{keywordflow}{if}\ (elements)\ \{}
+\DoxyCodeLine{00118\ \ \ \ \ CFIndex\ count\ =\ CFArrayGetCount(elements);}
+\DoxyCodeLine{00119\ \ \ \ \ \textcolor{keywordflow}{for}\ (CFIndex\ i\ =\ 0;\ i\ <\ count;\ ++i)\ \{}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ IOHIDElementRef\ element\ =\ (IOHIDElementRef)CFArrayGetValueAtIndex(elements,\ i);}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ parse\_element(element);}
+\DoxyCodeLine{00122\ \ \ \ \ \}}
+\DoxyCodeLine{00123\ \ \ \ \ CFRelease(elements);}
+\DoxyCodeLine{00124\ \ \ \}}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \ \ \textcolor{keywordflow}{if}\ (\_hat\_element\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00127\ \ \ \ \ \_hat\_left\_button\ =\ (int)\_buttons.size();}
+\DoxyCodeLine{00128\ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::hat\_left()));}
+\DoxyCodeLine{00129\ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::hat\_right()));}
+\DoxyCodeLine{00130\ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::hat\_down()));}
+\DoxyCodeLine{00131\ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::hat\_up()));}
+\DoxyCodeLine{00132\ \ \ \}}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \ \ \textcolor{keywordflow}{if}\ (\_pointer\_x\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ \_pointer\_y\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00135\ \ \ \ \ enable\_feature(Feature::POINTER);}
+\DoxyCodeLine{00136\ \ \ \ \ add\_pointer(PointerType::UNKNOWN,\ 0);}
+\DoxyCodeLine{00137\ \ \ \}}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00139\ \ \ \_is\_connected\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00140\ \}}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00145\ IOKitInputDevice::}
+\DoxyCodeLine{00146\ \string~IOKitInputDevice()\ \{}
+\DoxyCodeLine{00147\ \}}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00152\ \textcolor{keywordtype}{void}\ IOKitInputDevice::}
+\DoxyCodeLine{00153\ parse\_element(IOHIDElementRef\ element)\ \{}
+\DoxyCodeLine{00154\ \ \ \mbox{\hyperlink{classButtonHandle}{ButtonHandle}}\ handle\ =\ ButtonHandle::none();}
+\DoxyCodeLine{00155\ \ \ Axis\ axis\ =\ Axis::NONE;}
+\DoxyCodeLine{00156\ \ \ uint32\_t\ page\ =\ IOHIDElementGetUsagePage(element);}
+\DoxyCodeLine{00157\ \ \ uint32\_t\ usage\ =\ IOHIDElementGetUsage(element);}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00159\ \ \ \textcolor{keywordflow}{switch}\ (IOHIDElementGetType(element))\ \{}
+\DoxyCodeLine{00160\ \ \ \textcolor{keywordflow}{case}\ kIOHIDElementTypeInput\_Misc:}
+\DoxyCodeLine{00161\ \ \ \ \ \textcolor{keywordflow}{switch}\ (page)\ \{}
+\DoxyCodeLine{00162\ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDPage\_GenericDesktop:}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (usage)\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_X:}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::LEFT\_X;}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::FLIGHT\_STICK)\ \{}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::ROLL;}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::MOUSE)\ \{}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ \ \ \_pointer\_x\ =\ element;}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::X;}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_Y:}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::LEFT\_Y;}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::FLIGHT\_STICK)\ \{}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::PITCH;}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::MOUSE)\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ \ \ \_pointer\_y\ =\ element;}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::Y;}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_Z:}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::LEFT\_TRIGGER;}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::FLIGHT\_STICK)\ \{}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::THROTTLE;}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::Z;}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_Rx:}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_X;}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::PITCH;}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_Ry:}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_Y;}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::ROLL;}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_Rz:}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_TRIGGER;}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::YAW;}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_Slider:}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ axis\ =\ Axis::RUDDER;}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_Dial:}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_Wheel:}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ \_scroll\_wheel\ =\ element;}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_Hatswitch:}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \_hat\_element\ =\ element;}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_DPadUp:}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ handle\ =\ GamepadButton::dpad\_up();}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_DPadDown:}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ handle\ =\ GamepadButton::dpad\_down();}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_DPadRight:}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ handle\ =\ GamepadButton::dpad\_right();}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_DPadLeft:}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ handle\ =\ GamepadButton::dpad\_left();}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 0xffffffffu:}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDPage\_Simulation:}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (usage)\ \{}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Sim\_Rudder:}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \ \ axis\ =\ Axis::RUDDER;}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Sim\_Throttle:}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ axis\ =\ Axis::THROTTLE;}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Sim\_Accelerator:}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ axis\ =\ Axis::ACCELERATOR;}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Sim\_Brake:}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \ \ axis\ =\ Axis::BRAKE;}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00264\ \ \ \ \ \}}
+\DoxyCodeLine{00265\ \ \ \ \ \textcolor{keywordflow}{if}\ (axis\ !=\ Axis::NONE)\ \{}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ min\ =\ IOHIDElementGetLogicalMin(element);}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ max\ =\ IOHIDElementGetLogicalMax(element);}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_vendor\_id\ ==\ 0x044f\ \&\&\ \_product\_id\ ==\ 0xb108\ \&\&\ axis\ ==\ Axis::THROTTLE)\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ T.Flight\ Hotas\ X\ throttle\ is\ reversed\ and\ can\ go\ backwards.}}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ add\_axis(axis,\ max,\ min,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (axis\ ==\ Axis::YAW\ ||\ axis\ ==\ Axis::RUDDER\ ||\ axis\ ==\ Axis::LEFT\_Y\ ||\ axis\ ==\ Axis::RIGHT\_Y\ ||}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\_device\_class\ ==\ DeviceClass::SPATIAL\_MOUSE\ \&\&\ (axis\ ==\ Axis::Y\ ||\ axis\ ==\ Axis::Z\ ||\ axis\ ==\ Axis::ROLL)))\ \{}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We'd\ like\ to\ reverse\ the\ Y\ axis\ to\ match\ the\ XInput\ behavior.}}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ also\ reverse\ yaw\ to\ obey\ the\ right-\/hand\ rule.}}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \ \ add\_axis(axis,\ max,\ min);}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ \ \ add\_axis(axis,\ min,\ max);}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00279\ }
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \_analog\_elements.push\_back(element);}
+\DoxyCodeLine{00281\ \ \ \ \ \}}
+\DoxyCodeLine{00282\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00283\ }
+\DoxyCodeLine{00284\ \ \ \textcolor{keywordflow}{case}\ kIOHIDElementTypeInput\_Button:}
+\DoxyCodeLine{00285\ \ \ \ \ \textcolor{keywordflow}{switch}\ (page)\ \{}
+\DoxyCodeLine{00286\ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDPage\_GenericDesktop:}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (usage)\ \{}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_DPadUp:}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \ \ handle\ =\ GamepadButton::dpad\_up();}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_DPadDown:}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \ \ handle\ =\ GamepadButton::dpad\_down();}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_DPadRight:}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ \ \ handle\ =\ GamepadButton::dpad\_right();}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_GD\_DPadLeft:}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ \ \ handle\ =\ GamepadButton::dpad\_left();}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDPage\_KeyboardOrKeypad:}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (usage)\ \{}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardA:}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardB:}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardC:}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardD:}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardE:}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF:}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardG:}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardH:}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardI:}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardJ:}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardK:}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardL:}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardM:}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardN:}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardO:}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardP:}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardQ:}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardR:}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardS:}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardT:}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardU:}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardV:}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardW:}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardX:}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardY:}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardZ:}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'a'}\ +\ (usage\ -\/\ kHIDUsage\_KeyboardA));}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keyboard1:}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'1'});}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keyboard2:}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'2'});}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keyboard3:}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'3'});}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keyboard4:}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'4'});}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keyboard5:}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'5'});}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keyboard6:}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'6'});}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keyboard7:}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'7'});}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keyboard8:}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'8'});}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keyboard9:}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'9'});}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keyboard0:}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'0'});}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardReturnOrEnter:}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::enter();}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardEscape:}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::escape();}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardDeleteOrBackspace:}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::backspace();}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardTab:}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::tab();}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardSpacebar:}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'\ '});}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardHyphen:}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'-\/'});}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardEqualSign:}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'='});}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardOpenBracket:}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'['});}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardCloseBracket:}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{']'});}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardBackslash:}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'\(\backslash\)\(\backslash\)'});}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardNonUSPound:}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'\$'});}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardSemicolon:}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{';'});}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardQuote:}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'\(\backslash\)''});}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardGraveAccentAndTilde:}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'`'});}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardComma:}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{','});}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardPeriod:}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'.'});}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardSlash:}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'/'});}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardCapsLock:}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::caps\_lock();}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF1:}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f1();}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF2:}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f2();}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00425\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF3:}
+\DoxyCodeLine{00426\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f3();}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF4:}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f4();}
+\DoxyCodeLine{00430\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF5:}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f5();}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF6:}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f6();}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF7:}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f7();}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF8:}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f8();}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF9:}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f9();}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF10:}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f10();}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF11:}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f11();}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF12:}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f12();}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardPrintScreen:}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::print\_screen();}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardScrollLock:}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::scroll\_lock();}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardPause:}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::pause();}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardInsert:}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::insert();}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardHome:}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::home();}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardPageUp:}
+\DoxyCodeLine{00471\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::page\_up();}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00473\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardDeleteForward:}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::del();}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardEnd:}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::end();}
+\DoxyCodeLine{00478\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00479\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardPageDown:}
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::page\_down();}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardRightArrow:}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::right();}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardLeftArrow:}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::left();}
+\DoxyCodeLine{00487\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00488\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardDownArrow:}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::down();}
+\DoxyCodeLine{00490\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardUpArrow:}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::up();}
+\DoxyCodeLine{00493\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00494\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeypadNumLock:}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::num\_lock();}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeypadSlash:}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'/'});}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeypadAsterisk:}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'*'});}
+\DoxyCodeLine{00502\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00503\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeypadHyphen:}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'-\/'});}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeypadPlus:}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'+'});}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeypadEnter:}
+\DoxyCodeLine{00510\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::enter();}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keypad1:}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'1'});}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keypad2:}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'2'});}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keypad3:}
+\DoxyCodeLine{00519\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'3'});}
+\DoxyCodeLine{00520\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00521\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keypad4:}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'4'});}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keypad5:}
+\DoxyCodeLine{00525\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'5'});}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00527\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keypad6:}
+\DoxyCodeLine{00528\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'6'});}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keypad7:}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'7'});}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00533\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keypad8:}
+\DoxyCodeLine{00534\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'8'});}
+\DoxyCodeLine{00535\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00536\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keypad9:}
+\DoxyCodeLine{00537\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'9'});}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_Keypad0:}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'0'});}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00542\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeypadPeriod:}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'.'});}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardNonUSBackslash:}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'\(\backslash\)\(\backslash\)'});}
+\DoxyCodeLine{00547\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00548\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeypadEqualSign:}
+\DoxyCodeLine{00549\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'='});}
+\DoxyCodeLine{00550\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF13:}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f13();}
+\DoxyCodeLine{00553\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF14:}
+\DoxyCodeLine{00555\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f14();}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00557\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF15:}
+\DoxyCodeLine{00558\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f15();}
+\DoxyCodeLine{00559\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00560\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardF16:}
+\DoxyCodeLine{00561\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::f16();}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardExecute:}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardHelp:}
+\DoxyCodeLine{00566\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::help();}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardMenu:}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::menu();}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeypadComma:}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{','});}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeypadEqualSignAS400:}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ascii\_key(\textcolor{charliteral}{'='});}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardReturn:}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::enter();}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardLeftControl:}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::lcontrol();}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardLeftShift:}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::lshift();}
+\DoxyCodeLine{00585\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardLeftAlt:}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::lalt();}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardLeftGUI:}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::lmeta();}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00592\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardRightControl:}
+\DoxyCodeLine{00593\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::rcontrol();}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardRightShift:}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::rshift();}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardRightAlt:}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::ralt();}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDUsage\_KeyboardRightGUI:}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \ \ handle\ =\ KeyboardButton::rmeta();}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00608\ }
+\DoxyCodeLine{00609\ \ \ \ \ \textcolor{keywordflow}{case}\ kHIDPage\_Button:}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_vendor\_id\ ==\ 0x0810\ \&\&\ \_product\_id\ ==\ 0xe501)\ \{}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ SNES-\/style\ USB\ gamepad}}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classButtonHandle}{ButtonHandle}}\ gamepad\_buttons[]\ =\ \{}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00615\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::face\_x(),}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::face\_a(),}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::face\_b(),}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::face\_y(),}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::lshoulder(),}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::rshoulder(),}
+\DoxyCodeLine{00621\ \ \ \ \ \ \ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00623\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::back(),}
+\DoxyCodeLine{00624\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::start(),}
+\DoxyCodeLine{00625\ \ \ \ \ \ \ \ \ \ \ \};}
+\DoxyCodeLine{00626\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (usage\ <\ \textcolor{keyword}{sizeof}(gamepad\_buttons)\ /\ \textcolor{keyword}{sizeof}(\mbox{\hyperlink{classButtonHandle}{ButtonHandle}}))\ \{}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \ \ \ \ \ \ handle\ =\ gamepad\_buttons[usage];}
+\DoxyCodeLine{00628\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ These\ seem\ to\ be\ the\ button\ mappings\ exposed\ by\ the\ 360Controller}}
+\DoxyCodeLine{00631\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ driver.\ \ I\ don't\ know\ if\ other\ drivers\ do\ the\ same\ thing\ at\ all.}}
+\DoxyCodeLine{00632\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classButtonHandle}{ButtonHandle}}\ gamepad\_buttons[]\ =\ \{}
+\DoxyCodeLine{00633\ \ \ \ \ \ \ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00634\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::face\_a(),}
+\DoxyCodeLine{00635\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::face\_b(),}
+\DoxyCodeLine{00636\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::face\_x(),}
+\DoxyCodeLine{00637\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::face\_y(),}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::lshoulder(),}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::rshoulder(),}
+\DoxyCodeLine{00640\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::lstick(),}
+\DoxyCodeLine{00641\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::rstick(),}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::start(),}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::back(),}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::guide(),}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::dpad\_up(),}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::dpad\_down(),}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::dpad\_left(),}
+\DoxyCodeLine{00648\ \ \ \ \ \ \ \ \ \ \ \ \ GamepadButton::dpad\_right(),}
+\DoxyCodeLine{00649\ \ \ \ \ \ \ \ \ \ \ \};}
+\DoxyCodeLine{00650\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (usage\ <\ \textcolor{keyword}{sizeof}(gamepad\_buttons)\ /\ \textcolor{keyword}{sizeof}(\mbox{\hyperlink{classButtonHandle}{ButtonHandle}}))\ \{}
+\DoxyCodeLine{00651\ \ \ \ \ \ \ \ \ \ \ \ \ handle\ =\ gamepad\_buttons[usage];}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::FLIGHT\_STICK)\ \{}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (usage\ >\ 0)\ \{}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \ \ \ \ handle\ =\ GamepadButton::joystick(usage\ -\/\ 1);}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::MOUSE)\ \{}
+\DoxyCodeLine{00659\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ In\ Panda,\ wheel\ and\ right\ button\ are\ flipped\ around...}}
+\DoxyCodeLine{00660\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ button\ =\ (usage\ ==\ 2\ ||\ usage\ ==\ 3)\ ?\ (4\ -\/\ usage)\ :\ (usage\ -\/\ 1);}
+\DoxyCodeLine{00661\ \ \ \ \ \ \ \ \ handle\ =\ MouseButton::button(button);}
+\DoxyCodeLine{00662\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00663\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00664\ \ \ \ \ \}}
+\DoxyCodeLine{00665\ \ \ \ \ \_buttons.push\_back(ButtonState(handle));}
+\DoxyCodeLine{00666\ \ \ \ \ \_button\_elements.push\_back(element);}
+\DoxyCodeLine{00667\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00668\ }
+\DoxyCodeLine{00669\ \ \ \textcolor{keywordflow}{case}\ kIOHIDElementTypeInput\_Axis:}
+\DoxyCodeLine{00670\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00671\ }
+\DoxyCodeLine{00672\ \ \ \textcolor{keywordflow}{case}\ kIOHIDElementTypeInput\_ScanCodes:}
+\DoxyCodeLine{00673\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00674\ }
+\DoxyCodeLine{00675\ \ \ \textcolor{keywordflow}{case}\ kIOHIDElementTypeOutput:}
+\DoxyCodeLine{00676\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00677\ }
+\DoxyCodeLine{00678\ \ \ \textcolor{keywordflow}{case}\ kIOHIDElementTypeFeature:}
+\DoxyCodeLine{00679\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00680\ }
+\DoxyCodeLine{00681\ \ \ \textcolor{keywordflow}{case}\ kIOHIDElementTypeCollection:}
+\DoxyCodeLine{00682\ \ \ \ \ \{}
+\DoxyCodeLine{00683\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ doesn't\ seem\ to\ be\ necessary\ and\ instead\ leads\ to\ duplication\ of}}
+\DoxyCodeLine{00684\ \ \ \ \ \ \ \textcolor{comment}{//\ axes\ and\ buttons.}}
+\DoxyCodeLine{00685\ \ \ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00686\ \textcolor{comment}{\ \ \ \ \ \ CFArrayRef\ children\ =\ IOHIDElementGetChildren(element);}}
+\DoxyCodeLine{00687\ \textcolor{comment}{\ \ \ \ \ \ CFIndex\ count\ =\ CFArrayGetCount(children);}}
+\DoxyCodeLine{00688\ \textcolor{comment}{\ \ \ \ \ \ for\ (CFIndex\ i\ =\ 0;\ i\ <\ count;\ ++i)\ \{}}
+\DoxyCodeLine{00689\ \textcolor{comment}{\ \ \ \ \ \ \ \ IOHIDElementRef\ element\ =\ (IOHIDElementRef)CFArrayGetValueAtIndex(children,\ i);}}
+\DoxyCodeLine{00690\ \textcolor{comment}{\ \ \ \ \ \ \ \ parse\_element(element,\ depth\ +\ 2);}}
+\DoxyCodeLine{00691\ \textcolor{comment}{\ \ \ \ \ \ \}*/}}
+\DoxyCodeLine{00692\ \ \ \ \ \}}
+\DoxyCodeLine{00693\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00694\ \ \ \}}
+\DoxyCodeLine{00695\ \}}
+\DoxyCodeLine{00696\ }
+\DoxyCodeLine{00702\ \textcolor{keywordtype}{void}\ IOKitInputDevice::}
+\DoxyCodeLine{00703\ do\_poll()\ \{}
+\DoxyCodeLine{00704\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_button\_elements.size();\ ++i)\ \{}
+\DoxyCodeLine{00705\ \ \ \ \ IOHIDValueRef\ value\_ref;}
+\DoxyCodeLine{00706\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_button\_elements[i])\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00707\ \ \ \ \ \textcolor{keywordflow}{if}\ (IOHIDDeviceGetValue(\_device,\ \_button\_elements[i],\ \&value\_ref)\ ==\ kIOReturnSuccess)\ \{}
+\DoxyCodeLine{00708\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ value\ =\ IOHIDValueGetIntegerValue(value\_ref);}
+\DoxyCodeLine{00709\ \ \ \ \ \ \ button\_changed(i,\ value\ !=\ 0);}
+\DoxyCodeLine{00710\ \ \ \ \ \}}
+\DoxyCodeLine{00711\ \ \ \}}
+\DoxyCodeLine{00712\ }
+\DoxyCodeLine{00713\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_analog\_elements.size();\ ++i)\ \{}
+\DoxyCodeLine{00714\ \ \ \ \ IOHIDValueRef\ value\_ref;}
+\DoxyCodeLine{00715\ \ \ \ \ \textcolor{keywordflow}{if}\ (IOHIDDeviceGetValue(\_device,\ \_analog\_elements[i],\ \&value\_ref)\ ==\ kIOReturnSuccess)\ \{}
+\DoxyCodeLine{00716\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ value\ =\ IOHIDValueGetIntegerValue(value\_ref);}
+\DoxyCodeLine{00717\ \ \ \ \ \ \ axis\_changed(i,\ value);}
+\DoxyCodeLine{00718\ \ \ \ \ \}}
+\DoxyCodeLine{00719\ \ \ \}}
+\DoxyCodeLine{00720\ }
+\DoxyCodeLine{00721\ \ \ \textcolor{keywordflow}{if}\ (\_hat\_element\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00722\ \ \ \ \ IOHIDValueRef\ value\_ref;}
+\DoxyCodeLine{00723\ \ \ \ \ \textcolor{keywordflow}{if}\ (IOHIDDeviceGetValue(\_device,\ \_hat\_element,\ \&value\_ref)\ ==\ kIOReturnSuccess)\ \{}
+\DoxyCodeLine{00724\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ value\ =\ IOHIDValueGetIntegerValue(value\_ref);}
+\DoxyCodeLine{00725\ \ \ \ \ \ \ button\_changed(\_hat\_left\_button\ +\ 0,\ value\ >=\ 5\ \&\&\ value\ <=\ 7);\ \textcolor{comment}{//\ left}}
+\DoxyCodeLine{00726\ \ \ \ \ \ \ button\_changed(\_hat\_left\_button\ +\ 1,\ value\ >=\ 1\ \&\&\ value\ <=\ 3);\ \textcolor{comment}{//\ right}}
+\DoxyCodeLine{00727\ \ \ \ \ \ \ button\_changed(\_hat\_left\_button\ +\ 2,\ value\ >=\ 3\ \&\&\ value\ <=\ 5);\ \textcolor{comment}{//\ down}}
+\DoxyCodeLine{00728\ \ \ \ \ \ \ button\_changed(\_hat\_left\_button\ +\ 3,\ value\ ==\ 7\ ||\ value\ ==\ 0\ ||\ value\ ==\ 1);\ \textcolor{comment}{//\ up}}
+\DoxyCodeLine{00729\ \ \ \ \ \}}
+\DoxyCodeLine{00730\ \ \ \}}
+\DoxyCodeLine{00731\ }
+\DoxyCodeLine{00732\ \ \ \textcolor{keywordtype}{int}\ x\ =\ 0,\ y\ =\ 0;}
+\DoxyCodeLine{00733\ \ \ \textcolor{keywordflow}{if}\ (\_pointer\_x\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00734\ \ \ \ \ IOHIDValueRef\ value\_ref;}
+\DoxyCodeLine{00735\ \ \ \ \ \textcolor{keywordflow}{if}\ (IOHIDDeviceGetValue(\_device,\ \_pointer\_x,\ \&value\_ref)\ ==\ kIOReturnSuccess)\ \{}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ uint64\_t\ timestamp\ =\ IOHIDValueGetTimeStamp(value\_ref);}
+\DoxyCodeLine{00737\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (timestamp\ !=\ \_pointer\_x\_timestamp)\ \{}
+\DoxyCodeLine{00738\ \ \ \ \ \ \ \ \ x\ =\ IOHIDValueGetIntegerValue(value\_ref);}
+\DoxyCodeLine{00739\ \ \ \ \ \ \ \ \ \_pointer\_x\_timestamp\ =\ timestamp;}
+\DoxyCodeLine{00740\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00741\ \ \ \ \ \}}
+\DoxyCodeLine{00742\ \ \ \}}
+\DoxyCodeLine{00743\ \ \ \textcolor{keywordflow}{if}\ (\_pointer\_y\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00744\ \ \ \ \ IOHIDValueRef\ value\_ref;}
+\DoxyCodeLine{00745\ \ \ \ \ \textcolor{keywordflow}{if}\ (IOHIDDeviceGetValue(\_device,\ \_pointer\_y,\ \&value\_ref)\ ==\ kIOReturnSuccess)\ \{}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ uint64\_t\ timestamp\ =\ IOHIDValueGetTimeStamp(value\_ref);}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (timestamp\ !=\ \_pointer\_y\_timestamp)\ \{}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ \ \ y\ =\ IOHIDValueGetIntegerValue(value\_ref);}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \ \ \_pointer\_y\_timestamp\ =\ timestamp;}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00751\ \ \ \ \ \}}
+\DoxyCodeLine{00752\ \ \ \}}
+\DoxyCodeLine{00753\ \ \ \textcolor{keywordflow}{if}\ (x\ !=\ 0\ ||\ y\ !=\ 0)\ \{}
+\DoxyCodeLine{00754\ \ \ \ \ pointer\_moved(0,\ x,\ y,\ ClockObject::get\_global\_clock()-\/>get\_frame\_time());}
+\DoxyCodeLine{00755\ \ \ \}}
+\DoxyCodeLine{00756\ }
+\DoxyCodeLine{00757\ \ \ \textcolor{comment}{//\ Do\ we\ have\ a\ scroll\ wheel\ axis?}}
+\DoxyCodeLine{00758\ \ \ \textcolor{keywordflow}{if}\ (\_scroll\_wheel\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00759\ \ \ \ \ IOHIDValueRef\ value\_ref;}
+\DoxyCodeLine{00760\ \ \ \ \ \textcolor{keywordflow}{if}\ (IOHIDDeviceGetValue(\_device,\ \_scroll\_wheel,\ \&value\_ref)\ ==\ kIOReturnSuccess)\ \{}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ uint64\_t\ timestamp\ =\ IOHIDValueGetTimeStamp(value\_ref);}
+\DoxyCodeLine{00762\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (timestamp\ !=\ \_scroll\_wheel\_timestamp)\ \{}
+\DoxyCodeLine{00763\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ value\ =\ IOHIDValueGetIntegerValue(value\_ref);}
+\DoxyCodeLine{00764\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (value\ !=\ 0)\ \{}
+\DoxyCodeLine{00765\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Just\ fire\ off\ a\ rapid\ down/up\ event.}}
+\DoxyCodeLine{00766\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ time\ =\ ClockObject::get\_global\_clock()-\/>get\_frame\_time();}
+\DoxyCodeLine{00767\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classButtonHandle}{ButtonHandle}}\ handle\ =\ (value\ >\ 0)\ ?\ MouseButton::wheel\_up()\ :\ MouseButton::wheel\_down();}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ \ \ \ \ \_button\_events-\/>add\_event(\mbox{\hyperlink{classButtonEvent}{ButtonEvent}}(handle,\ ButtonEvent::T\_down,\ time));}
+\DoxyCodeLine{00769\ \ \ \ \ \ \ \ \ \ \ \_button\_events-\/>add\_event(\mbox{\hyperlink{classButtonEvent}{ButtonEvent}}(handle,\ ButtonEvent::T\_up,\ time));}
+\DoxyCodeLine{00770\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00771\ \ \ \ \ \ \ \ \ \_scroll\_wheel\_timestamp\ =\ timestamp;}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00773\ \ \ \ \ \}}
+\DoxyCodeLine{00774\ \ \ \}}
+\DoxyCodeLine{00775\ \}}
+\DoxyCodeLine{00776\ }
+\DoxyCodeLine{00777\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_\_APPLE\_\_}}
+
+\end{DoxyCode}

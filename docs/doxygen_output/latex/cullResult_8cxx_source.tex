@@ -1,0 +1,495 @@
+\doxysection{cull\+Result.\+cxx}
+\hypertarget{cullResult_8cxx_source}{}\label{cullResult_8cxx_source}\index{panda/src/pgraph/cullResult.cxx@{panda/src/pgraph/cullResult.cxx}}
+\mbox{\hyperlink{cullResult_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullResult_8h}{cullResult.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullBinManager_8h}{cullBinManager.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullBinAttrib_8h}{cullBinAttrib.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{textureAttrib_8h}{textureAttrib.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightAttrib_8h}{lightAttrib.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{colorAttrib_8h}{colorAttrib.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{alphaTestAttrib_8h}{alphaTestAttrib.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{depthWriteAttrib_8h}{depthWriteAttrib.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{colorScaleAttrib_8h}{colorScaleAttrib.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{fogAttrib_8h}{fogAttrib.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{transparencyAttrib_8h}{transparencyAttrib.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{renderState_8h}{renderState.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{rescaleNormalAttrib_8h}{rescaleNormalAttrib.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{clockObject_8h}{clockObject.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pgraph_8h}{config\_pgraph.h}}"{}}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{depthOffsetAttrib_8h}{depthOffsetAttrib.h}}"{}}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{colorBlendAttrib_8h}{colorBlendAttrib.h}}"{}}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{shaderAttrib_8h}{shaderAttrib.h}}"{}}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ CullResult::\_type\_handle;}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00035\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00036\ \textcolor{comment}{\ *\ This\ value\ is\ used\ instead\ of\ 1.0\ to\ represent\ the\ alpha\ level\ of\ a\ pixel}}
+\DoxyCodeLine{00037\ \textcolor{comment}{\ *\ that\ is\ to\ be\ considered\ "{}opaque"{}\ for\ the\ purposes\ of\ M\_dual.\ \ Ideally,\ 1.0}}
+\DoxyCodeLine{00038\ \textcolor{comment}{\ *\ is\ the\ only\ correct\ value\ for\ this.\ \ Realistically,\ we\ have\ to\ fudge\ it}}
+\DoxyCodeLine{00039\ \textcolor{comment}{\ *\ lower\ for\ two\ reasons:\ (1)\ The\ modelers\ tend\ to\ paint\ textures\ with\ very}}
+\DoxyCodeLine{00040\ \textcolor{comment}{\ *\ slight\ transparency\ levels\ in\ places\ that\ are\ not\ intended\ to\ be}}
+\DoxyCodeLine{00041\ \textcolor{comment}{\ *\ transparent,\ without\ realizing\ it.\ \ These\ very\ faint\ transparency\ regions}}
+\DoxyCodeLine{00042\ \textcolor{comment}{\ *\ are\ normally\ (almost)\ invisible,\ but\ when\ rendered\ with\ M\_dual\ they\ may\ be}}
+\DoxyCodeLine{00043\ \textcolor{comment}{\ *\ revealed\ as\ regions\ of\ poor\ alpha\ sorting.\ \ (2)\ There\ seems\ to\ be\ some}}
+\DoxyCodeLine{00044\ \textcolor{comment}{\ *\ problem\ in\ DX\ where,\ in\ certain\ circumstances\ apparently\ related\ to}}
+\DoxyCodeLine{00045\ \textcolor{comment}{\ *\ automatic\ texture\ management,\ it\ spontaneously\ drops\ out\ the\ bottom\ two}}
+\DoxyCodeLine{00046\ \textcolor{comment}{\ *\ bits\ of\ an\ eight-\/bit\ alpha\ channel,\ causing\ a\ value\ of\ 255\ to\ become\ a}}
+\DoxyCodeLine{00047\ \textcolor{comment}{\ *\ value\ of\ 252\ instead.\ \ We\ use\ 256\ as\ the\ denominator\ here\ (instead\ of,\ say,}}
+\DoxyCodeLine{00048\ \textcolor{comment}{\ *\ 255)\ because\ a\ fractional\ power\ of\ two\ will\ have\ a\ terminating}}
+\DoxyCodeLine{00049\ \textcolor{comment}{\ *\ representation\ in\ base\ 2,\ and\ thus\ will\ be\ more\ likely\ to\ have\ a\ precise}}
+\DoxyCodeLine{00050\ \textcolor{comment}{\ *\ value\ in\ whatever\ internal\ representation\ the\ graphics\ API\ will\ use.}}
+\DoxyCodeLine{00051\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00052\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ PN\_stdfloat\ dual\_opaque\_level\ =\ 252.0\ /\ 256.0;}
+\DoxyCodeLine{00053\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ bin\_color\_flash\_rate\ =\ 1.0;\ \ \textcolor{comment}{//\ 1\ state\ change\ per\ second}}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00058\ CullResult::}
+\DoxyCodeLine{00059\ CullResult(\mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg,}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \&draw\_region\_pcollector)\ :}
+\DoxyCodeLine{00061\ \ \ \_gsg(gsg),}
+\DoxyCodeLine{00062\ \ \ \_draw\_region\_pcollector(draw\_region\_pcollector)}
+\DoxyCodeLine{00063\ \{}
+\DoxyCodeLine{00064\ \ \ \_page\ =\ \&\_first\_page;}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00067\ \ \ MemoryUsage::update\_type(\textcolor{keyword}{this},\ get\_class\_type());}
+\DoxyCodeLine{00068\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00071\ \ \ \_show\_transparency\ =\ show\_transparency.get\_value();}
+\DoxyCodeLine{00072\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00073\ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00080\ PT(\mbox{\hyperlink{classCullResult}{CullResult}})\ CullResult::}
+\DoxyCodeLine{00081\ make\_next()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00082\ \ \ PT(\mbox{\hyperlink{classCullResult}{CullResult}})\ new\_result\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classCullResult}{CullResult}}(\_gsg,\ \_draw\_region\_pcollector);}
+\DoxyCodeLine{00083\ \ \ new\_result-\/>\_bins.reserve(\_bins.size());}
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00085\ \ \ \mbox{\hyperlink{classCullBinManager}{CullBinManager}}\ *bin\_manager\ =\ CullBinManager::get\_global\_ptr();}
+\DoxyCodeLine{00086\ }
+\DoxyCodeLine{00087\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_bins.size();\ ++i)\ \{}
+\DoxyCodeLine{00088\ \ \ \ \ \mbox{\hyperlink{classCullBin}{CullBin}}\ *old\_bin\ =\ \_bins[i];}
+\DoxyCodeLine{00089\ \ \ \ \ \textcolor{keywordflow}{if}\ (old\_bin\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ \ \ old\_bin-\/>get\_bin\_type()\ !=\ bin\_manager-\/>get\_bin\_type(i))\ \{}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ new\_result-\/>\_bins.push\_back(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00092\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00093\ \ \ \ \ \ \ new\_result-\/>\_bins.push\_back(old\_bin-\/>make\_next());}
+\DoxyCodeLine{00094\ \ \ \ \ \}}
+\DoxyCodeLine{00095\ \ \ \}}
+\DoxyCodeLine{00096\ }
+\DoxyCodeLine{00097\ \ \ \textcolor{keywordflow}{return}\ new\_result;}
+\DoxyCodeLine{00098\ \}}
+\DoxyCodeLine{00099\ }
+\DoxyCodeLine{00104\ \textcolor{keywordtype}{void}\ CullResult::}
+\DoxyCodeLine{00105\ add\_object(\mbox{\hyperlink{classCullableObject}{CullableObject}}\ \&\&\textcolor{keywordtype}{object},\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCullTraverser}{CullTraverser}}\ *traverser)\ \{}
+\DoxyCodeLine{00106\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ LColor\ flash\_alpha\_color(0.92,\ 0.96,\ 0.10,\ 1.0f);}
+\DoxyCodeLine{00107\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ LColor\ flash\_binary\_color(0.21f,\ 0.67f,\ 0.24,\ 1.0f);}
+\DoxyCodeLine{00108\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ LColor\ flash\_multisample\_color(0.78f,\ 0.05f,\ 0.81f,\ 1.0f);}
+\DoxyCodeLine{00109\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ LColor\ flash\_dual\_color(0.92,\ 0.01f,\ 0.01f,\ 1.0f);}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ nassertv(\textcolor{keywordtype}{object}.\_draw\_callback\ !=\ \textcolor{keyword}{nullptr}\ ||\ \textcolor{keywordtype}{object}.\_geom\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00113\ \ \ \textcolor{keywordtype}{bool}\ force\ =\ !traverser-\/>get\_effective\_incomplete\_render();}
+\DoxyCodeLine{00114\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ traverser-\/>get\_current\_thread();}
+\DoxyCodeLine{00115\ \ \ \mbox{\hyperlink{classCullBinManager}{CullBinManager}}\ *bin\_manager\ =\ CullBinManager::get\_global\_ptr();}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00117\ \ \ \textcolor{comment}{//\ This\ is\ probably\ a\ good\ time\ to\ check\ for\ an\ auto\ rescale\ setting.}}
+\DoxyCodeLine{00118\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRescaleNormalAttrib}{RescaleNormalAttrib}}\ *rescale;}
+\DoxyCodeLine{00119\ \ \ \textcolor{keywordtype}{object}.\_state-\/>get\_attrib\_def(rescale);}
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{if}\ (rescale-\/>get\_mode()\ ==\ RescaleNormalAttrib::M\_auto)\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ RescaleNormalAttrib::Mode\ mode;}
+\DoxyCodeLine{00122\ }
+\DoxyCodeLine{00123\ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{object}.\_internal\_transform-\/>has\_identity\_scale())\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ mode\ =\ RescaleNormalAttrib::M\_none;}
+\DoxyCodeLine{00125\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{object}.\_internal\_transform-\/>has\_uniform\_scale())\ \{}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ mode\ =\ RescaleNormalAttrib::M\_rescale;}
+\DoxyCodeLine{00127\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ mode\ =\ RescaleNormalAttrib::M\_normalize;}
+\DoxyCodeLine{00129\ \ \ \ \ \}}
+\DoxyCodeLine{00130\ }
+\DoxyCodeLine{00131\ \ \ \ \ \textcolor{keywordtype}{object}.\_state\ =\ \textcolor{keywordtype}{object}.\_state-\/>compose(get\_rescale\_normal\_state(mode));}
+\DoxyCodeLine{00132\ \ \ \}}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \ \ \textcolor{comment}{//\ Check\ for\ a\ special\ wireframe\ setting.}}
+\DoxyCodeLine{00135\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderModeAttrib}{RenderModeAttrib}}\ *rmode;}
+\DoxyCodeLine{00136\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{object}.\_state-\/>get\_attrib(rmode))\ \{}
+\DoxyCodeLine{00137\ \ \ \ \ \textcolor{keywordflow}{if}\ (rmode-\/>get\_mode()\ ==\ RenderModeAttrib::M\_filled\_wireframe)\ \{}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \mbox{\hyperlink{classCullableObject}{CullableObject}}\ wireframe\_part(\textcolor{keywordtype}{object});}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classShaderAttrib}{ShaderAttrib}}\ *shader\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \textcolor{keywordtype}{object}.\_state-\/>get\_attrib(shader);}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ wireframe\_part.\_state\ =\ get\_wireframe\_overlay\_state(rmode,\ shader);}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (wireframe\_part.munge\_geom}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \ \ (\_gsg,\ \_gsg-\/>get\_geom\_munger(wireframe\_part.\_state,\ current\_thread),}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \ \ \ traverser,\ force))\ \{}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ wireframe\_bin\_index\ =\ bin\_manager-\/>\mbox{\hyperlink{classCullBinManager_af7ac3f55f15e5bd4aac28825b4af388f}{find\_bin}}(\textcolor{stringliteral}{"{}fixed"{}});}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCullBin}{CullBin}}\ *bin\ =\ get\_bin(wireframe\_bin\_index);}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ nassertv(bin\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ check\_flash\_bin(wireframe\_part.\_state,\ bin\_manager,\ wireframe\_bin\_index);}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ bin-\/>add\_object(alloc\_object(std::move(wireframe\_part)),\ current\_thread);}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \textcolor{keywordtype}{object}.\_state\ =\ \textcolor{keywordtype}{object}.\_state-\/>compose(get\_wireframe\_filled\_state());}
+\DoxyCodeLine{00154\ \ \ \ \ \}}
+\DoxyCodeLine{00155\ \ \ \}}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00157\ \ \ \textcolor{comment}{//\ Check\ to\ see\ if\ there's\ a\ special\ transparency\ setting.}}
+\DoxyCodeLine{00158\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransparencyAttrib}{TransparencyAttrib}}\ *trans;}
+\DoxyCodeLine{00159\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{object}.\_state-\/>get\_attrib(trans))\ \{}
+\DoxyCodeLine{00160\ \ \ \ \ \textcolor{keywordflow}{switch}\ (trans-\/>get\_mode())\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ \textcolor{keywordflow}{case}\ TransparencyAttrib::M\_alpha:}
+\DoxyCodeLine{00162\ \ \ \ \ \textcolor{keywordflow}{case}\ TransparencyAttrib::M\_premultiplied\_alpha:}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \textcolor{comment}{//\ M\_alpha\ implies\ an\ alpha-\/write\ test,\ so\ we\ don't\ waste\ time\ writing}}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \textcolor{comment}{//\ 0-\/valued\ pixels.}}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \textcolor{keywordtype}{object}.\_state\ =\ \textcolor{keywordtype}{object}.\_state-\/>compose(get\_alpha\_state());}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ check\_flash\_transparency(\textcolor{keywordtype}{object}.\_state,\ flash\_alpha\_color);}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00168\ }
+\DoxyCodeLine{00169\ \ \ \ \ \textcolor{keywordflow}{case}\ TransparencyAttrib::M\_binary:}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \textcolor{comment}{//\ M\_binary\ is\ implemented\ by\ explicitly\ setting\ the\ alpha\ test.}}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \textcolor{keywordtype}{object}.\_state\ =\ \textcolor{keywordtype}{object}.\_state-\/>compose(get\_binary\_state());}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ check\_flash\_transparency(\textcolor{keywordtype}{object}.\_state,\ flash\_binary\_color);}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00175\ \ \ \ \ \textcolor{keywordflow}{case}\ TransparencyAttrib::M\_multisample:}
+\DoxyCodeLine{00176\ \ \ \ \ \textcolor{keywordflow}{case}\ TransparencyAttrib::M\_multisample\_mask:}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ multisample\ modes\ are\ implemented\ using\ M\_binary\ if\ the\ GSG\ in}}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \textcolor{comment}{//\ use\ doesn't\ support\ multisample.}}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_gsg-\/>get\_supports\_multisample())\ \{}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{object}.\_state\ =\ \textcolor{keywordtype}{object}.\_state-\/>compose(get\_binary\_state());}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ check\_flash\_transparency(\textcolor{keywordtype}{object}.\_state,\ flash\_multisample\_color);}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00184\ }
+\DoxyCodeLine{00185\ \ \ \ \ \textcolor{keywordflow}{case}\ TransparencyAttrib::M\_dual:}
+\DoxyCodeLine{00186\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ check\_flash\_transparency(\textcolor{keywordtype}{object}.\_state,\ flash\_dual\_color);}
+\DoxyCodeLine{00188\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!m\_dual)\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ m\_dual\ is\ configured\ off,\ it\ becomes\ M\_alpha.}}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \textcolor{comment}{//\ M\_dual\ is\ implemented\ by\ drawing\ the\ opaque\ parts\ first,\ without}}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \textcolor{comment}{//\ transparency,\ then\ drawing\ the\ transparent\ parts\ later.\ \ This\ means}}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \textcolor{comment}{//\ we\ must\ copy\ the\ object\ and\ add\ it\ to\ both\ bins.\ \ We\ can\ only\ do\ this}}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \textcolor{comment}{//\ if\ we\ do\ not\ have\ an\ explicit\ bin\ already\ applied;\ otherwise,\ M\_dual}}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \textcolor{comment}{//\ falls\ back\ to\ M\_alpha.}}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCullBinAttrib}{CullBinAttrib}}\ *bin\_attrib;}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\textcolor{keywordtype}{object}.\_state-\/>get\_attrib(bin\_attrib)\ ||}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ \ \ \ \ bin\_attrib-\/>get\_bin\_name().empty())\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ make\ a\ copy\ of\ the\ object\ to\ draw\ the\ transparent\ part;\ this}}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ gets\ placed\ in\ the\ transparent\ bin.}}
+\DoxyCodeLine{00205\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (m\_dual\_transparent)}
+\DoxyCodeLine{00207\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCullableObject}{CullableObject}}\ transparent\_part(\textcolor{keywordtype}{object});}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ transparent\_state\ =\ get\_dual\_transparent\_state();}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ transparent\_part.\_state\ =\ \textcolor{keywordtype}{object}.\_state-\/>compose(transparent\_state);}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (transparent\_part.munge\_geom}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\_gsg,\ \_gsg-\/>get\_geom\_munger(transparent\_part.\_state,\ current\_thread),}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ traverser,\ force))\ \{}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ transparent\_bin\_index\ =\ transparent\_part.\_state-\/>get\_bin\_index();}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCullBin}{CullBin}}\ *bin\ =\ get\_bin(transparent\_bin\_index);}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ nassertv(bin\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ check\_flash\_bin(transparent\_part.\_state,\ bin\_manager,\ transparent\_bin\_index);}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ bin-\/>add\_object(alloc\_object(std::move(transparent\_part)),\ current\_thread);}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ we\ can\ draw\ the\ opaque\ part.\ \ This\ will\ end\ up\ in\ the\ opaque}}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ bin.}}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{object}.\_state\ =\ \textcolor{keywordtype}{object}.\_state-\/>compose(get\_dual\_opaque\_state());}
+\DoxyCodeLine{00226\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!m\_dual\_opaque)\ \{}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00230\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ object\ is\ assigned\ to\ a\ specific\ bin;\ M\_dual\ becomes\ M\_alpha.}}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00235\ }
+\DoxyCodeLine{00236\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \textcolor{comment}{//\ Other\ kinds\ of\ transparency\ need\ no\ special\ handling.}}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00239\ \ \ \ \ \}}
+\DoxyCodeLine{00240\ \ \ \}}
+\DoxyCodeLine{00241\ }
+\DoxyCodeLine{00242\ \ \ \textcolor{keywordtype}{int}\ bin\_index\ =\ \textcolor{keywordtype}{object}.\_state-\/>get\_bin\_index();}
+\DoxyCodeLine{00243\ \ \ \mbox{\hyperlink{classCullBin}{CullBin}}\ *bin\ =\ get\_bin(bin\_index);}
+\DoxyCodeLine{00244\ \ \ nassertv(bin\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00245\ \ \ check\_flash\_bin(\textcolor{keywordtype}{object}.\_state,\ bin\_manager,\ bin\_index);}
+\DoxyCodeLine{00246\ }
+\DoxyCodeLine{00247\ \ \ \textcolor{comment}{//\ Munge\ vertices\ as\ needed\ for\ the\ GSG's\ requirements,\ and\ the\ object's}}
+\DoxyCodeLine{00248\ \ \ \textcolor{comment}{//\ current\ state.}}
+\DoxyCodeLine{00249\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{object}.munge\_geom(\_gsg,\ \_gsg-\/>get\_geom\_munger(\textcolor{keywordtype}{object}.\_state,\ current\_thread),\ traverser,\ force))\ \{}
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{comment}{//\ The\ object\ may\ or\ may\ not\ now\ be\ fully\ resident,\ but\ this\ may\ not}}
+\DoxyCodeLine{00251\ \ \ \ \ \textcolor{comment}{//\ matter,\ since\ the\ GSG\ may\ have\ the\ necessary\ buffers\ already\ loaded.}}
+\DoxyCodeLine{00252\ \ \ \ \ \textcolor{comment}{//\ We'll\ let\ the\ GSG\ ultimately\ decide\ whether\ to\ render\ it.}}
+\DoxyCodeLine{00253\ \ \ \ \ bin-\/>add\_object(alloc\_object(std::move(\textcolor{keywordtype}{object})),\ current\_thread);}
+\DoxyCodeLine{00254\ \ \ \}}
+\DoxyCodeLine{00255\ \}}
+\DoxyCodeLine{00256\ }
+\DoxyCodeLine{00262\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classCullResult_ae5621d083685766970ac29ad49e85dc8}{CullResult::}}}
+\DoxyCodeLine{00263\ \mbox{\hyperlink{classCullResult_ae5621d083685766970ac29ad49e85dc8}{finish\_cull}}(\mbox{\hyperlink{classSceneSetup}{SceneSetup}}\ *scene\_setup,\ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00264\ \ \ \mbox{\hyperlink{classCullBinManager}{CullBinManager}}\ *bin\_manager\ =\ CullBinManager::get\_global\_ptr();}
+\DoxyCodeLine{00265\ }
+\DoxyCodeLine{00266\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_bins.size();\ ++i)\ \{}
+\DoxyCodeLine{00267\ \ \ \ \ \textcolor{keywordflow}{if}\ (!bin\_manager-\/>get\_bin\_active(i))\ \{}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ bin\ isn't\ active,\ don't\ sort\ it,\ and\ don't\ draw\ it.\ \ In\ fact,}}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \textcolor{comment}{//\ clear\ it.}}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \_bins[i]\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00271\ }
+\DoxyCodeLine{00272\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \mbox{\hyperlink{classCullBin}{CullBin}}\ *bin\ =\ \_bins[i];}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bin\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \ \ bin-\/>finish\_cull(scene\_setup,\ current\_thread);}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00277\ \ \ \ \ \}}
+\DoxyCodeLine{00278\ \ \ \}}
+\DoxyCodeLine{00279\ \}}
+\DoxyCodeLine{00280\ }
+\DoxyCodeLine{00284\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classCullResult_a72f91e62781ba0a7dc45eea631febfac}{CullResult::}}}
+\DoxyCodeLine{00285\ \mbox{\hyperlink{classCullResult_a72f91e62781ba0a7dc45eea631febfac}{draw}}(\mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00286\ \ \ \textcolor{keywordtype}{bool}\ force\ =\ !\_gsg-\/>get\_effective\_incomplete\_render();}
+\DoxyCodeLine{00287\ }
+\DoxyCodeLine{00288\ \ \ \textcolor{comment}{//\ Ask\ the\ bin\ manager\ for\ the\ correct\ order\ to\ draw\ all\ the\ bins.}}
+\DoxyCodeLine{00289\ \ \ \mbox{\hyperlink{classCullBinManager}{CullBinManager}}\ *bin\_manager\ =\ CullBinManager::get\_global\_ptr();}
+\DoxyCodeLine{00290\ \ \ \textcolor{keywordtype}{int}\ num\_bins\ =\ bin\_manager-\/>get\_num\_bins();}
+\DoxyCodeLine{00291\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_bins;\ i++)\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{keywordtype}{int}\ bin\_index\ =\ bin\_manager-\/>get\_bin(i);}
+\DoxyCodeLine{00293\ \ \ \ \ nassertv(bin\_index\ >=\ 0);}
+\DoxyCodeLine{00294\ }
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordflow}{if}\ (bin\_index\ <\ (\textcolor{keywordtype}{int})\_bins.size()\ \&\&\ \_bins[bin\_index]\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \_gsg-\/>push\_group\_marker(\_bins[bin\_index]-\/>get\_name());}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ \_bins[bin\_index]-\/>draw(force,\ current\_thread);}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \_gsg-\/>pop\_group\_marker();}
+\DoxyCodeLine{00300\ \ \ \ \ \}}
+\DoxyCodeLine{00301\ \ \ \}}
+\DoxyCodeLine{00302\ \}}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00314\ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ CullResult::}
+\DoxyCodeLine{00315\ make\_result\_graph()\ \{}
+\DoxyCodeLine{00316\ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ root\_node\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classPandaNode}{PandaNode}}(\textcolor{stringliteral}{"{}cull\_result"{}});}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00318\ \ \ \textcolor{comment}{//\ Ask\ the\ bin\ manager\ for\ the\ correct\ order\ to\ draw\ all\ the\ bins.}}
+\DoxyCodeLine{00319\ \ \ \mbox{\hyperlink{classCullBinManager}{CullBinManager}}\ *bin\_manager\ =\ CullBinManager::get\_global\_ptr();}
+\DoxyCodeLine{00320\ \ \ \textcolor{keywordtype}{int}\ num\_bins\ =\ bin\_manager-\/>get\_num\_bins();}
+\DoxyCodeLine{00321\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_bins;\ i++)\ \{}
+\DoxyCodeLine{00322\ \ \ \ \ \textcolor{keywordtype}{int}\ bin\_index\ =\ bin\_manager-\/>get\_bin(i);}
+\DoxyCodeLine{00323\ \ \ \ \ nassertr(bin\_index\ >=\ 0,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00324\ }
+\DoxyCodeLine{00325\ \ \ \ \ \textcolor{keywordflow}{if}\ (bin\_index\ <\ (\textcolor{keywordtype}{int})\_bins.size()\ \&\&\ \_bins[bin\_index]\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ root\_node-\/>add\_child(\_bins[bin\_index]-\/>make\_result\_graph());}
+\DoxyCodeLine{00327\ \ \ \ \ \}}
+\DoxyCodeLine{00328\ \ \ \}}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00330\ \ \ \textcolor{keywordflow}{return}\ root\_node;}
+\DoxyCodeLine{00331\ \}}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00338\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classCullResult_ab55d166794479ce82443147a53222aef}{CullResult::}}}
+\DoxyCodeLine{00339\ \mbox{\hyperlink{classCullResult_ab55d166794479ce82443147a53222aef}{bin\_removed}}(\textcolor{keywordtype}{int}\ bin\_index)\ \{}
+\DoxyCodeLine{00340\ \ \ \textcolor{comment}{//\ Do\ something\ here.}}
+\DoxyCodeLine{00341\ \ \ nassertv(\textcolor{keyword}{false});}
+\DoxyCodeLine{00342\ \}}
+\DoxyCodeLine{00343\ }
+\DoxyCodeLine{00348\ \mbox{\hyperlink{classCullBin}{CullBin}}\ *CullResult::}
+\DoxyCodeLine{00349\ make\_new\_bin(\textcolor{keywordtype}{int}\ bin\_index)\ \{}
+\DoxyCodeLine{00350\ \ \ \mbox{\hyperlink{classCullBinManager}{CullBinManager}}\ *bin\_manager\ =\ CullBinManager::get\_global\_ptr();}
+\DoxyCodeLine{00351\ \ \ PT(\mbox{\hyperlink{classCullBin}{CullBin}})\ bin\ =\ bin\_manager-\/>make\_new\_bin(bin\_index,\ \_gsg,}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_draw\_region\_pcollector);}
+\DoxyCodeLine{00353\ \ \ \mbox{\hyperlink{classCullBin}{CullBin}}\ *bin\_ptr\ =\ bin.p();}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00355\ \ \ \textcolor{keywordflow}{if}\ (bin\_ptr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \textcolor{comment}{//\ Now\ store\ it\ in\ the\ vector.}}
+\DoxyCodeLine{00357\ \ \ \ \ \textcolor{keywordflow}{while}\ (bin\_index\ >=\ (\textcolor{keywordtype}{int})\_bins.size())\ \{}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \_bins.push\_back(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00359\ \ \ \ \ \}}
+\DoxyCodeLine{00360\ \ \ \ \ nassertr(bin\_index\ >=\ 0\ \&\&\ bin\_index\ <\ (\textcolor{keywordtype}{int})\_bins.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ \ \ \textcolor{comment}{//\ Prevent\ unnecessary\ refunref\ by\ swapping\ the\ PointerTos.}}
+\DoxyCodeLine{00363\ \ \ \ \ std::swap(\_bins[bin\_index],\ bin);}
+\DoxyCodeLine{00364\ \ \ \}}
+\DoxyCodeLine{00365\ }
+\DoxyCodeLine{00366\ \ \ \textcolor{keywordflow}{return}\ bin\_ptr;}
+\DoxyCodeLine{00367\ \}}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00372\ CullResult::AllocationPage\ *CullResult::}
+\DoxyCodeLine{00373\ new\_page()\ \{}
+\DoxyCodeLine{00374\ \ \ AllocationPage\ *page\ =\ \textcolor{keyword}{new}\ AllocationPage;}
+\DoxyCodeLine{00375\ \ \ page-\/>\_next\ =\ \_page;}
+\DoxyCodeLine{00376\ \ \ \_page\ =\ page;}
+\DoxyCodeLine{00377\ \ \ \textcolor{keywordflow}{return}\ page;}
+\DoxyCodeLine{00378\ \}}
+\DoxyCodeLine{00379\ }
+\DoxyCodeLine{00383\ \textcolor{keywordtype}{void}\ CullResult::}
+\DoxyCodeLine{00384\ delete\_page(AllocationPage\ *page)\ \{}
+\DoxyCodeLine{00385\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ std::exchange(page-\/>\_size,\ 0);}
+\DoxyCodeLine{00386\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ size;\ ++i)\ \{}
+\DoxyCodeLine{00387\ \ \ \ \ ((\mbox{\hyperlink{classCullableObject}{CullableObject}}\ *)page-\/>\_memory)[i].\string~CullableObject();}
+\DoxyCodeLine{00388\ \ \ \}}
+\DoxyCodeLine{00389\ \ \ AllocationPage\ *next\ =\ page-\/>\_next;}
+\DoxyCodeLine{00390\ \ \ \textcolor{keywordflow}{if}\ (next\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ delete\_page(next);}
+\DoxyCodeLine{00392\ \ \ \ \ \textcolor{keyword}{delete}\ page;}
+\DoxyCodeLine{00393\ \ \ \}}
+\DoxyCodeLine{00394\ \}}
+\DoxyCodeLine{00395\ }
+\DoxyCodeLine{00399\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *CullResult::}
+\DoxyCodeLine{00400\ get\_rescale\_normal\_state(RescaleNormalAttrib::Mode\ mode)\ \{}
+\DoxyCodeLine{00401\ \ \ \textcolor{keyword}{static}\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ states[RescaleNormalAttrib::M\_auto\ +\ 1];}
+\DoxyCodeLine{00402\ \ \ \textcolor{keywordflow}{if}\ (states[mode].is\_null())\ \{}
+\DoxyCodeLine{00403\ \ \ \ \ states[mode]\ =\ RenderState::make(RescaleNormalAttrib::make(mode),}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RenderState::get\_max\_priority());}
+\DoxyCodeLine{00405\ \ \ \}}
+\DoxyCodeLine{00406\ \ \ \textcolor{keywordflow}{return}\ states[mode].p();}
+\DoxyCodeLine{00407\ \}}
+\DoxyCodeLine{00408\ }
+\DoxyCodeLine{00413\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *CullResult::}
+\DoxyCodeLine{00414\ get\_alpha\_state()\ \{}
+\DoxyCodeLine{00415\ \ \ \textcolor{keyword}{static}\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ state\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00416\ \ \ \textcolor{keywordflow}{if}\ (state\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00417\ \ \ \ \ \textcolor{comment}{//\ We\ don't\ monkey\ with\ the\ priority,\ since\ we\ want\ to\ allow\ the\ user\ to}}
+\DoxyCodeLine{00418\ \ \ \ \ \textcolor{comment}{//\ override\ this\ if\ he\ desires.}}
+\DoxyCodeLine{00419\ \ \ \ \ state\ =\ RenderState::make(AlphaTestAttrib::make(AlphaTestAttrib::M\_greater,\ 0.0f));}
+\DoxyCodeLine{00420\ \ \ \}}
+\DoxyCodeLine{00421\ \ \ \textcolor{keywordflow}{return}\ state.p();}
+\DoxyCodeLine{00422\ \}}
+\DoxyCodeLine{00423\ }
+\DoxyCodeLine{00427\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *CullResult::}
+\DoxyCodeLine{00428\ get\_binary\_state()\ \{}
+\DoxyCodeLine{00429\ \ \ \textcolor{keyword}{static}\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ state\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00430\ \ \ \textcolor{keywordflow}{if}\ (state\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00431\ \ \ \ \ state\ =\ RenderState::make(AlphaTestAttrib::make(AlphaTestAttrib::M\_greater\_equal,\ 0.5f),}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ TransparencyAttrib::make(TransparencyAttrib::M\_none),}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RenderState::get\_max\_priority());}
+\DoxyCodeLine{00434\ \ \ \}}
+\DoxyCodeLine{00435\ \ \ \textcolor{keywordflow}{return}\ state.p();}
+\DoxyCodeLine{00436\ \}}
+\DoxyCodeLine{00437\ }
+\DoxyCodeLine{00438\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00442\ \textcolor{keywordtype}{void}\ CullResult::}
+\DoxyCodeLine{00443\ apply\_flash\_color(CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ \&state,\ \textcolor{keyword}{const}\ LColor\ \&flash\_color)\ \{}
+\DoxyCodeLine{00444\ \ \ \textcolor{keywordtype}{int}\ cycle\ =\ (int)(ClockObject::get\_global\_clock()-\/>get\_frame\_time()\ *\ bin\_color\_flash\_rate);}
+\DoxyCodeLine{00445\ \ \ \textcolor{keywordflow}{if}\ ((cycle\ \&\ 1)\ ==\ 0)\ \{}
+\DoxyCodeLine{00446\ \ \ \ \ state\ =\ state-\/>remove\_attrib(TextureAttrib::get\_class\_slot());}
+\DoxyCodeLine{00447\ \ \ \ \ state\ =\ state-\/>remove\_attrib(LightAttrib::get\_class\_slot());}
+\DoxyCodeLine{00448\ \ \ \ \ state\ =\ state-\/>remove\_attrib(ColorScaleAttrib::get\_class\_slot());}
+\DoxyCodeLine{00449\ \ \ \ \ state\ =\ state-\/>remove\_attrib(FogAttrib::get\_class\_slot());}
+\DoxyCodeLine{00450\ \ \ \ \ state\ =\ state-\/>add\_attrib(ColorAttrib::make\_flat(flash\_color),}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RenderState::get\_max\_priority());}
+\DoxyCodeLine{00452\ \ \ \}}
+\DoxyCodeLine{00453\ \}}
+\DoxyCodeLine{00454\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00460\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *CullResult::}
+\DoxyCodeLine{00461\ get\_dual\_transparent\_state()\ \{}
+\DoxyCodeLine{00462\ \ \ \textcolor{keyword}{static}\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ state\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00463\ \ \ \textcolor{keywordflow}{if}\ (state\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00464\ \ \ \ \ \textcolor{comment}{//\ The\ alpha\ test\ for\ >\ 0\ prevents\ us\ from\ drawing\ empty\ pixels,\ and\ hence}}
+\DoxyCodeLine{00465\ \ \ \ \ \textcolor{comment}{//\ filling\ up\ the\ depth\ buffer\ with\ large\ empty\ spaces\ that\ may\ obscure}}
+\DoxyCodeLine{00466\ \ \ \ \ \textcolor{comment}{//\ other\ things.\ \ However,\ this\ does\ mean\ we\ draw\ pixels\ twice\ where\ the}}
+\DoxyCodeLine{00467\ \ \ \ \ \textcolor{comment}{//\ alpha\ ==\ 1.0\ (since\ they\ were\ already\ drawn\ in\ the\ opaque\ pass).\ \ This}}
+\DoxyCodeLine{00468\ \ \ \ \ \textcolor{comment}{//\ is\ not\ normally\ a\ problem.}}
+\DoxyCodeLine{00469\ \ \ \ \ state\ =\ RenderState::make(AlphaTestAttrib::make(AlphaTestAttrib::M\_greater,\ 0.0f),}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ TransparencyAttrib::make(TransparencyAttrib::M\_alpha),}
+\DoxyCodeLine{00471\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ DepthWriteAttrib::make(DepthWriteAttrib::M\_off),}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RenderState::get\_max\_priority());}
+\DoxyCodeLine{00473\ \ \ \}}
+\DoxyCodeLine{00474\ }
+\DoxyCodeLine{00475\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00476\ \ \ \textcolor{keywordflow}{if}\ (m\_dual\_flash)\ \{}
+\DoxyCodeLine{00477\ \ \ \ \ \textcolor{keywordtype}{int}\ cycle\ =\ (int)(ClockObject::get\_global\_clock()-\/>get\_frame\_time()\ *\ bin\_color\_flash\_rate);}
+\DoxyCodeLine{00478\ \ \ \ \ \textcolor{keywordflow}{if}\ ((cycle\ \&\ 1)\ ==\ 0)\ \{}
+\DoxyCodeLine{00479\ \ \ \ \ \ \ \textcolor{keyword}{static}\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ flash\_state\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (flash\_state\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ \ \ flash\_state\ =\ state-\/>add\_attrib(ColorAttrib::make\_flat(LColor(0.8f,\ 0.2,\ 0.2,\ 1.0f)),}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RenderState::get\_max\_priority());}
+\DoxyCodeLine{00483\ }
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \ \ flash\_state\ =\ flash\_state-\/>add\_attrib(ColorScaleAttrib::make(LVecBase4(1.0f,\ 1.0f,\ 1.0f,\ 1.0f)),}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RenderState::get\_max\_priority());}
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00487\ \ \ \ \ \ \ \ \ flash\_state\ =\ flash\_state-\/>add\_attrib(AlphaTestAttrib::make(AlphaTestAttrib::M\_less,\ 1.0f),}
+\DoxyCodeLine{00488\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RenderState::get\_max\_priority());}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00490\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ flash\_state.p();}
+\DoxyCodeLine{00491\ \ \ \ \ \}}
+\DoxyCodeLine{00492\ \ \ \}}
+\DoxyCodeLine{00493\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{00494\ }
+\DoxyCodeLine{00495\ \ \ \textcolor{keywordflow}{return}\ state.p();}
+\DoxyCodeLine{00496\ \}}
+\DoxyCodeLine{00497\ }
+\DoxyCodeLine{00502\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *CullResult::}
+\DoxyCodeLine{00503\ get\_dual\_opaque\_state()\ \{}
+\DoxyCodeLine{00504\ \ \ \textcolor{keyword}{static}\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ state\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00505\ \ \ \textcolor{keywordflow}{if}\ (state\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00506\ \ \ \ \ state\ =\ RenderState::make(AlphaTestAttrib::make(AlphaTestAttrib::M\_greater\_equal,\ dual\_opaque\_level),}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ TransparencyAttrib::make(TransparencyAttrib::M\_none),}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RenderState::get\_max\_priority());}
+\DoxyCodeLine{00509\ \ \ \}}
+\DoxyCodeLine{00510\ }
+\DoxyCodeLine{00511\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00512\ \ \ \textcolor{keywordflow}{if}\ (m\_dual\_flash)\ \{}
+\DoxyCodeLine{00513\ \ \ \ \ \textcolor{keywordtype}{int}\ cycle\ =\ (int)(ClockObject::get\_global\_clock()-\/>get\_frame\_time()\ *\ bin\_color\_flash\_rate);}
+\DoxyCodeLine{00514\ \ \ \ \ \textcolor{keywordflow}{if}\ ((cycle\ \&\ 1)\ ==\ 0)\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \textcolor{keyword}{static}\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ flash\_state\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (flash\_state\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \ \ flash\_state\ =\ state-\/>add\_attrib(ColorAttrib::make\_flat(LColor(0.2,\ 0.2,\ 0.8f,\ 1.0f)),}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RenderState::get\_max\_priority());}
+\DoxyCodeLine{00519\ \ \ \ \ \ \ \ \ flash\_state\ =\ flash\_state-\/>add\_attrib(ColorScaleAttrib::make(LVecBase4(1.0f,\ 1.0f,\ 1.0f,\ 1.0f)),}
+\DoxyCodeLine{00520\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RenderState::get\_max\_priority());}
+\DoxyCodeLine{00521\ }
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ flash\_state.p();}
+\DoxyCodeLine{00524\ \ \ \ \ \}}
+\DoxyCodeLine{00525\ \ \ \}}
+\DoxyCodeLine{00526\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{00527\ }
+\DoxyCodeLine{00528\ \ \ \textcolor{keywordflow}{return}\ state.p();}
+\DoxyCodeLine{00529\ \}}
+\DoxyCodeLine{00530\ }
+\DoxyCodeLine{00535\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *CullResult::}
+\DoxyCodeLine{00536\ get\_wireframe\_filled\_state()\ \{}
+\DoxyCodeLine{00537\ \ \ \textcolor{keyword}{static}\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ state\ =\ RenderState::make(}
+\DoxyCodeLine{00538\ \ \ \ \ RenderModeAttrib::make(RenderModeAttrib::M\_filled),}
+\DoxyCodeLine{00539\ \ \ \ \ RenderState::get\_max\_priority());}
+\DoxyCodeLine{00540\ \ \ \textcolor{keywordflow}{return}\ state.p();}
+\DoxyCodeLine{00541\ \}}
+\DoxyCodeLine{00542\ }
+\DoxyCodeLine{00547\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ CullResult::}
+\DoxyCodeLine{00548\ get\_wireframe\_overlay\_state(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderModeAttrib}{RenderModeAttrib}}\ *rmode)\ \{}
+\DoxyCodeLine{00549\ \ \ \textcolor{keywordflow}{return}\ get\_wireframe\_overlay\_state(rmode,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00550\ \}}
+\DoxyCodeLine{00551\ }
+\DoxyCodeLine{00558\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ CullResult::}
+\DoxyCodeLine{00559\ get\_wireframe\_overlay\_state(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderModeAttrib}{RenderModeAttrib}}\ *rmode,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classShaderAttrib}{ShaderAttrib}}\ *shader)\ \{}
+\DoxyCodeLine{00560\ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ state\ =\ RenderState::make(}
+\DoxyCodeLine{00561\ \ \ \ \ DepthOffsetAttrib::make(1,\ 0,\ 0.99999f),}
+\DoxyCodeLine{00562\ \ \ \ \ RenderModeAttrib::make(RenderModeAttrib::M\_wireframe,}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ rmode-\/>get\_thickness(),}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ rmode-\/>get\_perspective()));}
+\DoxyCodeLine{00565\ \ \ \textcolor{keywordflow}{if}\ (filled\_wireframe\_apply\_shader)\ \{}
+\DoxyCodeLine{00566\ \ \ \ \ state\ =\ state-\/>add\_attrib(ColorBlendAttrib::make(ColorBlendAttrib::M\_add,}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ColorBlendAttrib::O\_zero,}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ColorBlendAttrib::O\_constant\_color,}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ColorBlendAttrib::M\_add,}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ColorBlendAttrib::O\_one,}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ColorBlendAttrib::O\_one\_minus\_incoming\_alpha,}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ rmode-\/>get\_wireframe\_color()));}
+\DoxyCodeLine{00573\ \ \ \ \ state\ =\ state-\/>add\_attrib(shader);}
+\DoxyCodeLine{00574\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00575\ \ \ \ \ state\ =\ state-\/>add\_attrib(ColorBlendAttrib::make(ColorBlendAttrib::M\_add,}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ColorBlendAttrib::O\_incoming\_alpha,}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ColorBlendAttrib::O\_one\_minus\_incoming\_alpha));}
+\DoxyCodeLine{00578\ \ \ \ \ state\ =\ state-\/>add\_attrib(ColorAttrib::make\_flat(rmode-\/>get\_wireframe\_color()));}
+\DoxyCodeLine{00579\ \ \ \}}
+\DoxyCodeLine{00580\ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{00581\ \}}
+
+\end{DoxyCode}

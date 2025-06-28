@@ -1,0 +1,643 @@
+\doxysection{p\+Stat\+Flame\+Graph.\+cxx}
+\hypertarget{pStatFlameGraph_8cxx_source}{}\label{pStatFlameGraph_8cxx_source}\index{pandatool/src/pstatserver/pStatFlameGraph.cxx@{pandatool/src/pstatserver/pStatFlameGraph.cxx}}
+\mbox{\hyperlink{pStatFlameGraph_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatFlameGraph_8h}{pStatFlameGraph.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatFrameData_8h}{pStatFrameData.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatCollectorDef_8h}{pStatCollectorDef.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{string__utils_8h}{string\_utils.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pstatclient_8h}{config\_pstatclient.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ <sstream>}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00027\ PStatFlameGraph::}
+\DoxyCodeLine{00028\ PStatFlameGraph(\mbox{\hyperlink{classPStatMonitor}{PStatMonitor}}\ *monitor,\ \textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{int}\ collector\_index,}
+\DoxyCodeLine{00029\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ frame\_number,\ \textcolor{keywordtype}{int}\ xsize,\ \textcolor{keywordtype}{int}\ ysize)\ :}
+\DoxyCodeLine{00030\ \ \ \mbox{\hyperlink{classPStatGraph}{PStatGraph}}(monitor,\ xsize,\ ysize),}
+\DoxyCodeLine{00031\ \ \ \_thread\_index(thread\_index),}
+\DoxyCodeLine{00032\ \ \ \_collector\_index(collector\_index),}
+\DoxyCodeLine{00033\ \ \ \_orig\_collector\_index(collector\_index),}
+\DoxyCodeLine{00034\ \ \ \_frame\_number(frame\_number)}
+\DoxyCodeLine{00035\ \{}
+\DoxyCodeLine{00036\ \ \ \_average\_mode\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00037\ \ \ \_average\_cursor\ =\ 0;}
+\DoxyCodeLine{00038\ \ \ \_current\_frame\ =\ -\/1;}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \ \ \_title\_unknown\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ \ \ \textcolor{comment}{//\ NB.\ This\ won't\ call\ force\_redraw()\ (which\ we\ can't\ do\ yet)\ because\ average}}
+\DoxyCodeLine{00043\ \ \ \textcolor{comment}{//\ mode\ is\ true}}
+\DoxyCodeLine{00044\ \ \ update();}
+\DoxyCodeLine{00045\ \ \ \_time\_width\ =\ \_stack.get\_net\_value(\textcolor{keyword}{false});}
+\DoxyCodeLine{00046\ \ \ \textcolor{keywordflow}{if}\ (\_time\_width\ ==\ 0.0)\ \{}
+\DoxyCodeLine{00047\ \ \ \ \ \_time\_width\ =\ 1.0\ /\ pstats\_target\_frame\_rate;}
+\DoxyCodeLine{00048\ \ \ \}}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \ \ \_guide\_bar\_units\ =\ GBU\_ms\ |\ GBU\_hz\ |\ GBU\_show\_units;}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \ \ monitor-\/>\_flame\_graphs.insert(\textcolor{keyword}{this});}
+\DoxyCodeLine{00053\ \}}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00058\ PStatFlameGraph::}
+\DoxyCodeLine{00059\ \string~PStatFlameGraph()\ \{}
+\DoxyCodeLine{00060\ \ \ \_monitor-\/>\_flame\_graphs.erase(\textcolor{keyword}{this});}
+\DoxyCodeLine{00061\ \}}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00066\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_a77f7e839375e14b1c6ecf6106ec16e12}{PStatFlameGraph::}}}
+\DoxyCodeLine{00067\ \mbox{\hyperlink{classPStatFlameGraph_a77f7e839375e14b1c6ecf6106ec16e12}{update}}()\ \{}
+\DoxyCodeLine{00068\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ \ \ \textcolor{comment}{//\ Don't\ bother\ to\ update\ the\ thread\ data\ until\ we\ know\ at\ least\ something}}
+\DoxyCodeLine{00071\ \ \ \textcolor{comment}{//\ about\ the\ collectors\ and\ threads.}}
+\DoxyCodeLine{00072\ \ \ \textcolor{keywordflow}{if}\ (client\_data-\/>\mbox{\hyperlink{classPStatClientData_a947af0d045e34707dfbe9f17ed4c8aa4}{get\_num\_collectors}}()\ !=\ 0\ \&\&}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a37f031ee8fbaaa8c139ada02d19a1926}{get\_num\_threads}}()\ !=\ 0)\ \{}
+\DoxyCodeLine{00074\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatThreadData}{PStatThreadData}}\ *thread\_data\ =}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a46e69042db6f96f3c5eb00990c904dc8}{get\_thread\_data}}(\_thread\_index);}
+\DoxyCodeLine{00076\ \ \ \ \ \textcolor{keywordflow}{if}\ (!thread\_data-\/>is\_empty())\ \{}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_frame\_number\ >=\ 0)\ \{}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a4a22d1791dc1b5a468ba25810709e2bc}{has\_frame}}(\_frame\_number))\ \{}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_current\_frame\ !=\ \_frame\_number)\ \{}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ \ \ \ \ \ \ \_current\_frame\ =\ \_frame\_number;}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \ \ \ \ \ \ update\_data();}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00084\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00085\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ frame\_number\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a69bcce3d1e7df55590225f42c70d815c}{get\_latest\_frame\_number}}();}
+\DoxyCodeLine{00086\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (frame\_number\ !=\ \_current\_frame)\ \{}
+\DoxyCodeLine{00087\ \ \ \ \ \ \ \ \ \ \ \_current\_frame\ =\ frame\_number;}
+\DoxyCodeLine{00088\ }
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \ \ \ \ update\_data();}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00092\ \ \ \ \ \}}
+\DoxyCodeLine{00093\ \ \ \}}
+\DoxyCodeLine{00094\ }
+\DoxyCodeLine{00095\ \ \ \mbox{\hyperlink{classPStatFlameGraph_ae80a80a9323e59d160952ae38ef3677c}{idle}}();}
+\DoxyCodeLine{00096\ \}}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00104\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_ac98aee8b244fde3993a72f9d0413a0b6}{PStatFlameGraph::}}}
+\DoxyCodeLine{00105\ \mbox{\hyperlink{classPStatFlameGraph_ac98aee8b244fde3993a72f9d0413a0b6}{set\_collector\_index}}(\textcolor{keywordtype}{int}\ collector\_index)\ \{}
+\DoxyCodeLine{00106\ \ \ \textcolor{keywordflow}{if}\ (collector\_index\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00107\ \ \ \ \ \textcolor{comment}{//\ First\ go\ back\ to\ the\ collector\ where\ we\ originally\ opened\ this\ graph,}}
+\DoxyCodeLine{00108\ \ \ \ \ \textcolor{comment}{//\ and\ only\ then\ go\ back\ to\ the\ root.}}
+\DoxyCodeLine{00109\ \ \ \ \ collector\_index\ =\ \_orig\_collector\_index;}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_collector\_index\ ==\ \_orig\_collector\_index)\ \{}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ collector\_index\ =\ -\/1;}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \_orig\_collector\_index\ =\ -\/1;}
+\DoxyCodeLine{00113\ \ \ \ \ \}}
+\DoxyCodeLine{00114\ \ \ \}}
+\DoxyCodeLine{00115\ \ \ \textcolor{keywordflow}{if}\ (\_collector\_index\ !=\ collector\_index)\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ \_collector\_index\ =\ collector\_index;}
+\DoxyCodeLine{00117\ \ \ \ \ \_title\_unknown\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00118\ \ \ \ \ \_stack.clear();}
+\DoxyCodeLine{00119\ \ \ \ \ update\_data();}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00121\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_average\_mode)\ \{}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \_stack.update\_averages(\_average\_cursor);}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \_time\_width\ =\ \_stack.get\_net\_value(\textcolor{keyword}{true});}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_time\_width\ ==\ 0.0)\ \{}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ \_time\_width\ =\ 1.0\ /\ pstats\_target\_frame\_rate;}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a7f6d9e5cbcbb0df8532fb32adf49b029}{normal\_guide\_bars}}();}
+\DoxyCodeLine{00128\ \ \ \ \ \}}
+\DoxyCodeLine{00129\ \ \ \}}
+\DoxyCodeLine{00130\ \}}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00135\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_ace86a909d8d8f4739e677e5f61a035a6}{PStatFlameGraph::}}}
+\DoxyCodeLine{00136\ \mbox{\hyperlink{classPStatFlameGraph_ace86a909d8d8f4739e677e5f61a035a6}{push\_collector\_index}}(\textcolor{keywordtype}{int}\ collector\_index)\ \{}
+\DoxyCodeLine{00137\ \ \ \textcolor{keywordflow}{if}\ (\_collector\_index\ !=\ collector\_index)\ \{}
+\DoxyCodeLine{00138\ \ \ \ \ \_history.push\_back(\_collector\_index);}
+\DoxyCodeLine{00139\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_ac98aee8b244fde3993a72f9d0413a0b6}{set\_collector\_index}}(collector\_index);}
+\DoxyCodeLine{00140\ \ \ \}}
+\DoxyCodeLine{00141\ \}}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00147\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPStatFlameGraph_a6b1401e2d1fe32841f8ed5fed3a92316}{PStatFlameGraph::}}}
+\DoxyCodeLine{00148\ \mbox{\hyperlink{classPStatFlameGraph_a6b1401e2d1fe32841f8ed5fed3a92316}{pop\_collector\_index}}()\ \{}
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordflow}{if}\ (!\_history.empty())\ \{}
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{keywordtype}{int}\ collector\_index\ =\ \_history.back();}
+\DoxyCodeLine{00151\ \ \ \ \ \_history.pop\_back();}
+\DoxyCodeLine{00152\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_ac98aee8b244fde3993a72f9d0413a0b6}{set\_collector\_index}}(collector\_index);}
+\DoxyCodeLine{00153\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00154\ \ \ \}}
+\DoxyCodeLine{00155\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00156\ \}}
+\DoxyCodeLine{00157\ }
+\DoxyCodeLine{00161\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_a4dfb523fce54627b0ccd84e4411914fc}{PStatFlameGraph::}}}
+\DoxyCodeLine{00162\ \mbox{\hyperlink{classPStatFlameGraph_a4dfb523fce54627b0ccd84e4411914fc}{set\_frame\_number}}(\textcolor{keywordtype}{int}\ frame\_number)\ \{}
+\DoxyCodeLine{00163\ \ \ \textcolor{keywordflow}{if}\ (\_frame\_number\ !=\ frame\_number)\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ \_frame\_number\ =\ frame\_number;}
+\DoxyCodeLine{00165\ \ \ \ \ \_current\_frame\ =\ frame\_number;}
+\DoxyCodeLine{00166\ \ \ \ \ \_title\_unknown\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00167\ \ \ \ \ \_stack.clear();}
+\DoxyCodeLine{00168\ \ \ \ \ update\_data();}
+\DoxyCodeLine{00169\ }
+\DoxyCodeLine{00170\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_average\_mode)\ \{}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \_stack.update\_averages(\_average\_cursor);}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \_time\_width\ =\ \_stack.get\_net\_value(\textcolor{keyword}{true});}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_time\_width\ ==\ 0.0)\ \{}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \_time\_width\ =\ 1.0\ /\ pstats\_target\_frame\_rate;}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a7f6d9e5cbcbb0df8532fb32adf49b029}{normal\_guide\_bars}}();}
+\DoxyCodeLine{00177\ \ \ \ \ \}}
+\DoxyCodeLine{00178\ \ \ \}}
+\DoxyCodeLine{00179\ \}}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00184\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPStatFlameGraph_a4e896ba8eb93b8898a817c5d4713ed55}{PStatFlameGraph::}}}
+\DoxyCodeLine{00185\ \mbox{\hyperlink{classPStatFlameGraph_a4e896ba8eb93b8898a817c5d4713ed55}{first\_frame}}()\ \{}
+\DoxyCodeLine{00186\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00187\ \ \ \textcolor{keywordflow}{if}\ (client\_data\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00188\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00189\ \ \ \}}
+\DoxyCodeLine{00190\ }
+\DoxyCodeLine{00191\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatThreadData}{PStatThreadData}}\ *thread\_data\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a46e69042db6f96f3c5eb00990c904dc8}{get\_thread\_data}}(\_thread\_index);}
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordflow}{if}\ (thread\_data\ ==\ \textcolor{keyword}{nullptr}\ ||\ thread\_data-\/>is\_empty())\ \{}
+\DoxyCodeLine{00193\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00194\ \ \ \}}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ \textcolor{keywordtype}{int}\ oldest\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a89dad002af95b70bc102133dba62210c}{get\_oldest\_frame\_number}}();}
+\DoxyCodeLine{00197\ \ \ \textcolor{keywordflow}{if}\ (\_frame\_number\ !=\ oldest\ \&\&\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a4a22d1791dc1b5a468ba25810709e2bc}{has\_frame}}(oldest))\ \{}
+\DoxyCodeLine{00198\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a4dfb523fce54627b0ccd84e4411914fc}{set\_frame\_number}}(oldest);}
+\DoxyCodeLine{00199\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00200\ \ \ \}}
+\DoxyCodeLine{00201\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00202\ \}}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00208\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPStatFlameGraph_a703752831f4e2bbbceaa2f8c49914246}{PStatFlameGraph::}}}
+\DoxyCodeLine{00209\ \mbox{\hyperlink{classPStatFlameGraph_a703752831f4e2bbbceaa2f8c49914246}{next\_frame}}()\ \{}
+\DoxyCodeLine{00210\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00211\ \ \ \textcolor{keywordflow}{if}\ (client\_data\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00212\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00213\ \ \ \}}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatThreadData}{PStatThreadData}}\ *thread\_data\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a46e69042db6f96f3c5eb00990c904dc8}{get\_thread\_data}}(\_thread\_index);}
+\DoxyCodeLine{00216\ \ \ \textcolor{keywordflow}{if}\ (thread\_data\ ==\ \textcolor{keyword}{nullptr}\ ||\ thread\_data-\/>is\_empty())\ \{}
+\DoxyCodeLine{00217\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00218\ \ \ \}}
+\DoxyCodeLine{00219\ }
+\DoxyCodeLine{00220\ \ \ \textcolor{keywordtype}{int}\ latest\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a69bcce3d1e7df55590225f42c70d815c}{get\_latest\_frame\_number}}();}
+\DoxyCodeLine{00221\ \ \ \textcolor{keywordflow}{if}\ (\_frame\_number\ <\ 0\ ||\ \_frame\_number\ >\ latest)\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a4dfb523fce54627b0ccd84e4411914fc}{set\_frame\_number}}(latest);}
+\DoxyCodeLine{00223\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00224\ \ \ \}}
+\DoxyCodeLine{00225\ }
+\DoxyCodeLine{00226\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ \_frame\_number\ +\ 1;\ i\ <=\ latest;\ ++i)\ \{}
+\DoxyCodeLine{00227\ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a4a22d1791dc1b5a468ba25810709e2bc}{has\_frame}}(i))\ \{}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a4dfb523fce54627b0ccd84e4411914fc}{set\_frame\_number}}(i);}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00230\ \ \ \ \ \}}
+\DoxyCodeLine{00231\ \ \ \}}
+\DoxyCodeLine{00232\ }
+\DoxyCodeLine{00233\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00234\ \}}
+\DoxyCodeLine{00235\ }
+\DoxyCodeLine{00240\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPStatFlameGraph_a89a7050be707c11f0fa13a99cde54078}{PStatFlameGraph::}}}
+\DoxyCodeLine{00241\ \mbox{\hyperlink{classPStatFlameGraph_a89a7050be707c11f0fa13a99cde54078}{prev\_frame}}()\ \{}
+\DoxyCodeLine{00242\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00243\ \ \ \textcolor{keywordflow}{if}\ (client\_data\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00244\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00245\ \ \ \}}
+\DoxyCodeLine{00246\ }
+\DoxyCodeLine{00247\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatThreadData}{PStatThreadData}}\ *thread\_data\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a46e69042db6f96f3c5eb00990c904dc8}{get\_thread\_data}}(\_thread\_index);}
+\DoxyCodeLine{00248\ \ \ \textcolor{keywordflow}{if}\ (thread\_data\ ==\ \textcolor{keyword}{nullptr}\ ||\ thread\_data-\/>is\_empty())\ \{}
+\DoxyCodeLine{00249\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00250\ \ \ \}}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \ \ \textcolor{keywordtype}{int}\ oldest\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a89dad002af95b70bc102133dba62210c}{get\_oldest\_frame\_number}}();}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00255\ \ \ \textcolor{keywordflow}{if}\ (\_frame\_number\ <\ 0)\ \{}
+\DoxyCodeLine{00256\ \ \ \ \ i\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a69bcce3d1e7df55590225f42c70d815c}{get\_latest\_frame\_number}}();}
+\DoxyCodeLine{00257\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00258\ \ \ \ \ i\ =\ \_frame\_number\ -\/\ 1;}
+\DoxyCodeLine{00259\ \ \ \}}
+\DoxyCodeLine{00260\ \ \ \textcolor{keywordflow}{while}\ (i\ >=\ oldest)\ \{}
+\DoxyCodeLine{00261\ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a4a22d1791dc1b5a468ba25810709e2bc}{has\_frame}}(i))\ \{}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a4dfb523fce54627b0ccd84e4411914fc}{set\_frame\_number}}(i);}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00264\ \ \ \ \ \}}
+\DoxyCodeLine{00265\ \ \ \ \ -\/-\/i;}
+\DoxyCodeLine{00266\ \ \ \}}
+\DoxyCodeLine{00267\ }
+\DoxyCodeLine{00268\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00269\ \}}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00274\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPStatFlameGraph_a2cf97631a0fd8c7c53784551bbaa5600}{PStatFlameGraph::}}}
+\DoxyCodeLine{00275\ \mbox{\hyperlink{classPStatFlameGraph_a2cf97631a0fd8c7c53784551bbaa5600}{last\_frame}}()\ \{}
+\DoxyCodeLine{00276\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00277\ \ \ \textcolor{keywordflow}{if}\ (client\_data\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00279\ \ \ \}}
+\DoxyCodeLine{00280\ }
+\DoxyCodeLine{00281\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatThreadData}{PStatThreadData}}\ *thread\_data\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a46e69042db6f96f3c5eb00990c904dc8}{get\_thread\_data}}(\_thread\_index);}
+\DoxyCodeLine{00282\ \ \ \textcolor{keywordflow}{if}\ (thread\_data\ ==\ \textcolor{keyword}{nullptr}\ ||\ thread\_data-\/>is\_empty())\ \{}
+\DoxyCodeLine{00283\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00284\ \ \ \}}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \textcolor{keywordtype}{int}\ latest\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a69bcce3d1e7df55590225f42c70d815c}{get\_latest\_frame\_number}}();}
+\DoxyCodeLine{00287\ \ \ \textcolor{keywordflow}{if}\ (\_frame\_number\ !=\ latest\ \&\&\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a4a22d1791dc1b5a468ba25810709e2bc}{has\_frame}}(latest))\ \{}
+\DoxyCodeLine{00288\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a4dfb523fce54627b0ccd84e4411914fc}{set\_frame\_number}}(latest);}
+\DoxyCodeLine{00289\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00290\ \ \ \}}
+\DoxyCodeLine{00291\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00292\ \}}
+\DoxyCodeLine{00293\ }
+\DoxyCodeLine{00297\ std::string\ \mbox{\hyperlink{classPStatFlameGraph_a23b00d3f89d8a69449937c8f2f87a8e6}{PStatFlameGraph::}}}
+\DoxyCodeLine{00298\ \mbox{\hyperlink{classPStatFlameGraph_a23b00d3f89d8a69449937c8f2f87a8e6}{get\_title\_text}}()\ \{}
+\DoxyCodeLine{00299\ \ \ std::string\ text;}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00301\ \ \ \_title\_unknown\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00303\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00304\ \ \ \textcolor{keywordflow}{if}\ (\_collector\_index\ >=\ 0)\ \{}
+\DoxyCodeLine{00305\ \ \ \ \ \textcolor{keywordflow}{if}\ (client\_data-\/>\mbox{\hyperlink{classPStatClientData_aa9e2c591cab46b192ff3aa9409e1f681}{has\_collector}}(\_collector\_index))\ \{}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ text\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a108bc9bffd81beda32f1c783860d2366}{get\_collector\_fullname}}(\_collector\_index);}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ text\ +=\ \textcolor{stringliteral}{"{}\ flame\ graph"{}};}
+\DoxyCodeLine{00308\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \_title\_unknown\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00310\ \ \ \ \ \}}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_thread\_index\ !=\ 0)\ \{}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (client\_data-\/>\mbox{\hyperlink{classPStatClientData_a191b7fe1a56515271c5829d870e48192}{has\_thread}}(\_thread\_index))\ \{}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ text\ +=\ \textcolor{stringliteral}{"{}\ ("{}}\ +\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a5b905293fa940d70742612a4ec5a87f6}{get\_thread\_name}}(\_thread\_index)\ +\ \textcolor{stringliteral}{"{}\ thread)"{}};}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ \_title\_unknown\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00318\ \ \ \ \ \}}
+\DoxyCodeLine{00319\ \ \ \}}
+\DoxyCodeLine{00320\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (client\_data-\/>\mbox{\hyperlink{classPStatClientData_a191b7fe1a56515271c5829d870e48192}{has\_thread}}(\_thread\_index))\ \{}
+\DoxyCodeLine{00321\ \ \ \ \ text\ +=\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a5b905293fa940d70742612a4ec5a87f6}{get\_thread\_name}}(\_thread\_index)\ +\ \textcolor{stringliteral}{"{}\ thread\ flame\ graph"{}};}
+\DoxyCodeLine{00322\ \ \ \}}
+\DoxyCodeLine{00323\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00324\ \ \ \ \ \_title\_unknown\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00325\ \ \ \}}
+\DoxyCodeLine{00326\ }
+\DoxyCodeLine{00327\ \ \ \textcolor{keywordflow}{if}\ (\_frame\_number\ >=\ 0)\ \{}
+\DoxyCodeLine{00328\ \ \ \ \ text\ +=\ \textcolor{stringliteral}{"{}\ (frame\ "{}}\ +\ format\_string(\_frame\_number)\ +\ \textcolor{stringliteral}{"{})"{}};}
+\DoxyCodeLine{00329\ \ \ \}}
+\DoxyCodeLine{00330\ }
+\DoxyCodeLine{00331\ \ \ \textcolor{keywordflow}{return}\ text;}
+\DoxyCodeLine{00332\ \}}
+\DoxyCodeLine{00333\ }
+\DoxyCodeLine{00338\ std::string\ \mbox{\hyperlink{classPStatFlameGraph_a44bf41cc64eb10cdc5b146fe158fd3d0}{PStatFlameGraph::}}}
+\DoxyCodeLine{00339\ \mbox{\hyperlink{classPStatFlameGraph_a44bf41cc64eb10cdc5b146fe158fd3d0}{get\_bar\_tooltip}}(\textcolor{keywordtype}{int}\ depth,\ \textcolor{keywordtype}{int}\ x)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00340\ \ \ \textcolor{keyword}{const}\ StackLevel\ *level\ =\ \_stack.locate(depth,\ pixel\_to\_height(x),\ \_average\_mode);}
+\DoxyCodeLine{00341\ \ \ \textcolor{keywordflow}{if}\ (level\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00342\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00343\ \ \ \ \ \textcolor{keywordflow}{if}\ (client\_data\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_aa9e2c591cab46b192ff3aa9409e1f681}{has\_collector}}(level-\/>\_collector\_index))\ \{}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ text;}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ text\ <<\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a108bc9bffd81beda32f1c783860d2366}{get\_collector\_fullname}}(level-\/>\_collector\_index);}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ text\ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ \mbox{\hyperlink{classPStatGraph_aa9829b73ad4d9ce79092eafcb3202b57}{format\_number}}(level-\/>get\_net\_value(\_average\_mode),\ GBU\_show\_units\ |\ GBU\_ms);}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (level-\/>\_count\ >\ 1)\ \{}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ text\ <<\ \textcolor{stringliteral}{"{}\ /\ "{}}\ <<\ level-\/>\_count\ <<\ \textcolor{stringliteral}{"{}x"{}};}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ text\ <<\ \textcolor{stringliteral}{"{})"{}};}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ text.str();}
+\DoxyCodeLine{00352\ \ \ \ \ \}}
+\DoxyCodeLine{00353\ \ \ \}}
+\DoxyCodeLine{00354\ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{00355\ \}}
+\DoxyCodeLine{00356\ }
+\DoxyCodeLine{00360\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPStatFlameGraph_a903a32048dcb3a084d42e1b583e894df}{PStatFlameGraph::}}}
+\DoxyCodeLine{00361\ \mbox{\hyperlink{classPStatFlameGraph_a903a32048dcb3a084d42e1b583e894df}{get\_bar\_collector}}(\textcolor{keywordtype}{int}\ depth,\ \textcolor{keywordtype}{int}\ x)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00362\ \ \ \textcolor{keyword}{const}\ StackLevel\ *level\ =\ \_stack.locate(depth,\ pixel\_to\_height(x),\ \_average\_mode);}
+\DoxyCodeLine{00363\ \ \ \textcolor{keywordflow}{if}\ (level\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00364\ \ \ \ \ \textcolor{keywordflow}{return}\ level-\/>\_collector\_index;}
+\DoxyCodeLine{00365\ \ \ \}}
+\DoxyCodeLine{00366\ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00367\ \}}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00372\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_a00d13a7dc605a909397deb83eed0a053}{PStatFlameGraph::}}}
+\DoxyCodeLine{00373\ \mbox{\hyperlink{classPStatFlameGraph_a00d13a7dc605a909397deb83eed0a053}{write\_datagram}}(\mbox{\hyperlink{classDatagram}{Datagram}}\ \&dg)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00374\ \ \ dg.add\_int16(\_orig\_collector\_index);}
+\DoxyCodeLine{00375\ \ \ dg.add\_float64(\_time\_width);}
+\DoxyCodeLine{00376\ \ \ dg.add\_bool(\_average\_mode);}
+\DoxyCodeLine{00377\ }
+\DoxyCodeLine{00378\ \ \ \mbox{\hyperlink{classPStatGraph_aa70e909c8ffac3abd11933f296b1562f}{PStatGraph::write\_datagram}}(dg);}
+\DoxyCodeLine{00379\ \}}
+\DoxyCodeLine{00380\ }
+\DoxyCodeLine{00384\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_aa79d11f9fc982c6718da26ae33ebf815}{PStatFlameGraph::}}}
+\DoxyCodeLine{00385\ \mbox{\hyperlink{classPStatFlameGraph_aa79d11f9fc982c6718da26ae33ebf815}{read\_datagram}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan)\ \{}
+\DoxyCodeLine{00386\ \ \ \_orig\_collector\_index\ =\ scan.get\_int16();}
+\DoxyCodeLine{00387\ \ \ \_time\_width\ =\ scan.get\_float64();}
+\DoxyCodeLine{00388\ \ \ \_average\_mode\ =\ scan.get\_bool();}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \mbox{\hyperlink{classPStatGraph_aae84b504720083c677534f2c444f6632}{PStatGraph::read\_datagram}}(scan);}
+\DoxyCodeLine{00391\ }
+\DoxyCodeLine{00392\ \ \ \_current\_frame\ =\ -\/1;}
+\DoxyCodeLine{00393\ \ \ \_stack.clear();}
+\DoxyCodeLine{00394\ \ \ \mbox{\hyperlink{classPStatFlameGraph_a77f7e839375e14b1c6ecf6106ec16e12}{update}}();}
+\DoxyCodeLine{00395\ \ \ \textcolor{keywordflow}{if}\ (\_average\_mode)\ \{}
+\DoxyCodeLine{00396\ \ \ \ \ \_time\_width\ =\ \_stack.get\_net\_value(\textcolor{keyword}{false});}
+\DoxyCodeLine{00397\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_time\_width\ ==\ 0.0)\ \{}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \_time\_width\ =\ 1.0\ /\ pstats\_target\_frame\_rate;}
+\DoxyCodeLine{00399\ \ \ \ \ \}}
+\DoxyCodeLine{00400\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a7f6d9e5cbcbb0df8532fb32adf49b029}{normal\_guide\_bars}}();}
+\DoxyCodeLine{00401\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a031c26dac9e2e7257a73d20ff14311eb}{force\_redraw}}();}
+\DoxyCodeLine{00402\ \ \ \}}
+\DoxyCodeLine{00403\ \}}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00408\ \textcolor{keywordtype}{void}\ PStatFlameGraph::}
+\DoxyCodeLine{00409\ update\_data()\ \{}
+\DoxyCodeLine{00410\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClientData}{PStatClientData}}\ *client\_data\ =\ \_monitor-\/>get\_client\_data();}
+\DoxyCodeLine{00411\ \ \ \textcolor{keywordflow}{if}\ (client\_data\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00412\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00413\ \ \ \}}
+\DoxyCodeLine{00414\ }
+\DoxyCodeLine{00415\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatThreadData}{PStatThreadData}}\ *thread\_data\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a46e69042db6f96f3c5eb00990c904dc8}{get\_thread\_data}}(\_thread\_index);}
+\DoxyCodeLine{00416\ \ \ \textcolor{keywordflow}{if}\ (thread\_data\ ==\ \textcolor{keyword}{nullptr}\ ||\ thread\_data-\/>is\_empty())\ \{}
+\DoxyCodeLine{00417\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00418\ \ \ \}}
+\DoxyCodeLine{00419\ }
+\DoxyCodeLine{00420\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatFrameData}{PStatFrameData}}\ \&frame\_data\ =\ thread\_data-\/>\mbox{\hyperlink{classPStatThreadData_a5530a369c1f4400afdbbb2659cdd99f2}{get\_frame}}(\_current\_frame);}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00422\ \ \ \textcolor{keywordtype}{bool}\ first\_time\ =\ \_stack.\_children.empty();}
+\DoxyCodeLine{00423\ }
+\DoxyCodeLine{00424\ \ \ StackLevel\ *top\ =\ \&\_stack;}
+\DoxyCodeLine{00425\ \ \ top-\/>reset();}
+\DoxyCodeLine{00426\ }
+\DoxyCodeLine{00427\ \ \ \textcolor{keywordtype}{size\_t}\ num\_events\ =\ frame\_data.get\_num\_events();}
+\DoxyCodeLine{00428\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ ei\ =\ 0;\ ei\ <\ num\_events;\ ++ei)\ \{}
+\DoxyCodeLine{00429\ \ \ \ \ \textcolor{keywordtype}{int}\ collector\_index\ =\ frame\_data.get\_time\_collector(ei);}
+\DoxyCodeLine{00430\ \ \ \ \ \textcolor{keywordtype}{double}\ time\ =\ frame\_data.get\_time(ei);}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{keywordflow}{if}\ (frame\_data.is\_start(ei))\ \{}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ a\ collector\ index,\ use\ it\ to\ determine\ which\ bottom-\/level}}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \textcolor{comment}{//\ stack\ frames\ we\ are\ interested\ in.}}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_collector\_index\ <\ 0\ ||}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \ \ \ \ \_collector\_index\ ==\ collector\_index\ ||}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \ \ \ \ top\ !=\ \&\_stack)\ \{}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ \ \ top\ =\ top-\/>start(collector\_index,\ time);}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Check\ whether\ one\ of\ the\ parents\ matches,\ perhaps.}}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ parent\_index\ =\ collector\_index;}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatCollectorDef}{PStatCollectorDef}}\ \&def\ =\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_a24e17a5885214596815115a8bb768e2a}{get\_collector\_def}}(parent\_index);}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (parent\_index\ ==\ def.\_parent\_index)\ \{}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \ \ \ \ parent\_index\ =\ def.\_parent\_index;}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (parent\_index\ ==\ \_collector\_index)\ \{}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Yes,\ let\ it\ through.}}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \ \ \ \ \ \ top\ =\ top-\/>start(collector\_index,\ time);}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (parent\_index\ >=\ 0\ \&\&\ client\_data-\/>\mbox{\hyperlink{classPStatClientData_aa9e2c591cab46b192ff3aa9409e1f681}{has\_collector}}(parent\_index));}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00457\ \ \ \ \ \}}
+\DoxyCodeLine{00458\ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ top\ =\ top-\/>stop(collector\_index,\ time);}
+\DoxyCodeLine{00460\ \ \ \ \ \}}
+\DoxyCodeLine{00461\ \ \ \}}
+\DoxyCodeLine{00462\ \ \ top\ =\ top-\/>stop\_all(frame\_data.get\_end());}
+\DoxyCodeLine{00463\ \ \ nassertv(top\ ==\ \&\_stack);}
+\DoxyCodeLine{00464\ }
+\DoxyCodeLine{00465\ \ \ \textcolor{keywordflow}{if}\ (first\_time)\ \{}
+\DoxyCodeLine{00466\ \ \ \ \ \_stack.reset\_averages();}
+\DoxyCodeLine{00467\ \ \ \}}
+\DoxyCodeLine{00468\ }
+\DoxyCodeLine{00469\ \ \ \textcolor{keywordflow}{if}\ (!\_average\_mode)\ \{}
+\DoxyCodeLine{00470\ \ \ \ \ \textcolor{comment}{//\ Redraw\ right\ away,\ except\ in\ average\ mode,\ where\ it's\ done\ in\ animate().}}
+\DoxyCodeLine{00471\ \ \ \ \ \_time\_width\ =\ \_stack.get\_net\_value(\textcolor{keyword}{false});}
+\DoxyCodeLine{00472\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_time\_width\ ==\ 0.0)\ \{}
+\DoxyCodeLine{00473\ \ \ \ \ \ \ \_time\_width\ =\ 1.0\ /\ pstats\_target\_frame\_rate;}
+\DoxyCodeLine{00474\ \ \ \ \ \}}
+\DoxyCodeLine{00475\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a7f6d9e5cbcbb0df8532fb32adf49b029}{normal\_guide\_bars}}();}
+\DoxyCodeLine{00476\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a031c26dac9e2e7257a73d20ff14311eb}{force\_redraw}}();}
+\DoxyCodeLine{00477\ \ \ \}}
+\DoxyCodeLine{00478\ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00485\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_a364749482f8eb2540c32ff3ada48bed1}{PStatFlameGraph::}}}
+\DoxyCodeLine{00486\ \mbox{\hyperlink{classPStatFlameGraph_a364749482f8eb2540c32ff3ada48bed1}{changed\_size}}(\textcolor{keywordtype}{int}\ xsize,\ \textcolor{keywordtype}{int}\ ysize)\ \{}
+\DoxyCodeLine{00487\ \ \ \textcolor{keywordflow}{if}\ (xsize\ !=\ \_xsize\ ||\ ysize\ !=\ \_ysize)\ \{}
+\DoxyCodeLine{00488\ \ \ \ \ \_xsize\ =\ xsize;}
+\DoxyCodeLine{00489\ \ \ \ \ \_ysize\ =\ ysize;}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00491\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a7f6d9e5cbcbb0df8532fb32adf49b029}{normal\_guide\_bars}}();}
+\DoxyCodeLine{00492\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a031c26dac9e2e7257a73d20ff14311eb}{force\_redraw}}();}
+\DoxyCodeLine{00493\ \ \ \}}
+\DoxyCodeLine{00494\ \}}
+\DoxyCodeLine{00495\ }
+\DoxyCodeLine{00500\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_a031c26dac9e2e7257a73d20ff14311eb}{PStatFlameGraph::}}}
+\DoxyCodeLine{00501\ \mbox{\hyperlink{classPStatFlameGraph_a031c26dac9e2e7257a73d20ff14311eb}{force\_redraw}}()\ \{}
+\DoxyCodeLine{00502\ \ \ \mbox{\hyperlink{classPStatFlameGraph_a46a2f7fbd04b1a149bbba0242612db31}{begin\_draw}}();}
+\DoxyCodeLine{00503\ \ \ r\_draw\_level(\_stack);}
+\DoxyCodeLine{00504\ \ \ \mbox{\hyperlink{classPStatFlameGraph_aeb77c0b7cbe400a8cbdd5cf2121c3637}{end\_draw}}();}
+\DoxyCodeLine{00505\ \}}
+\DoxyCodeLine{00506\ }
+\DoxyCodeLine{00510\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_a7f6d9e5cbcbb0df8532fb32adf49b029}{PStatFlameGraph::}}}
+\DoxyCodeLine{00511\ \mbox{\hyperlink{classPStatFlameGraph_a7f6d9e5cbcbb0df8532fb32adf49b029}{normal\_guide\_bars}}()\ \{}
+\DoxyCodeLine{00512\ \ \ \textcolor{comment}{//\ We\ want\ vaguely\ 100\ pixels\ between\ guide\ bars.}}
+\DoxyCodeLine{00513\ \ \ \textcolor{keywordtype}{int}\ num\_bars\ =\ get\_xsize()\ /\ 100;}
+\DoxyCodeLine{00514\ }
+\DoxyCodeLine{00515\ \ \ \_guide\_bars.clear();}
+\DoxyCodeLine{00516\ }
+\DoxyCodeLine{00517\ \ \ \textcolor{keywordtype}{double}\ dist\ =\ \_time\_width\ /\ num\_bars;}
+\DoxyCodeLine{00518\ }
+\DoxyCodeLine{00519\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 1;\ i\ <\ num\_bars;\ ++i)\ \{}
+\DoxyCodeLine{00520\ \ \ \ \ \_guide\_bars.push\_back(\mbox{\hyperlink{classPStatGraph_a3361dd9894e280326e4831f2d575e19a}{make\_guide\_bar}}(i\ *\ dist));}
+\DoxyCodeLine{00521\ \ \ \}}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00523\ \ \ \_guide\_bars\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00524\ \}}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00530\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_a46a2f7fbd04b1a149bbba0242612db31}{PStatFlameGraph::}}}
+\DoxyCodeLine{00531\ \mbox{\hyperlink{classPStatFlameGraph_a46a2f7fbd04b1a149bbba0242612db31}{begin\_draw}}()\ \{}
+\DoxyCodeLine{00532\ \}}
+\DoxyCodeLine{00533\ }
+\DoxyCodeLine{00538\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_a37b275f248db727735f5b687c6d68c18}{PStatFlameGraph::}}}
+\DoxyCodeLine{00539\ \mbox{\hyperlink{classPStatFlameGraph_a37b275f248db727735f5b687c6d68c18}{draw\_bar}}(\textcolor{keywordtype}{int}\ depth,\ \textcolor{keywordtype}{int}\ from\_x,\ \textcolor{keywordtype}{int}\ to\_x,\ \textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ parent\_index)\ \{}
+\DoxyCodeLine{00540\ \}}
+\DoxyCodeLine{00541\ }
+\DoxyCodeLine{00546\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_aeb77c0b7cbe400a8cbdd5cf2121c3637}{PStatFlameGraph::}}}
+\DoxyCodeLine{00547\ \mbox{\hyperlink{classPStatFlameGraph_aeb77c0b7cbe400a8cbdd5cf2121c3637}{end\_draw}}()\ \{}
+\DoxyCodeLine{00548\ \}}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00554\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatFlameGraph_ae80a80a9323e59d160952ae38ef3677c}{PStatFlameGraph::}}}
+\DoxyCodeLine{00555\ \mbox{\hyperlink{classPStatFlameGraph_ae80a80a9323e59d160952ae38ef3677c}{idle}}()\ \{}
+\DoxyCodeLine{00556\ \}}
+\DoxyCodeLine{00557\ }
+\DoxyCodeLine{00562\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPStatFlameGraph_a2ff3545c8f2e4d398898e314b813cfeb}{PStatFlameGraph::}}}
+\DoxyCodeLine{00563\ \mbox{\hyperlink{classPStatFlameGraph_a2ff3545c8f2e4d398898e314b813cfeb}{animate}}(\textcolor{keywordtype}{double}\ time,\ \textcolor{keywordtype}{double}\ dt)\ \{}
+\DoxyCodeLine{00564\ \ \ \textcolor{keywordflow}{if}\ (!\_average\_mode)\ \{}
+\DoxyCodeLine{00565\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00566\ \ \ \}}
+\DoxyCodeLine{00567\ }
+\DoxyCodeLine{00568\ \ \ \textcolor{keywordflow}{if}\ (\_stack.update\_averages(\_average\_cursor))\ \{}
+\DoxyCodeLine{00569\ \ \ \ \ \_time\_width\ =\ \_stack.get\_net\_value(\textcolor{keyword}{true});}
+\DoxyCodeLine{00570\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_time\_width\ ==\ 0.0)\ \{}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \_time\_width\ =\ 1.0\ /\ pstats\_target\_frame\_rate;}
+\DoxyCodeLine{00572\ \ \ \ \ \}}
+\DoxyCodeLine{00573\ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a7f6d9e5cbcbb0df8532fb32adf49b029}{normal\_guide\_bars}}();}
+\DoxyCodeLine{00574\ \ \ \}}
+\DoxyCodeLine{00575\ }
+\DoxyCodeLine{00576\ \ \ \textcolor{comment}{//\ Always\ use\ force\_redraw,\ since\ the\ mouse\ position\ may\ have\ changed.}}
+\DoxyCodeLine{00577\ \ \ \mbox{\hyperlink{classPStatFlameGraph_a031c26dac9e2e7257a73d20ff14311eb}{force\_redraw}}();}
+\DoxyCodeLine{00578\ }
+\DoxyCodeLine{00579\ \ \ \textcolor{comment}{//\ Cycle\ through\ the\ ring\ buffers.}}
+\DoxyCodeLine{00580\ \ \ \_average\_cursor\ =\ (\_average\_cursor\ +\ 1)\ \%\ \_num\_average\_frames;}
+\DoxyCodeLine{00581\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00582\ \}}
+\DoxyCodeLine{00583\ }
+\DoxyCodeLine{00587\ \textcolor{keywordtype}{void}\ PStatFlameGraph::StackLevel::}
+\DoxyCodeLine{00588\ reset()\ \{}
+\DoxyCodeLine{00589\ \ \ \_start\_time\ =\ 0.0;}
+\DoxyCodeLine{00590\ \ \ \_net\_value\ =\ 0.0;}
+\DoxyCodeLine{00591\ \ \ \_count\ =\ 0;}
+\DoxyCodeLine{00592\ \ \ \_started\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00593\ }
+\DoxyCodeLine{00594\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{auto}\ \&item\ :\ \_children)\ \{}
+\DoxyCodeLine{00595\ \ \ \ \ item.second.reset();}
+\DoxyCodeLine{00596\ \ \ \}}
+\DoxyCodeLine{00597\ \}}
+\DoxyCodeLine{00598\ }
+\DoxyCodeLine{00603\ PStatFlameGraph::StackLevel\ *PStatFlameGraph::StackLevel::}
+\DoxyCodeLine{00604\ start(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{double}\ time)\ \{}
+\DoxyCodeLine{00605\ \ \ StackLevel\ \&child\ =\ \_children[collector\_index];}
+\DoxyCodeLine{00606\ \ \ child.\_parent\ =\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00607\ \ \ child.\_collector\_index\ =\ collector\_index;}
+\DoxyCodeLine{00608\ \ \ child.\_start\_time\ =\ std::max(\_start\_time,\ time);}
+\DoxyCodeLine{00609\ \ \ child.\_count++;}
+\DoxyCodeLine{00610\ \ \ child.\_started\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00611\ \ \ \textcolor{keywordflow}{return}\ \&child;}
+\DoxyCodeLine{00612\ \}}
+\DoxyCodeLine{00613\ }
+\DoxyCodeLine{00619\ PStatFlameGraph::StackLevel\ *PStatFlameGraph::StackLevel::}
+\DoxyCodeLine{00620\ stop(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{double}\ time)\ \{}
+\DoxyCodeLine{00621\ \ \ StackLevel\ *new\_top\ =\ r\_stop(collector\_index,\ time);}
+\DoxyCodeLine{00622\ \ \ \textcolor{keywordflow}{if}\ (new\_top\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00623\ \ \ \ \ \textcolor{keywordflow}{return}\ new\_top;}
+\DoxyCodeLine{00624\ \ \ \}}
+\DoxyCodeLine{00625\ \ \ \textcolor{comment}{//\ We\ have\ a\ stop\ event\ without\ a\ preceding\ start\ event.\ \ Measure\ the}}
+\DoxyCodeLine{00626\ \ \ \textcolor{comment}{//\ the\ time\ from\ the\ start\ of\ the\ current\ stack\ frame\ to\ the\ stop\ time.}}
+\DoxyCodeLine{00627\ \ \ \textcolor{comment}{//\ Actually,\ don't\ do\ this,\ because\ it\ means\ that\ a\ child\ may\ end\ up\ with}}
+\DoxyCodeLine{00628\ \ \ \textcolor{comment}{//\ more\ time\ than\ the\ parent.\ \ Need\ a\ better\ solution\ for\ this\ -\/\ or\ not?}}
+\DoxyCodeLine{00629\ \ \ \textcolor{comment}{//start(collector\_index,\ \_start\_time)-\/>stop(collector\_index,\ time);}}
+\DoxyCodeLine{00630\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00631\ \}}
+\DoxyCodeLine{00632\ }
+\DoxyCodeLine{00637\ PStatFlameGraph::StackLevel\ *PStatFlameGraph::StackLevel::}
+\DoxyCodeLine{00638\ stop\_all(\textcolor{keywordtype}{double}\ time)\ \{}
+\DoxyCodeLine{00639\ \ \ \textcolor{keywordflow}{if}\ (\_parent\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00640\ \ \ \ \ nassertr(\_started,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00641\ \ \ \ \ \_net\_value\ +=\ time\ -\/\ \_start\_time;}
+\DoxyCodeLine{00642\ \ \ \ \ \textcolor{keywordflow}{return}\ \_parent-\/>stop\_all(time);}
+\DoxyCodeLine{00643\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00644\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00645\ \ \ \}}
+\DoxyCodeLine{00646\ \}}
+\DoxyCodeLine{00647\ }
+\DoxyCodeLine{00651\ \textcolor{keywordtype}{void}\ PStatFlameGraph::StackLevel::}
+\DoxyCodeLine{00652\ reset\_averages()\ \{}
+\DoxyCodeLine{00653\ \ \ \textcolor{keywordtype}{double}\ net\_value\ =\ get\_net\_value(\textcolor{keyword}{false});}
+\DoxyCodeLine{00654\ }
+\DoxyCodeLine{00655\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{double}\ \&value\ :\ \_values)\ \{}
+\DoxyCodeLine{00656\ \ \ \ \ value\ =\ net\_value;}
+\DoxyCodeLine{00657\ \ \ \}}
+\DoxyCodeLine{00658\ \ \ \_avg\_net\_value\ =\ net\_value;}
+\DoxyCodeLine{00659\ }
+\DoxyCodeLine{00660\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{auto}\ \&item\ :\ \_children)\ \{}
+\DoxyCodeLine{00661\ \ \ \ \ item.second.reset\_averages();}
+\DoxyCodeLine{00662\ \ \ \}}
+\DoxyCodeLine{00663\ \}}
+\DoxyCodeLine{00664\ }
+\DoxyCodeLine{00668\ \textcolor{keywordtype}{bool}\ PStatFlameGraph::StackLevel::}
+\DoxyCodeLine{00669\ update\_averages(\textcolor{keywordtype}{size\_t}\ cursor)\ \{}
+\DoxyCodeLine{00670\ \ \ \_values[cursor]\ =\ get\_net\_value(\textcolor{keyword}{false});}
+\DoxyCodeLine{00671\ }
+\DoxyCodeLine{00672\ \ \ \textcolor{keywordtype}{bool}\ changed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00673\ }
+\DoxyCodeLine{00674\ \ \ \textcolor{keywordtype}{double}\ sum\ =\ 0;}
+\DoxyCodeLine{00675\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{double}\ value\ :\ \_values)\ \{}
+\DoxyCodeLine{00676\ \ \ \ \ sum\ +=\ value;}
+\DoxyCodeLine{00677\ \ \ \}}
+\DoxyCodeLine{00678\ \ \ \textcolor{keywordtype}{double}\ avg\ =\ sum\ /\ \_num\_average\_frames;}
+\DoxyCodeLine{00679\ \ \ \textcolor{keywordflow}{if}\ (avg\ !=\ \_avg\_net\_value)\ \{}
+\DoxyCodeLine{00680\ \ \ \ \ \_avg\_net\_value\ =\ avg;}
+\DoxyCodeLine{00681\ \ \ \ \ changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00682\ \ \ \}}
+\DoxyCodeLine{00683\ }
+\DoxyCodeLine{00684\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{auto}\ \&item\ :\ \_children)\ \{}
+\DoxyCodeLine{00685\ \ \ \ \ \textcolor{keywordflow}{if}\ (item.second.update\_averages(cursor))\ \{}
+\DoxyCodeLine{00686\ \ \ \ \ \ \ changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00687\ \ \ \ \ \}}
+\DoxyCodeLine{00688\ \ \ \}}
+\DoxyCodeLine{00689\ }
+\DoxyCodeLine{00690\ \ \ \textcolor{keywordflow}{return}\ changed;}
+\DoxyCodeLine{00691\ \}}
+\DoxyCodeLine{00692\ }
+\DoxyCodeLine{00696\ \textcolor{keyword}{const}\ PStatFlameGraph::StackLevel\ *PStatFlameGraph::StackLevel::}
+\DoxyCodeLine{00697\ locate(\textcolor{keywordtype}{int}\ depth,\ \textcolor{keywordtype}{double}\ time,\ \textcolor{keywordtype}{bool}\ average)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00698\ \ \ \textcolor{keywordflow}{if}\ (time\ <\ 0.0)\ \{}
+\DoxyCodeLine{00699\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00700\ \ \ \}}
+\DoxyCodeLine{00701\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ \textcolor{keyword}{auto}\ \&item\ :\ \_children)\ \{}
+\DoxyCodeLine{00702\ \ \ \ \ \textcolor{keywordtype}{double}\ value\ =\ item.second.get\_net\_value(average);}
+\DoxyCodeLine{00703\ \ \ \ \ \textcolor{keywordflow}{if}\ (time\ <\ value)\ \{}
+\DoxyCodeLine{00704\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (depth\ ==\ 0)\ \{}
+\DoxyCodeLine{00705\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ it.}}
+\DoxyCodeLine{00706\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \&item.second;}
+\DoxyCodeLine{00707\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00708\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Recurse.}}
+\DoxyCodeLine{00709\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ item.second.locate(depth\ -\/\ 1,\ time,\ average);}
+\DoxyCodeLine{00710\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00711\ \ \ \ \ \}}
+\DoxyCodeLine{00712\ \ \ \ \ time\ -\/=\ value;}
+\DoxyCodeLine{00713\ \ \ \}}
+\DoxyCodeLine{00714\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00715\ \}}
+\DoxyCodeLine{00716\ }
+\DoxyCodeLine{00720\ \textcolor{keywordtype}{void}\ PStatFlameGraph::StackLevel::}
+\DoxyCodeLine{00721\ clear()\ \{}
+\DoxyCodeLine{00722\ \ \ \_children.clear();}
+\DoxyCodeLine{00723\ \ \ \_count\ =\ 0;}
+\DoxyCodeLine{00724\ \ \ \_net\_value\ =\ 0.0;}
+\DoxyCodeLine{00725\ \}}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00730\ PStatFlameGraph::StackLevel\ *PStatFlameGraph::StackLevel::}
+\DoxyCodeLine{00731\ r\_stop(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{double}\ time)\ \{}
+\DoxyCodeLine{00732\ \ \ \textcolor{keywordflow}{if}\ (\_collector\_index\ ==\ collector\_index)\ \{}
+\DoxyCodeLine{00733\ \ \ \ \ \textcolor{comment}{//\ Found\ it.}}
+\DoxyCodeLine{00734\ \ \ \ \ nassertr(\_started,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00735\ \ \ \ \ \_net\_value\ +=\ time\ -\/\ \_start\_time;}
+\DoxyCodeLine{00736\ \ \ \ \ \_started\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00737\ \ \ \ \ nassertr(\_parent\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00738\ \ \ \ \ \textcolor{keywordflow}{return}\ \_parent;}
+\DoxyCodeLine{00739\ \ \ \}}
+\DoxyCodeLine{00740\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_parent\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00741\ \ \ \ \ StackLevel\ *level\ =\ \_parent-\/>r\_stop(collector\_index,\ time);}
+\DoxyCodeLine{00742\ \ \ \ \ \textcolor{keywordflow}{if}\ (level\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ nassertr(\_started,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ \_net\_value\ +=\ time\ -\/\ \_start\_time;}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \_started\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ level;}
+\DoxyCodeLine{00747\ \ \ \ \ \}}
+\DoxyCodeLine{00748\ \ \ \}}
+\DoxyCodeLine{00749\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00750\ \}}
+\DoxyCodeLine{00751\ }
+\DoxyCodeLine{00755\ \textcolor{keywordtype}{void}\ PStatFlameGraph::}
+\DoxyCodeLine{00756\ r\_draw\_level(\textcolor{keyword}{const}\ StackLevel\ \&level,\ \textcolor{keywordtype}{int}\ depth,\ \textcolor{keywordtype}{double}\ offset)\ \{}
+\DoxyCodeLine{00757\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ \textcolor{keyword}{auto}\ \&item\ :\ level.\_children)\ \{}
+\DoxyCodeLine{00758\ \ \ \ \ \textcolor{keyword}{const}\ StackLevel\ \&child\ =\ item.second;}
+\DoxyCodeLine{00759\ }
+\DoxyCodeLine{00760\ \ \ \ \ \textcolor{keywordtype}{double}\ value\ =\ child.get\_net\_value(\_average\_mode);}
+\DoxyCodeLine{00761\ }
+\DoxyCodeLine{00762\ \ \ \ \ \textcolor{keywordtype}{int}\ from\_x\ =\ height\_to\_pixel(offset);}
+\DoxyCodeLine{00763\ \ \ \ \ \textcolor{keywordtype}{int}\ to\_x\ =\ height\_to\_pixel(offset\ +\ value);}
+\DoxyCodeLine{00764\ }
+\DoxyCodeLine{00765\ \ \ \ \ \textcolor{comment}{//\ No\ need\ to\ recurse\ if\ the\ bars\ have\ become\ smaller\ than\ a\ pixel.}}
+\DoxyCodeLine{00766\ \ \ \ \ \textcolor{keywordflow}{if}\ (to\_x\ >\ from\_x)\ \{}
+\DoxyCodeLine{00767\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatFlameGraph_a37b275f248db727735f5b687c6d68c18}{draw\_bar}}(depth,\ from\_x,\ to\_x,\ child.\_collector\_index,\ level.\_collector\_index);}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ r\_draw\_level(child,\ depth\ +\ 1,\ offset);}
+\DoxyCodeLine{00769\ \ \ \ \ \}}
+\DoxyCodeLine{00770\ }
+\DoxyCodeLine{00771\ \ \ \ \ offset\ +=\ value;}
+\DoxyCodeLine{00772\ \ \ \}}
+\DoxyCodeLine{00773\ \}}
+
+\end{DoxyCode}

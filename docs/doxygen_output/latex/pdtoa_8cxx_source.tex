@@ -1,0 +1,596 @@
+\doxysection{pdtoa.\+cxx}
+\hypertarget{pdtoa_8cxx_source}{}\label{pdtoa_8cxx_source}\index{dtool/src/dtoolbase/pdtoa.cxx@{dtool/src/dtoolbase/pdtoa.cxx}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00002\ \textcolor{comment}{See\ pdtoa.h\ for\ explanation.}}
+\DoxyCodeLine{00003\ \textcolor{comment}{}}
+\DoxyCodeLine{00004\ \textcolor{comment}{Copyright\ (C)\ 2014\ Milo\ Yip}}
+\DoxyCodeLine{00005\ \textcolor{comment}{Permission\ is\ hereby\ granted,\ free\ of\ charge,\ to\ any\ person\ obtaining\ a\ copy}}
+\DoxyCodeLine{00006\ \textcolor{comment}{of\ this\ software\ and\ associated\ documentation\ files\ (the\ "{}Software"{}),\ to\ deal}}
+\DoxyCodeLine{00007\ \textcolor{comment}{in\ the\ Software\ without\ restriction,\ including\ without\ limitation\ the\ rights}}
+\DoxyCodeLine{00008\ \textcolor{comment}{to\ use,\ copy,\ modify,\ merge,\ publish,\ distribute,\ sublicense,\ and/or\ sell}}
+\DoxyCodeLine{00009\ \textcolor{comment}{copies\ of\ the\ Software,\ and\ to\ permit\ persons\ to\ whom\ the\ Software\ is}}
+\DoxyCodeLine{00010\ \textcolor{comment}{furnished\ to\ do\ so,\ subject\ to\ the\ following\ conditions:}}
+\DoxyCodeLine{00011\ \textcolor{comment}{}}
+\DoxyCodeLine{00012\ \textcolor{comment}{The\ above\ copyright\ notice\ and\ this\ permission\ notice\ shall\ be\ included\ in}}
+\DoxyCodeLine{00013\ \textcolor{comment}{all\ copies\ or\ substantial\ portions\ of\ the\ Software.}}
+\DoxyCodeLine{00014\ \textcolor{comment}{}}
+\DoxyCodeLine{00015\ \textcolor{comment}{THE\ SOFTWARE\ IS\ PROVIDED\ "{}AS\ IS"{},\ WITHOUT\ WARRANTY\ OF\ ANY\ KIND,\ EXPRESS\ OR}}
+\DoxyCodeLine{00016\ \textcolor{comment}{IMPLIED,\ INCLUDING\ BUT\ NOT\ LIMITED\ TO\ THE\ WARRANTIES\ OF\ MERCHANTABILITY,}}
+\DoxyCodeLine{00017\ \textcolor{comment}{FITNESS\ FOR\ A\ PARTICULAR\ PURPOSE\ AND\ NONINFRINGEMENT.\ IN\ NO\ EVENT\ SHALL\ THE}}
+\DoxyCodeLine{00018\ \textcolor{comment}{AUTHORS\ OR\ COPYRIGHT\ HOLDERS\ BE\ LIABLE\ FOR\ ANY\ CLAIM,\ DAMAGES\ OR\ OTHER}}
+\DoxyCodeLine{00019\ \textcolor{comment}{LIABILITY,\ WHETHER\ IN\ AN\ ACTION\ OF\ CONTRACT,\ TORT\ OR\ OTHERWISE,\ ARISING\ FROM,}}
+\DoxyCodeLine{00020\ \textcolor{comment}{OUT\ OF\ OR\ IN\ CONNECTION\ WITH\ THE\ SOFTWARE\ OR\ THE\ USE\ OR\ OTHER\ DEALINGS\ IN}}
+\DoxyCodeLine{00021\ \textcolor{comment}{THE\ SOFTWARE.}}
+\DoxyCodeLine{00022\ \textcolor{comment}{*/}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}pdtoa.h"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cmath_8h}{cmath.h}}"{}}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ <assert.h>}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{math_8h}{math.h}}>}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{stdint_8h}{stdint.h}}>}}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#if\ defined(\_MSC\_VER)}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ <intrin.h>}}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#include\ <float.h>}}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#define\ copysign\ \_copysign}}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \textcolor{preprocessor}{\#pragma\ float\_control(precise,\ on,\ push)}}
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \textcolor{preprocessor}{\#define\ UINT64\_C2(h,\ l)\ ((static\_cast<uint64\_t>(h)\ <<\ 32)\ |\ static\_cast<uint64\_t>(l))}}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00041\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structDiyFp}{DiyFp}}\ \{}
+\DoxyCodeLine{00042\ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}()\ \{\}}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00044\ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}(uint64\_t\ f,\ \textcolor{keywordtype}{int}\ e)\ :\ f(f),\ e(e)\ \{\}}
+\DoxyCodeLine{00045\ }
+\DoxyCodeLine{00046\ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}(\textcolor{keywordtype}{double}\ d)\ \{}
+\DoxyCodeLine{00047\ \ \ \ \ \textcolor{keyword}{union\ }\{}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ d;}
+\DoxyCodeLine{00049\ \ \ \ \ \ \ uint64\_t\ u64;}
+\DoxyCodeLine{00050\ \ \ \ \ \}\ u\ =\ \{\ d\ \};}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \ \ \ \ \textcolor{keywordtype}{int}\ biased\_e\ =\ (u.u64\ \&\ kDpExponentMask)\ >>\ kDpSignificandSize;}
+\DoxyCodeLine{00053\ \ \ \ \ uint64\_t\ significand\ =\ (u.u64\ \&\ kDpSignificandMask);}
+\DoxyCodeLine{00054\ \ \ \ \ \textcolor{keywordflow}{if}\ (biased\_e\ !=\ 0)\ \{}
+\DoxyCodeLine{00055\ \ \ \ \ \ \ f\ =\ significand\ +\ kDpHiddenBit;}
+\DoxyCodeLine{00056\ \ \ \ \ \ \ e\ =\ biased\_e\ -\/\ kDpExponentBias;}
+\DoxyCodeLine{00057\ \ \ \ \ \}}
+\DoxyCodeLine{00058\ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ f\ =\ significand;}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ e\ =\ kDpMinExponent\ +\ 1;}
+\DoxyCodeLine{00061\ \ \ \ \ \}}
+\DoxyCodeLine{00062\ \ \ \}}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00064\ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ operator-\/(\textcolor{keyword}{const}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}\&\ rhs)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00065\ \ \ \ \ assert(e\ ==\ rhs.e);}
+\DoxyCodeLine{00066\ \ \ \ \ assert(f\ >=\ rhs.f);}
+\DoxyCodeLine{00067\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}(f\ -\/\ rhs.f,\ e);}
+\DoxyCodeLine{00068\ \ \ \}}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ \mbox{\hyperlink{structDiyFp_aed659229443b5dc76bd6fa09b9bb63fc}{operator*}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}\&\ rhs)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00071\ \textcolor{preprocessor}{\#if\ defined(\_MSC\_VER)\ \&\&\ defined(\_M\_AMD64)}}
+\DoxyCodeLine{00072\ \ \ \ \ uint64\_t\ h;}
+\DoxyCodeLine{00073\ \ \ \ \ uint64\_t\ l\ =\ \_umul128(f,\ rhs.f,\ \&h);}
+\DoxyCodeLine{00074\ \ \ \ \ \textcolor{keywordflow}{if}\ (l\ \&\ (uint64\_t(1)\ <<\ 63))\ \textcolor{comment}{//\ rounding}}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ h++;}
+\DoxyCodeLine{00076\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}(h,\ e\ +\ rhs.e\ +\ 64);}
+\DoxyCodeLine{00077\ \textcolor{preprocessor}{\#elif\ (\_\_GNUC\_\_\ >\ 4\ ||\ (\_\_GNUC\_\_\ ==\ 4\ \&\&\ \_\_GNUC\_MINOR\_\_\ >=\ 6))\ \&\&\ defined(\_\_x86\_64\_\_)}}
+\DoxyCodeLine{00078\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \_\_int128\ p\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{unsigned}\ \_\_int128\textcolor{keyword}{>}(f)\ *\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{unsigned}\ \_\_int128\textcolor{keyword}{>}(rhs.f);}
+\DoxyCodeLine{00079\ \ \ \ \ uint64\_t\ h\ =\ p\ >>\ 64;}
+\DoxyCodeLine{00080\ \ \ \ \ uint64\_t\ l\ =\ \textcolor{keyword}{static\_cast<}uint64\_t\textcolor{keyword}{>}(p);}
+\DoxyCodeLine{00081\ \ \ \ \ \textcolor{keywordflow}{if}\ (l\ \&\ (uint64\_t(1)\ <<\ 63))\ \textcolor{comment}{//\ rounding}}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ h++;}
+\DoxyCodeLine{00083\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}(h,\ e\ +\ rhs.e\ +\ 64);}
+\DoxyCodeLine{00084\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00085\ \ \ \ \ \textcolor{keyword}{const}\ uint64\_t\ M32\ =\ 0xFFFFFFFF;}
+\DoxyCodeLine{00086\ \ \ \ \ \textcolor{keyword}{const}\ uint64\_t\ a\ =\ f\ >>\ 32;}
+\DoxyCodeLine{00087\ \ \ \ \ \textcolor{keyword}{const}\ uint64\_t\ b\ =\ f\ \&\ M32;}
+\DoxyCodeLine{00088\ \ \ \ \ \textcolor{keyword}{const}\ uint64\_t\ c\ =\ rhs.f\ >>\ 32;}
+\DoxyCodeLine{00089\ \ \ \ \ \textcolor{keyword}{const}\ uint64\_t\ d\ =\ rhs.f\ \&\ M32;}
+\DoxyCodeLine{00090\ \ \ \ \ \textcolor{keyword}{const}\ uint64\_t\ ac\ =\ a\ *\ c;}
+\DoxyCodeLine{00091\ \ \ \ \ \textcolor{keyword}{const}\ uint64\_t\ bc\ =\ b\ *\ c;}
+\DoxyCodeLine{00092\ \ \ \ \ \textcolor{keyword}{const}\ uint64\_t\ ad\ =\ a\ *\ d;}
+\DoxyCodeLine{00093\ \ \ \ \ \textcolor{keyword}{const}\ uint64\_t\ bd\ =\ b\ *\ d;}
+\DoxyCodeLine{00094\ \ \ \ \ uint64\_t\ tmp\ =\ (bd\ >>\ 32)\ +\ (ad\ \&\ M32)\ +\ (bc\ \&\ M32);}
+\DoxyCodeLine{00095\ \ \ \ \ tmp\ +=\ 1U\ <<\ 31;\ \ }
+\DoxyCodeLine{00096\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}(ac\ +\ (ad\ >>\ 32)\ +\ (bc\ >>\ 32)\ +\ (tmp\ >>\ 32),\ e\ +\ rhs.e\ +\ 64);}
+\DoxyCodeLine{00097\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00098\ \ \ \}}
+\DoxyCodeLine{00099\ }
+\DoxyCodeLine{00100\ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ Normalize()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00101\ \textcolor{preprocessor}{\#if\ defined(\_MSC\_VER)\ \&\&\ defined(\_M\_AMD64)}}
+\DoxyCodeLine{00102\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ index;}
+\DoxyCodeLine{00103\ \ \ \ \ \_BitScanReverse64(\&index,\ f);}
+\DoxyCodeLine{00104\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}(f\ <<\ (63\ -\/\ index),\ e\ -\/\ (63\ -\/\ index));}
+\DoxyCodeLine{00105\ \textcolor{preprocessor}{\#elif\ defined(\_\_GNUC\_\_)}}
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{keywordtype}{int}\ s\ =\ \_\_builtin\_clzll(f);}
+\DoxyCodeLine{00107\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}(f\ <<\ s,\ e\ -\/\ s);}
+\DoxyCodeLine{00108\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00109\ \ \ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ res\ =\ *\textcolor{keyword}{this};}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{keywordflow}{while}\ (!(res.f\ \&\ kDpHiddenBit))\ \{}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ res.f\ <<=\ 1;}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ res.e-\/-\/;}
+\DoxyCodeLine{00113\ \ \ \ \ \}}
+\DoxyCodeLine{00114\ \ \ \ \ res.f\ <<=\ (kDiySignificandSize\ -\/\ kDpSignificandSize\ -\/\ 1);}
+\DoxyCodeLine{00115\ \ \ \ \ res.e\ =\ res.e\ -\/\ (kDiySignificandSize\ -\/\ kDpSignificandSize\ -\/\ 1);}
+\DoxyCodeLine{00116\ \ \ \ \ \textcolor{keywordflow}{return}\ res;}
+\DoxyCodeLine{00117\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00118\ \ \ \}}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ NormalizeBoundary()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00121\ \textcolor{preprocessor}{\#if\ defined(\_MSC\_VER)\ \&\&\ defined(\_M\_AMD64)}}
+\DoxyCodeLine{00122\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ index;}
+\DoxyCodeLine{00123\ \ \ \ \ \_BitScanReverse64(\&index,\ f);}
+\DoxyCodeLine{00124\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ (f\ <<\ (63\ -\/\ index),\ e\ -\/\ (63\ -\/\ index));}
+\DoxyCodeLine{00125\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00126\ \ \ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ res\ =\ *\textcolor{keyword}{this};}
+\DoxyCodeLine{00127\ \ \ \ \ \textcolor{keywordflow}{while}\ (!(res.f\ \&\ (kDpHiddenBit\ <<\ 1)))\ \{}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ res.f\ <<=\ 1;}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ res.e-\/-\/;}
+\DoxyCodeLine{00130\ \ \ \ \ \}}
+\DoxyCodeLine{00131\ \ \ \ \ res.f\ <<=\ (kDiySignificandSize\ -\/\ kDpSignificandSize\ -\/\ 2);}
+\DoxyCodeLine{00132\ \ \ \ \ res.e\ =\ res.e\ -\/\ (kDiySignificandSize\ -\/\ kDpSignificandSize\ -\/\ 2);}
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{keywordflow}{return}\ res;}
+\DoxyCodeLine{00134\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00135\ \ \ \}}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \ \ \textcolor{keywordtype}{void}\ NormalizedBoundaries(\mbox{\hyperlink{structDiyFp}{DiyFp}}*\ minus,\ \mbox{\hyperlink{structDiyFp}{DiyFp}}*\ plus)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00138\ \ \ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ pl\ =\ \mbox{\hyperlink{structDiyFp}{DiyFp}}((f\ <<\ 1)\ +\ 1,\ e\ -\/\ 1).NormalizeBoundary();}
+\DoxyCodeLine{00139\ \ \ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ mi\ =\ (f\ ==\ kDpHiddenBit)\ ?\ \mbox{\hyperlink{structDiyFp}{DiyFp}}((f\ <<\ 2)\ -\/\ 1,\ e\ -\/\ 2)\ :\ \mbox{\hyperlink{structDiyFp}{DiyFp}}((f\ <<\ 1)\ -\/\ 1,\ e\ -\/\ 1);}
+\DoxyCodeLine{00140\ \ \ \ \ mi.f\ <<=\ mi.e\ -\/\ pl.e;}
+\DoxyCodeLine{00141\ \ \ \ \ mi.e\ =\ pl.e;}
+\DoxyCodeLine{00142\ \ \ \ \ *plus\ =\ pl;}
+\DoxyCodeLine{00143\ \ \ \ \ *minus\ =\ mi;}
+\DoxyCodeLine{00144\ \ \ \}}
+\DoxyCodeLine{00145\ }
+\DoxyCodeLine{00146\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ kDiySignificandSize\ =\ 64;}
+\DoxyCodeLine{00147\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ kDpSignificandSize\ =\ 52;}
+\DoxyCodeLine{00148\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ kDpExponentBias\ =\ 0x3FF\ +\ kDpSignificandSize;}
+\DoxyCodeLine{00149\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ kDpMinExponent\ =\ -\/kDpExponentBias;}
+\DoxyCodeLine{00150\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ uint64\_t\ kDpExponentMask\ =\ UINT64\_C2(0x7FF00000,\ 0x00000000);}
+\DoxyCodeLine{00151\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ uint64\_t\ kDpSignificandMask\ =\ UINT64\_C2(0x000FFFFF,\ 0xFFFFFFFF);}
+\DoxyCodeLine{00152\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ uint64\_t\ kDpHiddenBit\ =\ UINT64\_C2(0x00100000,\ 0x00000000);}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00154\ \ \ uint64\_t\ f;}
+\DoxyCodeLine{00155\ \ \ \textcolor{keywordtype}{int}\ e;}
+\DoxyCodeLine{00156\ \};}
+\DoxyCodeLine{00157\ }
+\DoxyCodeLine{00158\ \textcolor{keyword}{inline}\ \textcolor{keyword}{static}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ GetCachedPower(\textcolor{keywordtype}{int}\ e,\ \textcolor{keywordtype}{int}*\ K)\ \{}
+\DoxyCodeLine{00159\ \ \ \textcolor{comment}{//\ 10\string^-\/348,\ 10\string^-\/340,\ ...,\ 10\string^340}}
+\DoxyCodeLine{00160\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ uint64\_t\ kCachedPowers\_F[]\ =\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ UINT64\_C2(0xfa8fd5a0,\ 0x081c0288),\ UINT64\_C2(0xbaaee17f,\ 0xa23ebf76),}
+\DoxyCodeLine{00162\ \ \ \ \ UINT64\_C2(0x8b16fb20,\ 0x3055ac76),\ UINT64\_C2(0xcf42894a,\ 0x5dce35ea),}
+\DoxyCodeLine{00163\ \ \ \ \ UINT64\_C2(0x9a6bb0aa,\ 0x55653b2d),\ UINT64\_C2(0xe61acf03,\ 0x3d1a45df),}
+\DoxyCodeLine{00164\ \ \ \ \ UINT64\_C2(0xab70fe17,\ 0xc79ac6ca),\ UINT64\_C2(0xff77b1fc,\ 0xbebcdc4f),}
+\DoxyCodeLine{00165\ \ \ \ \ UINT64\_C2(0xbe5691ef,\ 0x416bd60c),\ UINT64\_C2(0x8dd01fad,\ 0x907ffc3c),}
+\DoxyCodeLine{00166\ \ \ \ \ UINT64\_C2(0xd3515c28,\ 0x31559a83),\ UINT64\_C2(0x9d71ac8f,\ 0xada6c9b5),}
+\DoxyCodeLine{00167\ \ \ \ \ UINT64\_C2(0xea9c2277,\ 0x23ee8bcb),\ UINT64\_C2(0xaecc4991,\ 0x4078536d),}
+\DoxyCodeLine{00168\ \ \ \ \ UINT64\_C2(0x823c1279,\ 0x5db6ce57),\ UINT64\_C2(0xc2109436,\ 0x4dfb5637),}
+\DoxyCodeLine{00169\ \ \ \ \ UINT64\_C2(0x9096ea6f,\ 0x3848984f),\ UINT64\_C2(0xd77485cb,\ 0x25823ac7),}
+\DoxyCodeLine{00170\ \ \ \ \ UINT64\_C2(0xa086cfcd,\ 0x97bf97f4),\ UINT64\_C2(0xef340a98,\ 0x172aace5),}
+\DoxyCodeLine{00171\ \ \ \ \ UINT64\_C2(0xb23867fb,\ 0x2a35b28e),\ UINT64\_C2(0x84c8d4df,\ 0xd2c63f3b),}
+\DoxyCodeLine{00172\ \ \ \ \ UINT64\_C2(0xc5dd4427,\ 0x1ad3cdba),\ UINT64\_C2(0x936b9fce,\ 0xbb25c996),}
+\DoxyCodeLine{00173\ \ \ \ \ UINT64\_C2(0xdbac6c24,\ 0x7d62a584),\ UINT64\_C2(0xa3ab6658,\ 0x0d5fdaf6),}
+\DoxyCodeLine{00174\ \ \ \ \ UINT64\_C2(0xf3e2f893,\ 0xdec3f126),\ UINT64\_C2(0xb5b5ada8,\ 0xaaff80b8),}
+\DoxyCodeLine{00175\ \ \ \ \ UINT64\_C2(0x87625f05,\ 0x6c7c4a8b),\ UINT64\_C2(0xc9bcff60,\ 0x34c13053),}
+\DoxyCodeLine{00176\ \ \ \ \ UINT64\_C2(0x964e858c,\ 0x91ba2655),\ UINT64\_C2(0xdff97724,\ 0x70297ebd),}
+\DoxyCodeLine{00177\ \ \ \ \ UINT64\_C2(0xa6dfbd9f,\ 0xb8e5b88f),\ UINT64\_C2(0xf8a95fcf,\ 0x88747d94),}
+\DoxyCodeLine{00178\ \ \ \ \ UINT64\_C2(0xb9447093,\ 0x8fa89bcf),\ UINT64\_C2(0x8a08f0f8,\ 0xbf0f156b),}
+\DoxyCodeLine{00179\ \ \ \ \ UINT64\_C2(0xcdb02555,\ 0x653131b6),\ UINT64\_C2(0x993fe2c6,\ 0xd07b7fac),}
+\DoxyCodeLine{00180\ \ \ \ \ UINT64\_C2(0xe45c10c4,\ 0x2a2b3b06),\ UINT64\_C2(0xaa242499,\ 0x697392d3),}
+\DoxyCodeLine{00181\ \ \ \ \ UINT64\_C2(0xfd87b5f2,\ 0x8300ca0e),\ UINT64\_C2(0xbce50864,\ 0x92111aeb),}
+\DoxyCodeLine{00182\ \ \ \ \ UINT64\_C2(0x8cbccc09,\ 0x6f5088cc),\ UINT64\_C2(0xd1b71758,\ 0xe219652c),}
+\DoxyCodeLine{00183\ \ \ \ \ UINT64\_C2(0x9c400000,\ 0x00000000),\ UINT64\_C2(0xe8d4a510,\ 0x00000000),}
+\DoxyCodeLine{00184\ \ \ \ \ UINT64\_C2(0xad78ebc5,\ 0xac620000),\ UINT64\_C2(0x813f3978,\ 0xf8940984),}
+\DoxyCodeLine{00185\ \ \ \ \ UINT64\_C2(0xc097ce7b,\ 0xc90715b3),\ UINT64\_C2(0x8f7e32ce,\ 0x7bea5c70),}
+\DoxyCodeLine{00186\ \ \ \ \ UINT64\_C2(0xd5d238a4,\ 0xabe98068),\ UINT64\_C2(0x9f4f2726,\ 0x179a2245),}
+\DoxyCodeLine{00187\ \ \ \ \ UINT64\_C2(0xed63a231,\ 0xd4c4fb27),\ UINT64\_C2(0xb0de6538,\ 0x8cc8ada8),}
+\DoxyCodeLine{00188\ \ \ \ \ UINT64\_C2(0x83c7088e,\ 0x1aab65db),\ UINT64\_C2(0xc45d1df9,\ 0x42711d9a),}
+\DoxyCodeLine{00189\ \ \ \ \ UINT64\_C2(0x924d692c,\ 0xa61be758),\ UINT64\_C2(0xda01ee64,\ 0x1a708dea),}
+\DoxyCodeLine{00190\ \ \ \ \ UINT64\_C2(0xa26da399,\ 0x9aef774a),\ UINT64\_C2(0xf209787b,\ 0xb47d6b85),}
+\DoxyCodeLine{00191\ \ \ \ \ UINT64\_C2(0xb454e4a1,\ 0x79dd1877),\ UINT64\_C2(0x865b8692,\ 0x5b9bc5c2),}
+\DoxyCodeLine{00192\ \ \ \ \ UINT64\_C2(0xc83553c5,\ 0xc8965d3d),\ UINT64\_C2(0x952ab45c,\ 0xfa97a0b3),}
+\DoxyCodeLine{00193\ \ \ \ \ UINT64\_C2(0xde469fbd,\ 0x99a05fe3),\ UINT64\_C2(0xa59bc234,\ 0xdb398c25),}
+\DoxyCodeLine{00194\ \ \ \ \ UINT64\_C2(0xf6c69a72,\ 0xa3989f5c),\ UINT64\_C2(0xb7dcbf53,\ 0x54e9bece),}
+\DoxyCodeLine{00195\ \ \ \ \ UINT64\_C2(0x88fcf317,\ 0xf22241e2),\ UINT64\_C2(0xcc20ce9b,\ 0xd35c78a5),}
+\DoxyCodeLine{00196\ \ \ \ \ UINT64\_C2(0x98165af3,\ 0x7b2153df),\ UINT64\_C2(0xe2a0b5dc,\ 0x971f303a),}
+\DoxyCodeLine{00197\ \ \ \ \ UINT64\_C2(0xa8d9d153,\ 0x5ce3b396),\ UINT64\_C2(0xfb9b7cd9,\ 0xa4a7443c),}
+\DoxyCodeLine{00198\ \ \ \ \ UINT64\_C2(0xbb764c4c,\ 0xa7a44410),\ UINT64\_C2(0x8bab8eef,\ 0xb6409c1a),}
+\DoxyCodeLine{00199\ \ \ \ \ UINT64\_C2(0xd01fef10,\ 0xa657842c),\ UINT64\_C2(0x9b10a4e5,\ 0xe9913129),}
+\DoxyCodeLine{00200\ \ \ \ \ UINT64\_C2(0xe7109bfb,\ 0xa19c0c9d),\ UINT64\_C2(0xac2820d9,\ 0x623bf429),}
+\DoxyCodeLine{00201\ \ \ \ \ UINT64\_C2(0x80444b5e,\ 0x7aa7cf85),\ UINT64\_C2(0xbf21e440,\ 0x03acdd2d),}
+\DoxyCodeLine{00202\ \ \ \ \ UINT64\_C2(0x8e679c2f,\ 0x5e44ff8f),\ UINT64\_C2(0xd433179d,\ 0x9c8cb841),}
+\DoxyCodeLine{00203\ \ \ \ \ UINT64\_C2(0x9e19db92,\ 0xb4e31ba9),\ UINT64\_C2(0xeb96bf6e,\ 0xbadf77d9),}
+\DoxyCodeLine{00204\ \ \ \ \ UINT64\_C2(0xaf87023b,\ 0x9bf0ee6b)}
+\DoxyCodeLine{00205\ \ \ \};}
+\DoxyCodeLine{00206\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ int16\_t\ kCachedPowers\_E[]\ =\ \{}
+\DoxyCodeLine{00207\ \ \ \ \ -\/1220,\ -\/1193,\ -\/1166,\ -\/1140,\ -\/1113,\ -\/1087,\ -\/1060,\ -\/1034,\ -\/1007,\ \ -\/980,}
+\DoxyCodeLine{00208\ \ \ \ \ \ -\/954,\ \ -\/927,\ \ -\/901,\ \ -\/874,\ \ -\/847,\ \ -\/821,\ \ -\/794,\ \ -\/768,\ \ -\/741,\ \ -\/715,}
+\DoxyCodeLine{00209\ \ \ \ \ \ -\/688,\ \ -\/661,\ \ -\/635,\ \ -\/608,\ \ -\/582,\ \ -\/555,\ \ -\/529,\ \ -\/502,\ \ -\/475,\ \ -\/449,}
+\DoxyCodeLine{00210\ \ \ \ \ \ -\/422,\ \ -\/396,\ \ -\/369,\ \ -\/343,\ \ -\/316,\ \ -\/289,\ \ -\/263,\ \ -\/236,\ \ -\/210,\ \ -\/183,}
+\DoxyCodeLine{00211\ \ \ \ \ \ -\/157,\ \ -\/130,\ \ -\/103,\ \ \ -\/77,\ \ \ -\/50,\ \ \ -\/24,\ \ \ \ \ 3,\ \ \ \ 30,\ \ \ \ 56,\ \ \ \ 83,}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ 109,\ \ \ 136,\ \ \ 162,\ \ \ 189,\ \ \ 216,\ \ \ 242,\ \ \ 269,\ \ \ 295,\ \ \ 322,\ \ \ 348,}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ 375,\ \ \ 402,\ \ \ 428,\ \ \ 455,\ \ \ 481,\ \ \ 508,\ \ \ 534,\ \ \ 561,\ \ \ 588,\ \ \ 614,}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ 641,\ \ \ 667,\ \ \ 694,\ \ \ 720,\ \ \ 747,\ \ \ 774,\ \ \ 800,\ \ \ 827,\ \ \ 853,\ \ \ 880,}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ 907,\ \ \ 933,\ \ \ 960,\ \ \ 986,\ \ 1013,\ \ 1039,\ \ 1066}
+\DoxyCodeLine{00216\ \ \ \};}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00218\ \ \ \textcolor{comment}{//int\ k\ =\ static\_cast<int>(ceil((-\/61\ -\/\ e)\ *\ 0.30102999566398114))\ +\ 374;}}
+\DoxyCodeLine{00219\ \ \ \textcolor{keywordtype}{double}\ dk\ =\ (-\/61\ -\/\ e)\ *\ 0.30102999566398114\ +\ 347;\ \ \textcolor{comment}{//\ dk\ must\ be\ positive,\ so\ can\ do\ ceiling\ in\ positive}}
+\DoxyCodeLine{00220\ \ \ \textcolor{keywordtype}{int}\ k\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(dk);}
+\DoxyCodeLine{00221\ \ \ \textcolor{keywordflow}{if}\ (k\ !=\ dk)}
+\DoxyCodeLine{00222\ \ \ \ \ k++;}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00224\ \ \ \textcolor{keywordtype}{unsigned}\ index\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{unsigned}\textcolor{keyword}{>}((k\ >>\ 3)\ +\ 1);}
+\DoxyCodeLine{00225\ \ \ *K\ =\ -\/(-\/348\ +\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(index\ <<\ 3));\ \ \textcolor{comment}{//\ decimal\ exponent\ no\ need\ lookup\ table}}
+\DoxyCodeLine{00226\ }
+\DoxyCodeLine{00227\ \ \ assert(index\ <\ \textcolor{keyword}{sizeof}(kCachedPowers\_F)\ /\ \textcolor{keyword}{sizeof}(kCachedPowers\_F[0]));}
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}(kCachedPowers\_F[index],\ kCachedPowers\_E[index]);}
+\DoxyCodeLine{00229\ \}}
+\DoxyCodeLine{00230\ }
+\DoxyCodeLine{00231\ \textcolor{keyword}{inline}\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ GrisuRound(\textcolor{keywordtype}{char}*\ buffer,\ \textcolor{keywordtype}{int}\ len,\ uint64\_t\ delta,\ uint64\_t\ rest,\ uint64\_t\ ten\_kappa,\ uint64\_t\ wp\_w)\ \{}
+\DoxyCodeLine{00232\ \ \ \textcolor{keywordflow}{while}\ (rest\ <\ wp\_w\ \&\&\ delta\ -\/\ rest\ >=\ ten\_kappa\ \&\&}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ (rest\ +\ ten\_kappa\ <\ wp\_w\ ||\ \ }
+\DoxyCodeLine{00234\ \ \ \ \ \ \ wp\_w\ -\/\ rest\ >\ rest\ +\ ten\_kappa\ -\/\ wp\_w))\ \{}
+\DoxyCodeLine{00235\ \ \ \ \ buffer[len\ -\/\ 1]-\/-\/;}
+\DoxyCodeLine{00236\ \ \ \ \ rest\ +=\ ten\_kappa;}
+\DoxyCodeLine{00237\ \ \ \}}
+\DoxyCodeLine{00238\ \}}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00240\ \textcolor{keyword}{inline}\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{unsigned}\ CountDecimalDigit32(uint32\_t\ n)\ \{}
+\DoxyCodeLine{00241\ \ \ \textcolor{comment}{//\ Simple\ pure\ C++\ implementation\ was\ faster\ than\ \_\_builtin\_clz\ version\ in\ this\ situation.}}
+\DoxyCodeLine{00242\ \ \ \textcolor{keywordflow}{if}\ (n\ <\ 10)\ \textcolor{keywordflow}{return}\ 1;}
+\DoxyCodeLine{00243\ \ \ \textcolor{keywordflow}{if}\ (n\ <\ 100)\ \textcolor{keywordflow}{return}\ 2;}
+\DoxyCodeLine{00244\ \ \ \textcolor{keywordflow}{if}\ (n\ <\ 1000)\ \textcolor{keywordflow}{return}\ 3;}
+\DoxyCodeLine{00245\ \ \ \textcolor{keywordflow}{if}\ (n\ <\ 10000)\ \textcolor{keywordflow}{return}\ 4;}
+\DoxyCodeLine{00246\ \ \ \textcolor{keywordflow}{if}\ (n\ <\ 100000)\ \textcolor{keywordflow}{return}\ 5;}
+\DoxyCodeLine{00247\ \ \ \textcolor{keywordflow}{if}\ (n\ <\ 1000000)\ \textcolor{keywordflow}{return}\ 6;}
+\DoxyCodeLine{00248\ \ \ \textcolor{keywordflow}{if}\ (n\ <\ 10000000)\ \textcolor{keywordflow}{return}\ 7;}
+\DoxyCodeLine{00249\ \ \ \textcolor{keywordflow}{if}\ (n\ <\ 100000000)\ \textcolor{keywordflow}{return}\ 8;}
+\DoxyCodeLine{00250\ \ \ \textcolor{keywordflow}{if}\ (n\ <\ 1000000000)\ \textcolor{keywordflow}{return}\ 9;}
+\DoxyCodeLine{00251\ \ \ \textcolor{keywordflow}{return}\ 10;}
+\DoxyCodeLine{00252\ \}}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \textcolor{keyword}{inline}\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ DigitGen(\textcolor{keyword}{const}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}\&\ W,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}\&\ Mp,\ uint64\_t\ delta,\ \textcolor{keywordtype}{char}*\ buffer,\ \textcolor{keywordtype}{int}*\ len,\ \textcolor{keywordtype}{int}*\ K)\ \{}
+\DoxyCodeLine{00255\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ uint32\_t\ kPow10[]\ =\ \{\ 1,\ 10,\ 100,\ 1000,\ 10000,\ 100000,\ 1000000,\ 10000000,\ 100000000,\ 1000000000,\ 0,\ 0,\ 0,\ 0,\ 0\ \};}
+\DoxyCodeLine{00256\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ one(uint64\_t(1)\ <<\ -\/Mp.e,\ Mp.e);}
+\DoxyCodeLine{00257\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ wp\_w\ =\ Mp\ -\/\ W;}
+\DoxyCodeLine{00258\ \ \ uint32\_t\ p1\ =\ \textcolor{keyword}{static\_cast<}uint32\_t\textcolor{keyword}{>}(Mp.f\ >>\ -\/one.e);}
+\DoxyCodeLine{00259\ \ \ uint64\_t\ p2\ =\ Mp.f\ \&\ (one.f\ -\/\ 1);}
+\DoxyCodeLine{00260\ \ \ \textcolor{keywordtype}{int}\ kappa\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(CountDecimalDigit32(p1));}
+\DoxyCodeLine{00261\ \ \ *len\ =\ 0;}
+\DoxyCodeLine{00262\ }
+\DoxyCodeLine{00263\ \ \ \textcolor{keywordflow}{while}\ (kappa\ >\ 0)\ \{}
+\DoxyCodeLine{00264\ \ \ \ \ uint32\_t\ d\ =\ 0;}
+\DoxyCodeLine{00265\ \ \ \ \ \textcolor{keywordflow}{switch}\ (kappa)\ \{}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 10:\ d\ =\ p1\ /\ 1000000000;\ p1\ \%=\ 1000000000;\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \ 9:\ d\ =\ p1\ /\ \ 100000000;\ p1\ \%=\ \ 100000000;\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \ 8:\ d\ =\ p1\ /\ \ \ 10000000;\ p1\ \%=\ \ \ 10000000;\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \ 7:\ d\ =\ p1\ /\ \ \ \ 1000000;\ p1\ \%=\ \ \ \ 1000000;\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \ 6:\ d\ =\ p1\ /\ \ \ \ \ 100000;\ p1\ \%=\ \ \ \ \ 100000;\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \ 5:\ d\ =\ p1\ /\ \ \ \ \ \ 10000;\ p1\ \%=\ \ \ \ \ \ 10000;\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \ 4:\ d\ =\ p1\ /\ \ \ \ \ \ \ 1000;\ p1\ \%=\ \ \ \ \ \ \ 1000;\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \ 3:\ d\ =\ p1\ /\ \ \ \ \ \ \ \ 100;\ p1\ \%=\ \ \ \ \ \ \ \ 100;\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \ 2:\ d\ =\ p1\ /\ \ \ \ \ \ \ \ \ 10;\ p1\ \%=\ \ \ \ \ \ \ \ \ 10;\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \ 1:\ d\ =\ p1;\ \ \ \ \ \ \ \ \ \ \ \ \ \ p1\ =\ \ \ \ \ \ \ \ \ \ \ 0;\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ NODEFAULT}
+\DoxyCodeLine{00277\ \ \ \ \ \}}
+\DoxyCodeLine{00278\ \ \ \ \ \textcolor{keywordflow}{if}\ (d\ ||\ *len)}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ buffer[(*len)++]\ =\ \textcolor{charliteral}{'0'}\ +\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{char}\textcolor{keyword}{>}(d);}
+\DoxyCodeLine{00280\ \ \ \ \ kappa-\/-\/;}
+\DoxyCodeLine{00281\ \ \ \ \ uint64\_t\ tmp\ =\ (\textcolor{keyword}{static\_cast<}uint64\_t\textcolor{keyword}{>}(p1)\ <<\ -\/one.e)\ +\ p2;}
+\DoxyCodeLine{00282\ \ \ \ \ \textcolor{keywordflow}{if}\ (tmp\ <=\ delta)\ \{}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ *K\ +=\ kappa;}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ GrisuRound(buffer,\ *len,\ delta,\ tmp,\ \textcolor{keyword}{static\_cast<}uint64\_t\textcolor{keyword}{>}(kPow10[kappa])\ <<\ -\/one.e,\ wp\_w.f);}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00286\ \ \ \ \ \}}
+\DoxyCodeLine{00287\ \ \ \}}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ \textcolor{comment}{//\ kappa\ =\ 0}}
+\DoxyCodeLine{00290\ \ \ \textcolor{keywordflow}{for}\ (;;)\ \{}
+\DoxyCodeLine{00291\ \ \ \ \ p2\ *=\ 10;}
+\DoxyCodeLine{00292\ \ \ \ \ delta\ *=\ 10;}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{keywordtype}{char}\ d\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{char}\textcolor{keyword}{>}(p2\ >>\ -\/one.e);}
+\DoxyCodeLine{00294\ \ \ \ \ \textcolor{keywordflow}{if}\ (d\ ||\ *len)}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ buffer[(*len)++]\ =\ \textcolor{charliteral}{'0'}\ +\ d;}
+\DoxyCodeLine{00296\ \ \ \ \ p2\ \&=\ one.f\ -\/\ 1;}
+\DoxyCodeLine{00297\ \ \ \ \ kappa-\/-\/;}
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{keywordflow}{if}\ (p2\ <\ delta)\ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ *K\ +=\ kappa;}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ GrisuRound(buffer,\ *len,\ delta,\ p2,\ one.f,\ wp\_w.f\ *\ kPow10[-\/kappa]);}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00302\ \ \ \ \ \}}
+\DoxyCodeLine{00303\ \ \ \}}
+\DoxyCodeLine{00304\ \}}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00306\ \textcolor{keyword}{inline}\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ Grisu2(\textcolor{keywordtype}{double}\ value,\ \textcolor{keywordtype}{char}*\ buffer,\ \textcolor{keywordtype}{int}*\ length,\ \textcolor{keywordtype}{int}*\ K)\ \{}
+\DoxyCodeLine{00307\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ v(value);}
+\DoxyCodeLine{00308\ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ w\_m,\ w\_p;}
+\DoxyCodeLine{00309\ \ \ v.NormalizedBoundaries(\&w\_m,\ \&w\_p);}
+\DoxyCodeLine{00310\ }
+\DoxyCodeLine{00311\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ c\_mk\ =\ GetCachedPower(w\_p.e,\ K);}
+\DoxyCodeLine{00312\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ W\ =\ v.Normalize()\ *\ c\_mk;}
+\DoxyCodeLine{00313\ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ Wp\ =\ w\_p\ *\ c\_mk;}
+\DoxyCodeLine{00314\ \ \ \mbox{\hyperlink{structDiyFp}{DiyFp}}\ Wm\ =\ w\_m\ *\ c\_mk;}
+\DoxyCodeLine{00315\ \ \ Wm.f++;}
+\DoxyCodeLine{00316\ \ \ Wp.f-\/-\/;}
+\DoxyCodeLine{00317\ \ \ DigitGen(W,\ Wp,\ Wp.f\ -\/\ Wm.f,\ buffer,\ length,\ K);}
+\DoxyCodeLine{00318\ \}}
+\DoxyCodeLine{00319\ }
+\DoxyCodeLine{00320\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ cDigitsLut[200]\ =\ \{}
+\DoxyCodeLine{00321\ \ \ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'9'},}
+\DoxyCodeLine{00322\ \ \ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'9'},}
+\DoxyCodeLine{00323\ \ \ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'9'},}
+\DoxyCodeLine{00324\ \ \ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'9'},}
+\DoxyCodeLine{00325\ \ \ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'9'},}
+\DoxyCodeLine{00326\ \ \ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'9'},}
+\DoxyCodeLine{00327\ \ \ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'9'},}
+\DoxyCodeLine{00328\ \ \ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'9'},}
+\DoxyCodeLine{00329\ \ \ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'9'},}
+\DoxyCodeLine{00330\ \ \ \textcolor{charliteral}{'9'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'9'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'9'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'9'},\ \textcolor{charliteral}{'3'},\ \textcolor{charliteral}{'9'},\ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'9'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'9'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'9'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'9'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'9'},\ \textcolor{charliteral}{'9'}}
+\DoxyCodeLine{00331\ \};}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00333\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{void}\ WriteExponent(\textcolor{keywordtype}{int}\ K,\ \textcolor{keywordtype}{char}*\ buffer)\ \{}
+\DoxyCodeLine{00334\ \ \ \textcolor{keywordflow}{if}\ (K\ <\ 0)\ \{}
+\DoxyCodeLine{00335\ \ \ \ \ *buffer++\ =\ \textcolor{charliteral}{'-\/'};}
+\DoxyCodeLine{00336\ \ \ \ \ K\ =\ -\/K;}
+\DoxyCodeLine{00337\ \ \ \}}
+\DoxyCodeLine{00338\ }
+\DoxyCodeLine{00339\ \ \ \textcolor{keywordflow}{if}\ (K\ >=\ 100)\ \{}
+\DoxyCodeLine{00340\ \ \ \ \ *buffer++\ =\ \textcolor{charliteral}{'0'}\ +\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{char}\textcolor{keyword}{>}(K\ /\ 100);}
+\DoxyCodeLine{00341\ \ \ \ \ K\ \%=\ 100;}
+\DoxyCodeLine{00342\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ d\ =\ cDigitsLut\ +\ K\ *\ 2;}
+\DoxyCodeLine{00343\ \ \ \ \ *buffer++\ =\ d[0];}
+\DoxyCodeLine{00344\ \ \ \ \ *buffer++\ =\ d[1];}
+\DoxyCodeLine{00345\ \ \ \}}
+\DoxyCodeLine{00346\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (K\ >=\ 10)\ \{}
+\DoxyCodeLine{00347\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ d\ =\ cDigitsLut\ +\ K\ *\ 2;}
+\DoxyCodeLine{00348\ \ \ \ \ *buffer++\ =\ d[0];}
+\DoxyCodeLine{00349\ \ \ \ \ *buffer++\ =\ d[1];}
+\DoxyCodeLine{00350\ \ \ \}}
+\DoxyCodeLine{00351\ \ \ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00352\ \ \ \ \ *buffer++\ =\ \textcolor{charliteral}{'0'}\ +\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{char}\textcolor{keyword}{>}(K);}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ *buffer\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00355\ \}}
+\DoxyCodeLine{00356\ }
+\DoxyCodeLine{00357\ \textcolor{keyword}{inline}\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ Prettify(\textcolor{keywordtype}{char}*\ buffer,\ \textcolor{keywordtype}{int}\ length,\ \textcolor{keywordtype}{int}\ k)\ \{}
+\DoxyCodeLine{00358\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ kk\ =\ length\ +\ k;\ \ \textcolor{comment}{//\ 10\string^(kk-\/1)\ <=\ v\ <\ 10\string^kk}}
+\DoxyCodeLine{00359\ }
+\DoxyCodeLine{00360\ \ \ \textcolor{keywordflow}{if}\ (length\ <=\ kk\ \&\&\ kk\ <=\ 21)\ \{}
+\DoxyCodeLine{00361\ \ \ \ \ \textcolor{comment}{//\ 1234e7\ -\/>\ 12340000000}}
+\DoxyCodeLine{00362\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ length;\ i\ <\ kk;\ i++)}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ buffer[i]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00364\ \ \ \ \ buffer[kk]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00365\ \ \ \ \ buffer[kk\ +\ 1]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00366\ \ \ \ \ buffer[kk\ +\ 2]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00367\ \ \ \}}
+\DoxyCodeLine{00368\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (0\ <\ kk\ \&\&\ kk\ <=\ 21)\ \{}
+\DoxyCodeLine{00369\ \ \ \ \ \textcolor{comment}{//\ 1234e-\/2\ -\/>\ 12.34}}
+\DoxyCodeLine{00370\ \ \ \ \ memmove(\&buffer[kk\ +\ 1],\ \&buffer[kk],\ length\ -\/\ kk);}
+\DoxyCodeLine{00371\ \ \ \ \ buffer[kk]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00372\ \ \ \ \ buffer[length\ +\ 1]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00373\ \ \ \}}
+\DoxyCodeLine{00374\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (-\/6\ <\ kk\ \&\&\ kk\ <=\ 0)\ \{}
+\DoxyCodeLine{00375\ \ \ \ \ \textcolor{comment}{//\ 1234e-\/6\ -\/>\ 0.001234}}
+\DoxyCodeLine{00376\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ offset\ =\ 2\ -\/\ kk;}
+\DoxyCodeLine{00377\ \ \ \ \ memmove(\&buffer[offset],\ \&buffer[0],\ length);}
+\DoxyCodeLine{00378\ \ \ \ \ buffer[0]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00379\ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00380\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 2;\ i\ <\ offset;\ i++)}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ buffer[i]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00382\ \ \ \ \ buffer[length\ +\ offset]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00383\ \ \ \}}
+\DoxyCodeLine{00384\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (length\ ==\ 1)\ \{}
+\DoxyCodeLine{00385\ \ \ \ \ \textcolor{comment}{//\ 1e30}}
+\DoxyCodeLine{00386\ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'e'};}
+\DoxyCodeLine{00387\ \ \ \ \ WriteExponent(kk\ -\/\ 1,\ \&buffer[2]);}
+\DoxyCodeLine{00388\ \ \ \}}
+\DoxyCodeLine{00389\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00390\ \ \ \ \ \textcolor{comment}{//\ 1234e30\ -\/>\ 1.234e33}}
+\DoxyCodeLine{00391\ \ \ \ \ memmove(\&buffer[2],\ \&buffer[1],\ length\ -\/\ 1);}
+\DoxyCodeLine{00392\ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00393\ \ \ \ \ buffer[length\ +\ 1]\ =\ \textcolor{charliteral}{'e'};}
+\DoxyCodeLine{00394\ \ \ \ \ WriteExponent(kk\ -\/\ 1,\ \&buffer[0\ +\ length\ +\ 2]);}
+\DoxyCodeLine{00395\ \ \ \}}
+\DoxyCodeLine{00396\ \}}
+\DoxyCodeLine{00397\ }
+\DoxyCodeLine{00398\ \textcolor{keywordtype}{void}\ pdtoa(\textcolor{keywordtype}{double}\ value,\ \textcolor{keywordtype}{char}\ *buffer)\ \{}
+\DoxyCodeLine{00399\ \textcolor{preprocessor}{\#ifdef\ \_MSC\_VER}}
+\DoxyCodeLine{00400\ \ \ \textcolor{keywordflow}{if}\ (copysign(1.0,\ value)\ <\ 0)\ \{}
+\DoxyCodeLine{00401\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00402\ \ \ \textcolor{keywordflow}{if}\ (std::signbit(value))\ \{}
+\DoxyCodeLine{00403\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00404\ \ \ \ \ *buffer++\ =\ \textcolor{charliteral}{'-\/'};}
+\DoxyCodeLine{00405\ \ \ \ \ value\ =\ -\/value;}
+\DoxyCodeLine{00406\ \ \ \}}
+\DoxyCodeLine{00407\ \ \ \textcolor{keywordflow}{if}\ (cinf(value))\ \{}
+\DoxyCodeLine{00408\ \ \ \ \ buffer[0]\ =\ \textcolor{charliteral}{'i'};}
+\DoxyCodeLine{00409\ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'n'};}
+\DoxyCodeLine{00410\ \ \ \ \ buffer[2]\ =\ \textcolor{charliteral}{'f'};}
+\DoxyCodeLine{00411\ \ \ \ \ buffer[3]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00412\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cnan(value))\ \{}
+\DoxyCodeLine{00413\ \ \ \ \ buffer[0]\ =\ \textcolor{charliteral}{'n'};}
+\DoxyCodeLine{00414\ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'a'};}
+\DoxyCodeLine{00415\ \ \ \ \ buffer[2]\ =\ \textcolor{charliteral}{'n'};}
+\DoxyCodeLine{00416\ \ \ \ \ buffer[3]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00417\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (value\ ==\ 0.0)\ \{}
+\DoxyCodeLine{00418\ \ \ \ \ buffer[0]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00419\ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00420\ \ \ \ \ buffer[2]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00421\ \ \ \ \ buffer[3]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00422\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (value\ ==\ 1.0)\ \{}
+\DoxyCodeLine{00423\ \ \ \ \ buffer[0]\ =\ \textcolor{charliteral}{'1'};}
+\DoxyCodeLine{00424\ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00425\ \ \ \ \ buffer[2]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00426\ \ \ \ \ buffer[3]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00427\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00428\ \ \ \ \ \textcolor{keywordtype}{int}\ length,\ K;}
+\DoxyCodeLine{00429\ \ \ \ \ Grisu2(value,\ buffer,\ \&length,\ \&K);}
+\DoxyCodeLine{00430\ \ \ \ \ Prettify(buffer,\ length,\ K);}
+\DoxyCodeLine{00431\ \ \ \}}
+\DoxyCodeLine{00432\ \}}
+\DoxyCodeLine{00433\ }
+\DoxyCodeLine{00438\ \textcolor{keywordtype}{void}\ pftoa(\textcolor{keywordtype}{float}\ value,\ \textcolor{keywordtype}{char}\ *buffer)\ \{}
+\DoxyCodeLine{00439\ \textcolor{preprocessor}{\#ifdef\ \_MSC\_VER}}
+\DoxyCodeLine{00440\ \ \ \textcolor{keywordflow}{if}\ (copysign(1.0f,\ value)\ <\ 0)\ \{}
+\DoxyCodeLine{00441\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00442\ \ \ \textcolor{keywordflow}{if}\ (std::signbit(value))\ \{}
+\DoxyCodeLine{00443\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00444\ \ \ \ \ *buffer++\ =\ \textcolor{charliteral}{'-\/'};}
+\DoxyCodeLine{00445\ \ \ \ \ value\ =\ -\/value;}
+\DoxyCodeLine{00446\ \ \ \}}
+\DoxyCodeLine{00447\ \ \ \textcolor{keywordflow}{if}\ (cinf(value))\ \{}
+\DoxyCodeLine{00448\ \ \ \ \ buffer[0]\ =\ \textcolor{charliteral}{'i'};}
+\DoxyCodeLine{00449\ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'n'};}
+\DoxyCodeLine{00450\ \ \ \ \ buffer[2]\ =\ \textcolor{charliteral}{'f'};}
+\DoxyCodeLine{00451\ \ \ \ \ buffer[3]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00452\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cnan(value))\ \{}
+\DoxyCodeLine{00453\ \ \ \ \ buffer[0]\ =\ \textcolor{charliteral}{'n'};}
+\DoxyCodeLine{00454\ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'a'};}
+\DoxyCodeLine{00455\ \ \ \ \ buffer[2]\ =\ \textcolor{charliteral}{'n'};}
+\DoxyCodeLine{00456\ \ \ \ \ buffer[3]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00457\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (value\ ==\ 0.0f)\ \{}
+\DoxyCodeLine{00458\ \ \ \ \ buffer[0]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00459\ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00460\ \ \ \ \ buffer[2]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00461\ \ \ \ \ buffer[3]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00462\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (value\ ==\ 1.0f)\ \{}
+\DoxyCodeLine{00463\ \ \ \ \ buffer[0]\ =\ \textcolor{charliteral}{'1'};}
+\DoxyCodeLine{00464\ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00465\ \ \ \ \ buffer[2]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00466\ \ \ \ \ buffer[3]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00467\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \textcolor{keywordtype}{int}\ length,\ k;}
+\DoxyCodeLine{00469\ \ \ \ \ Grisu2(value,\ buffer,\ \&length,\ \&k);}
+\DoxyCodeLine{00470\ }
+\DoxyCodeLine{00471\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ kk\ =\ length\ +\ k;\ \ \textcolor{comment}{//\ 10\string^(kk-\/1)\ <=\ v\ <\ 10\string^kk}}
+\DoxyCodeLine{00472\ }
+\DoxyCodeLine{00473\ \ \ \ \ \textcolor{keywordflow}{if}\ (length\ <=\ kk\ \&\&\ kk\ <=\ 21)\ \{}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ \textcolor{comment}{//\ 1234e7\ -\/>\ 12340000000}}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ length;\ i\ <\ kk;\ i++)}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \ \ buffer[i]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ buffer[kk]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00478\ \ \ \ \ \ \ buffer[kk\ +\ 1]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00479\ \ \ \ \ \ \ buffer[kk\ +\ 2]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00480\ \ \ \ \ \}}
+\DoxyCodeLine{00481\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (0\ <\ kk\ \&\&\ kk\ <=\ 21)\ \{}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ \textcolor{comment}{//\ 1234e-\/2\ -\/>\ 12.34}}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ memmove(\&buffer[kk\ +\ 1],\ \&buffer[kk],\ length\ -\/\ kk);}
+\DoxyCodeLine{00484\ }
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ want\ the\ shortest\ possible\ representation,\ so\ keep\ reading\ digits}}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ \textcolor{comment}{//\ until\ strtod\ would\ give\ the\ correct\ float\ value.}}
+\DoxyCodeLine{00487\ \ \ \ \ \ \ buffer[kk]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00488\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ v\ =\ (double)atoi(buffer);}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ buffer[kk]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ multiplicand\ =\ 0.1;}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ kk\ +\ 1;\ i\ <=\ length;\ ++i)\ \{}
+\DoxyCodeLine{00493\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ vplus\ =\ v\ +\ (buffer[i]\ -\/\ \textcolor{charliteral}{'0'}\ +\ 1)\ *\ multiplicand;}
+\DoxyCodeLine{00494\ \ \ \ \ \ \ \ \ v\ +=\ (buffer[i]\ -\/\ \textcolor{charliteral}{'0'})\ *\ multiplicand;}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \ \ multiplicand\ *=\ 0.1;}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{float})v\ ==\ value)\ \{}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ \ \ \ \ length\ =\ i;}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (buffer[i]\ <\ \textcolor{charliteral}{'9'}\ \&\&\ (\textcolor{keywordtype}{float})vplus\ ==\ value)\ \{}
+\DoxyCodeLine{00502\ \ \ \ \ \ \ \ \ \ \ ++buffer[i];}
+\DoxyCodeLine{00503\ \ \ \ \ \ \ \ \ \ \ length\ =\ i;}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00508\ \ \ \ \ \ \ buffer[length\ +\ 1]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00509\ \ \ \ \ \}}
+\DoxyCodeLine{00510\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (-\/6\ <\ kk\ \&\&\ kk\ <=\ 0)\ \{}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ \textcolor{comment}{//\ 1234e-\/6\ -\/>\ 0.001234}}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ offset\ =\ 2\ -\/\ kk;}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ memmove(\&buffer[offset],\ \&buffer[0],\ length);}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ buffer[0]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00516\ }
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ want\ the\ shortest\ possible\ representation,\ so\ keep\ reading\ digits}}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ \textcolor{comment}{//\ until\ strtod\ would\ give\ the\ correct\ float\ value.}}
+\DoxyCodeLine{00519\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ multiplicand\ =\ 1.0;}
+\DoxyCodeLine{00520\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 2;\ i\ <\ offset;\ i++)\ \{}
+\DoxyCodeLine{00521\ \ \ \ \ \ \ \ \ buffer[i]\ =\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \ \ multiplicand\ *=\ 0.1;}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{float})multiplicand\ ==\ value)\ \{}
+\DoxyCodeLine{00525\ \ \ \ \ \ \ \ \ length\ =\ 0;}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \ \ buffer[offset\ -\/\ 1]\ =\ \textcolor{charliteral}{'1'};}
+\DoxyCodeLine{00527\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00528\ \ \ \ \ \ \ \ \ multiplicand\ *=\ 0.1;}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ v\ =\ 0.0;}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ offset;\ i\ <\ length\ +\ offset;\ ++i)\ \{}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ vplus\ =\ v\ +\ (buffer[i]\ -\/\ \textcolor{charliteral}{'0'}\ +\ 1)\ *\ multiplicand;}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ \ \ \ \ v\ +=\ (buffer[i]\ -\/\ \textcolor{charliteral}{'0'})\ *\ multiplicand;}
+\DoxyCodeLine{00533\ \ \ \ \ \ \ \ \ \ \ multiplicand\ *=\ 0.1;}
+\DoxyCodeLine{00534\ }
+\DoxyCodeLine{00535\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{float})v\ ==\ value)\ \{}
+\DoxyCodeLine{00536\ \ \ \ \ \ \ \ \ \ \ \ \ buffer[i\ +\ 1]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00537\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (buffer[i]\ <\ \textcolor{charliteral}{'9'}\ \&\&\ (\textcolor{keywordtype}{float})vplus\ ==\ value)\ \{}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \ \ \ \ \ \ buffer[i]++;}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \ \ \ \ \ \ buffer[i\ +\ 1]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00542\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ buffer[length\ +\ offset]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00547\ \ \ \ \ \}}
+\DoxyCodeLine{00548\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (length\ ==\ 1)\ \{}
+\DoxyCodeLine{00549\ \ \ \ \ \ \ \textcolor{comment}{//\ 1e30}}
+\DoxyCodeLine{00550\ \ \ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'e'};}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ WriteExponent(kk\ -\/\ 1,\ \&buffer[2]);}
+\DoxyCodeLine{00552\ \ \ \ \ \}}
+\DoxyCodeLine{00553\ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \textcolor{comment}{//\ 1234e30\ -\/>\ 1.234e33}}
+\DoxyCodeLine{00555\ \ \ \ \ \ \ memmove(\&buffer[2],\ \&buffer[1],\ length\ -\/\ 1);}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'.'};}
+\DoxyCodeLine{00557\ \ \ \ \ \ \ buffer[length\ +\ 1]\ =\ \textcolor{charliteral}{'e'};}
+\DoxyCodeLine{00558\ }
+\DoxyCodeLine{00559\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ e\_mult\ =\ pow(10.0,\ kk\ -\/\ 1);}
+\DoxyCodeLine{00560\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{float})(10.0\ *\ e\_mult)\ ==\ value)\ \{}
+\DoxyCodeLine{00561\ \ \ \ \ \ \ \ \ buffer[0]\ =\ \textcolor{charliteral}{'1'};}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ \ \ buffer[1]\ =\ \textcolor{charliteral}{'e'};}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \ \ WriteExponent(kk,\ \&buffer[2]);}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ want\ the\ shortest\ possible\ representation,\ so\ keep\ reading}}
+\DoxyCodeLine{00566\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ digits\ until\ strtod\ would\ give\ the\ correct\ float\ value.}}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ v\ =\ buffer[0]\ -\/\ \textcolor{charliteral}{'0'};}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ multiplicand\ =\ 0.1;}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 2;\ i\ <\ length\ +\ 2;\ ++i)\ \{}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ vplus\ =\ v\ +\ (buffer[i]\ -\/\ \textcolor{charliteral}{'0'}\ +\ 1)\ *\ multiplicand;}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ \ \ v\ +=\ (buffer[i]\ -\/\ \textcolor{charliteral}{'0'})\ *\ multiplicand;}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \ \ \ \ multiplicand\ *=\ 0.1;}
+\DoxyCodeLine{00573\ }
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{float})(v\ *\ e\_mult)\ ==\ value)\ \{}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \ \ \ \ \ \ length\ =\ i;}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ \ \ \ \ buffer[i\ +\ 1]\ =\ \textcolor{charliteral}{'e'};}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (buffer[i]\ <\ \textcolor{charliteral}{'9'}\ \&\&\ (\textcolor{keywordtype}{float})(vplus\ *\ e\_mult)\ ==\ value)\ \{}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ \ \ \ \ \ \ buffer[i]++;}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \ \ \ \ \ \ length\ =\ i;}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \ \ \ \ \ \ buffer[i\ +\ 1]\ =\ \textcolor{charliteral}{'e'};}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00585\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \ \ WriteExponent(kk\ -\/\ 1,\ \&buffer[0\ +\ length\ +\ 2]);}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00588\ \ \ \ \ \}}
+\DoxyCodeLine{00589\ \ \ \}}
+\DoxyCodeLine{00590\ \}}
+\DoxyCodeLine{00591\ }
+\DoxyCodeLine{00592\ \textcolor{preprocessor}{\#ifdef\ \_MSC\_VER}}
+\DoxyCodeLine{00593\ \textcolor{preprocessor}{\#pragma\ float\_control(pop)}}
+\DoxyCodeLine{00594\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

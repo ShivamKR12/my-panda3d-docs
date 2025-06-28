@@ -1,0 +1,278 @@
+\doxysection{recorder\+Controller.\+cxx}
+\hypertarget{recorderController_8cxx_source}{}\label{recorderController_8cxx_source}\index{panda/src/recorder/recorderController.cxx@{panda/src/recorder/recorderController.cxx}}
+\mbox{\hyperlink{recorderController_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{recorderController_8h}{recorderController.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{recorderFrame_8h}{recorderFrame.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamReader_8h}{bamReader.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamWriter_8h}{bamWriter.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__recorder_8h}{config\_recorder.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bam_8h}{bam.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{clockObject_8h}{clockObject.h}}"{}}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ RecorderController::\_type\_handle;}
+\DoxyCodeLine{00023\ \mbox{\hyperlink{classFactory}{RecorderController::RecorderFactory}}\ *RecorderController::\_factory\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00028\ RecorderController::}
+\DoxyCodeLine{00029\ RecorderController()\ \{}
+\DoxyCodeLine{00030\ \ \ \_clock\_offset\ =\ 0.0;}
+\DoxyCodeLine{00031\ \ \ \_frame\_offset\ =\ 0;}
+\DoxyCodeLine{00032\ \ \ \_writer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00033\ \ \ \_reader\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00034\ \ \ \_frame\_tie\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00035\ \ \ \_user\_table\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRecorderTable}{RecorderTable}};}
+\DoxyCodeLine{00036\ \ \ \_user\_table\_modified\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00037\ \ \ \_file\_table\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00038\ \ \ \_active\_table\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00039\ \ \ \_eof\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00040\ \}}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00045\ RecorderController::}
+\DoxyCodeLine{00046\ \string~RecorderController()\ \{}
+\DoxyCodeLine{00047\ \ \ close();}
+\DoxyCodeLine{00048\ \ \ \textcolor{keyword}{delete}\ \_user\_table;}
+\DoxyCodeLine{00049\ \}}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00055\ \textcolor{keywordtype}{bool}\ RecorderController::}
+\DoxyCodeLine{00056\ begin\_record(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{00057\ \ \ close();}
+\DoxyCodeLine{00058\ \ \ \_filename\ =\ filename;}
+\DoxyCodeLine{00059\ \ \ \mbox{\hyperlink{classClockObject}{ClockObject}}\ *global\_clock\ =\ ClockObject::get\_global\_clock();}
+\DoxyCodeLine{00060\ \ \ \_clock\_offset\ =\ global\_clock-\/>get\_frame\_time();}
+\DoxyCodeLine{00061\ \ \ \_frame\_offset\ =\ global\_clock-\/>get\_frame\_count();}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00063\ \ \ time(\&\_header.\_start\_time);}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ \ \ \textcolor{keywordflow}{if}\ (!\_dout.open(\_filename))\ \{}
+\DoxyCodeLine{00066\ \ \ \ \ recorder\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Unable\ to\ open\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00067\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00068\ \ \ \}}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ \ \ \textcolor{keywordflow}{if}\ (!\_dout.write\_header(\_bam\_header))\ \{}
+\DoxyCodeLine{00071\ \ \ \ \ recorder\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ to\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00072\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00073\ \ \ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ \_writer\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBamWriter}{BamWriter}}(\&\_dout);}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00077\ \ \ \textcolor{keywordflow}{if}\ (!\_writer-\/>init())\ \{}
+\DoxyCodeLine{00078\ \ \ \ \ close();}
+\DoxyCodeLine{00079\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00080\ \ \ \}}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00082\ \ \ \textcolor{comment}{//\ Write\ out\ the\ header\ information.}}
+\DoxyCodeLine{00083\ \ \ \_writer-\/>write\_object(\&\_header);}
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00085\ \ \ \_user\_table\_modified\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00086\ }
+\DoxyCodeLine{00087\ \ \ \textcolor{comment}{//\ Tell\ all\ of\ our\ recorders\ that\ they're\ live\ now.}}
+\DoxyCodeLine{00088\ \ \ \_user\_table-\/>\mbox{\hyperlink{classRecorderTable_af01081081eaa5e44e48d29fcb1d6ba44}{set\_flags}}(RecorderBase::F\_recording);}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00090\ \ \ recorder\_cat.info()}
+\DoxyCodeLine{00091\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Recording\ session\ to\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00093\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00094\ \}}
+\DoxyCodeLine{00095\ }
+\DoxyCodeLine{00103\ \textcolor{keywordtype}{bool}\ RecorderController::}
+\DoxyCodeLine{00104\ begin\_playback(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{00105\ \ \ close();}
+\DoxyCodeLine{00106\ \ \ \_filename\ =\ filename;}
+\DoxyCodeLine{00107\ \ \ \mbox{\hyperlink{classClockObject}{ClockObject}}\ *global\_clock\ =\ ClockObject::get\_global\_clock();}
+\DoxyCodeLine{00108\ \ \ \_clock\_offset\ =\ global\_clock-\/>get\_frame\_time();}
+\DoxyCodeLine{00109\ \ \ \_frame\_offset\ =\ global\_clock-\/>get\_frame\_count();}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ \textcolor{keywordflow}{if}\ (!\_din.open(\_filename))\ \{}
+\DoxyCodeLine{00112\ \ \ \ \ recorder\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Unable\ to\ open\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00113\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00114\ \ \ \}}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ std::string\ head;}
+\DoxyCodeLine{00117\ \ \ \textcolor{keywordflow}{if}\ (!\_din.read\_header(head,\ \_bam\_header.size())\ ||\ head\ !=\ \_bam\_header)\ \{}
+\DoxyCodeLine{00118\ \ \ \ \ recorder\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Unable\ to\ read\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00119\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00120\ \ \ \}}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00122\ \ \ \_reader\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBamReader}{BamReader}}(\&\_din);}
+\DoxyCodeLine{00123\ \ \ \textcolor{keywordflow}{if}\ (!\_reader-\/>\mbox{\hyperlink{classBamReader_a93a91392b652d4096988fd6c093ee128}{init}}())\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ close();}
+\DoxyCodeLine{00125\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00126\ \ \ \}}
+\DoxyCodeLine{00127\ }
+\DoxyCodeLine{00128\ \ \ \_user\_table\_modified\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00129\ \ \ \_active\_table\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRecorderTable}{RecorderTable}};}
+\DoxyCodeLine{00130\ \ \ \_eof\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ \ \ \textcolor{comment}{//\ Start\ out\ by\ reading\ the\ RecorderHeader.}}
+\DoxyCodeLine{00133\ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\textcolor{keywordtype}{object}\ =\ \_reader-\/>\mbox{\hyperlink{classBamReader_aa2745e61d4d3750aae692e72bc02fa3f}{read\_object}}();}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00135\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{object}\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00136\ \ \ \ \ \ \ !object-\/>is\_of\_type(RecorderHeader::get\_class\_type()))\ \{}
+\DoxyCodeLine{00137\ \ \ \ \ recorder\_cat.error()}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\ does\ not\ contain\ a\ recorded\ session.\(\backslash\)n"{}};}
+\DoxyCodeLine{00139\ \ \ \ \ close();}
+\DoxyCodeLine{00140\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00141\ \ \ \}}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00143\ \ \ \textcolor{keywordflow}{if}\ (!\_reader-\/>\mbox{\hyperlink{classBamReader_a79364fc8c51fdf559ea8c8c8aea0fb41}{resolve}}())\ \{}
+\DoxyCodeLine{00144\ \ \ \ \ recorder\_cat.warning()}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ resolve\ header\ data.\(\backslash\)n"{}};}
+\DoxyCodeLine{00146\ \ \ \}}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \ \ \mbox{\hyperlink{classRecorderHeader}{RecorderHeader}}\ *new\_header\ =\ DCAST(\mbox{\hyperlink{classRecorderHeader}{RecorderHeader}},\ \textcolor{keywordtype}{object});}
+\DoxyCodeLine{00149\ \ \ \_header\ =\ (*new\_header);}
+\DoxyCodeLine{00150\ \ \ \textcolor{keyword}{delete}\ new\_header;}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00152\ \ \ \textcolor{comment}{//\ Now\ read\ the\ first\ frame.}}
+\DoxyCodeLine{00153\ \ \ \_next\_frame\ =\ read\_frame();}
+\DoxyCodeLine{00154\ \ \ \textcolor{keywordflow}{if}\ (\_next\_frame\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00155\ \ \ \ \ recorder\_cat.error()}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\ does\ not\ contain\ any\ frames.\(\backslash\)n"{}};}
+\DoxyCodeLine{00157\ \ \ \ \ close();}
+\DoxyCodeLine{00158\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00159\ \ \ \}}
+\DoxyCodeLine{00160\ }
+\DoxyCodeLine{00161\ \ \ recorder\_cat.info()}
+\DoxyCodeLine{00162\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Playing\ back\ session\ from\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00164\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00165\ \}}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00170\ \textcolor{keywordtype}{void}\ RecorderController::}
+\DoxyCodeLine{00171\ close()\ \{}
+\DoxyCodeLine{00172\ \ \ \textcolor{keywordflow}{if}\ (\_writer\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00173\ \ \ \ \ \textcolor{keyword}{delete}\ \_writer;}
+\DoxyCodeLine{00174\ \ \ \ \ \_writer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00176\ \ \ \ \ \textcolor{comment}{//\ Tell\ all\ of\ our\ recorders\ that\ they're\ no\ longer\ recording.}}
+\DoxyCodeLine{00177\ \ \ \ \ \_user\_table-\/>\mbox{\hyperlink{classRecorderTable_afcfff21a134990173d3a4f8255899c97}{clear\_flags}}(RecorderBase::F\_recording);}
+\DoxyCodeLine{00178\ \ \ \}}
+\DoxyCodeLine{00179\ \ \ \textcolor{keywordflow}{if}\ (\_reader\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00180\ \ \ \ \ \textcolor{keyword}{delete}\ \_reader;}
+\DoxyCodeLine{00181\ \ \ \ \ \_reader\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ \ \ \ \ \textcolor{comment}{//\ Tell\ all\ of\ our\ recorders\ that\ they're\ no\ longer\ playing.}}
+\DoxyCodeLine{00184\ \ \ \ \ \_active\_table-\/>\mbox{\hyperlink{classRecorderTable_afcfff21a134990173d3a4f8255899c97}{clear\_flags}}(RecorderBase::F\_playing);}
+\DoxyCodeLine{00185\ \ \ \}}
+\DoxyCodeLine{00186\ \ \ \_dout.close();}
+\DoxyCodeLine{00187\ \ \ \_din.close();}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordflow}{if}\ (\_file\_table\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ \textcolor{keyword}{delete}\ \_file\_table;}
+\DoxyCodeLine{00191\ \ \ \ \ \_file\_table\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00192\ \ \ \}}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00194\ \ \ \textcolor{keywordflow}{if}\ (\_active\_table\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00195\ \ \ \ \ \textcolor{keyword}{delete}\ \_active\_table;}
+\DoxyCodeLine{00196\ \ \ \ \ \_active\_table\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00197\ \ \ \}}
+\DoxyCodeLine{00198\ \}}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00204\ \textcolor{keywordtype}{void}\ RecorderController::}
+\DoxyCodeLine{00205\ record\_frame()\ \{}
+\DoxyCodeLine{00206\ \ \ \textcolor{keywordflow}{if}\ (is\_recording())\ \{}
+\DoxyCodeLine{00207\ \ \ \ \ \mbox{\hyperlink{classClockObject}{ClockObject}}\ *global\_clock\ =\ ClockObject::get\_global\_clock();}
+\DoxyCodeLine{00208\ \ \ \ \ \textcolor{keywordtype}{double}\ now\ =\ global\_clock-\/>get\_frame\_time()\ -\/\ \_clock\_offset;}
+\DoxyCodeLine{00209\ \ \ \ \ \textcolor{keywordtype}{int}\ frame\ =\ global\_clock-\/>get\_frame\_count()\ -\/\ \_frame\_offset;}
+\DoxyCodeLine{00210\ }
+\DoxyCodeLine{00211\ \ \ \ \ \mbox{\hyperlink{classRecorderFrame}{RecorderFrame}}\ data(now,\ frame,\ \_user\_table\_modified,\ \_user\_table);}
+\DoxyCodeLine{00212\ \ \ \ \ \_user\_table\_modified\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00213\ }
+\DoxyCodeLine{00214\ \ \ \ \ \_writer-\/>write\_object(\&data);}
+\DoxyCodeLine{00215\ \ \ \}}
+\DoxyCodeLine{00216\ \}}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00222\ \textcolor{keywordtype}{void}\ RecorderController::}
+\DoxyCodeLine{00223\ play\_frame()\ \{}
+\DoxyCodeLine{00224\ \ \ \textcolor{keywordflow}{if}\ (is\_playing())\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_eof)\ \{}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ close();}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00228\ \ \ \ \ \}}
+\DoxyCodeLine{00229\ }
+\DoxyCodeLine{00230\ \ \ \ \ \mbox{\hyperlink{classClockObject}{ClockObject}}\ *global\_clock\ =\ ClockObject::get\_global\_clock();}
+\DoxyCodeLine{00231\ \ \ \ \ \textcolor{keywordtype}{double}\ now\ =\ global\_clock-\/>get\_frame\_time()\ -\/\ \_clock\_offset;}
+\DoxyCodeLine{00232\ \ \ \ \ \textcolor{keywordtype}{int}\ frame\ =\ global\_clock-\/>get\_frame\_count()\ -\/\ \_frame\_offset;}
+\DoxyCodeLine{00233\ }
+\DoxyCodeLine{00234\ \ \ \ \ \textcolor{keywordflow}{while}\ (\_next\_frame\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_frame\_tie)\ \{}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (frame\ <\ \_next\_frame-\/>\_frame)\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ haven't\ reached\ the\ next\ frame\ yet.}}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Insist\ that\ the\ clock\ runs\ at\ the\ same\ rate\ as\ it\ did\ in\ the}}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ previous\ session.}}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ global\_clock-\/>set\_frame\_time(\_next\_frame-\/>\_timestamp\ +}}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \_clock\_offset);\ global\_clock-\/>set\_real\_time(\_next\_frame-\/>\_timestamp}}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ +\ \_clock\_offset);}}
+\DoxyCodeLine{00246\ }
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Hmm,\ that's\ crummy.\ \ Just\ keep\ the\ clock\ offset\ up-\/to-\/date.}}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \ \ \_clock\_offset\ =\ global\_clock-\/>get\_frame\_time()\ -\/\ \_next\_frame-\/>\_timestamp;}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (now\ <\ \_next\_frame-\/>\_timestamp)\ \{}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ haven't\ reached\ the\ next\ frame\ yet.}}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00255\ }
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Keep\ our\ frame\_offset\ up-\/to-\/date.}}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \_frame\_offset\ =\ global\_clock-\/>get\_frame\_count()\ -\/\ \_next\_frame-\/>\_frame;}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00259\ }
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_next\_frame-\/>\_table\_changed\ \&\&\ \_file\_table\ !=\ \_next\_frame-\/>\_table)\ \{}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_file\_table;}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ \_file\_table\ =\ \_next\_frame-\/>\_table;}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_next\_frame-\/>\_table\_changed\ ||\ \_user\_table\_modified)\ \{}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We're\ about\ to\ change\ the\ active\ table.\ \ Temporarily\ disable\ the}}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ playing\ flag\ on\ the\ currently-\/active\ recorders.}}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ \_active\_table-\/>\mbox{\hyperlink{classRecorderTable_afcfff21a134990173d3a4f8255899c97}{clear\_flags}}(RecorderBase::F\_playing);}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_active\_table;}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ \_active\_table\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRecorderTable}{RecorderTable}}(*\_file\_table);}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ \_active\_table-\/>\mbox{\hyperlink{classRecorderTable_a786bcd1e599e5c0eaeb22d1f7c423416}{merge\_from}}(*\_user\_table);}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ \_user\_table\_modified\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ reenable\ the\ playing\ flag\ on\ the\ newly-\/active\ recorders.}}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \ \ \_active\_table-\/>\mbox{\hyperlink{classRecorderTable_af01081081eaa5e44e48d29fcb1d6ba44}{set\_flags}}(RecorderBase::F\_playing);}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \_next\_frame-\/>\_table\ =\ \_active\_table;}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \_next\_frame-\/>\mbox{\hyperlink{classRecorderFrame_a783e544695b4f5b4829aac411a7b4e58}{play\_frame}}(\_reader);}
+\DoxyCodeLine{00280\ }
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_next\_frame;}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \_next\_frame\ =\ read\_frame();}
+\DoxyCodeLine{00283\ \ \ \ \ \}}
+\DoxyCodeLine{00284\ }
+\DoxyCodeLine{00285\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_reader-\/>is\_eof())\ \{}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ recorder\_cat.info()}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}End\ of\ recorded\ session.\(\backslash\)n"{}};}
+\DoxyCodeLine{00288\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ recorder\_cat.error()}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ read\ datagram\ from\ recorded\ session.\(\backslash\)n"{}};}
+\DoxyCodeLine{00291\ \ \ \ \ \}}
+\DoxyCodeLine{00292\ \ \ \ \ \_eof\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00293\ \ \ \}}
+\DoxyCodeLine{00294\ \}}
+\DoxyCodeLine{00295\ }
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00301\ \mbox{\hyperlink{classRecorderFrame}{RecorderFrame}}\ *RecorderController::}
+\DoxyCodeLine{00302\ read\_frame()\ \{}
+\DoxyCodeLine{00303\ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\textcolor{keywordtype}{object}\ =\ \_reader-\/>\mbox{\hyperlink{classBamReader_aa2745e61d4d3750aae692e72bc02fa3f}{read\_object}}();}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{object}\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ !object-\/>is\_of\_type(RecorderFrame::get\_class\_type()))\ \{}
+\DoxyCodeLine{00307\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00308\ \ \ \}}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ \textcolor{keywordflow}{if}\ (!\_reader-\/>\mbox{\hyperlink{classBamReader_a79364fc8c51fdf559ea8c8c8aea0fb41}{resolve}}())\ \{}
+\DoxyCodeLine{00311\ \ \ \ \ recorder\_cat.warning()}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ resolve\ frame\ data.\(\backslash\)n"{}};}
+\DoxyCodeLine{00313\ \ \ \}}
+\DoxyCodeLine{00314\ }
+\DoxyCodeLine{00315\ \ \ \textcolor{keywordflow}{return}\ DCAST(\mbox{\hyperlink{classRecorderFrame}{RecorderFrame}},\ \textcolor{keywordtype}{object});}
+\DoxyCodeLine{00316\ \}}
+
+\end{DoxyCode}

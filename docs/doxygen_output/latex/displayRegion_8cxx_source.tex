@@ -1,0 +1,532 @@
+\doxysection{display\+Region.\+cxx}
+\hypertarget{displayRegion_8cxx_source}{}\label{displayRegion_8cxx_source}\index{panda/src/display/displayRegion.cxx@{panda/src/display/displayRegion.cxx}}
+\mbox{\hyperlink{displayRegion_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{displayRegion_8h}{displayRegion.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{stereoDisplayRegion_8h}{stereoDisplayRegion.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{graphicsEngine_8h}{graphicsEngine.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{graphicsOutput_8h}{graphicsOutput.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__display_8h}{config\_display.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{texture_8h}{texture.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{camera_8h}{camera.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{dcast_8h}{dcast.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmImage_8h}{pnmImage.h}}"{}}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ <time.h>}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ DisplayRegion::\_type\_handle;}
+\DoxyCodeLine{00029\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ DisplayRegionPipelineReader::\_type\_handle;}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00034\ DisplayRegion::}
+\DoxyCodeLine{00035\ DisplayRegion(\mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *window,\ \textcolor{keyword}{const}\ LVecBase4\ \&dimensions)\ :}
+\DoxyCodeLine{00036\ \ \ \_window(window),}
+\DoxyCodeLine{00037\ \ \ \_incomplete\_render(true),}
+\DoxyCodeLine{00038\ \ \ \_texture\_reload\_priority(0),}
+\DoxyCodeLine{00039\ \ \ \_cull\_region\_pcollector(\textcolor{stringliteral}{"{}Cull:Invalid"{}}),}
+\DoxyCodeLine{00040\ \ \ \_draw\_region\_pcollector(\textcolor{stringliteral}{"{}Draw:Invalid"{}})}
+\DoxyCodeLine{00041\ \{}
+\DoxyCodeLine{00042\ \ \ \_screenshot\_buffer\_type\ =\ window-\/>get\_draw\_buffer\_type();}
+\DoxyCodeLine{00043\ \ \ \_draw\_buffer\_type\ =\ window-\/>get\_draw\_buffer\_type();}
+\DoxyCodeLine{00044\ \ \ set\_num\_regions(1);}
+\DoxyCodeLine{00045\ \ \ set\_dimensions(0,\ dimensions);}
+\DoxyCodeLine{00046\ \ \ compute\_pixels\_all\_stages();}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00048\ \ \ \_window-\/>add\_display\_region(\textcolor{keyword}{this});}
+\DoxyCodeLine{00049\ \}}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00054\ DisplayRegion::}
+\DoxyCodeLine{00055\ \string~DisplayRegion()\ \{}
+\DoxyCodeLine{00056\ \ \ \mbox{\hyperlink{classDisplayRegion_a6a87ed49c740f181a823639665a10a97}{cleanup}}();}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00058\ \ \ \textcolor{comment}{//\ The\ window\ pointer\ should\ already\ have\ been\ cleared\ by\ the\ time\ the}}
+\DoxyCodeLine{00059\ \ \ \textcolor{comment}{//\ DisplayRegion\ destructs\ (since\ the\ GraphicsOutput\ class\ keeps\ a\ reference}}
+\DoxyCodeLine{00060\ \ \ \textcolor{comment}{//\ count\ on\ the\ DisplayRegion).}}
+\DoxyCodeLine{00061\ \ \ nassertv(\_window\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00062\ \}}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00068\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a6a87ed49c740f181a823639665a10a97}{DisplayRegion::}}}
+\DoxyCodeLine{00069\ \mbox{\hyperlink{classDisplayRegion_a6a87ed49c740f181a823639665a10a97}{cleanup}}()\ \{}
+\DoxyCodeLine{00070\ \ \ \mbox{\hyperlink{classCycleDataStageWriter}{CDStageWriter}}\ cdata(\_cycler,\ 0);}
+\DoxyCodeLine{00071\ \ \ \textcolor{keywordflow}{if}\ (cdata-\/>\_camera\_node\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00072\ \ \ \ \ \textcolor{comment}{//\ We\ need\ to\ tell\ the\ old\ camera\ we're\ not\ using\ it\ anymore.}}
+\DoxyCodeLine{00073\ \ \ \ \ cdata-\/>\_camera\_node-\/>remove\_display\_region(\textcolor{keyword}{this});}
+\DoxyCodeLine{00074\ \ \ \}}
+\DoxyCodeLine{00075\ \ \ cdata-\/>\_camera\_node\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00076\ \ \ cdata-\/>\_camera\ =\ \mbox{\hyperlink{classNodePath}{NodePath}}();}
+\DoxyCodeLine{00077\ }
+\DoxyCodeLine{00078\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDCullWriter}}\ cdata\_cull(\_cycler\_cull,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00079\ \ \ cdata\_cull-\/>\_cull\_result\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00080\ \}}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00090\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a97c38dd70deb04eaa9d09d397c496116}{DisplayRegion::}}}
+\DoxyCodeLine{00091\ \mbox{\hyperlink{classDisplayRegion_a97c38dd70deb04eaa9d09d397c496116}{set\_lens\_index}}(\textcolor{keywordtype}{int}\ index)\ \{}
+\DoxyCodeLine{00092\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00093\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler,\ \textcolor{keyword}{true},\ current\_thread);}
+\DoxyCodeLine{00094\ \ \ cdata-\/>\_lens\_index\ =\ index;}
+\DoxyCodeLine{00095\ \}}
+\DoxyCodeLine{00096\ }
+\DoxyCodeLine{00105\ \textcolor{keywordtype}{void}\ DisplayRegion::}
+\DoxyCodeLine{00106\ set\_dimensions(\textcolor{keywordtype}{int}\ i,\ \textcolor{keyword}{const}\ LVecBase4\ \&dimensions)\ \{}
+\DoxyCodeLine{00107\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00108\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler,\ \textcolor{keyword}{true},\ current\_thread);}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ cdata-\/>\_regions[i].\_dimensions\ =\ dimensions;}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \textcolor{keywordflow}{if}\ (\_window\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ \_window-\/>has\_size())\ \{}
+\DoxyCodeLine{00113\ \ \ \ \ do\_compute\_pixels(i,\ \_window-\/>get\_fb\_x\_size(),\ \_window-\/>get\_fb\_y\_size(),\ cdata);}
+\DoxyCodeLine{00114\ \ \ \}}
+\DoxyCodeLine{00115\ \}}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00121\ \mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}}\ *\mbox{\hyperlink{classDisplayRegion_a925422d3fd993b018ee09da93e42c132}{DisplayRegion::}}}
+\DoxyCodeLine{00122\ \mbox{\hyperlink{classDisplayRegion_a925422d3fd993b018ee09da93e42c132}{get\_pipe}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00123\ \ \ \textcolor{keywordflow}{return}\ (\_window\ !=\ \textcolor{keyword}{nullptr})\ ?\ \_window-\/>get\_pipe()\ :\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00124\ \}}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00129\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classDisplayRegion_ab5ec04c0765e71a669b52a3b01d2629a}{DisplayRegion::}}}
+\DoxyCodeLine{00130\ \mbox{\hyperlink{classDisplayRegion_ab5ec04c0765e71a669b52a3b01d2629a}{is\_stereo}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00131\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00132\ \}}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00145\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_ab6da947e00ed8c02c353bcabebcaa928}{DisplayRegion::}}}
+\DoxyCodeLine{00146\ \mbox{\hyperlink{classDisplayRegion_ab6da947e00ed8c02c353bcabebcaa928}{set\_camera}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&camera)\ \{}
+\DoxyCodeLine{00147\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ \mbox{\hyperlink{classCamera}{Camera}}\ *camera\_node\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00150\ \ \ \textcolor{keywordflow}{if}\ (!camera.is\_empty())\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ DCAST\_INTO\_V(camera\_node,\ camera.node());}
+\DoxyCodeLine{00152\ \ \ \}}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00154\ \ \ \textcolor{keywordflow}{if}\ (camera\_node\ !=\ cdata-\/>\_camera\_node)\ \{}
+\DoxyCodeLine{00155\ \ \ \ \ \textcolor{comment}{//\ Note\ that\ these\ operations\ on\ the\ DisplayRegion\ are\ not\ pipelined:\ they}}
+\DoxyCodeLine{00156\ \ \ \ \ \textcolor{comment}{//\ operate\ across\ all\ pipeline\ stages.\ \ Since\ we\ have\ already\ asserted\ we}}
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{comment}{//\ are\ running\ in\ pipeline\ stage\ 0,\ no\ problem.}}
+\DoxyCodeLine{00158\ \ \ \ \ \textcolor{keywordflow}{if}\ (cdata-\/>\_camera\_node\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ need\ to\ tell\ the\ old\ camera\ we're\ not\ using\ him\ anymore.}}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ cdata-\/>\_camera\_node-\/>remove\_display\_region(\textcolor{keyword}{this});}
+\DoxyCodeLine{00161\ \ \ \ \ \}}
+\DoxyCodeLine{00162\ \ \ \ \ cdata-\/>\_camera\_node\ =\ camera\_node;}
+\DoxyCodeLine{00163\ \ \ \ \ \textcolor{keywordflow}{if}\ (cdata-\/>\_camera\_node\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ tell\ the\ new\ camera\ we\ are\ using\ him.}}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ cdata-\/>\_camera\_node-\/>add\_display\_region(\textcolor{keyword}{this});}
+\DoxyCodeLine{00166\ \ \ \ \ \}}
+\DoxyCodeLine{00167\ \ \ \}}
+\DoxyCodeLine{00168\ }
+\DoxyCodeLine{00169\ \ \ cdata-\/>\_camera\ =\ camera;}
+\DoxyCodeLine{00170\ \}}
+\DoxyCodeLine{00171\ }
+\DoxyCodeLine{00179\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a915aa8febd869dffa7b5144b152658c9}{DisplayRegion::}}}
+\DoxyCodeLine{00180\ \mbox{\hyperlink{classDisplayRegion_a915aa8febd869dffa7b5144b152658c9}{set\_active}}(\textcolor{keywordtype}{bool}\ active)\ \{}
+\DoxyCodeLine{00181\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00182\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler,\ \textcolor{keyword}{true},\ current\_thread);}
+\DoxyCodeLine{00183\ }
+\DoxyCodeLine{00184\ \ \ \textcolor{keywordflow}{if}\ (active\ !=\ cdata-\/>\_active)\ \{}
+\DoxyCodeLine{00185\ \ \ \ \ cdata-\/>\_active\ =\ active;}
+\DoxyCodeLine{00186\ \ \ \ \ win\_display\_regions\_changed();}
+\DoxyCodeLine{00187\ \ \ \}}
+\DoxyCodeLine{00188\ \}}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00198\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a7b2efb8383fc2f43cdc5c55223a9197e}{DisplayRegion::}}}
+\DoxyCodeLine{00199\ \mbox{\hyperlink{classDisplayRegion_a7b2efb8383fc2f43cdc5c55223a9197e}{set\_sort}}(\textcolor{keywordtype}{int}\ sort)\ \{}
+\DoxyCodeLine{00200\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00201\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler,\ \textcolor{keyword}{true},\ current\_thread);}
+\DoxyCodeLine{00202\ }
+\DoxyCodeLine{00203\ \ \ \textcolor{keywordflow}{if}\ (sort\ !=\ cdata-\/>\_sort)\ \{}
+\DoxyCodeLine{00204\ \ \ \ \ cdata-\/>\_sort\ =\ sort;}
+\DoxyCodeLine{00205\ \ \ \ \ win\_display\_regions\_changed();}
+\DoxyCodeLine{00206\ \ \ \}}
+\DoxyCodeLine{00207\ \}}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00235\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a9b697c1c79a6dcdda29394d633a35c0f}{DisplayRegion::}}}
+\DoxyCodeLine{00236\ \mbox{\hyperlink{classDisplayRegion_a9b697c1c79a6dcdda29394d633a35c0f}{set\_stereo\_channel}}(Lens::StereoChannel\ stereo\_channel)\ \{}
+\DoxyCodeLine{00237\ \ \ nassertv(\mbox{\hyperlink{classDisplayRegion_ab5ec04c0765e71a669b52a3b01d2629a}{is\_stereo}}()\ ||\ stereo\_channel\ !=\ Lens::SC\_stereo);}
+\DoxyCodeLine{00238\ }
+\DoxyCodeLine{00239\ \ \ nassertv(Thread::get\_current\_pipeline\_stage()\ ==\ 0);}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler);}
+\DoxyCodeLine{00242\ \ \ cdata-\/>\_stereo\_channel\ =\ stereo\_channel;}
+\DoxyCodeLine{00243\ \ \ cdata-\/>\_tex\_view\_offset\ =\ (stereo\_channel\ ==\ Lens::SC\_right)\ ?\ 1\ :\ 0;}
+\DoxyCodeLine{00244\ \}}
+\DoxyCodeLine{00245\ }
+\DoxyCodeLine{00255\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a63031b50c41d191d6f63b8902f95a2f1}{DisplayRegion::}}}
+\DoxyCodeLine{00256\ \mbox{\hyperlink{classDisplayRegion_a63031b50c41d191d6f63b8902f95a2f1}{set\_tex\_view\_offset}}(\textcolor{keywordtype}{int}\ tex\_view\_offset)\ \{}
+\DoxyCodeLine{00257\ \ \ nassertv(Thread::get\_current\_pipeline\_stage()\ ==\ 0);}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler);}
+\DoxyCodeLine{00260\ \ \ cdata-\/>\_tex\_view\_offset\ =\ tex\_view\_offset;}
+\DoxyCodeLine{00261\ \}}
+\DoxyCodeLine{00262\ }
+\DoxyCodeLine{00275\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a750cd721457df7fa93a026599a892717}{DisplayRegion::}}}
+\DoxyCodeLine{00276\ \mbox{\hyperlink{classDisplayRegion_a750cd721457df7fa93a026599a892717}{set\_incomplete\_render}}(\textcolor{keywordtype}{bool}\ incomplete\_render)\ \{}
+\DoxyCodeLine{00277\ \ \ \_incomplete\_render\ =\ incomplete\_render;}
+\DoxyCodeLine{00278\ \}}
+\DoxyCodeLine{00279\ }
+\DoxyCodeLine{00291\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_ac5f88f5ee05cb12a714c37bc39031d18}{DisplayRegion::}}}
+\DoxyCodeLine{00292\ \mbox{\hyperlink{classDisplayRegion_ac5f88f5ee05cb12a714c37bc39031d18}{set\_texture\_reload\_priority}}(\textcolor{keywordtype}{int}\ texture\_reload\_priority)\ \{}
+\DoxyCodeLine{00293\ \ \ \_texture\_reload\_priority\ =\ texture\_reload\_priority;}
+\DoxyCodeLine{00294\ \}}
+\DoxyCodeLine{00295\ }
+\DoxyCodeLine{00301\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_ab5f6293225ea73a8743fefcb83de26a2}{DisplayRegion::}}}
+\DoxyCodeLine{00302\ \mbox{\hyperlink{classDisplayRegion_ab5f6293225ea73a8743fefcb83de26a2}{set\_cull\_traverser}}(\mbox{\hyperlink{classCullTraverser}{CullTraverser}}\ *trav)\ \{}
+\DoxyCodeLine{00303\ \ \ \_trav\ =\ trav;}
+\DoxyCodeLine{00304\ \}}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00310\ \mbox{\hyperlink{classCullTraverser}{CullTraverser}}\ *\mbox{\hyperlink{classDisplayRegion_aeaa570131d593c3eabd3c13a91163150}{DisplayRegion::}}}
+\DoxyCodeLine{00311\ \mbox{\hyperlink{classDisplayRegion_aeaa570131d593c3eabd3c13a91163150}{get\_cull\_traverser}}()\ \{}
+\DoxyCodeLine{00312\ \ \ \textcolor{keywordflow}{if}\ (\_trav\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00313\ \ \ \ \ \_trav\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classCullTraverser}{CullTraverser}};}
+\DoxyCodeLine{00314\ \ \ \}}
+\DoxyCodeLine{00315\ \ \ \textcolor{keywordflow}{return}\ \_trav;}
+\DoxyCodeLine{00316\ \}}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00333\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a505f39a6135a6911a5addcee0d3c27d7}{DisplayRegion::}}}
+\DoxyCodeLine{00334\ \mbox{\hyperlink{classDisplayRegion_a505f39a6135a6911a5addcee0d3c27d7}{set\_target\_tex\_page}}(\textcolor{keywordtype}{int}\ page)\ \{}
+\DoxyCodeLine{00335\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00336\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler,\ \textcolor{keyword}{true},\ current\_thread);}
+\DoxyCodeLine{00337\ \ \ cdata-\/>\_target\_tex\_page\ =\ page;}
+\DoxyCodeLine{00338\ \}}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00343\ \textcolor{keywordtype}{void}\ DisplayRegion::}
+\DoxyCodeLine{00344\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00345\ \ \ CDReader\ cdata(\_cycler);}
+\DoxyCodeLine{00346\ \ \ out\ <<\ \textcolor{stringliteral}{"{}DisplayRegion("{}}\ <<\ cdata-\/>\_regions[0].\_dimensions}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{})=pixels("{}}\ <<\ cdata-\/>\_regions[0].\_pixels\ <<\ \textcolor{stringliteral}{"{})"{}};}
+\DoxyCodeLine{00348\ \}}
+\DoxyCodeLine{00349\ }
+\DoxyCodeLine{00359\ \mbox{\hyperlink{classFilename}{Filename}}\ \mbox{\hyperlink{classDisplayRegion_a93fb36f03080940b5a55d75b7d45d359}{DisplayRegion::}}}
+\DoxyCodeLine{00360\ \mbox{\hyperlink{classDisplayRegion_a93fb36f03080940b5a55d75b7d45d359}{make\_screenshot\_filename}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&prefix)\ \{}
+\DoxyCodeLine{00361\ \ \ time\_t\ now\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00362\ \ \ \textcolor{keyword}{struct\ }tm\ *ttm\ =\ localtime(\&now);}
+\DoxyCodeLine{00363\ \ \ \textcolor{keywordtype}{int}\ frame\_count\ =\ ClockObject::get\_global\_clock()-\/>get\_frame\_count();}
+\DoxyCodeLine{00364\ }
+\DoxyCodeLine{00365\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ buffer\_size\ =\ 1024;}
+\DoxyCodeLine{00366\ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{00367\ }
+\DoxyCodeLine{00368\ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ filename\_strm;}
+\DoxyCodeLine{00369\ }
+\DoxyCodeLine{00370\ \ \ \textcolor{keywordtype}{size\_t}\ i\ =\ 0;}
+\DoxyCodeLine{00371\ \ \ \textcolor{keywordflow}{while}\ (i\ <\ screenshot\_filename.length())\ \{}
+\DoxyCodeLine{00372\ \ \ \ \ \textcolor{keywordtype}{char}\ ch1\ =\ screenshot\_filename[i++];}
+\DoxyCodeLine{00373\ \ \ \ \ \textcolor{keywordflow}{if}\ (ch1\ ==\ \textcolor{charliteral}{'\%'}\ \&\&\ i\ <\ screenshot\_filename.length())\ \{}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ ch2\ =\ screenshot\_filename[i++];}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ch2\ ==\ \textcolor{charliteral}{'\string~'}\ \&\&\ i\ <\ screenshot\_filename.length())\ \{}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ ch3\ =\ screenshot\_filename[i++];}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (ch3)\ \{}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'p'}:}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ filename\_strm\ <<\ prefix;}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00381\ }
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'f'}:}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \ \ \ \ filename\_strm\ <<\ frame\_count;}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'e'}:}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \ \ \ \ filename\_strm\ <<\ screenshot\_extension;}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00390\ }
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Use\ strftime()\ to\ decode\ the\ percent\ code.}}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ format[3]\ =\ \{\textcolor{charliteral}{'\%'},\ ch2,\ \textcolor{charliteral}{'\(\backslash\)0'}\};}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (strftime(buffer,\ buffer\_size,\ format,\ ttm))\ \{}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{char}\ *b\ =\ buffer;\ *b\ !=\ \textcolor{charliteral}{'\(\backslash\)0'};\ b++)\ \{}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (*b)\ \{}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\ '}:}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{':'}:}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'/'}:}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ filename\_strm\ <<\ \textcolor{charliteral}{'-\/'};}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00402\ }
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)n'}:}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00405\ }
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ filename\_strm\ <<\ *b;}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00412\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ filename\_strm\ <<\ ch1;}
+\DoxyCodeLine{00414\ \ \ \ \ \}}
+\DoxyCodeLine{00415\ \ \ \}}
+\DoxyCodeLine{00416\ }
+\DoxyCodeLine{00417\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classFilename}{Filename}}(filename\_strm.str());}
+\DoxyCodeLine{00418\ \}}
+\DoxyCodeLine{00419\ }
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00426\ \mbox{\hyperlink{classFilename}{Filename}}\ \mbox{\hyperlink{classDisplayRegion_af2549559e621c0b55dea2c4cb483df1d}{DisplayRegion::}}}
+\DoxyCodeLine{00427\ \mbox{\hyperlink{classDisplayRegion_af2549559e621c0b55dea2c4cb483df1d}{save\_screenshot\_default}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&prefix)\ \{}
+\DoxyCodeLine{00428\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ filename\ =\ \mbox{\hyperlink{classDisplayRegion_a93fb36f03080940b5a55d75b7d45d359}{make\_screenshot\_filename}}(prefix);}
+\DoxyCodeLine{00429\ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classDisplayRegion_a0bd6064382f1269cb58d9917b571f2fe}{save\_screenshot}}(filename))\ \{}
+\DoxyCodeLine{00430\ \ \ \ \ \textcolor{keywordflow}{return}\ filename;}
+\DoxyCodeLine{00431\ \ \ \}}
+\DoxyCodeLine{00432\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classFilename}{Filename}}();}
+\DoxyCodeLine{00433\ \}}
+\DoxyCodeLine{00434\ }
+\DoxyCodeLine{00439\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classDisplayRegion_a0bd6064382f1269cb58d9917b571f2fe}{DisplayRegion::}}}
+\DoxyCodeLine{00440\ \mbox{\hyperlink{classDisplayRegion_a0bd6064382f1269cb58d9917b571f2fe}{save\_screenshot}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&image\_comment)\ \{}
+\DoxyCodeLine{00441\ \ \ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ image;}
+\DoxyCodeLine{00442\ \ \ \textcolor{keywordflow}{if}\ (!\mbox{\hyperlink{classDisplayRegion_a3a93a974c2129ca426cef186861c0e6c}{get\_screenshot}}(image))\ \{}
+\DoxyCodeLine{00443\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00444\ \ \ \}}
+\DoxyCodeLine{00445\ }
+\DoxyCodeLine{00446\ \ \ image.set\_comment(image\_comment);}
+\DoxyCodeLine{00447\ \ \ \textcolor{keywordflow}{if}\ (!image.write(filename))\ \{}
+\DoxyCodeLine{00448\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00449\ \ \ \}}
+\DoxyCodeLine{00450\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00451\ \}}
+\DoxyCodeLine{00452\ }
+\DoxyCodeLine{00457\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classDisplayRegion_a3a93a974c2129ca426cef186861c0e6c}{DisplayRegion::}}}
+\DoxyCodeLine{00458\ \mbox{\hyperlink{classDisplayRegion_a3a93a974c2129ca426cef186861c0e6c}{get\_screenshot}}(\mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&image)\ \{}
+\DoxyCodeLine{00459\ \ \ PT(\mbox{\hyperlink{classTexture}{Texture}})\ tex\ =\ \mbox{\hyperlink{classDisplayRegion_a3a93a974c2129ca426cef186861c0e6c}{get\_screenshot}}();}
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00461\ \ \ \textcolor{keywordflow}{if}\ (tex\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00462\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00463\ \ \ \}}
+\DoxyCodeLine{00464\ }
+\DoxyCodeLine{00465\ \ \ \textcolor{keywordflow}{if}\ (!tex-\/>store(image))\ \{}
+\DoxyCodeLine{00466\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00467\ \ \ \}}
+\DoxyCodeLine{00468\ }
+\DoxyCodeLine{00469\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00470\ \}}
+\DoxyCodeLine{00471\ }
+\DoxyCodeLine{00476\ PT(\mbox{\hyperlink{classTexture}{Texture}})\ \mbox{\hyperlink{classDisplayRegion_a3a93a974c2129ca426cef186861c0e6c}{DisplayRegion::}}}
+\DoxyCodeLine{00477\ \mbox{\hyperlink{classDisplayRegion_a3a93a974c2129ca426cef186861c0e6c}{get\_screenshot}}()\ \{}
+\DoxyCodeLine{00478\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ \ \ \mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *window\ =\ get\_window();}
+\DoxyCodeLine{00481\ \ \ nassertr(window\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00482\ }
+\DoxyCodeLine{00483\ \ \ \mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}}\ *gsg\ =\ window-\/>get\_gsg();}
+\DoxyCodeLine{00484\ \ \ nassertr(gsg\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00485\ }
+\DoxyCodeLine{00486\ \ \ \textcolor{comment}{//\ Are\ we\ on\ the\ draw\ thread?}}
+\DoxyCodeLine{00487\ \ \ \textcolor{keywordflow}{if}\ (gsg-\/>get\_threading\_model().get\_draw\_stage()\ !=\ current\_thread-\/>get\_pipeline\_stage())\ \{}
+\DoxyCodeLine{00488\ \ \ \ \ \textcolor{comment}{//\ Ask\ the\ engine\ to\ do\ on\ the\ draw\ thread.}}
+\DoxyCodeLine{00489\ \ \ \ \ \mbox{\hyperlink{classGraphicsEngine}{GraphicsEngine}}\ *engine\ =\ window-\/>get\_engine();}
+\DoxyCodeLine{00490\ \ \ \ \ \textcolor{keywordflow}{return}\ engine-\/>run\_on\_draw\_thread([\textcolor{keyword}{this}]\ \{}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classDisplayRegion_a3a93a974c2129ca426cef186861c0e6c}{get\_screenshot}}();}
+\DoxyCodeLine{00492\ \ \ \ \ \});}
+\DoxyCodeLine{00493\ \ \ \}}
+\DoxyCodeLine{00494\ }
+\DoxyCodeLine{00495\ \ \ \textcolor{comment}{//\ We\ are\ on\ the\ draw\ thread.}}
+\DoxyCodeLine{00496\ \ \ \textcolor{keywordflow}{if}\ (!window-\/>\mbox{\hyperlink{classGraphicsOutput_a82bbfa980adaaa4abcdaa8c567182db1}{begin\_frame}}(GraphicsOutput::FM\_refresh,\ current\_thread))\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00498\ \ \ \}}
+\DoxyCodeLine{00499\ }
+\DoxyCodeLine{00500\ \ \ \{}
+\DoxyCodeLine{00501\ \ \ \ \ \textcolor{comment}{//\ Make\ sure\ that\ the\ correct\ viewport\ is\ active.}}
+\DoxyCodeLine{00502\ \ \ \ \ \mbox{\hyperlink{classDisplayRegionPipelineReader}{DisplayRegionPipelineReader}}\ dr\_reader(\textcolor{keyword}{this},\ current\_thread);}
+\DoxyCodeLine{00503\ \ \ \ \ gsg-\/>\mbox{\hyperlink{classGraphicsStateGuardian_a60bb06c5987b92bc39591d4a27bea4ab}{prepare\_display\_region}}(\&dr\_reader);}
+\DoxyCodeLine{00504\ \ \ \}}
+\DoxyCodeLine{00505\ }
+\DoxyCodeLine{00506\ \ \ PT(\mbox{\hyperlink{classTexture}{Texture}})\ tex\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTexture}{Texture}};}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00508\ \ \ \mbox{\hyperlink{classRenderBuffer}{RenderBuffer}}\ buffer\ =\ gsg-\/>\mbox{\hyperlink{classGraphicsStateGuardian_a9e068a69d7af6b393280e624217e2197}{get\_render\_buffer}}(get\_screenshot\_buffer\_type(),}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_window-\/>get\_fb\_properties());}
+\DoxyCodeLine{00510\ \ \ \textcolor{keywordflow}{if}\ (!gsg-\/>\mbox{\hyperlink{classGraphicsStateGuardian_a98221f5a2c02609c1e0a72047b877018}{framebuffer\_copy\_to\_ram}}(tex,\ 0,\ -\/1,\ \textcolor{keyword}{this},\ buffer))\ \{}
+\DoxyCodeLine{00511\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00512\ \ \ \}}
+\DoxyCodeLine{00513\ }
+\DoxyCodeLine{00514\ \ \ window-\/>\mbox{\hyperlink{classGraphicsOutput_a51bf142d4d882476b8a089581474dd0f}{end\_frame}}(GraphicsOutput::FM\_refresh,\ current\_thread);}
+\DoxyCodeLine{00515\ }
+\DoxyCodeLine{00516\ \ \ \textcolor{keywordflow}{return}\ tex;}
+\DoxyCodeLine{00517\ \}}
+\DoxyCodeLine{00518\ }
+\DoxyCodeLine{00522\ \textcolor{keywordtype}{void}\ DisplayRegion::}
+\DoxyCodeLine{00523\ clear\_cull\_result()\ \{}
+\DoxyCodeLine{00524\ \ \ CDCullWriter\ cdata\_cull(\_cycler\_cull,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00525\ \ \ cdata\_cull-\/>\_cull\_result\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00526\ \}}
+\DoxyCodeLine{00527\ }
+\DoxyCodeLine{00543\ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ DisplayRegion::}
+\DoxyCodeLine{00544\ make\_cull\_result\_graph()\ \{}
+\DoxyCodeLine{00545\ \ \ \mbox{\hyperlink{classCullResult}{CullResult}}\ *cull\_result\ =\ get\_cull\_result(Thread::get\_current\_thread());}
+\DoxyCodeLine{00546\ \ \ \textcolor{keywordflow}{if}\ (cull\_result\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00547\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00548\ \ \ \}}
+\DoxyCodeLine{00549\ \ \ \textcolor{keywordflow}{return}\ cull\_result-\/>make\_result\_graph();}
+\DoxyCodeLine{00550\ \}}
+\DoxyCodeLine{00551\ }
+\DoxyCodeLine{00556\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a098227c183f31f003604eaef94e54b71}{DisplayRegion::}}}
+\DoxyCodeLine{00557\ \mbox{\hyperlink{classDisplayRegion_a098227c183f31f003604eaef94e54b71}{compute\_pixels}}()\ \{}
+\DoxyCodeLine{00558\ \ \ \textcolor{keywordflow}{if}\ (\_window\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00559\ \ \ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00560\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ cdata-\/>\_regions.size();\ ++i)\ \{}
+\DoxyCodeLine{00561\ \ \ \ \ \ \ do\_compute\_pixels(i,\ \_window-\/>get\_fb\_x\_size(),\ \_window-\/>get\_fb\_y\_size(),}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cdata);}
+\DoxyCodeLine{00563\ \ \ \ \ \}}
+\DoxyCodeLine{00564\ \ \ \}}
+\DoxyCodeLine{00565\ \}}
+\DoxyCodeLine{00566\ }
+\DoxyCodeLine{00571\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a6c0d9e3c82f882b86d0b53cf17fa1f47}{DisplayRegion::}}}
+\DoxyCodeLine{00572\ \mbox{\hyperlink{classDisplayRegion_a6c0d9e3c82f882b86d0b53cf17fa1f47}{compute\_pixels\_all\_stages}}()\ \{}
+\DoxyCodeLine{00573\ \ \ \textcolor{keywordflow}{if}\ (\_window\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00574\ \ \ \ \ OPEN\_ITERATE\_ALL\_STAGES(\_cycler)\ \{}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \mbox{\hyperlink{classCycleDataStageWriter}{CDStageWriter}}\ cdata(\_cycler,\ pipeline\_stage);}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ cdata-\/>\_regions.size();\ ++i)\ \{}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \ \ do\_compute\_pixels(i,\ \_window-\/>get\_fb\_x\_size(),\ \_window-\/>get\_fb\_y\_size(),}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cdata);}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00580\ \ \ \ \ \}}
+\DoxyCodeLine{00581\ \ \ \ \ CLOSE\_ITERATE\_ALL\_STAGES(\_cycler);}
+\DoxyCodeLine{00582\ \ \ \}}
+\DoxyCodeLine{00583\ \}}
+\DoxyCodeLine{00584\ }
+\DoxyCodeLine{00589\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a098227c183f31f003604eaef94e54b71}{DisplayRegion::}}}
+\DoxyCodeLine{00590\ \mbox{\hyperlink{classDisplayRegion_a098227c183f31f003604eaef94e54b71}{compute\_pixels}}(\textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size)\ \{}
+\DoxyCodeLine{00591\ \ \ \mbox{\hyperlink{classCycleDataWriter}{CDWriter}}\ cdata(\_cycler,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00592\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ cdata-\/>\_regions.size();\ ++i)\ \{}
+\DoxyCodeLine{00593\ \ \ \ \ do\_compute\_pixels(i,\ x\_size,\ y\_size,\ cdata);}
+\DoxyCodeLine{00594\ \ \ \}}
+\DoxyCodeLine{00595\ \}}
+\DoxyCodeLine{00596\ }
+\DoxyCodeLine{00603\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a6c0d9e3c82f882b86d0b53cf17fa1f47}{DisplayRegion::}}}
+\DoxyCodeLine{00604\ \mbox{\hyperlink{classDisplayRegion_a6c0d9e3c82f882b86d0b53cf17fa1f47}{compute\_pixels\_all\_stages}}(\textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size)\ \{}
+\DoxyCodeLine{00605\ \ \ OPEN\_ITERATE\_ALL\_STAGES(\_cycler)\ \{}
+\DoxyCodeLine{00606\ \ \ \ \ \mbox{\hyperlink{classCycleDataStageWriter}{CDStageWriter}}\ cdata(\_cycler,\ pipeline\_stage);}
+\DoxyCodeLine{00607\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ cdata-\/>\_regions.size();\ ++i)\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ do\_compute\_pixels(i,\ x\_size,\ y\_size,\ cdata);}
+\DoxyCodeLine{00609\ \ \ \ \ \}}
+\DoxyCodeLine{00610\ \ \ \}}
+\DoxyCodeLine{00611\ \ \ CLOSE\_ITERATE\_ALL\_STAGES(\_cycler);}
+\DoxyCodeLine{00612\ \}}
+\DoxyCodeLine{00613\ }
+\DoxyCodeLine{00624\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classDisplayRegion_ae3d3f3b17ccf939eca355636fa75b20f}{DisplayRegion::}}}
+\DoxyCodeLine{00625\ \mbox{\hyperlink{classDisplayRegion_ae3d3f3b17ccf939eca355636fa75b20f}{supports\_pixel\_zoom}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00626\ \ \ \textcolor{keywordflow}{if}\ (\_window\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00627\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_window-\/>\mbox{\hyperlink{classDrawableRegion_a4cfe50ce12833faa307c6a2acae993f3}{supports\_pixel\_zoom}}())\ \{}
+\DoxyCodeLine{00628\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ get\_clear\_color\_active()\ \&\&\ get\_clear\_depth\_active();}
+\DoxyCodeLine{00629\ \ \ \ \ \}}
+\DoxyCodeLine{00630\ \ \ \}}
+\DoxyCodeLine{00631\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00632\ \}}
+\DoxyCodeLine{00633\ }
+\DoxyCodeLine{00639\ \textcolor{keywordtype}{void}\ DisplayRegion::}
+\DoxyCodeLine{00640\ win\_display\_regions\_changed()\ \{}
+\DoxyCodeLine{00641\ \ \ \textcolor{keywordflow}{if}\ (\_window\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ \_window-\/>win\_display\_regions\_changed();}
+\DoxyCodeLine{00643\ \ \ \}}
+\DoxyCodeLine{00644\ \}}
+\DoxyCodeLine{00645\ }
+\DoxyCodeLine{00650\ \textcolor{keywordtype}{void}\ DisplayRegion::}
+\DoxyCodeLine{00651\ do\_compute\_pixels(\textcolor{keywordtype}{int}\ i,\ \textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size,\ CData\ *cdata)\ \{}
+\DoxyCodeLine{00652\ \ \ \textcolor{keywordflow}{if}\ (display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00653\ \ \ \ \ display\_cat.debug()}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}DisplayRegion::do\_compute\_pixels("{}}\ <<\ x\_size\ <<\ \textcolor{stringliteral}{"{},\ "{}}\ <<\ y\_size\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00655\ \ \ \}}
+\DoxyCodeLine{00656\ }
+\DoxyCodeLine{00657\ \ \ Region\ \&region\ =\ cdata-\/>\_regions[i];}
+\DoxyCodeLine{00658\ }
+\DoxyCodeLine{00659\ \ \ region.\_pixels[0]\ =\ int((region.\_dimensions[0]\ *\ x\_size)\ +\ 0.5);}
+\DoxyCodeLine{00660\ \ \ region.\_pixels[1]\ =\ int((region.\_dimensions[1]\ *\ x\_size)\ +\ 0.5);}
+\DoxyCodeLine{00661\ \ \ region.\_pixels\_i[0]\ =\ region.\_pixels[0];}
+\DoxyCodeLine{00662\ \ \ region.\_pixels\_i[1]\ =\ region.\_pixels[1];}
+\DoxyCodeLine{00663\ }
+\DoxyCodeLine{00664\ \ \ nassertv(\_window\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00665\ \ \ \textcolor{keywordflow}{if}\ (\_window-\/>get\_inverted())\ \{}
+\DoxyCodeLine{00666\ \ \ \ \ \textcolor{comment}{//\ The\ window\ is\ inverted;\ compute\ the\ DisplayRegion\ accordingly.}}
+\DoxyCodeLine{00667\ \ \ \ \ region.\_pixels[2]\ =\ int(((1.0f\ -\/\ region.\_dimensions[3])\ *\ y\_size)\ +\ 0.5);}
+\DoxyCodeLine{00668\ \ \ \ \ region.\_pixels[3]\ =\ int(((1.0f\ -\/\ region.\_dimensions[2])\ *\ y\_size)\ +\ 0.5);}
+\DoxyCodeLine{00669\ \ \ \ \ region.\_pixels\_i[2]\ =\ int((region.\_dimensions[3]\ *\ y\_size)\ +\ 0.5);}
+\DoxyCodeLine{00670\ \ \ \ \ region.\_pixels\_i[3]\ =\ int((region.\_dimensions[2]\ *\ y\_size)\ +\ 0.5);}
+\DoxyCodeLine{00671\ }
+\DoxyCodeLine{00672\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00673\ \ \ \ \ \textcolor{comment}{//\ The\ window\ is\ normal.}}
+\DoxyCodeLine{00674\ \ \ \ \ region.\_pixels[2]\ =\ int((region.\_dimensions[2]\ *\ y\_size)\ +\ 0.5);}
+\DoxyCodeLine{00675\ \ \ \ \ region.\_pixels[3]\ =\ int((region.\_dimensions[3]\ *\ y\_size)\ +\ 0.5);}
+\DoxyCodeLine{00676\ \ \ \ \ region.\_pixels\_i[2]\ =\ int(((1.0f\ -\/\ region.\_dimensions[2])\ *\ y\_size)\ +\ 0.5);}
+\DoxyCodeLine{00677\ \ \ \ \ region.\_pixels\_i[3]\ =\ int(((1.0f\ -\/\ region.\_dimensions[3])\ *\ y\_size)\ +\ 0.5);}
+\DoxyCodeLine{00678\ \ \ \}}
+\DoxyCodeLine{00679\ \}}
+\DoxyCodeLine{00680\ }
+\DoxyCodeLine{00689\ \textcolor{keywordtype}{void}\ DisplayRegion::}
+\DoxyCodeLine{00690\ set\_active\_index(\textcolor{keywordtype}{int}\ index)\ \{}
+\DoxyCodeLine{00691\ \textcolor{preprocessor}{\#if\ defined(DO\_PSTATS)\ ||\ !defined(NDEBUG)}}
+\DoxyCodeLine{00692\ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ strm;}
+\DoxyCodeLine{00693\ }
+\DoxyCodeLine{00694\ \ \ \textcolor{comment}{//\ To\ make\ a\ more\ useful\ name\ for\ PStats\ and\ debug\ output,\ we\ add\ the\ scene}}
+\DoxyCodeLine{00695\ \ \ \textcolor{comment}{//\ graph\ name\ and\ camera\ name.}}
+\DoxyCodeLine{00696\ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ camera\ =\ get\_camera();}
+\DoxyCodeLine{00697\ \ \ \textcolor{keywordflow}{if}\ (!camera.is\_empty())\ \{}
+\DoxyCodeLine{00698\ \ \ \ \ \mbox{\hyperlink{classCamera}{Camera}}\ *camera\_node\ =\ DCAST(\mbox{\hyperlink{classCamera}{Camera}},\ camera.node());}
+\DoxyCodeLine{00699\ \ \ \ \ \textcolor{keywordflow}{if}\ (camera\_node\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00700\ \ \ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ scene\_root\ =\ camera\_node-\/>get\_scene();}
+\DoxyCodeLine{00701\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (scene\_root.is\_empty())\ \{}
+\DoxyCodeLine{00702\ \ \ \ \ \ \ \ \ scene\_root\ =\ camera.get\_top();}
+\DoxyCodeLine{00703\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00704\ \ \ \ \ \ \ strm\ <<\ scene\_root.get\_name();}
+\DoxyCodeLine{00705\ \ \ \ \ \}}
+\DoxyCodeLine{00706\ \ \ \}}
+\DoxyCodeLine{00707\ }
+\DoxyCodeLine{00708\ \ \ \textcolor{comment}{//\ And\ add\ the\ index\ in\ case\ we\ have\ two\ scene\ graphs\ with\ the\ same\ name.}}
+\DoxyCodeLine{00709\ \ \ strm\ <<\ \textcolor{stringliteral}{"{}\#"{}}\ <<\ index;}
+\DoxyCodeLine{00710\ }
+\DoxyCodeLine{00711\ \ \ \_debug\_name\ =\ strm.str();}
+\DoxyCodeLine{00712\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00713\ }
+\DoxyCodeLine{00714\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00715\ \ \ \_cull\_region\_pcollector\ =\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}(\_window-\/>get\_cull\_window\_pcollector(),\ \_debug\_name);}
+\DoxyCodeLine{00716\ \ \ \_draw\_region\_pcollector\ =\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}(\_window-\/>get\_draw\_window\_pcollector(),\ \_debug\_name);}
+\DoxyCodeLine{00717\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{00718\ \}}
+\DoxyCodeLine{00719\ }
+\DoxyCodeLine{00724\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classDisplayRegion_a89d404a8bf4e69302699671adcf776f5}{DisplayRegion::}}}
+\DoxyCodeLine{00725\ \mbox{\hyperlink{classDisplayRegion_a89d404a8bf4e69302699671adcf776f5}{do\_cull}}(\mbox{\hyperlink{classCullHandler}{CullHandler}}\ *cull\_handler,\ \mbox{\hyperlink{classSceneSetup}{SceneSetup}}\ *scene\_setup,}
+\DoxyCodeLine{00726\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}}\ *gsg,\ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00727\ }
+\DoxyCodeLine{00728\ \ \ \mbox{\hyperlink{classGraphicsEngine_afdad59b9fa2cefe17e03b7aa05e3e37b}{GraphicsEngine::do\_cull}}(cull\_handler,\ scene\_setup,\ gsg,\ current\_thread);}
+\DoxyCodeLine{00729\ \}}
+\DoxyCodeLine{00730\ }
+\DoxyCodeLine{00734\ DisplayRegion::CData::}
+\DoxyCodeLine{00735\ CData()\ :}
+\DoxyCodeLine{00736\ \ \ \_depth\_range(0,\ 1),}
+\DoxyCodeLine{00737\ \ \ \_lens\_index(0),}
+\DoxyCodeLine{00738\ \ \ \_camera\_node(nullptr),}
+\DoxyCodeLine{00739\ \ \ \_active(true),}
+\DoxyCodeLine{00740\ \ \ \_sort(0),}
+\DoxyCodeLine{00741\ \ \ \_stereo\_channel(\mbox{\hyperlink{classLens}{Lens}}::SC\_mono),}
+\DoxyCodeLine{00742\ \ \ \_tex\_view\_offset(0),}
+\DoxyCodeLine{00743\ \ \ \_target\_tex\_page(-\/1),}
+\DoxyCodeLine{00744\ \ \ \_scissor\_enabled(true)}
+\DoxyCodeLine{00745\ \{}
+\DoxyCodeLine{00746\ \ \ \_regions.push\_back(Region());}
+\DoxyCodeLine{00747\ \}}
+\DoxyCodeLine{00748\ }
+\DoxyCodeLine{00752\ DisplayRegion::CData::}
+\DoxyCodeLine{00753\ CData(\textcolor{keyword}{const}\ DisplayRegion::CData\ \&copy)\ :}
+\DoxyCodeLine{00754\ \ \ \_regions(copy.\_regions),}
+\DoxyCodeLine{00755\ \ \ \_depth\_range(copy.\_depth\_range),}
+\DoxyCodeLine{00756\ \ \ \_lens\_index(copy.\_lens\_index),}
+\DoxyCodeLine{00757\ \ \ \_camera(copy.\_camera),}
+\DoxyCodeLine{00758\ \ \ \_camera\_node(copy.\_camera\_node),}
+\DoxyCodeLine{00759\ \ \ \_active(copy.\_active),}
+\DoxyCodeLine{00760\ \ \ \_sort(copy.\_sort),}
+\DoxyCodeLine{00761\ \ \ \_stereo\_channel(copy.\_stereo\_channel),}
+\DoxyCodeLine{00762\ \ \ \_tex\_view\_offset(copy.\_tex\_view\_offset),}
+\DoxyCodeLine{00763\ \ \ \_target\_tex\_page(copy.\_target\_tex\_page),}
+\DoxyCodeLine{00764\ \ \ \_scissor\_enabled(copy.\_scissor\_enabled)}
+\DoxyCodeLine{00765\ \{}
+\DoxyCodeLine{00766\ \}}
+\DoxyCodeLine{00767\ }
+\DoxyCodeLine{00771\ \mbox{\hyperlink{classCycleData}{CycleData}}\ *DisplayRegion::CData::}
+\DoxyCodeLine{00772\ make\_copy()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00773\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ CData(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00774\ \}}
+\DoxyCodeLine{00775\ }
+\DoxyCodeLine{00779\ \mbox{\hyperlink{classCycleData}{CycleData}}\ *DisplayRegion::CDataCull::}
+\DoxyCodeLine{00780\ make\_copy()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00781\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ CDataCull(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00782\ \}}
+\DoxyCodeLine{00783\ }
+\DoxyCodeLine{00788\ \mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}}\ *\mbox{\hyperlink{classDisplayRegionPipelineReader_a315ef55c7c2f2dc2d15879a1522bff4a}{DisplayRegionPipelineReader::}}}
+\DoxyCodeLine{00789\ \mbox{\hyperlink{classDisplayRegionPipelineReader_a315ef55c7c2f2dc2d15879a1522bff4a}{get\_pipe}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00790\ \ \ \textcolor{keywordflow}{return}\ (\_object-\/>\_window\ !=\ \textcolor{keyword}{nullptr})\ ?\ \_object-\/>\_window-\/>get\_pipe()\ :\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00791\ \}}
+
+\end{DoxyCode}

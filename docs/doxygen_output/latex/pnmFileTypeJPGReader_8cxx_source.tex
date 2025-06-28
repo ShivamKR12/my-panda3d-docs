@@ -1,0 +1,393 @@
+\doxysection{pnm\+File\+Type\+JPGReader.\+cxx}
+\hypertarget{pnmFileTypeJPGReader_8cxx_source}{}\label{pnmFileTypeJPGReader_8cxx_source}\index{panda/src/pnmimagetypes/pnmFileTypeJPGReader.cxx@{panda/src/pnmimagetypes/pnmFileTypeJPGReader.cxx}}
+\mbox{\hyperlink{pnmFileTypeJPGReader_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmFileTypeJPG_8h}{pnmFileTypeJPG.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ HAVE\_JPEG}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pnmimagetypes_8h}{config\_pnmimagetypes.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{comment}{//\ The\ following\ bit\ of\ code,\ for\ setting\ up\ jpeg\_istream\_src(),\ was\ lifted}}
+\DoxyCodeLine{00022\ \textcolor{comment}{//\ from\ jpeglib,\ and\ modified\ to\ work\ with\ istream\ instead\ of\ stdio.}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00025\ \textcolor{comment}{\ *\ jdatasrc.c}}
+\DoxyCodeLine{00026\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00027\ \textcolor{comment}{\ *\ Copyright\ (C)\ 1994-\/1996,\ Thomas\ G.\ Lane.}}
+\DoxyCodeLine{00028\ \textcolor{comment}{\ *\ This\ file\ is\ part\ of\ the\ Independent\ JPEG\ Group's\ software.}}
+\DoxyCodeLine{00029\ \textcolor{comment}{\ *\ For\ conditions\ of\ distribution\ and\ use,\ see\ the\ accompanying\ README\ file.}}
+\DoxyCodeLine{00030\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00031\ \textcolor{comment}{\ *\ This\ file\ contains\ decompression\ data\ source\ routines\ for\ the\ case\ of}}
+\DoxyCodeLine{00032\ \textcolor{comment}{\ *\ reading\ JPEG\ data\ from\ a\ file\ (or\ any\ stdio\ stream).\ \ While\ these\ routines}}
+\DoxyCodeLine{00033\ \textcolor{comment}{\ *\ are\ sufficient\ for\ most\ applications,\ some\ will\ want\ to\ use\ a\ different}}
+\DoxyCodeLine{00034\ \textcolor{comment}{\ *\ source\ manager.}}
+\DoxyCodeLine{00035\ \textcolor{comment}{\ *\ IMPORTANT:\ we\ assume\ that\ fread()\ will\ correctly\ transcribe\ an\ array\ of}}
+\DoxyCodeLine{00036\ \textcolor{comment}{\ *\ JOCTETs\ from\ 8-\/bit-\/wide\ elements\ on\ external\ storage.\ \ If\ char\ is\ wider}}
+\DoxyCodeLine{00037\ \textcolor{comment}{\ *\ than\ 8\ bits\ on\ your\ machine,\ you\ may\ need\ to\ do\ some\ tweaking.}}
+\DoxyCodeLine{00038\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \textcolor{comment}{/*\ this\ is\ not\ a\ core\ library\ module,\ so\ it\ doesn't\ define\ JPEG\_INTERNALS\ */}}
+\DoxyCodeLine{00041\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \{}
+\DoxyCodeLine{00042\ \textcolor{preprocessor}{\#include\ <jpeglib.h>}}
+\DoxyCodeLine{00043\ \textcolor{preprocessor}{\#include\ <jerror.h>}}
+\DoxyCodeLine{00044\ \}}
+\DoxyCodeLine{00045\ }
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00047\ \textcolor{comment}{/*\ Expanded\ data\ source\ object\ for\ stdio\ input\ */}}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00050\ \ \ \textcolor{keyword}{struct\ }jpeg\_source\_mgr\ pub;\ \ \ \textcolor{comment}{/*\ public\ fields\ */}}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \ \ std::istream\ *\ infile;\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{/*\ source\ stream\ */}}
+\DoxyCodeLine{00053\ \ \ JOCTET\ *\ buffer;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{/*\ start\ of\ buffer\ */}}
+\DoxyCodeLine{00054\ \ \ \textcolor{keywordtype}{boolean}\ start\_of\_file;\ \ \ \ \ \ \ \ \textcolor{comment}{/*\ have\ we\ gotten\ any\ data\ yet?\ */}}
+\DoxyCodeLine{00055\ \}\ my\_source\_mgr;}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00057\ \textcolor{keyword}{typedef}\ my\_source\_mgr\ *\ my\_src\_ptr;}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00059\ \textcolor{preprocessor}{\#define\ INPUT\_BUF\_SIZE\ \ 4096\ \ \ \ }\textcolor{comment}{/*\ choose\ an\ efficiently\ fread'able\ size\ */}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00062\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00063\ \textcolor{comment}{\ *\ Initialize\ source\ -\/-\/-\/\ called\ by\ jpeg\_read\_header}}
+\DoxyCodeLine{00064\ \textcolor{comment}{\ *\ before\ any\ data\ is\ actually\ read.}}
+\DoxyCodeLine{00065\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00067\ METHODDEF(\textcolor{keywordtype}{void})}
+\DoxyCodeLine{00068\ init\_source\ (j\_decompress\_ptr\ cinfo)}
+\DoxyCodeLine{00069\ \{}
+\DoxyCodeLine{00070\ \ \ my\_src\_ptr\ src\ =\ (my\_src\_ptr)\ cinfo-\/>src;}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00072\ \ \ \textcolor{comment}{/*\ We\ reset\ the\ empty-\/input-\/file\ flag\ for\ each\ image,}}
+\DoxyCodeLine{00073\ \textcolor{comment}{\ \ \ *\ but\ we\ don't\ clear\ the\ input\ buffer.}}
+\DoxyCodeLine{00074\ \textcolor{comment}{\ \ \ *\ This\ is\ correct\ behavior\ for\ reading\ a\ series\ of\ images\ from\ one\ source.}}
+\DoxyCodeLine{00075\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00076\ \ \ src-\/>start\_of\_file\ =\ TRUE;}
+\DoxyCodeLine{00077\ \}}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00081\ \textcolor{comment}{\ *\ Fill\ the\ input\ buffer\ -\/-\/-\/\ called\ whenever\ buffer\ is\ emptied.}}
+\DoxyCodeLine{00082\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00083\ \textcolor{comment}{\ *\ In\ typical\ applications,\ this\ should\ read\ fresh\ data\ into\ the\ buffer}}
+\DoxyCodeLine{00084\ \textcolor{comment}{\ *\ (ignoring\ the\ current\ state\ of\ next\_input\_byte\ \&\ bytes\_in\_buffer),}}
+\DoxyCodeLine{00085\ \textcolor{comment}{\ *\ reset\ the\ pointer\ \&\ count\ to\ the\ start\ of\ the\ buffer,\ and\ return\ TRUE}}
+\DoxyCodeLine{00086\ \textcolor{comment}{\ *\ indicating\ that\ the\ buffer\ has\ been\ reloaded.\ \ It\ is\ not\ necessary\ to}}
+\DoxyCodeLine{00087\ \textcolor{comment}{\ *\ fill\ the\ buffer\ entirely,\ only\ to\ obtain\ at\ least\ one\ more\ byte.}}
+\DoxyCodeLine{00088\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00089\ \textcolor{comment}{\ *\ There\ is\ no\ such\ thing\ as\ an\ EOF\ return.\ \ If\ the\ end\ of\ the\ file\ has\ been}}
+\DoxyCodeLine{00090\ \textcolor{comment}{\ *\ reached,\ the\ routine\ has\ a\ choice\ of\ ERREXIT()\ or\ inserting\ fake\ data\ into}}
+\DoxyCodeLine{00091\ \textcolor{comment}{\ *\ the\ buffer.\ \ In\ most\ cases,\ generating\ a\ warning\ message\ and\ inserting\ a}}
+\DoxyCodeLine{00092\ \textcolor{comment}{\ *\ fake\ EOI\ marker\ is\ the\ best\ course\ of\ action\ -\/-\/-\/\ this\ will\ allow\ the}}
+\DoxyCodeLine{00093\ \textcolor{comment}{\ *\ decompressor\ to\ output\ however\ much\ of\ the\ image\ is\ there.\ \ However,}}
+\DoxyCodeLine{00094\ \textcolor{comment}{\ *\ the\ resulting\ error\ message\ is\ misleading\ if\ the\ real\ problem\ is\ an\ empty}}
+\DoxyCodeLine{00095\ \textcolor{comment}{\ *\ input\ file,\ so\ we\ handle\ that\ case\ specially.}}
+\DoxyCodeLine{00096\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00097\ \textcolor{comment}{\ *\ In\ applications\ that\ need\ to\ be\ able\ to\ suspend\ compression\ due\ to\ input}}
+\DoxyCodeLine{00098\ \textcolor{comment}{\ *\ not\ being\ available\ yet,\ a\ FALSE\ return\ indicates\ that\ no\ more\ data\ can\ be}}
+\DoxyCodeLine{00099\ \textcolor{comment}{\ *\ obtained\ right\ now,\ but\ more\ may\ be\ forthcoming\ later.\ \ In\ this\ situation,}}
+\DoxyCodeLine{00100\ \textcolor{comment}{\ *\ the\ decompressor\ will\ return\ to\ its\ caller\ (with\ an\ indication\ of\ the}}
+\DoxyCodeLine{00101\ \textcolor{comment}{\ *\ number\ of\ scanlines\ it\ has\ read,\ if\ any).\ \ The\ application\ should\ resume}}
+\DoxyCodeLine{00102\ \textcolor{comment}{\ *\ decompression\ after\ it\ has\ loaded\ more\ data\ into\ the\ input\ buffer.\ \ Note}}
+\DoxyCodeLine{00103\ \textcolor{comment}{\ *\ that\ there\ are\ substantial\ restrictions\ on\ the\ use\ of\ suspension\ -\/-\/-\/\ see}}
+\DoxyCodeLine{00104\ \textcolor{comment}{\ *\ the\ documentation.}}
+\DoxyCodeLine{00105\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00106\ \textcolor{comment}{\ *\ When\ suspending,\ the\ decompressor\ will\ back\ up\ to\ a\ convenient\ restart\ point}}
+\DoxyCodeLine{00107\ \textcolor{comment}{\ *\ (typically\ the\ start\ of\ the\ current\ MCU).\ next\_input\_byte\ \&\ bytes\_in\_buffer}}
+\DoxyCodeLine{00108\ \textcolor{comment}{\ *\ indicate\ where\ the\ restart\ point\ will\ be\ if\ the\ current\ call\ returns\ FALSE.}}
+\DoxyCodeLine{00109\ \textcolor{comment}{\ *\ Data\ beyond\ this\ point\ must\ be\ rescanned\ after\ resumption,\ so\ move\ it\ to}}
+\DoxyCodeLine{00110\ \textcolor{comment}{\ *\ the\ front\ of\ the\ buffer\ rather\ than\ discarding\ it.}}
+\DoxyCodeLine{00111\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00113\ METHODDEF(\textcolor{keywordtype}{boolean})}
+\DoxyCodeLine{00114\ fill\_input\_buffer\ (j\_decompress\_ptr\ cinfo)}
+\DoxyCodeLine{00115\ \{}
+\DoxyCodeLine{00116\ \ \ my\_src\_ptr\ src\ =\ (my\_src\_ptr)\ cinfo-\/>src;}
+\DoxyCodeLine{00117\ \ \ \textcolor{keywordtype}{size\_t}\ nbytes;}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ src-\/>infile-\/>read((\textcolor{keywordtype}{char}\ *)src-\/>buffer,\ INPUT\_BUF\_SIZE);}
+\DoxyCodeLine{00120\ \ \ nbytes\ =\ src-\/>infile-\/>gcount();}
+\DoxyCodeLine{00121\ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00122\ }
+\DoxyCodeLine{00123\ \ \ \textcolor{keywordflow}{if}\ (nbytes\ <=\ 0)\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ \textcolor{keywordflow}{if}\ (src-\/>start\_of\_file)\ \ \ \ \ \textcolor{comment}{/*\ Treat\ empty\ input\ file\ as\ fatal\ error\ */}}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ ERREXIT(cinfo,\ JERR\_INPUT\_EMPTY);}
+\DoxyCodeLine{00126\ \ \ \ \ WARNMS(cinfo,\ JWRN\_JPEG\_EOF);}
+\DoxyCodeLine{00127\ \ \ \ \ \textcolor{comment}{/*\ Insert\ a\ fake\ EOI\ marker\ */}}
+\DoxyCodeLine{00128\ \ \ \ \ src-\/>buffer[0]\ =\ (JOCTET)\ 0xFF;}
+\DoxyCodeLine{00129\ \ \ \ \ src-\/>buffer[1]\ =\ (JOCTET)\ JPEG\_EOI;}
+\DoxyCodeLine{00130\ \ \ \ \ nbytes\ =\ 2;}
+\DoxyCodeLine{00131\ \ \ \}}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \ \ src-\/>pub.next\_input\_byte\ =\ src-\/>buffer;}
+\DoxyCodeLine{00134\ \ \ src-\/>pub.bytes\_in\_buffer\ =\ nbytes;}
+\DoxyCodeLine{00135\ \ \ src-\/>start\_of\_file\ =\ FALSE;}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00138\ \}}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ }
+\DoxyCodeLine{00141\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00142\ \textcolor{comment}{\ *\ Skip\ data\ -\/-\/-\/\ used\ to\ skip\ over\ a\ potentially\ large\ amount\ of}}
+\DoxyCodeLine{00143\ \textcolor{comment}{\ *\ uninteresting\ data\ (such\ as\ an\ APPn\ marker).}}
+\DoxyCodeLine{00144\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00145\ \textcolor{comment}{\ *\ Writers\ of\ suspendable-\/input\ applications\ must\ note\ that\ skip\_input\_data}}
+\DoxyCodeLine{00146\ \textcolor{comment}{\ *\ is\ not\ granted\ the\ right\ to\ give\ a\ suspension\ return.\ \ If\ the\ skip\ extends}}
+\DoxyCodeLine{00147\ \textcolor{comment}{\ *\ beyond\ the\ data\ currently\ in\ the\ buffer,\ the\ buffer\ can\ be\ marked\ empty\ so}}
+\DoxyCodeLine{00148\ \textcolor{comment}{\ *\ that\ the\ next\ read\ will\ cause\ a\ fill\_input\_buffer\ call\ that\ can\ suspend.}}
+\DoxyCodeLine{00149\ \textcolor{comment}{\ *\ Arranging\ for\ additional\ bytes\ to\ be\ discarded\ before\ reloading\ the\ input}}
+\DoxyCodeLine{00150\ \textcolor{comment}{\ *\ buffer\ is\ the\ application\ writer's\ problem.}}
+\DoxyCodeLine{00151\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ METHODDEF(\textcolor{keywordtype}{void})}
+\DoxyCodeLine{00154\ skip\_input\_data\ (j\_decompress\_ptr\ cinfo,\ \textcolor{keywordtype}{long}\ num\_bytes)}
+\DoxyCodeLine{00155\ \{}
+\DoxyCodeLine{00156\ \ \ my\_src\_ptr\ src\ =\ (my\_src\_ptr)\ cinfo-\/>src;}
+\DoxyCodeLine{00157\ }
+\DoxyCodeLine{00158\ \ \ \textcolor{comment}{/*\ Just\ a\ dumb\ implementation\ for\ now.\ \ Could\ use\ fseek()\ except}}
+\DoxyCodeLine{00159\ \textcolor{comment}{\ \ \ *\ it\ doesn't\ work\ on\ pipes.\ \ Not\ clear\ that\ being\ smart\ is\ worth}}
+\DoxyCodeLine{00160\ \textcolor{comment}{\ \ \ *\ any\ trouble\ anyway\ -\/-\/-\/\ large\ skips\ are\ infrequent.}}
+\DoxyCodeLine{00161\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00162\ \ \ \textcolor{keywordflow}{if}\ (num\_bytes\ >\ 0)\ \{}
+\DoxyCodeLine{00163\ \ \ \ \ \textcolor{keywordflow}{while}\ (num\_bytes\ >\ (\textcolor{keywordtype}{long})\ src-\/>pub.bytes\_in\_buffer)\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ num\_bytes\ -\/=\ (long)\ src-\/>pub.bytes\_in\_buffer;}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ (void)\ fill\_input\_buffer(cinfo);}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \textcolor{comment}{/*\ note\ we\ assume\ that\ fill\_input\_buffer\ will\ never\ return\ FALSE,}}
+\DoxyCodeLine{00167\ \textcolor{comment}{\ \ \ \ \ \ \ *\ so\ suspension\ need\ not\ be\ handled.}}
+\DoxyCodeLine{00168\ \textcolor{comment}{\ \ \ \ \ \ \ */}}
+\DoxyCodeLine{00169\ \ \ \ \ \}}
+\DoxyCodeLine{00170\ \ \ \ \ src-\/>pub.next\_input\_byte\ +=\ (size\_t)\ num\_bytes;}
+\DoxyCodeLine{00171\ \ \ \ \ src-\/>pub.bytes\_in\_buffer\ -\/=\ (size\_t)\ num\_bytes;}
+\DoxyCodeLine{00172\ \ \ \}}
+\DoxyCodeLine{00173\ \}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00176\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00177\ \textcolor{comment}{\ *\ An\ additional\ method\ that\ can\ be\ provided\ by\ data\ source\ modules\ is\ the}}
+\DoxyCodeLine{00178\ \textcolor{comment}{\ *\ resync\_to\_restart\ method\ for\ error\ recovery\ in\ the\ presence\ of\ RST\ markers.}}
+\DoxyCodeLine{00179\ \textcolor{comment}{\ *\ For\ the\ moment,\ this\ source\ module\ just\ uses\ the\ default\ resync\ method}}
+\DoxyCodeLine{00180\ \textcolor{comment}{\ *\ provided\ by\ the\ JPEG\ library.\ \ That\ method\ assumes\ that\ no\ backtracking}}
+\DoxyCodeLine{00181\ \textcolor{comment}{\ *\ is\ possible.}}
+\DoxyCodeLine{00182\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00183\ }
+\DoxyCodeLine{00184\ }
+\DoxyCodeLine{00185\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00186\ \textcolor{comment}{\ *\ Terminate\ source\ -\/-\/-\/\ called\ by\ jpeg\_finish\_decompress}}
+\DoxyCodeLine{00187\ \textcolor{comment}{\ *\ after\ all\ data\ has\ been\ read.\ \ Often\ a\ no-\/op.}}
+\DoxyCodeLine{00188\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00189\ \textcolor{comment}{\ *\ NB:\ *not*\ called\ by\ jpeg\_abort\ or\ jpeg\_destroy;\ surrounding}}
+\DoxyCodeLine{00190\ \textcolor{comment}{\ *\ application\ must\ deal\ with\ any\ cleanup\ that\ should\ happen\ even}}
+\DoxyCodeLine{00191\ \textcolor{comment}{\ *\ for\ error\ exit.}}
+\DoxyCodeLine{00192\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00194\ METHODDEF(\textcolor{keywordtype}{void})}
+\DoxyCodeLine{00195\ term\_source\ (j\_decompress\_ptr\ cinfo)}
+\DoxyCodeLine{00196\ \{}
+\DoxyCodeLine{00197\ \ \ \textcolor{comment}{/*\ no\ work\ necessary\ here\ */}}
+\DoxyCodeLine{00198\ \}}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00202\ \textcolor{comment}{\ *\ Prepare\ for\ input\ from\ a\ stdio\ stream.}}
+\DoxyCodeLine{00203\ \textcolor{comment}{\ *\ The\ caller\ must\ have\ already\ opened\ the\ stream,\ and\ is\ responsible}}
+\DoxyCodeLine{00204\ \textcolor{comment}{\ *\ for\ closing\ it\ after\ finishing\ decompression.}}
+\DoxyCodeLine{00205\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00206\ }
+\DoxyCodeLine{00207\ GLOBAL(\textcolor{keywordtype}{void})}
+\DoxyCodeLine{00208\ jpeg\_istream\_src\ (j\_decompress\_ptr\ cinfo,\ std::istream\ *\ infile)}
+\DoxyCodeLine{00209\ \{}
+\DoxyCodeLine{00210\ \ \ my\_src\_ptr\ src;}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00212\ \ \ \textcolor{comment}{/*\ The\ source\ object\ and\ input\ buffer\ are\ made\ permanent\ so\ that\ a\ series}}
+\DoxyCodeLine{00213\ \textcolor{comment}{\ \ \ *\ of\ JPEG\ images\ can\ be\ read\ from\ the\ same\ file\ by\ calling\ jpeg\_stdio\_src}}
+\DoxyCodeLine{00214\ \textcolor{comment}{\ \ \ *\ only\ before\ the\ first\ one.\ \ (If\ we\ discarded\ the\ buffer\ at\ the\ end\ of}}
+\DoxyCodeLine{00215\ \textcolor{comment}{\ \ \ *\ one\ image,\ we'd\ likely\ lose\ the\ start\ of\ the\ next\ one.)}}
+\DoxyCodeLine{00216\ \textcolor{comment}{\ \ \ *\ This\ makes\ it\ unsafe\ to\ use\ this\ manager\ and\ a\ different\ source}}
+\DoxyCodeLine{00217\ \textcolor{comment}{\ \ \ *\ manager\ serially\ with\ the\ same\ JPEG\ object.\ \ Caveat\ programmer.}}
+\DoxyCodeLine{00218\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00219\ \ \ \textcolor{keywordflow}{if}\ (cinfo-\/>src\ ==\ \textcolor{keyword}{nullptr})\ \{\ \ \ \ \ \textcolor{comment}{/*\ first\ time\ for\ this\ JPEG\ object?\ */}}
+\DoxyCodeLine{00220\ \ \ \ \ cinfo-\/>src\ =\ (\textcolor{keyword}{struct\ }jpeg\_source\_mgr\ *)}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ (*cinfo-\/>mem-\/>alloc\_small)\ ((j\_common\_ptr)\ cinfo,\ JPOOL\_PERMANENT,}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{sizeof}(my\_source\_mgr));}
+\DoxyCodeLine{00223\ \ \ \ \ src\ =\ (my\_src\_ptr)\ cinfo-\/>src;}
+\DoxyCodeLine{00224\ \ \ \ \ src-\/>buffer\ =\ (JOCTET\ *)}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ (*cinfo-\/>mem-\/>alloc\_small)\ ((j\_common\_ptr)\ cinfo,\ JPOOL\_PERMANENT,}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ INPUT\_BUF\_SIZE\ *\ \textcolor{keyword}{sizeof}(JOCTET));}
+\DoxyCodeLine{00227\ \ \ \}}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00229\ \ \ src\ =\ (my\_src\_ptr)\ cinfo-\/>src;}
+\DoxyCodeLine{00230\ \ \ src-\/>pub.init\_source\ =\ init\_source;}
+\DoxyCodeLine{00231\ \ \ src-\/>pub.fill\_input\_buffer\ =\ fill\_input\_buffer;}
+\DoxyCodeLine{00232\ \ \ src-\/>pub.skip\_input\_data\ =\ skip\_input\_data;}
+\DoxyCodeLine{00233\ \ \ src-\/>pub.resync\_to\_restart\ =\ jpeg\_resync\_to\_restart;\ \textcolor{comment}{/*\ use\ default\ method\ */}}
+\DoxyCodeLine{00234\ \ \ src-\/>pub.term\_source\ =\ term\_source;}
+\DoxyCodeLine{00235\ \ \ src-\/>infile\ =\ infile;}
+\DoxyCodeLine{00236\ \ \ src-\/>pub.bytes\_in\_buffer\ =\ 0;\ \textcolor{comment}{/*\ forces\ fill\_input\_buffer\ on\ first\ read\ */}}
+\DoxyCodeLine{00237\ \ \ src-\/>pub.next\_input\_byte\ =\ \textcolor{keyword}{nullptr};\ \textcolor{comment}{/*\ until\ buffer\ loaded\ */}}
+\DoxyCodeLine{00238\ \}}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ }
+\DoxyCodeLine{00242\ \textcolor{comment}{//\ The\ rest\ of\ the\ code\ in\ this\ file\ is\ new\ to\ Panda.}}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00247\ PNMFileTypeJPG::Reader::}
+\DoxyCodeLine{00248\ Reader(\mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type,\ std::istream\ *file,\ \textcolor{keywordtype}{bool}\ owns\_file,\ std::string\ magic\_number)\ :}
+\DoxyCodeLine{00249\ \ \ \mbox{\hyperlink{classPNMReader}{PNMReader}}(type,\ file,\ owns\_file)}
+\DoxyCodeLine{00250\ \{}
+\DoxyCodeLine{00251\ \ \ \textcolor{comment}{//\ Hope\ we\ can\ putback()\ more\ than\ one\ character.}}
+\DoxyCodeLine{00252\ \ \ \textcolor{keywordflow}{for}\ (std::string::reverse\_iterator\ mi\ =\ magic\_number.rbegin();}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ mi\ !=\ magic\_number.rend();}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ ++mi)\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \_file-\/>putback(*mi);}
+\DoxyCodeLine{00256\ \ \ \}}
+\DoxyCodeLine{00257\ \ \ \textcolor{keywordflow}{if}\ (\_file-\/>fail())\ \{}
+\DoxyCodeLine{00258\ \ \ \ \ pnmimage\_jpg\_cat.error()}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ put\ back\ magic\ number.\(\backslash\)n"{}};}
+\DoxyCodeLine{00260\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00261\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00262\ \ \ \}}
+\DoxyCodeLine{00263\ \ \ \_is\_valid\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00265\ \ \ \textcolor{comment}{/*\ Step\ 1:\ allocate\ and\ initialize\ JPEG\ decompression\ object\ */}}
+\DoxyCodeLine{00266\ }
+\DoxyCodeLine{00267\ \ \ \textcolor{comment}{/*\ We\ set\ up\ the\ normal\ JPEG\ error\ routines,\ then\ override\ error\_exit.\ */}}
+\DoxyCodeLine{00268\ \ \ \_cinfo.err\ =\ jpeg\_std\_error(\&\_jerr.pub);}
+\DoxyCodeLine{00269\ }
+\DoxyCodeLine{00270\ \ \ \textcolor{comment}{/*\ Now\ we\ can\ initialize\ the\ JPEG\ decompression\ object.\ */}}
+\DoxyCodeLine{00271\ \ \ jpeg\_create\_decompress(\&\_cinfo);}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00273\ \ \ \textcolor{comment}{/*\ Step\ 2:\ specify\ data\ source\ (eg,\ a\ file)\ */}}
+\DoxyCodeLine{00274\ \ \ jpeg\_istream\_src(\&\_cinfo,\ file);}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00276\ \ \ \textcolor{comment}{/*\ Step\ 3:\ let\ lib\ jpeg\ know\ that\ we\ want\ to\ read\ the\ comment\ field\ */}}
+\DoxyCodeLine{00277\ \ \ jpeg\_save\_markers(\&\_cinfo,\ JPEG\_COM,\ 0xffff);}
+\DoxyCodeLine{00278\ }
+\DoxyCodeLine{00279\ \ \ \textcolor{comment}{/*\ Step\ 4:\ read\ file\ parameters\ with\ jpeg\_read\_header()\ */}}
+\DoxyCodeLine{00280\ \ \ jpeg\_read\_header(\&\_cinfo,\ TRUE);}
+\DoxyCodeLine{00281\ \ \ \textcolor{comment}{/*\ We\ can\ ignore\ the\ return\ value\ from\ jpeg\_read\_header\ since}}
+\DoxyCodeLine{00282\ \textcolor{comment}{\ \ \ *\ \ \ (a)\ suspension\ is\ not\ possible\ with\ the\ stdio\ data\ source,\ and}}
+\DoxyCodeLine{00283\ \textcolor{comment}{\ \ \ *\ \ \ (b)\ we\ passed\ TRUE\ to\ reject\ a\ tables-\/only\ JPEG\ file\ as\ an\ error.}}
+\DoxyCodeLine{00284\ \textcolor{comment}{\ \ \ *\ See\ libjpeg.doc\ for\ more\ info.}}
+\DoxyCodeLine{00285\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \ \ \_num\_channels\ =\ \_cinfo.num\_components;}
+\DoxyCodeLine{00288\ \ \ \_x\_size\ =\ (int)\_cinfo.image\_width;}
+\DoxyCodeLine{00289\ \ \ \_y\_size\ =\ (int)\_cinfo.image\_height;}
+\DoxyCodeLine{00290\ \ \ \_maxval\ =\ MAXJSAMPLE;}
+\DoxyCodeLine{00291\ }
+\DoxyCodeLine{00292\ \ \ \textcolor{comment}{/*\ Step\ 6:\ set\ parameters\ for\ decompression\ */}}
+\DoxyCodeLine{00293\ \ \ \_cinfo.scale\_num\ =\ 1;}
+\DoxyCodeLine{00294\ \ \ \_cinfo.scale\_denom\ =\ 1;}
+\DoxyCodeLine{00295\ \}}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00305\ \textcolor{keywordtype}{void}\ PNMFileTypeJPG::Reader::}
+\DoxyCodeLine{00306\ prepare\_read()\ \{}
+\DoxyCodeLine{00307\ \ \ \textcolor{keywordflow}{if}\ (\_has\_read\_size\ \&\&\ \_read\_x\_size\ !=\ 0\ \&\&\ \_read\_y\_size\ !=\ 0)\ \{}
+\DoxyCodeLine{00308\ \ \ \ \ \textcolor{comment}{//\ Attempt\ to\ get\ the\ scale\ close\ to\ our\ target\ scale.}}
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{keywordtype}{int}\ x\_reduction\ =\ \_cinfo.image\_width\ /\ \_read\_x\_size;}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{keywordtype}{int}\ y\_reduction\ =\ \_cinfo.image\_height\ /\ \_read\_y\_size;}
+\DoxyCodeLine{00311\ \ \ \ \ \_cinfo.scale\_denom\ =\ std::max(std::min(x\_reduction,\ y\_reduction),\ 1);}
+\DoxyCodeLine{00312\ \ \ \}}
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00314\ \ \ \textcolor{comment}{/*\ Step\ 7:\ Start\ decompressor\ */}}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \ \ jpeg\_start\_decompress(\&\_cinfo);}
+\DoxyCodeLine{00317\ \ \ \textcolor{comment}{/*\ We\ can\ ignore\ the\ return\ value\ since\ suspension\ is\ not\ possible}}
+\DoxyCodeLine{00318\ \textcolor{comment}{\ \ \ *\ with\ the\ stdio\ data\ source.}}
+\DoxyCodeLine{00319\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00320\ }
+\DoxyCodeLine{00321\ \ \ \_num\_channels\ =\ \_cinfo.output\_components;}
+\DoxyCodeLine{00322\ \ \ \_x\_size\ =\ (int)\_cinfo.output\_width;}
+\DoxyCodeLine{00323\ \ \ \_y\_size\ =\ (int)\_cinfo.output\_height;}
+\DoxyCodeLine{00324\ \}}
+\DoxyCodeLine{00325\ }
+\DoxyCodeLine{00329\ PNMFileTypeJPG::Reader::}
+\DoxyCodeLine{00330\ \string~Reader()\ \{}
+\DoxyCodeLine{00331\ \ \ \textcolor{keywordflow}{if}\ (\_is\_valid)\ \{}
+\DoxyCodeLine{00332\ \ \ \ \ jpeg\_destroy\_decompress(\&\_cinfo);}
+\DoxyCodeLine{00333\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00334\ \ \ \}}
+\DoxyCodeLine{00335\ \}}
+\DoxyCodeLine{00336\ }
+\DoxyCodeLine{00346\ \textcolor{keywordtype}{int}\ PNMFileTypeJPG::Reader::}
+\DoxyCodeLine{00347\ read\_data(\mbox{\hyperlink{structpixel}{xel}}\ *array,\ xelval\ *)\ \{}
+\DoxyCodeLine{00348\ \ \ \textcolor{keywordflow}{if}\ (!\_is\_valid)\ \{}
+\DoxyCodeLine{00349\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00350\ \ \ \}}
+\DoxyCodeLine{00351\ \ \ JSAMPARRAY\ buffer;\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{/*\ Output\ row\ buffer\ */}}
+\DoxyCodeLine{00352\ \ \ \textcolor{keywordtype}{int}\ row\_stride;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{/*\ physical\ row\ width\ in\ output\ buffer\ */}}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ nassertr(\_cinfo.output\_components\ ==\ 1\ ||\ \_cinfo.output\_components\ ==\ 3,\ 0);}
+\DoxyCodeLine{00355\ }
+\DoxyCodeLine{00356\ \ \ \textcolor{comment}{/*\ We\ may\ need\ to\ do\ some\ setup\ of\ our\ own\ at\ this\ point\ before\ reading}}
+\DoxyCodeLine{00357\ \textcolor{comment}{\ \ \ *\ the\ data.\ \ After\ jpeg\_start\_decompress()\ we\ have\ the\ correct\ scaled}}
+\DoxyCodeLine{00358\ \textcolor{comment}{\ \ \ *\ output\ image\ dimensions\ available,\ as\ well\ as\ the\ output\ colormap}}
+\DoxyCodeLine{00359\ \textcolor{comment}{\ \ \ *\ if\ we\ asked\ for\ color\ quantization.}}
+\DoxyCodeLine{00360\ \textcolor{comment}{\ \ \ *\ In\ this\ example,\ we\ need\ to\ make\ an\ output\ work\ buffer\ of\ the\ right\ size.}}
+\DoxyCodeLine{00361\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00362\ \ \ \textcolor{comment}{/*\ JSAMPLEs\ per\ row\ in\ output\ buffer\ */}}
+\DoxyCodeLine{00363\ \ \ row\_stride\ =\ \_cinfo.output\_width\ *\ \_cinfo.output\_components;}
+\DoxyCodeLine{00364\ \ \ \textcolor{comment}{/*\ Make\ a\ one-\/row-\/high\ sample\ array\ that\ will\ go\ away\ when\ done\ with\ image\ */}}
+\DoxyCodeLine{00365\ }
+\DoxyCodeLine{00366\ \ \ buffer\ =\ (*\_cinfo.mem-\/>alloc\_sarray)}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ((j\_common\_ptr)\ \&\_cinfo,\ JPOOL\_IMAGE,\ row\_stride,\ 1);}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00369\ \ \ \textcolor{comment}{/*\ Step\ 6:\ while\ (scan\ lines\ remain\ to\ be\ read)\ */}}
+\DoxyCodeLine{00370\ \ \ \textcolor{comment}{/*\ \ \ \ \ \ \ \ \ \ \ jpeg\_read\_scanlines(...);\ */}}
+\DoxyCodeLine{00371\ }
+\DoxyCodeLine{00372\ \ \ \textcolor{comment}{/*\ Here\ we\ use\ the\ library's\ state\ variable\ cinfo.output\_scanline\ as\ the}}
+\DoxyCodeLine{00373\ \textcolor{comment}{\ \ \ *\ loop\ counter,\ so\ that\ we\ don't\ have\ to\ keep\ track\ ourselves.}}
+\DoxyCodeLine{00374\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00375\ \ \ \textcolor{keywordtype}{int}\ x\ =\ 0;}
+\DoxyCodeLine{00376\ \ \ \textcolor{keywordflow}{while}\ (\_cinfo.output\_scanline\ <\ \_cinfo.output\_height)\ \{}
+\DoxyCodeLine{00377\ \ \ \ \ \textcolor{comment}{/*\ jpeg\_read\_scanlines\ expects\ an\ array\ of\ pointers\ to\ scanlines.}}
+\DoxyCodeLine{00378\ \textcolor{comment}{\ \ \ \ \ *\ Here\ the\ array\ is\ only\ one\ element\ long,\ but\ you\ could\ ask\ for}}
+\DoxyCodeLine{00379\ \textcolor{comment}{\ \ \ \ \ *\ more\ than\ one\ scanline\ at\ a\ time\ if\ that's\ more\ convenient.}}
+\DoxyCodeLine{00380\ \textcolor{comment}{\ \ \ \ \ */}}
+\DoxyCodeLine{00381\ \ \ \ \ jpeg\_read\_scanlines(\&\_cinfo,\ buffer,\ 1);}
+\DoxyCodeLine{00382\ \ \ \ \ \textcolor{comment}{/*\ Assume\ put\_scanline\_someplace\ wants\ a\ pointer\ and\ sample\ count.\ */}}
+\DoxyCodeLine{00383\ \ \ \ \ \textcolor{comment}{//\ put\_scanline\_someplace(buffer[0],\ row\_stride);}}
+\DoxyCodeLine{00384\ \ \ \ \ JSAMPROW\ bufptr\ =\ buffer[0];}
+\DoxyCodeLine{00385\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ row\_stride;\ i\ +=\ \_cinfo.output\_components)\ \{}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_cinfo.output\_components\ ==\ 1)\ \{}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \ \ xelval\ val\ =\ (xelval)bufptr[i];}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ \ \ nassertr(x\ <\ \_x\_size\ *\ \_y\_size,\ 0);}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \ \ PNM\_ASSIGN1(array[x],\ val);}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ xelval\ red,\ grn,\ blu;}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ red\ =\ (xelval)bufptr[i];}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ grn\ =\ (xelval)bufptr[i+1];}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ blu\ =\ (xelval)bufptr[i+2];}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ nassertr(x\ <\ \_x\_size\ *\ \_y\_size,\ 0);}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ PPM\_ASSIGN(array[x],\ red,\ grn,\ blu);}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ x++;}
+\DoxyCodeLine{00399\ \ \ \ \ \}}
+\DoxyCodeLine{00400\ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00401\ \ \ \}}
+\DoxyCodeLine{00402\ }
+\DoxyCodeLine{00403\ \ \ \textcolor{comment}{/*\ Step\ 7:\ Finish\ decompression\ */}}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00405\ \ \ jpeg\_finish\_decompress(\&\_cinfo);}
+\DoxyCodeLine{00406\ }
+\DoxyCodeLine{00407\ \ \ \textcolor{comment}{/*\ We\ can\ ignore\ the\ return\ value\ since\ suspension\ is\ not\ possible}}
+\DoxyCodeLine{00408\ \textcolor{comment}{\ \ \ *\ with\ the\ stdio\ data\ source.}}
+\DoxyCodeLine{00409\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00410\ }
+\DoxyCodeLine{00411\ \ \ \textcolor{comment}{/*\ At\ this\ point\ you\ may\ want\ to\ check\ to\ see\ whether\ any\ corrupt-\/data}}
+\DoxyCodeLine{00412\ \textcolor{comment}{\ \ \ *\ warnings\ occurred\ (test\ whether\ jerr.pub.num\_warnings\ is\ nonzero).}}
+\DoxyCodeLine{00413\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00414\ \ \ \textcolor{keywordflow}{if}\ (\_jerr.pub.num\_warnings)\ \{}
+\DoxyCodeLine{00415\ \ \ \ \ pnmimage\_jpg\_cat.warning()}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Jpeg\ data\ may\ be\ corrupt"{}}\ <<\ std::endl;}
+\DoxyCodeLine{00417\ \ \ \}}
+\DoxyCodeLine{00418\ }
+\DoxyCodeLine{00419\ \ \ \textcolor{keywordflow}{return}\ \_y\_size;}
+\DoxyCodeLine{00420\ \}}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00422\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_JPEG}}
+
+\end{DoxyCode}

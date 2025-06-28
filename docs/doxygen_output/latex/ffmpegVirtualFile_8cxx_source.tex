@@ -1,0 +1,264 @@
+\doxysection{ffmpeg\+Virtual\+File.\+cxx}
+\hypertarget{ffmpegVirtualFile_8cxx_source}{}\label{ffmpegVirtualFile_8cxx_source}\index{panda/src/ffmpeg/ffmpegVirtualFile.cxx@{panda/src/ffmpeg/ffmpegVirtualFile.cxx}}
+\mbox{\hyperlink{ffmpegVirtualFile_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pandabase_8h}{pandabase.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__ffmpeg_8h}{config\_ffmpeg.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{ffmpegVirtualFile_8h}{ffmpegVirtualFile.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFileSystem_8h}{virtualFileSystem.h}}"{}}}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ \textcolor{keyword}{using\ }std::streampos;}
+\DoxyCodeLine{00021\ \textcolor{keyword}{using\ }std::streamsize;}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \{}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\ \ \#include\ <libavcodec/avcodec.h>}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\ \ \#include\ <libavformat/avformat.h>}}
+\DoxyCodeLine{00026\ \}}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#ifndef\ AVSEEK\_SIZE}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\ \ \#define\ AVSEEK\_SIZE\ 0x10000}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00035\ FfmpegVirtualFile::}
+\DoxyCodeLine{00036\ FfmpegVirtualFile()\ :}
+\DoxyCodeLine{00037\ \ \ \_io\_context(nullptr),}
+\DoxyCodeLine{00038\ \ \ \_format\_context(nullptr),}
+\DoxyCodeLine{00039\ \ \ \_in(nullptr),}
+\DoxyCodeLine{00040\ \ \ \_owns\_in(false),}
+\DoxyCodeLine{00041\ \ \ \_buffer\_size(ffmpeg\_read\_buffer\_size)}
+\DoxyCodeLine{00042\ \{}
+\DoxyCodeLine{00043\ \}}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00048\ FfmpegVirtualFile::}
+\DoxyCodeLine{00049\ \string~FfmpegVirtualFile()\ \{}
+\DoxyCodeLine{00050\ \ \ \mbox{\hyperlink{classFfmpegVirtualFile_aef80bdfd1568eaa67c5732b116db3334}{close}}();}
+\DoxyCodeLine{00051\ \}}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00058\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFfmpegVirtualFile_a198e39e670d12c667b8366c286572d7d}{FfmpegVirtualFile::}}}
+\DoxyCodeLine{00059\ \mbox{\hyperlink{classFfmpegVirtualFile_a198e39e670d12c667b8366c286572d7d}{open\_vfs}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{00060\ \ \ \mbox{\hyperlink{classFfmpegVirtualFile_aef80bdfd1568eaa67c5732b116db3334}{close}}();}
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00062\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00063\ \ \ \ \ ffmpeg\_cat.debug()}
+\DoxyCodeLine{00064\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ffmpeg\ open\_vfs("{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00065\ \ \ \}}
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00067\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00068\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ filename;}
+\DoxyCodeLine{00069\ \ \ fname.set\_binary();}
+\DoxyCodeLine{00070\ \ \ PT(\mbox{\hyperlink{classVirtualFile}{VirtualFile}})\ vfile\ =\ vfs-\/>get\_file(fname);}
+\DoxyCodeLine{00071\ \ \ \textcolor{keywordflow}{if}\ (vfile\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00072\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00073\ \ \ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ \_in\ =\ vfile-\/>open\_read\_file(\textcolor{keyword}{true});}
+\DoxyCodeLine{00076\ \ \ \textcolor{keywordflow}{if}\ (\_in\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00077\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00078\ \ \ \}}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \ \ \_owns\_in\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00081\ \ \ \_start\ =\ 0;}
+\DoxyCodeLine{00082\ \ \ \_size\ =\ vfile-\/>get\_file\_size(\_in);}
+\DoxyCodeLine{00083\ }
+\DoxyCodeLine{00084\ \ \ \textcolor{comment}{//\ NOTE:\ The\ AVIO\ system\ owns\ the\ buffer\ after\ allocation\ and\ may\ realloc\ it}}
+\DoxyCodeLine{00085\ \ \ \textcolor{comment}{//\ internally.\ \ Therefore,\ when\ we're\ done\ with\ the\ buffer,\ we\ use}}
+\DoxyCodeLine{00086\ \ \ \textcolor{comment}{//\ \_io\_context-\/>buffer\ to\ deallocate\ it\ rather\ than\ holding\ on\ to\ this}}
+\DoxyCodeLine{00087\ \ \ \textcolor{comment}{//\ pointer.}}
+\DoxyCodeLine{00088\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *buffer\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}*)\ av\_malloc(\_buffer\_size);}
+\DoxyCodeLine{00089\ \ \ \_io\_context\ =\ avio\_alloc\_context(buffer,\ \_buffer\_size,\ 0,\ (\textcolor{keywordtype}{void}*)\ \textcolor{keyword}{this},}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \&read\_packet,\ \textcolor{keyword}{nullptr},\ \&seek);}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00092\ \ \ \_format\_context\ =\ avformat\_alloc\_context();}
+\DoxyCodeLine{00093\ \ \ \_format\_context-\/>pb\ =\ \_io\_context;}
+\DoxyCodeLine{00094\ }
+\DoxyCodeLine{00095\ \ \ \textcolor{comment}{//\ Now\ we\ can\ open\ the\ stream.}}
+\DoxyCodeLine{00096\ \ \ \textcolor{keywordtype}{int}\ result\ =}
+\DoxyCodeLine{00097\ \ \ \ \ avformat\_open\_input(\&\_format\_context,\ \textcolor{stringliteral}{"{}"{}},\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00098\ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00099\ \ \ \ \ \mbox{\hyperlink{classFfmpegVirtualFile_aef80bdfd1568eaa67c5732b116db3334}{close}}();}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00101\ \ \ \}}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00103\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00104\ \}}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00111\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFfmpegVirtualFile_aa42e2de75f3f1894e3f5c1324cfa49c5}{FfmpegVirtualFile::}}}
+\DoxyCodeLine{00112\ \mbox{\hyperlink{classFfmpegVirtualFile_aa42e2de75f3f1894e3f5c1324cfa49c5}{open\_subfile}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classSubfileInfo}{SubfileInfo}}\ \&info)\ \{}
+\DoxyCodeLine{00113\ \ \ \mbox{\hyperlink{classFfmpegVirtualFile_aef80bdfd1568eaa67c5732b116db3334}{close}}();}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ info.get\_filename();}
+\DoxyCodeLine{00116\ \ \ fname.set\_binary();}
+\DoxyCodeLine{00117\ \ \ \textcolor{keywordflow}{if}\ (!fname.open\_read(\_file\_in))\ \{}
+\DoxyCodeLine{00118\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00119\ \ \ \}}
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ ffmpeg\_cat.debug()}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ffmpeg\ open\_subfile("{}}\ <<\ fname\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00123\ \ \ \}}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \_in\ =\ \&\_file\_in;}
+\DoxyCodeLine{00126\ \ \ \_owns\_in\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00127\ \ \ \_start\ =\ info.get\_start();}
+\DoxyCodeLine{00128\ \ \ \_size\ =\ info.get\_size();}
+\DoxyCodeLine{00129\ }
+\DoxyCodeLine{00130\ \ \ \_in-\/>seekg(\_start);}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ \ \ \textcolor{comment}{//\ NOTE:\ The\ AVIO\ system\ owns\ the\ buffer\ after\ allocation\ and\ may\ realloc\ it}}
+\DoxyCodeLine{00133\ \ \ \textcolor{comment}{//\ internally.\ \ Therefore,\ when\ we're\ done\ with\ the\ buffer,\ we\ use}}
+\DoxyCodeLine{00134\ \ \ \textcolor{comment}{//\ \_io\_context-\/>buffer\ to\ deallocate\ it\ rather\ than\ holding\ on\ to\ this}}
+\DoxyCodeLine{00135\ \ \ \textcolor{comment}{//\ pointer.}}
+\DoxyCodeLine{00136\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *buffer\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}*)\ av\_malloc(\_buffer\_size);}
+\DoxyCodeLine{00137\ \ \ \_io\_context\ =\ avio\_alloc\_context(buffer,\ \_buffer\_size,\ 0,\ (\textcolor{keywordtype}{void}*)\ \textcolor{keyword}{this},}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \&read\_packet,\ \textcolor{keyword}{nullptr},\ \&seek);}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ \ \ \_format\_context\ =\ avformat\_alloc\_context();}
+\DoxyCodeLine{00141\ \ \ \_format\_context-\/>pb\ =\ \_io\_context;}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00143\ \ \ \textcolor{comment}{//\ Now\ we\ can\ open\ the\ stream.}}
+\DoxyCodeLine{00144\ \ \ \textcolor{keywordtype}{int}\ result\ =}
+\DoxyCodeLine{00145\ \ \ \ \ avformat\_open\_input(\&\_format\_context,\ fname.c\_str(),\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00146\ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00147\ \ \ \ \ \mbox{\hyperlink{classFfmpegVirtualFile_aef80bdfd1568eaa67c5732b116db3334}{close}}();}
+\DoxyCodeLine{00148\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00149\ \ \ \}}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00151\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00152\ \}}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00158\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFfmpegVirtualFile_aef80bdfd1568eaa67c5732b116db3334}{FfmpegVirtualFile::}}}
+\DoxyCodeLine{00159\ \mbox{\hyperlink{classFfmpegVirtualFile_aef80bdfd1568eaa67c5732b116db3334}{close}}()\ \{}
+\DoxyCodeLine{00160\ \ \ \textcolor{keywordflow}{if}\ (\_format\_context\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ avformat\_close\_input(\&\_format\_context);}
+\DoxyCodeLine{00162\ \ \ \}}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00164\ \ \ \textcolor{keywordflow}{if}\ (\_io\_context\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00165\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_io\_context-\/>buffer\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ av\_free(\_io\_context-\/>buffer);}
+\DoxyCodeLine{00167\ \ \ \ \ \}}
+\DoxyCodeLine{00168\ \ \ \ \ av\_free(\_io\_context);}
+\DoxyCodeLine{00169\ \ \ \ \ \_io\_context\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00170\ \ \ \}}
+\DoxyCodeLine{00171\ }
+\DoxyCodeLine{00172\ \ \ \textcolor{keywordflow}{if}\ (\_owns\_in)\ \{}
+\DoxyCodeLine{00173\ \ \ \ \ nassertv(\_in\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00174\ \ \ \ \ VirtualFileSystem::close\_read\_file(\_in);}
+\DoxyCodeLine{00175\ \ \ \ \ \_owns\_in\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00176\ \ \ \}}
+\DoxyCodeLine{00177\ \ \ \_in\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00178\ \}}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00184\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFfmpegVirtualFile_a02bf3ddb1f95a6129984671b88a8e239}{FfmpegVirtualFile::}}}
+\DoxyCodeLine{00185\ \mbox{\hyperlink{classFfmpegVirtualFile_a02bf3ddb1f95a6129984671b88a8e239}{register\_protocol}}()\ \{}
+\DoxyCodeLine{00186\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}\ initialized\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00187\ \ \ \textcolor{keywordflow}{if}\ (initialized)\ \{}
+\DoxyCodeLine{00188\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00189\ \ \ \}}
+\DoxyCodeLine{00190\ }
+\DoxyCodeLine{00191\ \ \ \textcolor{comment}{//\ Here's\ a\ good\ place\ to\ call\ this\ global\ ffmpeg\ initialization\ function.}}
+\DoxyCodeLine{00192\ \ \ \textcolor{comment}{//\ However,\ ffmpeg\ (but\ not\ libav)\ deprecated\ this,\ hence\ this\ check.}}
+\DoxyCodeLine{00193\ \textcolor{preprocessor}{\#if\ LIBAVFORMAT\_VERSION\_MICRO\ <\ 100\ ||\ LIBAVFORMAT\_VERSION\_INT\ <\ AV\_VERSION\_INT(58,\ 9,\ 100)}}
+\DoxyCodeLine{00194\ \ \ av\_register\_all();}
+\DoxyCodeLine{00195\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00196\ }
+\DoxyCodeLine{00197\ \ \ \textcolor{comment}{//\ And\ this\ one.}}
+\DoxyCodeLine{00198\ \ \ avformat\_network\_init();}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00200\ \ \ \textcolor{comment}{//\ Let's\ also\ register\ the\ logging\ to\ Panda's\ notify\ callback.}}
+\DoxyCodeLine{00201\ \ \ av\_log\_set\_callback(\&log\_callback);}
+\DoxyCodeLine{00202\ \}}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00207\ \textcolor{keywordtype}{int}\ FfmpegVirtualFile::}
+\DoxyCodeLine{00208\ read\_packet(\textcolor{keywordtype}{void}\ *opaque,\ uint8\_t\ *buf,\ \textcolor{keywordtype}{int}\ size)\ \{}
+\DoxyCodeLine{00209\ \ \ streampos\ ssize\ =\ (streampos)size;}
+\DoxyCodeLine{00210\ \ \ \mbox{\hyperlink{classFfmpegVirtualFile}{FfmpegVirtualFile}}\ *self\ =\ (\mbox{\hyperlink{classFfmpegVirtualFile}{FfmpegVirtualFile}}\ *)\ opaque;}
+\DoxyCodeLine{00211\ \ \ std::istream\ *in\ =\ self-\/>\_in;}
+\DoxyCodeLine{00212\ }
+\DoxyCodeLine{00213\ \ \ \textcolor{comment}{//\ Since\ we\ may\ be\ simulating\ a\ subset\ of\ the\ opened\ stream,\ don't\ allow\ it}}
+\DoxyCodeLine{00214\ \ \ \textcolor{comment}{//\ to\ read\ past\ the\ "{}end"{}.}}
+\DoxyCodeLine{00215\ \ \ streampos\ remaining\ =\ self-\/>\_start\ +\ (streampos)self-\/>\_size\ -\/\ in-\/>tellg();}
+\DoxyCodeLine{00216\ \ \ \textcolor{keywordflow}{if}\ (remaining\ <\ ssize)\ \{}
+\DoxyCodeLine{00217\ \ \ \ \ \textcolor{keywordflow}{if}\ (remaining\ <=\ 0)\ \{}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ AVERROR\_EOF;}
+\DoxyCodeLine{00219\ \ \ \ \ \}}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00221\ \ \ \ \ ssize\ =\ remaining;}
+\DoxyCodeLine{00222\ \ \ \}}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00224\ \ \ in-\/>read((\textcolor{keywordtype}{char}\ *)buf,\ ssize);}
+\DoxyCodeLine{00225\ \ \ streamsize\ gc\ =\ in-\/>gcount();}
+\DoxyCodeLine{00226\ \ \ in-\/>clear();}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{int})gc;}
+\DoxyCodeLine{00229\ \}}
+\DoxyCodeLine{00230\ }
+\DoxyCodeLine{00234\ int64\_t\ FfmpegVirtualFile::}
+\DoxyCodeLine{00235\ seek(\textcolor{keywordtype}{void}\ *opaque,\ int64\_t\ pos,\ \textcolor{keywordtype}{int}\ whence)\ \{}
+\DoxyCodeLine{00236\ \ \ \mbox{\hyperlink{classFfmpegVirtualFile}{FfmpegVirtualFile}}\ *self\ =\ (\mbox{\hyperlink{classFfmpegVirtualFile}{FfmpegVirtualFile}}\ *)\ opaque;}
+\DoxyCodeLine{00237\ \ \ std::istream\ *in\ =\ self-\/>\_in;}
+\DoxyCodeLine{00238\ }
+\DoxyCodeLine{00239\ \ \ \textcolor{keywordflow}{switch}\ (whence)\ \{}
+\DoxyCodeLine{00240\ \ \ \textcolor{keywordflow}{case}\ SEEK\_SET:}
+\DoxyCodeLine{00241\ \ \ \ \ in-\/>seekg(self-\/>\_start\ +\ (streampos)pos,\ std::ios::beg);}
+\DoxyCodeLine{00242\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00244\ \ \ \textcolor{keywordflow}{case}\ SEEK\_CUR:}
+\DoxyCodeLine{00245\ \ \ \ \ in-\/>seekg(pos,\ std::ios::cur);}
+\DoxyCodeLine{00246\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \ \ \textcolor{keywordflow}{case}\ SEEK\_END:}
+\DoxyCodeLine{00249\ \ \ \ \ \textcolor{comment}{//\ For\ seeks\ relative\ to\ the\ end,\ we\ actually\ compute\ the\ end\ based\ on}}
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{comment}{//\ \_start\ +\ \_size,\ and\ then\ use\ ios::beg.}}
+\DoxyCodeLine{00251\ \ \ \ \ in-\/>seekg(self-\/>\_start\ +\ (streampos)self-\/>\_size\ +\ (streampos)pos,\ std::ios::beg);}
+\DoxyCodeLine{00252\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \ \ \textcolor{keywordflow}{case}\ AVSEEK\_SIZE:}
+\DoxyCodeLine{00255\ \ \ \ \ \textcolor{keywordflow}{return}\ self-\/>\_size;}
+\DoxyCodeLine{00256\ }
+\DoxyCodeLine{00257\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00258\ \ \ \ \ ffmpeg\_cat.error()}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Illegal\ parameter\ to\ seek\ in\ FfmpegVirtualFile\(\backslash\)n"{}};}
+\DoxyCodeLine{00260\ \ \ \ \ in-\/>clear();}
+\DoxyCodeLine{00261\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00262\ \ \ \}}
+\DoxyCodeLine{00263\ }
+\DoxyCodeLine{00264\ \ \ in-\/>clear();}
+\DoxyCodeLine{00265\ \ \ \textcolor{keywordflow}{return}\ in-\/>tellg()\ -\/\ self-\/>\_start;}
+\DoxyCodeLine{00266\ \}}
+\DoxyCodeLine{00267\ }
+\DoxyCodeLine{00272\ \textcolor{keywordtype}{void}\ FfmpegVirtualFile::}
+\DoxyCodeLine{00273\ log\_callback(\textcolor{keywordtype}{void}\ *ptr,\ \textcolor{keywordtype}{int}\ level,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *fmt,\ va\_list\ v1)\ \{}
+\DoxyCodeLine{00274\ \ \ NotifySeverity\ severity;}
+\DoxyCodeLine{00275\ \textcolor{preprocessor}{\#ifdef\ AV\_LOG\_PANIC}}
+\DoxyCodeLine{00276\ \ \ \textcolor{keywordflow}{if}\ (level\ <=\ AV\_LOG\_PANIC)\ \{}
+\DoxyCodeLine{00277\ \ \ \ \ severity\ =\ NS\_fatal;}
+\DoxyCodeLine{00278\ \ \ \}\ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00279\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00280\ \ \ \textcolor{keywordflow}{if}\ (level\ <=\ AV\_LOG\_ERROR)\ \{}
+\DoxyCodeLine{00281\ \ \ \ \ severity\ =\ NS\_error;}
+\DoxyCodeLine{00282\ \textcolor{preprocessor}{\#ifdef\ AV\_LOG\_WARNING}}
+\DoxyCodeLine{00283\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (level\ <=\ AV\_LOG\_WARNING)\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ severity\ =\ NS\_warning;}
+\DoxyCodeLine{00285\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00286\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (level\ <=\ AV\_LOG\_INFO)\ \{}
+\DoxyCodeLine{00287\ \ \ \ \ severity\ =\ NS\_info;}
+\DoxyCodeLine{00288\ \textcolor{preprocessor}{\#ifdef\ AV\_LOG\_VERBOSE}}
+\DoxyCodeLine{00289\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (level\ <=\ AV\_LOG\_VERBOSE)\ \{}
+\DoxyCodeLine{00290\ \ \ \ \ severity\ =\ NS\_debug;}
+\DoxyCodeLine{00291\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00292\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{comment}{/*\ level\ <=\ AV\_LOG\_DEBUG\ */}\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ severity\ =\ NS\_spam;}
+\DoxyCodeLine{00294\ \ \ \}}
+\DoxyCodeLine{00295\ }
+\DoxyCodeLine{00296\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_on(severity))\ \{}
+\DoxyCodeLine{00297\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 4096;}
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{keywordtype}{char}\ *buffer\ =\ (\textcolor{keywordtype}{char}\ *)alloca(buffer\_size);}
+\DoxyCodeLine{00299\ \ \ \ \ vsnprintf(buffer,\ buffer\_size,\ fmt,\ v1);}
+\DoxyCodeLine{00300\ \ \ \ \ nassertv(strlen(buffer)\ <\ buffer\_size);}
+\DoxyCodeLine{00301\ \ \ \ \ ffmpeg\_cat.out(severity,\ \textcolor{keyword}{true})}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ <<\ buffer;}
+\DoxyCodeLine{00303\ \ \ \}}
+\DoxyCodeLine{00304\ \}}
+
+\end{DoxyCode}

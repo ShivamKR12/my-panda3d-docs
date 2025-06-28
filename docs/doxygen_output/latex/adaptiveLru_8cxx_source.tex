@@ -1,0 +1,540 @@
+\doxysection{adaptive\+Lru.\+cxx}
+\hypertarget{adaptiveLru_8cxx_source}{}\label{adaptiveLru_8cxx_source}\index{panda/src/gobj/adaptiveLru.cxx@{panda/src/gobj/adaptiveLru.cxx}}
+\mbox{\hyperlink{adaptiveLru_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{adaptiveLru_8h}{adaptiveLru.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__gobj_8h}{config\_gobj.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{clockObject_8h}{clockObject.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{indent_8h}{indent.h}}"{}}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{keyword}{using\ }std::cerr;}
+\DoxyCodeLine{00020\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ HIGH\_PRIORITY\_SCALE\ =\ 4;}
+\DoxyCodeLine{00023\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ LOW\_PRIORITY\_RANGE\ =\ 25;}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00028\ AdaptiveLru::}
+\DoxyCodeLine{00029\ AdaptiveLru(\textcolor{keyword}{const}\ std::string\ \&name,\ \textcolor{keywordtype}{size\_t}\ max\_size)\ :}
+\DoxyCodeLine{00030\ \ \ \mbox{\hyperlink{classNamable}{Namable}}(name)}
+\DoxyCodeLine{00031\ \{}
+\DoxyCodeLine{00032\ \ \ \_total\_size\ =\ 0;}
+\DoxyCodeLine{00033\ \ \ \_max\_size\ =\ max\_size;}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00035\ \ \ \_current\_frame\_identifier\ =\ 0;}
+\DoxyCodeLine{00036\ \ \ \_weight\ =\ adaptive\_lru\_weight;}
+\DoxyCodeLine{00037\ \ \ \_max\_updates\_per\_frame\ =\ adaptive\_lru\_max\_updates\_per\_frame;}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \ \ \textcolor{comment}{//\ Initialize\ our\ list\ heads\ to\ empty.}}
+\DoxyCodeLine{00040\ \ \ \_static\_list.\_next\ =\ \&\_static\_list;}
+\DoxyCodeLine{00041\ \ \ \_static\_list.\_prev\ =\ \&\_static\_list;}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \ \ \textcolor{keywordtype}{int}\ index;}
+\DoxyCodeLine{00044\ \ \ \textcolor{keywordflow}{for}\ (index\ =\ 0;\ index\ <\ LPP\_TotalPriorities;\ ++index)\ \{}
+\DoxyCodeLine{00045\ \ \ \ \ \_page\_array[index].\_next\ =\ \&\_page\_array[index];}
+\DoxyCodeLine{00046\ \ \ \ \ \_page\_array[index].\_prev\ =\ \&\_page\_array[index];}
+\DoxyCodeLine{00047\ \ \ \}}
+\DoxyCodeLine{00048\ \}}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00053\ AdaptiveLru::}
+\DoxyCodeLine{00054\ \string~AdaptiveLru()\ \{}
+\DoxyCodeLine{00055\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00056\ \ \ \textcolor{comment}{//\ We're\ shutting\ down.\ \ Force-\/remove\ everything\ remaining,\ but\ don't}}
+\DoxyCodeLine{00057\ \ \ \textcolor{comment}{//\ explicitly\ evict\ it\ (that\ would\ force\ vertex\ buffers\ to\ write\ themselves}}
+\DoxyCodeLine{00058\ \ \ \textcolor{comment}{//\ to\ disk\ unnecessarily).}}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00060\ \ \ \textcolor{keywordflow}{while}\ (\_static\_list.\_next\ !=\ \&\_static\_list)\ \{}
+\DoxyCodeLine{00061\ \ \ \ \ nassertv(\_static\_list.\_next\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00062\ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *page\ =\ (\mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *)(\mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *)\_static\_list.\_next;}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00064\ \ \ \ \ page-\/>\_lru\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00065\ \ \ \ \ ((\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)page)-\/>remove\_from\_list();}
+\DoxyCodeLine{00066\ \ \ \ \ ((\mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *)page)-\/>remove\_from\_list();}
+\DoxyCodeLine{00067\ \ \ \}}
+\DoxyCodeLine{00068\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00069\ \}}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00075\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAdaptiveLru_aaf06cccd5a955824cdfba521becbf4ac}{AdaptiveLru::}}}
+\DoxyCodeLine{00076\ \mbox{\hyperlink{classAdaptiveLru_aaf06cccd5a955824cdfba521becbf4ac}{do\_partial\_lru\_update}}(\textcolor{keywordtype}{int}\ num\_updates)\ \{}
+\DoxyCodeLine{00077\ \ \ \textcolor{comment}{//\ Iterate\ sequentially\ through\ the\ static\ list\ of\ pages.\ \ As\ we\ process}}
+\DoxyCodeLine{00078\ \ \ \textcolor{comment}{//\ each\ page,\ pop\ it\ and\ push\ it\ back\ on\ the\ tail.\ \ Stop\ when\ we\ have}}
+\DoxyCodeLine{00079\ \ \ \textcolor{comment}{//\ processed\ num\_updates,\ or\ come\ back\ to\ the\ starting\ one.}}
+\DoxyCodeLine{00080\ }
+\DoxyCodeLine{00081\ \ \ \mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *start\_node\ =\ (\mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *)\_static\_list.\_next;}
+\DoxyCodeLine{00082\ \ \ \textcolor{keywordflow}{if}\ (start\_node\ ==\ \&\_static\_list)\ \{}
+\DoxyCodeLine{00083\ \ \ \ \ \textcolor{comment}{//\ List\ is\ empty.}}
+\DoxyCodeLine{00084\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00085\ \ \ \}}
+\DoxyCodeLine{00086\ }
+\DoxyCodeLine{00087\ \ \ \mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *node\ =\ start\_node;}
+\DoxyCodeLine{00088\ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00089\ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *next\ =\ (\mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *)node-\/>\_next;}
+\DoxyCodeLine{00090\ \ \ \ \ \textcolor{keywordflow}{if}\ (-\/-\/num\_updates\ <=\ 0)\ \{}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00092\ \ \ \ \ \}}
+\DoxyCodeLine{00093\ }
+\DoxyCodeLine{00094\ \ \ \ \ \mbox{\hyperlink{classAdaptiveLru_a7f77fe53ca3afa1ee749e8b29ee77168}{update\_page}}((\mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *)node);}
+\DoxyCodeLine{00095\ \ \ \ \ node-\/>remove\_from\_list();}
+\DoxyCodeLine{00096\ \ \ \ \ node-\/>insert\_before(\&\_static\_list);}
+\DoxyCodeLine{00097\ \ \ \ \ node\ =\ next;}
+\DoxyCodeLine{00098\ \ \ \}\ \textcolor{keywordflow}{while}\ (node\ !=\ start\_node\ \&\&\ node\ !=\ \&\_static\_list);}
+\DoxyCodeLine{00099\ \}}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00110\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAdaptiveLru_a7f77fe53ca3afa1ee749e8b29ee77168}{AdaptiveLru::}}}
+\DoxyCodeLine{00111\ \mbox{\hyperlink{classAdaptiveLru_a7f77fe53ca3afa1ee749e8b29ee77168}{update\_page}}(\mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *page)\ \{}
+\DoxyCodeLine{00112\ \ \ \textcolor{keywordtype}{int}\ target\_priority\ =\ page-\/>\_priority;}
+\DoxyCodeLine{00113\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ lifetime\_frames\ =\ \_current\_frame\_identifier\ -\/\ page-\/>\_first\_frame\_identifier;}
+\DoxyCodeLine{00114\ \ \ \textcolor{keywordflow}{if}\ (lifetime\_frames\ >\ 0)\ \{}
+\DoxyCodeLine{00115\ \ \ \ \ \textcolor{keywordflow}{if}\ (page-\/>\_update\_frame\_identifier)\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ update\_frames;}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \ \ \ \ \ \ update\_frames\ =\ (\_current\_frame\_identifier\ -\/\ page-\/>\_update\_frame\_identifier);}
+\DoxyCodeLine{00119\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (update\_frames\ >\ 0)\ \{}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (page-\/>\_update\_total\_usage\ >\ 0)\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \ \ \ \ PN\_stdfloat\ update\_average\_frame\_utilization\ =}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \ \ \ \ \ \ (PN\_stdfloat)\ (page-\/>\_update\_total\_usage)\ /\ (PN\_stdfloat)update\_frames;}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \ \ \ \ page-\/>\_average\_frame\_utilization\ =}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ \ \ \ \ calculate\_exponential\_moving\_average(update\_average\_frame\_utilization,}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ page-\/>\_average\_frame\_utilization);}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ \ \ \ \ page-\/>\_average\_frame\_utilization\ *=\ 1.0f\ -\/\ \_weight;}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00130\ }
+\DoxyCodeLine{00131\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (page-\/>\_average\_frame\_utilization\ >=\ 1.0f)\ \{}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ integer\_average\_frame\_utilization;}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \ \ \ \ \ \ \ \ \ \ integer\_average\_frame\_utilization\ =}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \ \ \ \ \ \ (int)\ ((page-\/>\_average\_frame\_utilization\ -\/\ 1.0f)\ *}
+\DoxyCodeLine{00136\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (PN\_stdfloat)\ HIGH\_PRIORITY\_SCALE);}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (integer\_average\_frame\_utilization\ >=\ LPP\_New)\ \{}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \ \ \ \ \ \ integer\_average\_frame\_utilization\ =\ LPP\_New;}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ \ \ integer\_average\_frame\_utilization\ =\ LPP\_New\ -\/}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ \ \ \ \ integer\_average\_frame\_utilization;}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \ \ target\_priority\ =\ integer\_average\_frame\_utilization;}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ integer\_average\_frame\_utilization;}
+\DoxyCodeLine{00145\ }
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \ \ integer\_average\_frame\_utilization\ =\ (int)}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ \ \ \ \ \ (page-\/>\_average\_frame\_utilization\ *}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ \ \ \ \ \ (PN\_stdfloat)\ LOW\_PRIORITY\_RANGE);}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \ \ integer\_average\_frame\_utilization\ =\ LOW\_PRIORITY\_RANGE\ -\/}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \ \ \ \ integer\_average\_frame\_utilization;}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \ \ target\_priority\ =\ LPP\_New\ +\ integer\_average\_frame\_utilization;}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00154\ \ \ \ \ \}}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00156\ \ \ \ \ page-\/>\_update\_frame\_identifier\ =\ \_current\_frame\_identifier;}
+\DoxyCodeLine{00157\ \ \ \ \ page-\/>\_update\_total\_usage\ =\ 0;}
+\DoxyCodeLine{00158\ \ \ \}}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \textcolor{keywordflow}{if}\ (target\_priority\ !=\ page-\/>\_priority)\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ page-\/>\_priority\ =\ std::min(std::max(target\_priority,\ 0),\ LPP\_TotalPriorities\ -\/\ 1);}
+\DoxyCodeLine{00162\ \ \ \ \ ((\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)page)-\/>remove\_from\_list();}
+\DoxyCodeLine{00163\ \ \ \ \ ((\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)page)-\/>insert\_before(\&\_page\_array[page-\/>\_priority]);}
+\DoxyCodeLine{00164\ \ \ \}}
+\DoxyCodeLine{00165\ \}}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00173\ \textcolor{keywordtype}{void}\ AdaptiveLruPage::}
+\DoxyCodeLine{00174\ enqueue\_lru(\mbox{\hyperlink{classAdaptiveLru}{AdaptiveLru}}\ *lru)\ \{}
+\DoxyCodeLine{00175\ \ \ \textcolor{keywordflow}{if}\ (lru\ !=\ \_lru\ \&\&\ \_lru\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00176\ \ \ \ \ \textcolor{comment}{//\ It\ was\ previously\ on\ a\ different\ LRU.\ \ Remove\ it\ first.}}
+\DoxyCodeLine{00177\ \ \ \ \ \_lru-\/>\mbox{\hyperlink{classAdaptiveLru_af91facbd072f7615c0ae9e0d7fb668e2}{do\_remove\_page}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00178\ \ \ \ \ \_lru\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00179\ \ \ \}}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00181\ \ \ \textcolor{keywordflow}{if}\ (lru\ ==\ \_lru)\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_lru\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ already\ on\ this\ LRU.\ \ Access\ it.}}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \_lru-\/>\mbox{\hyperlink{classAdaptiveLru_a9c5396ccfe137e8ba3fedbcfc39b8bed}{do\_access\_page}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00185\ \ \ \ \ \}}
+\DoxyCodeLine{00186\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00187\ \ \ \ \ nassertv(lru\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00188\ \ \ \ \ \textcolor{comment}{//\ Add\ it\ to\ a\ new\ LRU.}}
+\DoxyCodeLine{00189\ \ \ \ \ \_lru\ =\ lru;}
+\DoxyCodeLine{00190\ }
+\DoxyCodeLine{00191\ \ \ \ \ \_priority\ =\ AdaptiveLru::LPP\_New;}
+\DoxyCodeLine{00192\ \ \ \ \ \_first\_frame\_identifier\ =\ \_lru-\/>\_current\_frame\_identifier;}
+\DoxyCodeLine{00193\ \ \ \ \ \_current\_frame\_identifier\ =\ \_lru-\/>\_current\_frame\_identifier;}
+\DoxyCodeLine{00194\ \ \ \ \ \_lru-\/>\mbox{\hyperlink{classAdaptiveLru_a43a8ce1f6405913e62fcbf8c05b574ba}{do\_add\_page}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00195\ \ \ \}}
+\DoxyCodeLine{00196\ \}}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00202\ \textcolor{keywordtype}{size\_t}\ AdaptiveLru::}
+\DoxyCodeLine{00203\ count\_active\_size()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00204\ \ \ \textcolor{keywordtype}{size\_t}\ counted\_size\ =\ 0;}
+\DoxyCodeLine{00205\ }
+\DoxyCodeLine{00206\ \ \ \mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *node\ =\ (\mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *)\_static\_list.\_next;}
+\DoxyCodeLine{00207\ \ \ \textcolor{keywordflow}{while}\ (node\ !=\ \&\_static\_list)\ \{}
+\DoxyCodeLine{00208\ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *page\ =\ (\mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *)node;}
+\DoxyCodeLine{00209\ \ \ \ \ \textcolor{keywordflow}{if}\ (page-\/>\_current\_frame\_identifier\ +\ 1\ >=\ \_current\_frame\_identifier)\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ counted\_size\ +=\ page-\/>\_lru\_size;}
+\DoxyCodeLine{00211\ \ \ \ \ \}}
+\DoxyCodeLine{00212\ \ \ \ \ node\ =\ (\mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *)node-\/>\_next;}
+\DoxyCodeLine{00213\ \ \ \}}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordflow}{return}\ counted\_size;}
+\DoxyCodeLine{00216\ \}}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00223\ \textcolor{keywordtype}{void}\ AdaptiveLru::}
+\DoxyCodeLine{00224\ begin\_epoch()\ \{}
+\DoxyCodeLine{00225\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00226\ \ \ \mbox{\hyperlink{classAdaptiveLru_aaf06cccd5a955824cdfba521becbf4ac}{do\_partial\_lru\_update}}(\_max\_updates\_per\_frame);}
+\DoxyCodeLine{00227\ \ \ \textcolor{keywordflow}{if}\ (\_total\_size\ >\ \_max\_size)\ \{}
+\DoxyCodeLine{00228\ \ \ \ \ \mbox{\hyperlink{classAdaptiveLru_aad757d7cd81dd00aa4ac50fdba87ae47}{do\_evict\_to}}(\_max\_size,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00229\ \ \ \}}
+\DoxyCodeLine{00230\ }
+\DoxyCodeLine{00231\ \ \ \_current\_frame\_identifier\ =\ ClockObject::get\_global\_clock()-\/>get\_frame\_count();}
+\DoxyCodeLine{00232\ \}}
+\DoxyCodeLine{00233\ }
+\DoxyCodeLine{00237\ \textcolor{keywordtype}{void}\ AdaptiveLru::}
+\DoxyCodeLine{00238\ output(ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00239\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00240\ \ \ out\ <<\ \textcolor{stringliteral}{"{}AdaptiveLru\ "{}}\ <<\ get\_name()}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ "{}}\ <<\ \_total\_size\ <<\ \textcolor{stringliteral}{"{}\ of\ "{}}\ <<\ \_max\_size;}
+\DoxyCodeLine{00242\ \}}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00247\ \textcolor{keywordtype}{void}\ AdaptiveLru::}
+\DoxyCodeLine{00248\ write(ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00249\ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level)\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}:\(\backslash\)n"{}};}
+\DoxyCodeLine{00250\ }
+\DoxyCodeLine{00251\ \ \ \textcolor{comment}{//\ We\ write\ out\ the\ list\ backwards.\ \ Things\ we\ write\ out\ first\ are\ the}}
+\DoxyCodeLine{00252\ \ \ \textcolor{comment}{//\ freshest\ in\ the\ LRU.\ \ Things\ at\ the\ end\ of\ the\ list\ will\ be\ the\ next\ to}}
+\DoxyCodeLine{00253\ \ \ \textcolor{comment}{//\ be\ evicted.}}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00256\ }
+\DoxyCodeLine{00257\ \ \ \textcolor{keywordtype}{int}\ index;}
+\DoxyCodeLine{00258\ \ \ \textcolor{keywordflow}{for}\ (index\ =\ 0;\ index\ <\ LPP\_TotalPriorities;\ ++index)\ \{}
+\DoxyCodeLine{00259\ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *node\ =\ (\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)\_page\_array[index].\_prev;}
+\DoxyCodeLine{00260\ \ \ \ \ \textcolor{keywordflow}{if}\ (node\ !=\ \&\_page\_array[index])\ \{}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level\ +\ 2)\ <<\ \textcolor{stringliteral}{"{}Priority\ "{}}\ <<\ index\ <<\ \textcolor{stringliteral}{"{}:\(\backslash\)n"{}};}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (node\ !=\ \&\_page\_array[index])\ \{}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *page\ =\ (\mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *)node;}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level\ +\ 4)\ <<\ *page;}
+\DoxyCodeLine{00265\ }
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (page-\/>\_current\_frame\_identifier\ +\ 1\ >=\ \_current\_frame\_identifier)\ \{}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ (active)"{}};}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ node\ =\ (\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)node-\/>\_prev;}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00273\ \ \ \ \ \}}
+\DoxyCodeLine{00274\ \ \ \}}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00276\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00277\ \ \ ((\mbox{\hyperlink{classAdaptiveLru}{AdaptiveLru}}\ *)\textcolor{keyword}{this})-\/>do\_validate();}
+\DoxyCodeLine{00278\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00279\ \}}
+\DoxyCodeLine{00280\ }
+\DoxyCodeLine{00284\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAdaptiveLru_a43a8ce1f6405913e62fcbf8c05b574ba}{AdaptiveLru::}}}
+\DoxyCodeLine{00285\ \mbox{\hyperlink{classAdaptiveLru_a43a8ce1f6405913e62fcbf8c05b574ba}{do\_add\_page}}(\mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *page)\ \{}
+\DoxyCodeLine{00286\ \ \ nassertv(page\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ page-\/>\_lru\ ==\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00287\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ \_total\_size\ +=\ page-\/>\_lru\_size;}
+\DoxyCodeLine{00290\ \ \ ((\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)page)-\/>insert\_before(\&\_page\_array[page-\/>\_priority]);}
+\DoxyCodeLine{00291\ \ \ ((\mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *)page)-\/>insert\_before(\&\_static\_list);}
+\DoxyCodeLine{00292\ \}}
+\DoxyCodeLine{00293\ }
+\DoxyCodeLine{00297\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAdaptiveLru_af91facbd072f7615c0ae9e0d7fb668e2}{AdaptiveLru::}}}
+\DoxyCodeLine{00298\ \mbox{\hyperlink{classAdaptiveLru_af91facbd072f7615c0ae9e0d7fb668e2}{do\_remove\_page}}(\mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *page)\ \{}
+\DoxyCodeLine{00299\ \ \ nassertv(page\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ page-\/>\_lru\ ==\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00300\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00301\ }
+\DoxyCodeLine{00302\ \ \ \_total\_size\ -\/=\ page-\/>\_lru\_size;}
+\DoxyCodeLine{00303\ \ \ ((\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)page)-\/>remove\_from\_list();}
+\DoxyCodeLine{00304\ \ \ ((\mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *)page)-\/>remove\_from\_list();}
+\DoxyCodeLine{00305\ \}}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00310\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAdaptiveLru_a9c5396ccfe137e8ba3fedbcfc39b8bed}{AdaptiveLru::}}}
+\DoxyCodeLine{00311\ \mbox{\hyperlink{classAdaptiveLru_a9c5396ccfe137e8ba3fedbcfc39b8bed}{do\_access\_page}}(\mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *page)\ \{}
+\DoxyCodeLine{00312\ \ \ nassertv(page\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ page-\/>\_lru\ ==\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00313\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00314\ }
+\DoxyCodeLine{00315\ \ \ \textcolor{keywordflow}{if}\ (page-\/>\_current\_frame\_identifier\ ==\ \_current\_frame\_identifier)\ \{}
+\DoxyCodeLine{00316\ \ \ \ \ \textcolor{comment}{//\ This\ is\ the\ second\ or\ more\ time\ this\ page\ is\ accessed\ this\ frame.}}
+\DoxyCodeLine{00317\ \ \ \ \ ++(page-\/>\_current\_frame\_usage);}
+\DoxyCodeLine{00318\ }
+\DoxyCodeLine{00319\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ \textcolor{comment}{//\ This\ page\ has\ not\ yet\ been\ accessed\ this\ frame.\ \ Update\ it.}}
+\DoxyCodeLine{00321\ \ \ \ \ page-\/>\_current\_frame\_identifier\ =\ \_current\_frame\_identifier;}
+\DoxyCodeLine{00322\ \ \ \ \ page-\/>\_last\_frame\_usage\ =\ page-\/>\_current\_frame\_usage;}
+\DoxyCodeLine{00323\ \ \ \ \ page-\/>\_current\_frame\_usage\ =\ 1;}
+\DoxyCodeLine{00324\ \ \ \}}
+\DoxyCodeLine{00325\ }
+\DoxyCodeLine{00326\ \ \ \textcolor{comment}{//\ Move\ it\ to\ the\ tail\ of\ its\ priority\ list.}}
+\DoxyCodeLine{00327\ \ \ ((\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)page)-\/>remove\_from\_list();}
+\DoxyCodeLine{00328\ \ \ ((\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)page)-\/>insert\_before(\&\_page\_array[page-\/>\_priority]);}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00330\ \ \ ++(page-\/>\_update\_total\_usage);}
+\DoxyCodeLine{00331\ \}}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00338\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAdaptiveLru_aad757d7cd81dd00aa4ac50fdba87ae47}{AdaptiveLru::}}}
+\DoxyCodeLine{00339\ \mbox{\hyperlink{classAdaptiveLru_aad757d7cd81dd00aa4ac50fdba87ae47}{do\_evict\_to}}(\textcolor{keywordtype}{size\_t}\ target\_size,\ \textcolor{keywordtype}{bool}\ hard\_evict)\ \{}
+\DoxyCodeLine{00340\ \ \ \textcolor{keywordtype}{int}\ attempts;}
+\DoxyCodeLine{00341\ }
+\DoxyCodeLine{00342\ \ \ attempts\ =\ 0;}
+\DoxyCodeLine{00343\ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00344\ \ \ \ \ \textcolor{comment}{//\ page\ out\ lower\ priority\ pages\ first}}
+\DoxyCodeLine{00345\ \ \ \ \ \textcolor{keywordtype}{int}\ index;}
+\DoxyCodeLine{00346\ \ \ \ \ \textcolor{keywordflow}{for}\ (index\ =\ LPP\_TotalPriorities\ -\/\ 1;\ index\ >=\ 0;\ index-\/-\/)\ \{}
+\DoxyCodeLine{00347\ }
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \textcolor{comment}{//\ Store\ the\ current\ end\ of\ the\ list.\ \ If\ pages\ re-\/enqueue\ themselves}}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \textcolor{comment}{//\ during\ this\ traversal,\ we\ don't\ want\ to\ visit\ them\ twice.}}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *end\ =\ (\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)\_page\_array[index].\_prev;}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *node\ =\ (\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)\_page\_array[index].\_next;}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (node\ !=\ \&\_page\_array[index])\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *next\ =\ (\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)node-\/>\_next;}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *page\ =\ (\mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *)node;}
+\DoxyCodeLine{00357\ }
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (attempts\ ==\ 0\ \&\&}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \ \ \ \ \ \ (page-\/>\_current\_frame\_identifier\ +\ 1\ >=\ \_current\_frame\_identifier))\ \{}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ avoid\ swapping\ out\ pages\ used\ in\ the\ current\ and\ last\ frame\ on}}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ first\ attempt}}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ must\ release\ the\ lock\ while\ we\ call\ evict\_lru().}}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \ \ \ \ \_lock.unlock();}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ \ \ page-\/>evict\_lru();}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ \ \ \_lock.lock();}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_total\_size\ <=\ target\_size)\ \{}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We've\ evicted\ enough\ to\ satisfy\ our\ target.}}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (node\ ==\ end)\ \{}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We've\ reached\ the\ former\ end\ of\ the\ list.\ \ Stop\ here;\ everything}}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ after\ has\ been\ re-\/queued.}}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ node\ =\ next;}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00381\ \ \ \ \ \}}
+\DoxyCodeLine{00382\ \ \ \ \ attempts++;}
+\DoxyCodeLine{00383\ \ \ \}\ \textcolor{keywordflow}{while}\ (hard\_evict\ \&\&\ attempts\ <\ 2);}
+\DoxyCodeLine{00384\ \}}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00390\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classAdaptiveLru_a2d2dd6721a7cee7923b4959a3aa50711}{AdaptiveLru::}}}
+\DoxyCodeLine{00391\ \mbox{\hyperlink{classAdaptiveLru_a2d2dd6721a7cee7923b4959a3aa50711}{do\_validate}}()\ \{}
+\DoxyCodeLine{00392\ \ \ \textcolor{keywordtype}{bool}\ okflag\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00393\ \ \ \mbox{\hyperlink{classpset}{pset<AdaptiveLruPage\ *>}}\ pages;}
+\DoxyCodeLine{00394\ }
+\DoxyCodeLine{00395\ \ \ \textcolor{comment}{//\ First,\ walk\ through\ the\ dynamic\ pages.}}
+\DoxyCodeLine{00396\ \ \ \textcolor{keywordtype}{size\_t}\ counted\_size\ =\ 0;}
+\DoxyCodeLine{00397\ \ \ \textcolor{keywordtype}{int}\ index;}
+\DoxyCodeLine{00398\ \ \ \textcolor{keywordflow}{for}\ (index\ =\ 0;\ index\ <\ LPP\_TotalPriorities;\ ++index)\ \{}
+\DoxyCodeLine{00399\ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *node\ =\ (\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)\_page\_array[index].\_next;}
+\DoxyCodeLine{00400\ \ \ \ \ \textcolor{keywordflow}{while}\ (node\ !=\ \&\_page\_array[index])\ \{}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *page\ =\ (\mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *)node;}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ counted\_size\ +=\ page-\/>\_lru\_size;}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (page-\/>\_priority\ !=\ index)\ \{}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}page\ "{}}\ <<\ page\ <<\ \textcolor{stringliteral}{"{}\ has\ priority\ "{}}\ <<\ page-\/>\_priority}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ but\ is\ in\ queue\ "{}}\ <<\ index\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ okflag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00408\ }
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ inserted\_ok\ =\ pages.insert(page).second;}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!inserted\_ok)\ \{}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}page\ "{}}\ <<\ page\ <<\ \textcolor{stringliteral}{"{}\ appears\ more\ than\ once\ in\ the\ dynamic\ index\(\backslash\)n"{}};}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ okflag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ node\ =\ (\mbox{\hyperlink{classAdaptiveLruPageDynamicList}{AdaptiveLruPageDynamicList}}\ *)node-\/>\_next;}
+\DoxyCodeLine{00415\ \ \ \ \ \}}
+\DoxyCodeLine{00416\ \ \ \}}
+\DoxyCodeLine{00417\ }
+\DoxyCodeLine{00418\ \ \ \textcolor{keywordflow}{if}\ (counted\_size\ !=\ \_total\_size)\ \{}
+\DoxyCodeLine{00419\ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}count\ "{}}\ <<\ counted\_size\ <<\ \textcolor{stringliteral}{"{}\ bytes\ in\ dynamic\ index,\ but\ have\ "{}}\ <<\ \_total\_size\ <<\ \textcolor{stringliteral}{"{}\ on\ record\(\backslash\)n"{}};}
+\DoxyCodeLine{00420\ \ \ \ \ okflag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00421\ \ \ \}}
+\DoxyCodeLine{00422\ }
+\DoxyCodeLine{00423\ \ \ \textcolor{comment}{//\ Now,\ walk\ through\ the\ static\ pages.}}
+\DoxyCodeLine{00424\ \ \ counted\_size\ =\ 0;}
+\DoxyCodeLine{00425\ \ \ \mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *node\ =\ (\mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *)\_static\_list.\_next;}
+\DoxyCodeLine{00426\ \ \ \textcolor{keywordflow}{while}\ (node\ !=\ \&\_static\_list)\ \{}
+\DoxyCodeLine{00427\ \ \ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *page\ =\ (\mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *)node;}
+\DoxyCodeLine{00428\ \ \ \ \ counted\_size\ +=\ page-\/>\_lru\_size;}
+\DoxyCodeLine{00429\ }
+\DoxyCodeLine{00430\ \ \ \ \ \textcolor{keywordflow}{if}\ (pages.find(page)\ ==\ pages.end())\ \{}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}page\ "{}}\ <<\ page\ <<\ \textcolor{stringliteral}{"{}\ appears\ in\ dynamic\ index,\ but\ not\ in\ static\ index\ (or\ multiple\ times\ in\ static\ index)\(\backslash\)n"{}};}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ okflag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00433\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ pages.erase(page);}
+\DoxyCodeLine{00435\ \ \ \ \ \}}
+\DoxyCodeLine{00436\ \ \ \ \ node\ =\ (\mbox{\hyperlink{classAdaptiveLruPageStaticList}{AdaptiveLruPageStaticList}}\ *)node-\/>\_next;}
+\DoxyCodeLine{00437\ \ \ \}}
+\DoxyCodeLine{00438\ }
+\DoxyCodeLine{00439\ \ \ \textcolor{keywordflow}{if}\ (counted\_size\ !=\ \_total\_size)\ \{}
+\DoxyCodeLine{00440\ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}count\ "{}}\ <<\ counted\_size\ <<\ \textcolor{stringliteral}{"{}\ bytes\ in\ static\ index,\ but\ have\ "{}}\ <<\ \_total\_size\ <<\ \textcolor{stringliteral}{"{}\ on\ record\(\backslash\)n"{}};}
+\DoxyCodeLine{00441\ \ \ \ \ okflag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00442\ \ \ \}}
+\DoxyCodeLine{00443\ }
+\DoxyCodeLine{00444\ \ \ \textcolor{keywordflow}{return}\ okflag;}
+\DoxyCodeLine{00445\ \}}
+\DoxyCodeLine{00446\ }
+\DoxyCodeLine{00450\ AdaptiveLruPage::}
+\DoxyCodeLine{00451\ AdaptiveLruPage(\textcolor{keywordtype}{size\_t}\ lru\_size)\ :}
+\DoxyCodeLine{00452\ \ \ \_lru(nullptr),}
+\DoxyCodeLine{00453\ \ \ \_lru\_size(lru\_size),}
+\DoxyCodeLine{00454\ \ \ \_priority(0),}
+\DoxyCodeLine{00455\ \ \ \_first\_frame\_identifier(0),}
+\DoxyCodeLine{00456\ \ \ \_current\_frame\_identifier(0),}
+\DoxyCodeLine{00457\ \ \ \_update\_frame\_identifier(0),}
+\DoxyCodeLine{00458\ \ \ \_current\_frame\_usage(0),}
+\DoxyCodeLine{00459\ \ \ \_last\_frame\_usage(0),}
+\DoxyCodeLine{00460\ \ \ \_update\_total\_usage(0),}
+\DoxyCodeLine{00461\ \ \ \_average\_frame\_utilization(1.0f)}
+\DoxyCodeLine{00462\ \{}
+\DoxyCodeLine{00463\ \}}
+\DoxyCodeLine{00464\ }
+\DoxyCodeLine{00468\ AdaptiveLruPage::}
+\DoxyCodeLine{00469\ AdaptiveLruPage(\textcolor{keyword}{const}\ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ \&copy)\ :}
+\DoxyCodeLine{00470\ \ \ \_lru(nullptr),}
+\DoxyCodeLine{00471\ \ \ \_lru\_size(copy.\_lru\_size),}
+\DoxyCodeLine{00472\ \ \ \_priority(0),}
+\DoxyCodeLine{00473\ \ \ \_first\_frame\_identifier(0),}
+\DoxyCodeLine{00474\ \ \ \_current\_frame\_identifier(0),}
+\DoxyCodeLine{00475\ \ \ \_update\_frame\_identifier(0),}
+\DoxyCodeLine{00476\ \ \ \_current\_frame\_usage(0),}
+\DoxyCodeLine{00477\ \ \ \_last\_frame\_usage(0),}
+\DoxyCodeLine{00478\ \ \ \_update\_total\_usage(0),}
+\DoxyCodeLine{00479\ \ \ \_average\_frame\_utilization(1.0f)}
+\DoxyCodeLine{00480\ \{}
+\DoxyCodeLine{00481\ \}}
+\DoxyCodeLine{00482\ }
+\DoxyCodeLine{00486\ \textcolor{keywordtype}{void}\ AdaptiveLruPage::}
+\DoxyCodeLine{00487\ operator\ =\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ \&copy)\ \{}
+\DoxyCodeLine{00488\ \ \ set\_lru\_size(copy.get\_lru\_size());}
+\DoxyCodeLine{00489\ \}}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00494\ AdaptiveLruPage::}
+\DoxyCodeLine{00495\ \string~AdaptiveLruPage()\ \{}
+\DoxyCodeLine{00496\ \ \ \textcolor{keywordflow}{if}\ (\_lru\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ dequeue\_lru();}
+\DoxyCodeLine{00498\ \ \ \}}
+\DoxyCodeLine{00499\ \}}
+\DoxyCodeLine{00500\ }
+\DoxyCodeLine{00511\ \textcolor{keywordtype}{void}\ AdaptiveLruPage::}
+\DoxyCodeLine{00512\ evict\_lru()\ \{}
+\DoxyCodeLine{00513\ \ \ dequeue\_lru();}
+\DoxyCodeLine{00514\ \}}
+\DoxyCodeLine{00515\ }
+\DoxyCodeLine{00519\ \textcolor{keywordtype}{void}\ AdaptiveLruPage::}
+\DoxyCodeLine{00520\ output(ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00521\ \ \ out\ <<\ \textcolor{stringliteral}{"{}page\ "{}}\ <<\ \textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{},\ "{}}\ <<\ \_lru\_size;}
+\DoxyCodeLine{00522\ \}}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00527\ \textcolor{keywordtype}{void}\ AdaptiveLruPage::}
+\DoxyCodeLine{00528\ write(ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00529\ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level)\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00530\ \}}
+\DoxyCodeLine{00531\ }
+\DoxyCodeLine{00536\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ AdaptiveLruPage::}
+\DoxyCodeLine{00537\ get\_num\_frames()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00538\ \ \ \textcolor{keywordflow}{if}\ (\_lru\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00539\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00540\ \ \ \}}
+\DoxyCodeLine{00541\ \ \ \textcolor{keywordflow}{return}\ \_lru-\/>\_current\_frame\_identifier\ -\/\ \_first\_frame\_identifier;}
+\DoxyCodeLine{00542\ \}}
+\DoxyCodeLine{00543\ }
+\DoxyCodeLine{00548\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ AdaptiveLruPage::}
+\DoxyCodeLine{00549\ get\_num\_inactive\_frames()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00550\ \ \ \textcolor{keywordflow}{if}\ (\_lru\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00551\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00552\ \ \ \}}
+\DoxyCodeLine{00553\ \ \ \textcolor{keywordflow}{return}\ \_lru-\/>\_current\_frame\_identifier\ -\/\ \_current\_frame\_identifier;}
+\DoxyCodeLine{00554\ \}}
+\DoxyCodeLine{00555\ }
+\DoxyCodeLine{00556\ }
+\DoxyCodeLine{00557\ \textcolor{preprocessor}{\#if\ 0}}
+\DoxyCodeLine{00558\ }
+\DoxyCodeLine{00562\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00563\ test\_adaptive\_lru()\ \{}
+\DoxyCodeLine{00564\ \ \ \textcolor{keywordtype}{int}\ maximum\_memory\ =\ 3000000;}
+\DoxyCodeLine{00565\ \ \ \mbox{\hyperlink{classAdaptiveLru}{AdaptiveLru}}\ *lru\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classAdaptiveLru}{AdaptiveLru}}(\textcolor{stringliteral}{"{}test"{}},\ maximum\_memory);}
+\DoxyCodeLine{00566\ }
+\DoxyCodeLine{00567\ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *lru\_page\_0;}
+\DoxyCodeLine{00568\ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *lru\_page\_1;}
+\DoxyCodeLine{00569\ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *lru\_page\_2;}
+\DoxyCodeLine{00570\ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *lru\_page\_3;}
+\DoxyCodeLine{00571\ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *lru\_page\_4;}
+\DoxyCodeLine{00572\ \ \ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}\ *lru\_page\_5;}
+\DoxyCodeLine{00573\ }
+\DoxyCodeLine{00574\ \ \ lru\_page\_0\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}(1000000);}
+\DoxyCodeLine{00575\ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}created\ lru\_page\_0:\ "{}}\ <<\ lru\_page\_0\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00576\ \ \ lru\_page\_0-\/>enqueue\_lru(lru);}
+\DoxyCodeLine{00577\ }
+\DoxyCodeLine{00578\ \ \ lru\_page\_1\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}(1000000);}
+\DoxyCodeLine{00579\ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}created\ lru\_page\_1:\ "{}}\ <<\ lru\_page\_1\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00580\ \ \ lru\_page\_1-\/>enqueue\_lru(lru);}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ lru\_page\_2\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}(1000000);}
+\DoxyCodeLine{00583\ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}created\ lru\_page\_2:\ "{}}\ <<\ lru\_page\_2\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00584\ \ \ lru\_page\_2-\/>enqueue\_lru(lru);}
+\DoxyCodeLine{00585\ }
+\DoxyCodeLine{00586\ \ \ lru\_page\_3\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}(1000000);}
+\DoxyCodeLine{00587\ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}created\ lru\_page\_3:\ "{}}\ <<\ lru\_page\_3\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00588\ \ \ lru\_page\_3-\/>enqueue\_lru(lru);}
+\DoxyCodeLine{00589\ }
+\DoxyCodeLine{00590\ \ \ lru\_page\_4\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}(1000000);}
+\DoxyCodeLine{00591\ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}created\ lru\_page\_4:\ "{}}\ <<\ lru\_page\_4\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00592\ \ \ lru\_page\_4-\/>enqueue\_lru(lru);}
+\DoxyCodeLine{00593\ }
+\DoxyCodeLine{00594\ \ \ lru\_page\_5\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classAdaptiveLruPage}{AdaptiveLruPage}}(1000000);}
+\DoxyCodeLine{00595\ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}created\ lru\_page\_5:\ "{}}\ <<\ lru\_page\_5\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00596\ \ \ lru\_page\_5-\/>enqueue\_lru(lru);}
+\DoxyCodeLine{00597\ }
+\DoxyCodeLine{00598\ \ \ \textcolor{keywordtype}{int}\ total\_frames\ =\ 300;}
+\DoxyCodeLine{00599\ \ \ \textcolor{keywordtype}{int}\ index;}
+\DoxyCodeLine{00600\ \ \ \textcolor{keywordflow}{for}\ (index\ =\ 0;\ \ index\ <\ total\_frames;\ \ index++)\ \{}
+\DoxyCodeLine{00601\ \ \ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}FRAME\ "{}}\ <<\ index\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00602\ }
+\DoxyCodeLine{00603\ \ \ \ \ lru-\/>begin\_epoch();}
+\DoxyCodeLine{00604\ }
+\DoxyCodeLine{00605\ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ <=\ 5)\ \{}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ lru\_page\_0-\/>mark\_used\_lru(lru);}
+\DoxyCodeLine{00607\ \ \ \ \ \}}
+\DoxyCodeLine{00608\ }
+\DoxyCodeLine{00609\ \ \ \ \ lru\_page\_1-\/>mark\_used\_lru(lru);}
+\DoxyCodeLine{00610\ \ \ \ \ lru\_page\_1-\/>mark\_used\_lru(lru);}
+\DoxyCodeLine{00611\ }
+\DoxyCodeLine{00612\ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ \&\ 0x01)\ \{}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ lru\_page\_2-\/>mark\_used\_lru(lru);}
+\DoxyCodeLine{00614\ \ \ \ \ \}}
+\DoxyCodeLine{00615\ }
+\DoxyCodeLine{00616\ \ \ \ \ \textcolor{keywordflow}{if}\ ((index\ \%\ 10)\ ==\ 0)\ \{}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ lru\_page\_3-\/>mark\_used\_lru(lru);}
+\DoxyCodeLine{00618\ \ \ \ \ \}}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00620\ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ >=\ 100)\ \{}
+\DoxyCodeLine{00621\ \ \ \ \ \ \ lru\_page\_4-\/>mark\_used\_lru(lru);}
+\DoxyCodeLine{00622\ \ \ \ \ \}}
+\DoxyCodeLine{00623\ }
+\DoxyCodeLine{00624\ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ >=\ 200)\ \{}
+\DoxyCodeLine{00625\ \ \ \ \ \ \ lru\_page\_5-\/>mark\_used\_lru(lru);}
+\DoxyCodeLine{00626\ \ \ \ \ \}}
+\DoxyCodeLine{00627\ }
+\DoxyCodeLine{00628\ \ \ \ \ \textcolor{keywordflow}{if}\ (!lru-\/>validate())\ \{}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}Failed\ validation\(\backslash\)n"{}};}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00631\ \ \ \ \ \}}
+\DoxyCodeLine{00632\ \ \ \}}
+\DoxyCodeLine{00633\ }
+\DoxyCodeLine{00634\ \ \ \textcolor{keyword}{delete}\ lru;}
+\DoxyCodeLine{00635\ \ \ \textcolor{keyword}{delete}\ lru\_page\_0;}
+\DoxyCodeLine{00636\ \ \ \textcolor{keyword}{delete}\ lru\_page\_1;}
+\DoxyCodeLine{00637\ \ \ \textcolor{keyword}{delete}\ lru\_page\_2;}
+\DoxyCodeLine{00638\ \ \ \textcolor{keyword}{delete}\ lru\_page\_3;}
+\DoxyCodeLine{00639\ \ \ \textcolor{keyword}{delete}\ lru\_page\_4;}
+\DoxyCodeLine{00640\ \ \ \textcolor{keyword}{delete}\ lru\_page\_5;}
+\DoxyCodeLine{00641\ \}}
+\DoxyCodeLine{00642\ }
+\DoxyCodeLine{00643\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ test\_adaptive\_lru}}
+
+\end{DoxyCode}

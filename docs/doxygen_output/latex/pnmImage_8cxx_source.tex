@@ -1,0 +1,2212 @@
+\doxysection{pnm\+Image.\+cxx}
+\hypertarget{pnmImage_8cxx_source}{}\label{pnmImage_8cxx_source}\index{panda/src/pnmimage/pnmImage.cxx@{panda/src/pnmimage/pnmImage.cxx}}
+\mbox{\hyperlink{pnmImage_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmImage_8h}{pnmImage.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmReader_8h}{pnmReader.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmWriter_8h}{pnmWriter.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmBrush_8h}{pnmBrush.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pfmFile_8h}{pfmFile.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pnmimage_8h}{config\_pnmimage.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{perlinNoise2_8h}{perlinNoise2.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{stackedPerlinNoise2_8h}{stackedPerlinNoise2.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatCollector_8h}{pStatCollector.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimer_8h}{pStatTimer.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \textcolor{keyword}{using\ }std::max;}
+\DoxyCodeLine{00027\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \_image\_read\_pcollector(\textcolor{stringliteral}{"{}*:PNMImage:read"{}});}
+\DoxyCodeLine{00030\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \_image\_write\_pcollector(\textcolor{stringliteral}{"{}*:PNMImage:write"{}});}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00035\ PNMImage::}
+\DoxyCodeLine{00036\ PNMImage(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,\ \mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type)\ \{}
+\DoxyCodeLine{00037\ \ \ \_array\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00038\ \ \ \_alpha\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00039\ \ \ \_has\_read\_size\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00041\ \ \ \textcolor{keywordtype}{bool}\ result\ =\ read(filename,\ type);}
+\DoxyCodeLine{00042\ \ \ \textcolor{keywordflow}{if}\ (!result)\ \{}
+\DoxyCodeLine{00043\ \ \ \ \ pnmimage\_cat.error()}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ image\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00045\ \ \ \}}
+\DoxyCodeLine{00046\ \}}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00052\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00053\ clear()\ \{}
+\DoxyCodeLine{00054\ \ \ \textcolor{keywordflow}{if}\ (\_array\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00055\ \ \ \ \ PANDA\_FREE\_ARRAY(\_array);}
+\DoxyCodeLine{00056\ \ \ \ \ \_array\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00057\ \ \ \}}
+\DoxyCodeLine{00058\ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00059\ \ \ \ \ PANDA\_FREE\_ARRAY(\_alpha);}
+\DoxyCodeLine{00060\ \ \ \ \ \_alpha\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00061\ \ \ \}}
+\DoxyCodeLine{00062\ \ \ \_x\_size\ =\ 0;}
+\DoxyCodeLine{00063\ \ \ \_y\_size\ =\ 0;}
+\DoxyCodeLine{00064\ \ \ \_num\_channels\ =\ 0;}
+\DoxyCodeLine{00065\ \ \ \_maxval\ =\ 255;}
+\DoxyCodeLine{00066\ \ \ \_inv\_maxval\ =\ 1.0\ /\ 255.0;}
+\DoxyCodeLine{00067\ \ \ \_color\_space\ =\ CS\_linear;}
+\DoxyCodeLine{00068\ \ \ \_comment.clear();}
+\DoxyCodeLine{00069\ \ \ \_type\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00070\ \ \ \_has\_read\_size\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00071\ \ \ \_xel\_encoding\ =\ XE\_generic;}
+\DoxyCodeLine{00072\ \}}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00078\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00079\ clear(\textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size,\ \textcolor{keywordtype}{int}\ num\_channels,}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ xelval\ maxval,\ \mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type,\ ColorSpace\ color\_space)\ \{}
+\DoxyCodeLine{00081\ \ \ clear();}
+\DoxyCodeLine{00082\ \ \ nassertv(num\_channels\ >=\ 1\ \&\&\ num\_channels\ <=\ 4);}
+\DoxyCodeLine{00083\ \ \ nassertv(color\_space\ !=\ CS\_unspecified);}
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00085\ \ \ \_x\_size\ =\ x\_size;}
+\DoxyCodeLine{00086\ \ \ \_y\_size\ =\ y\_size;}
+\DoxyCodeLine{00087\ \ \ \_num\_channels\ =\ num\_channels;}
+\DoxyCodeLine{00088\ \ \ \_maxval\ =\ maxval;}
+\DoxyCodeLine{00089\ \ \ \_color\_space\ =\ color\_space;}
+\DoxyCodeLine{00090\ \ \ \_comment.clear();}
+\DoxyCodeLine{00091\ \ \ \_type\ =\ type;}
+\DoxyCodeLine{00092\ \ \ \_has\_read\_size\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00093\ }
+\DoxyCodeLine{00094\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{00095\ \ \ \ \ allocate\_alpha();}
+\DoxyCodeLine{00096\ \ \ \ \ memset(\_alpha,\ 0,\ \textcolor{keyword}{sizeof}(xelval)\ *\ \_y\_size\ *\ \_x\_size);}
+\DoxyCodeLine{00097\ \ \ \}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ allocate\_array();}
+\DoxyCodeLine{00100\ \ \ memset(\_array,\ 0,\ \textcolor{keyword}{sizeof}(\mbox{\hyperlink{structpixel}{xel}})\ *\ \_y\_size\ *\ \_x\_size);}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \ \ setup\_encoding();}
+\DoxyCodeLine{00103\ \ \ setup\_rc();}
+\DoxyCodeLine{00104\ \}}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00109\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00110\ copy\_from(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy)\ \{}
+\DoxyCodeLine{00111\ \ \ clear();}
+\DoxyCodeLine{00112\ \ \ copy\_header\_from(copy);}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00114\ \ \ \textcolor{keywordflow}{if}\ (copy.is\_valid())\ \{}
+\DoxyCodeLine{00115\ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ memcpy(\_alpha,\ copy.\_alpha,\ \textcolor{keyword}{sizeof}(xelval)\ *\ \_y\_size\ *\ \_x\_size);}
+\DoxyCodeLine{00117\ \ \ \ \ \}}
+\DoxyCodeLine{00118\ \ \ \ \ memcpy(\_array,\ copy.\_array,\ \textcolor{keyword}{sizeof}(\mbox{\hyperlink{structpixel}{xel}})\ *\ \_y\_size\ *\ \_x\_size);}
+\DoxyCodeLine{00119\ \ \ \}}
+\DoxyCodeLine{00120\ \}}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00125\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00126\ copy\_channel(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy,\ \textcolor{keywordtype}{int}\ src\_channel,\ \textcolor{keywordtype}{int}\ dest\_channel)\ \{}
+\DoxyCodeLine{00127\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ channels\ are\ in\ range}}
+\DoxyCodeLine{00128\ \ \ nassertv(src\_channel\ >=\ 0\ \&\&\ src\_channel\ <=\ 3);}
+\DoxyCodeLine{00129\ \ \ nassertv(dest\_channel\ >=\ 0\ \&\&\ dest\_channel\ <=\ 3);}
+\DoxyCodeLine{00130\ \ \ \textcolor{comment}{//\ Make\ sure\ that\ images\ are\ valid}}
+\DoxyCodeLine{00131\ \ \ \textcolor{keywordflow}{if}\ (!copy.is\_valid()\ ||\ !is\_valid())\ \{}
+\DoxyCodeLine{00132\ \ \ \ \ pnmimage\_cat.error()\ <<\ \textcolor{stringliteral}{"{}One\ of\ the\ images\ is\ invalid!\(\backslash\)n"{}};}
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00134\ \ \ \}}
+\DoxyCodeLine{00135\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ images\ are\ the\ same\ size}}
+\DoxyCodeLine{00136\ \ \ \textcolor{keywordflow}{if}\ (\_x\_size\ !=\ copy.get\_x\_size()\ ||\ \_y\_size\ !=\ copy.get\_y\_size())\{}
+\DoxyCodeLine{00137\ \ \ \ \ pnmimage\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Image\ size\ doesn't\ match!\(\backslash\)n"{}};}
+\DoxyCodeLine{00138\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00139\ \ \ \}}
+\DoxyCodeLine{00140\ \ \ \textcolor{comment}{//\ Do\ the\ actual\ copying}}
+\DoxyCodeLine{00141\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ x++)\ \{}
+\DoxyCodeLine{00142\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ y++)\ \{}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ LColorf\ t\ =\ get\_xel\_a(x,\ y);}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ LColorf\ o\ =\ copy.get\_xel\_a(x,\ y);}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ t.set\_cell(dest\_channel,\ o.get\_cell(src\_channel));}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ set\_xel\_a(x,\ y,\ t);}
+\DoxyCodeLine{00147\ \ \ \ \ \}}
+\DoxyCodeLine{00148\ \ \ \}}
+\DoxyCodeLine{00149\ \}}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00158\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00159\ copy\_channel\_bits(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy,\ \textcolor{keywordtype}{int}\ src\_channel,\ \textcolor{keywordtype}{int}\ dest\_channel,\ xelval\ src\_mask,\ \textcolor{keywordtype}{int}\ right\_shift)\ \{}
+\DoxyCodeLine{00160\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ channels\ are\ in\ range}}
+\DoxyCodeLine{00161\ \ \ nassertv(src\_channel\ >=\ 0\ \&\&\ src\_channel\ <=\ 3);}
+\DoxyCodeLine{00162\ \ \ nassertv(dest\_channel\ >=\ 0\ \&\&\ dest\_channel\ <=\ 3);}
+\DoxyCodeLine{00163\ \ \ \textcolor{comment}{//\ Make\ sure\ that\ images\ are\ valid}}
+\DoxyCodeLine{00164\ \ \ \textcolor{keywordflow}{if}\ (!copy.is\_valid()\ ||\ !is\_valid())\ \{}
+\DoxyCodeLine{00165\ \ \ \ \ pnmimage\_cat.error()\ <<\ \textcolor{stringliteral}{"{}One\ of\ the\ images\ is\ invalid!\(\backslash\)n"{}};}
+\DoxyCodeLine{00166\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00167\ \ \ \}}
+\DoxyCodeLine{00168\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ images\ are\ the\ same\ size}}
+\DoxyCodeLine{00169\ \ \ \textcolor{keywordflow}{if}\ (\_x\_size\ !=\ copy.get\_x\_size()\ ||\ \_y\_size\ !=\ copy.get\_y\_size())\{}
+\DoxyCodeLine{00170\ \ \ \ \ pnmimage\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Image\ size\ doesn't\ match!\(\backslash\)n"{}};}
+\DoxyCodeLine{00171\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00172\ \ \ \}}
+\DoxyCodeLine{00173\ }
+\DoxyCodeLine{00174\ \ \ \textcolor{comment}{//\ Do\ the\ actual\ copying.}}
+\DoxyCodeLine{00175\ \ \ \textcolor{keywordflow}{if}\ (right\_shift\ >=\ 0)\ \{}
+\DoxyCodeLine{00176\ \ \ \ \ xelval\ dest\_mask\ =\ \string~(src\_mask\ >>\ right\_shift);}
+\DoxyCodeLine{00177\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ x++)\ \{}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ y++)\ \{}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ xelval\ src\ =\ copy.get\_channel\_val(x,\ y,\ src\_channel);}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ xelval\ dest\ =\ get\_channel\_val(x,\ y,\ dest\_channel);}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ dest\ =\ (dest\ \&\ dest\_mask)\ |\ ((src\ \&\ src\_mask)\ >>\ right\_shift);}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ set\_channel\_val(x,\ y,\ dest\_channel,\ dest);}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00184\ \ \ \ \ \}}
+\DoxyCodeLine{00185\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00186\ \ \ \ \ \textcolor{keywordtype}{int}\ left\_shift\ =\ -\/right\_shift;}
+\DoxyCodeLine{00187\ \ \ \ \ xelval\ dest\_mask\ =\ \string~(src\_mask\ <<\ left\_shift);}
+\DoxyCodeLine{00188\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ x++)\ \{}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ y++)\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ xelval\ src\ =\ copy.get\_channel\_val(x,\ y,\ src\_channel);}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ xelval\ dest\ =\ get\_channel\_val(x,\ y,\ dest\_channel);}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ dest\ =\ (dest\ \&\ dest\_mask)\ |\ ((src\ \&\ src\_mask)\ <<\ left\_shift);}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ set\_channel\_val(x,\ y,\ dest\_channel,\ dest);}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00195\ \ \ \ \ \}}
+\DoxyCodeLine{00196\ \ \ \}}
+\DoxyCodeLine{00197\ \}}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00204\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00205\ copy\_header\_from(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImageHeader}{PNMImageHeader}}\ \&header)\ \{}
+\DoxyCodeLine{00206\ \ \ clear();}
+\DoxyCodeLine{00207\ \ \ PNMImageHeader::operator\ =\ (header);}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00209\ \ \ \textcolor{keywordflow}{if}\ (\_maxval\ ==\ 0)\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \_inv\_maxval\ =\ 0.0f;}
+\DoxyCodeLine{00211\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00212\ \ \ \ \ \_inv\_maxval\ =\ 1.0f\ /\ (float)\_maxval;}
+\DoxyCodeLine{00213\ \ \ \}}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{00216\ \ \ \ \ allocate\_alpha();}
+\DoxyCodeLine{00217\ \ \ \}}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00219\ \ \ allocate\_array();}
+\DoxyCodeLine{00220\ \ \ setup\_encoding();}
+\DoxyCodeLine{00221\ \ \ setup\_rc();}
+\DoxyCodeLine{00222\ \}}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00228\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00229\ take\_from(\mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&orig)\ \{}
+\DoxyCodeLine{00230\ \ \ clear();}
+\DoxyCodeLine{00231\ \ \ PNMImageHeader::operator\ =\ (orig);}
+\DoxyCodeLine{00232\ \ \ setup\_encoding();}
+\DoxyCodeLine{00233\ \ \ setup\_rc();}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00235\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{00236\ \ \ \ \ \_alpha\ =\ orig.\_alpha;}
+\DoxyCodeLine{00237\ \ \ \ \ orig.\_alpha\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00238\ \ \ \}}
+\DoxyCodeLine{00239\ \ \ \_array\ =\ orig.\_array;}
+\DoxyCodeLine{00240\ \ \ orig.\_array\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00241\ }
+\DoxyCodeLine{00242\ \ \ orig.clear();}
+\DoxyCodeLine{00243\ \}}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00248\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00249\ fill\_val(xelval\ red,\ xelval\ green,\ xelval\ blue)\ \{}
+\DoxyCodeLine{00250\ \ \ \textcolor{keywordflow}{if}\ (is\_valid())\ \{}
+\DoxyCodeLine{00251\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ red,\ green,\ blue);}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00255\ \ \ \ \ \}}
+\DoxyCodeLine{00256\ \ \ \}}
+\DoxyCodeLine{00257\ \}}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00262\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00263\ alpha\_fill\_val(xelval\ alpha)\ \{}
+\DoxyCodeLine{00264\ \ \ \textcolor{keywordflow}{if}\ (is\_valid())\ \{}
+\DoxyCodeLine{00265\ \ \ \ \ \textcolor{keywordflow}{if}\ (!has\_alpha())\ \{}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ add\_alpha();}
+\DoxyCodeLine{00267\ \ \ \ \ \}}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ alpha);}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00273\ \ \ \ \ \}}
+\DoxyCodeLine{00274\ \ \ \}}
+\DoxyCodeLine{00275\ \}}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00282\ \textcolor{keywordtype}{bool}\ PNMImage::}
+\DoxyCodeLine{00283\ read(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,\ \mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type,\ \textcolor{keywordtype}{bool}\ report\_unknown\_type)\ \{}
+\DoxyCodeLine{00284\ \ \ \mbox{\hyperlink{classPNMReader}{PNMReader}}\ *reader\ =\ make\_reader(filename,\ type,\ report\_unknown\_type);}
+\DoxyCodeLine{00285\ \ \ \textcolor{keywordflow}{if}\ (reader\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00286\ \ \ \ \ clear();}
+\DoxyCodeLine{00287\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00288\ \ \ \}}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00290\ \ \ \textcolor{keywordflow}{return}\ read(reader);}
+\DoxyCodeLine{00291\ \}}
+\DoxyCodeLine{00292\ }
+\DoxyCodeLine{00305\ \textcolor{keywordtype}{bool}\ PNMImage::}
+\DoxyCodeLine{00306\ read(std::istream\ \&data,\ \textcolor{keyword}{const}\ std::string\ \&filename,\ \mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type,}
+\DoxyCodeLine{00307\ \ \ \ \ \ \textcolor{keywordtype}{bool}\ report\_unknown\_type)\ \{}
+\DoxyCodeLine{00308\ \ \ \mbox{\hyperlink{classPNMReader}{PNMReader}}\ *reader\ =\ PNMImageHeader::make\_reader}
+\DoxyCodeLine{00309\ \ \ \ \ (\&data,\ \textcolor{keyword}{false},\ filename,\ std::string(),\ type,\ report\_unknown\_type);}
+\DoxyCodeLine{00310\ \ \ \textcolor{keywordflow}{if}\ (reader\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00311\ \ \ \ \ clear();}
+\DoxyCodeLine{00312\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00313\ \ \ \}}
+\DoxyCodeLine{00314\ \ \ \textcolor{keywordflow}{return}\ read(reader);}
+\DoxyCodeLine{00315\ \}}
+\DoxyCodeLine{00316\ }
+\DoxyCodeLine{00325\ \textcolor{keywordtype}{bool}\ PNMImage::}
+\DoxyCodeLine{00326\ read(\mbox{\hyperlink{classPNMReader}{PNMReader}}\ *reader)\ \{}
+\DoxyCodeLine{00327\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_image\_read\_pcollector);}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00329\ \ \ \textcolor{keywordtype}{bool}\ has\_read\_size\ =\ \_has\_read\_size;}
+\DoxyCodeLine{00330\ \ \ \textcolor{keywordtype}{int}\ read\_x\_size\ =\ \_read\_x\_size;}
+\DoxyCodeLine{00331\ \ \ \textcolor{keywordtype}{int}\ read\_y\_size\ =\ \_read\_y\_size;}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00333\ \ \ clear();}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00335\ \ \ \textcolor{keywordflow}{if}\ (reader\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00336\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00337\ \ \ \}}
+\DoxyCodeLine{00338\ }
+\DoxyCodeLine{00339\ \ \ \textcolor{keywordflow}{if}\ (!reader-\/>is\_valid())\ \{}
+\DoxyCodeLine{00340\ \ \ \ \ \textcolor{keyword}{delete}\ reader;}
+\DoxyCodeLine{00341\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00342\ \ \ \}}
+\DoxyCodeLine{00343\ }
+\DoxyCodeLine{00344\ \ \ \textcolor{keywordflow}{if}\ (has\_read\_size)\ \{}
+\DoxyCodeLine{00345\ \ \ \ \ reader-\/>set\_read\_size(read\_x\_size,\ read\_y\_size);}
+\DoxyCodeLine{00346\ \ \ \}}
+\DoxyCodeLine{00347\ \ \ reader-\/>\mbox{\hyperlink{classPNMReader_a56daaa0d17da863f2b7768806f43303e}{prepare\_read}}();}
+\DoxyCodeLine{00348\ }
+\DoxyCodeLine{00349\ \ \ copy\_header\_from(*reader);}
+\DoxyCodeLine{00350\ }
+\DoxyCodeLine{00351\ \ \ \textcolor{keywordflow}{if}\ (reader-\/>\mbox{\hyperlink{classPNMReader_a34acf9a526d3ffe9f6be1fc4617757ae}{is\_floating\_point}}())\ \{}
+\DoxyCodeLine{00352\ \ \ \ \ \textcolor{comment}{//\ Hmm,\ it's\ a\ floating-\/point\ file.\ \ Quietly\ convert\ it\ to\ integer.}}
+\DoxyCodeLine{00353\ \ \ \ \ \mbox{\hyperlink{classPfmFile}{PfmFile}}\ pfm;}
+\DoxyCodeLine{00354\ \ \ \ \ \textcolor{keywordflow}{if}\ (!reader-\/>\mbox{\hyperlink{classPNMReader_ae743bce38d7eb6a951a6291ecfa84269}{read\_pfm}}(pfm))\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ reader;}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00357\ \ \ \ \ \}}
+\DoxyCodeLine{00358\ \ \ \ \ \textcolor{keyword}{delete}\ reader;}
+\DoxyCodeLine{00359\ \ \ \ \ \textcolor{keywordflow}{return}\ pfm.store(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00360\ \ \ \}}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ \textcolor{comment}{//\ We\ reassign\ y\_size\ after\ reading\ because\ we\ might\ have\ read\ a\ truncated}}
+\DoxyCodeLine{00363\ \ \ \textcolor{comment}{//\ file.}}
+\DoxyCodeLine{00364\ \ \ \_y\_size\ =\ reader-\/>\mbox{\hyperlink{classPNMReader_a244e28aedcd80a852259646cc20f6a4a}{read\_data}}(\_array,\ \_alpha);}
+\DoxyCodeLine{00365\ \ \ \textcolor{keyword}{delete}\ reader;}
+\DoxyCodeLine{00366\ }
+\DoxyCodeLine{00367\ \ \ \textcolor{keywordflow}{if}\ (\_y\_size\ ==\ 0)\ \{}
+\DoxyCodeLine{00368\ \ \ \ \ clear();}
+\DoxyCodeLine{00369\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00370\ \ \ \}}
+\DoxyCodeLine{00371\ }
+\DoxyCodeLine{00372\ \ \ setup\_encoding();}
+\DoxyCodeLine{00373\ \ \ setup\_rc();}
+\DoxyCodeLine{00374\ }
+\DoxyCodeLine{00375\ \ \ \textcolor{keywordflow}{if}\ (has\_read\_size\ \&\&\ (\_x\_size\ !=\ read\_x\_size\ ||\ \_y\_size\ !=\ read\_y\_size))\ \{}
+\DoxyCodeLine{00376\ \ \ \ \ \textcolor{comment}{//\ The\ Reader\ didn't\ comply\ with\ our\ size\ request.\ \ Do\ the\ sizing}}
+\DoxyCodeLine{00377\ \ \ \ \ \textcolor{comment}{//\ explicitly,\ then.}}
+\DoxyCodeLine{00378\ \ \ \ \ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ new\_image(read\_x\_size,\ read\_y\_size,\ get\_num\_channels(),}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ get\_maxval(),\ get\_type(),\ get\_color\_space());}
+\DoxyCodeLine{00380\ \ \ \ \ new\_image.quick\_filter\_from(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00381\ \ \ \ \ take\_from(new\_image);}
+\DoxyCodeLine{00382\ \ \ \}}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00384\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00385\ \}}
+\DoxyCodeLine{00386\ }
+\DoxyCodeLine{00391\ \textcolor{keywordtype}{bool}\ PNMImage::}
+\DoxyCodeLine{00392\ write(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,\ \mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00393\ \ \ \textcolor{keywordflow}{if}\ (!is\_valid())\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00395\ \ \ \}}
+\DoxyCodeLine{00396\ }
+\DoxyCodeLine{00397\ \ \ \mbox{\hyperlink{classPNMWriter}{PNMWriter}}\ *writer\ =\ PNMImageHeader::make\_writer(filename,\ type);}
+\DoxyCodeLine{00398\ \ \ \textcolor{keywordflow}{if}\ (writer\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00399\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00400\ \ \ \}}
+\DoxyCodeLine{00401\ }
+\DoxyCodeLine{00402\ \ \ \textcolor{keywordflow}{return}\ write(writer);}
+\DoxyCodeLine{00403\ \}}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00414\ \textcolor{keywordtype}{bool}\ PNMImage::}
+\DoxyCodeLine{00415\ write(std::ostream\ \&data,\ \textcolor{keyword}{const}\ std::string\ \&filename,\ \mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00416\ \ \ \textcolor{keywordflow}{if}\ (!is\_valid())\ \{}
+\DoxyCodeLine{00417\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00418\ \ \ \}}
+\DoxyCodeLine{00419\ }
+\DoxyCodeLine{00420\ \ \ \mbox{\hyperlink{classPNMWriter}{PNMWriter}}\ *writer\ =\ PNMImageHeader::make\_writer}
+\DoxyCodeLine{00421\ \ \ \ \ (\&data,\ \textcolor{keyword}{false},\ filename,\ type);}
+\DoxyCodeLine{00422\ \ \ \textcolor{keywordflow}{if}\ (writer\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00423\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00424\ \ \ \}}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ \textcolor{keywordflow}{return}\ write(writer);}
+\DoxyCodeLine{00427\ \}}
+\DoxyCodeLine{00428\ }
+\DoxyCodeLine{00436\ \textcolor{keywordtype}{bool}\ PNMImage::}
+\DoxyCodeLine{00437\ write(\mbox{\hyperlink{classPNMWriter}{PNMWriter}}\ *writer)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00438\ \ \ \textcolor{keywordflow}{if}\ (writer\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00439\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00440\ \ \ \}}
+\DoxyCodeLine{00441\ }
+\DoxyCodeLine{00442\ \ \ \textcolor{keywordflow}{if}\ (!is\_valid())\ \{}
+\DoxyCodeLine{00443\ \ \ \ \ \textcolor{keyword}{delete}\ writer;}
+\DoxyCodeLine{00444\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00445\ \ \ \}}
+\DoxyCodeLine{00446\ }
+\DoxyCodeLine{00447\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_image\_write\_pcollector);}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00449\ \ \ writer-\/>copy\_header\_from(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00450\ }
+\DoxyCodeLine{00451\ \ \ \textcolor{keywordflow}{if}\ (!writer-\/>\mbox{\hyperlink{classPNMWriter_ad724a1b55352d04d5a655bfe43fc253a}{supports\_integer}}())\ \{}
+\DoxyCodeLine{00452\ \ \ \ \ \textcolor{comment}{//\ Hmm,\ it's\ only\ a\ floating-\/point\ file\ type.\ \ Convert\ it\ from\ the\ integer}}
+\DoxyCodeLine{00453\ \ \ \ \ \textcolor{comment}{//\ data\ we\ have.}}
+\DoxyCodeLine{00454\ \ \ \ \ \mbox{\hyperlink{classPfmFile}{PfmFile}}\ pfm;}
+\DoxyCodeLine{00455\ \ \ \ \ \textcolor{keywordflow}{if}\ (!pfm.load(*\textcolor{keyword}{this}))\ \{}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ writer;}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00458\ \ \ \ \ \}}
+\DoxyCodeLine{00459\ \ \ \ \ \textcolor{keywordtype}{bool}\ success\ =\ writer-\/>\mbox{\hyperlink{classPNMWriter_a6ea6d27b3bad22d109ecd3bc45f444c9}{write\_pfm}}(pfm);}
+\DoxyCodeLine{00460\ \ \ \ \ \textcolor{keyword}{delete}\ writer;}
+\DoxyCodeLine{00461\ \ \ \ \ \textcolor{keywordflow}{return}\ success;}
+\DoxyCodeLine{00462\ \ \ \}}
+\DoxyCodeLine{00463\ }
+\DoxyCodeLine{00464\ \ \ \textcolor{keywordflow}{if}\ (is\_grayscale()\ \&\&\ !writer-\/>\mbox{\hyperlink{classPNMWriter_ad1f594df4ff64592ede59e6c559d5049}{supports\_grayscale}}())\ \{}
+\DoxyCodeLine{00465\ \ \ \ \ \textcolor{comment}{//\ Copy\ the\ gray\ values\ to\ all\ channels\ to\ help\ out\ the\ writer.}}
+\DoxyCodeLine{00466\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x<get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ ((\mbox{\hyperlink{classPNMImage}{PNMImage}}\ *)\textcolor{keyword}{this})-\/>set\_xel\_val(x,\ y,\ get\_gray\_val(x,\ y));}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00470\ \ \ \ \ \}}
+\DoxyCodeLine{00471\ \ \ \}}
+\DoxyCodeLine{00472\ }
+\DoxyCodeLine{00473\ \ \ \textcolor{keywordtype}{int}\ result\ =\ writer-\/>\mbox{\hyperlink{classPNMWriter_a3c55c68ce59dfceb35e1c19862d0b5d5}{write\_data}}(\_array,\ \_alpha);}
+\DoxyCodeLine{00474\ \ \ \textcolor{keyword}{delete}\ writer;}
+\DoxyCodeLine{00475\ }
+\DoxyCodeLine{00476\ \ \ \textcolor{keywordflow}{return}\ (result\ ==\ \_y\_size);}
+\DoxyCodeLine{00477\ \}}
+\DoxyCodeLine{00478\ }
+\DoxyCodeLine{00486\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00487\ set\_color\_type(PNMImage::ColorType\ color\_type)\ \{}
+\DoxyCodeLine{00488\ \ \ nassertv((\textcolor{keywordtype}{int})color\_type\ >=\ 1\ \&\&\ (\textcolor{keywordtype}{int})color\_type\ <=\ 4);}
+\DoxyCodeLine{00489\ \ \ \textcolor{keywordflow}{if}\ (color\_type\ ==\ get\_color\_type())\ \{}
+\DoxyCodeLine{00490\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00491\ \ \ \}}
+\DoxyCodeLine{00492\ }
+\DoxyCodeLine{00493\ \ \ \textcolor{keywordflow}{if}\ (!is\_grayscale()\ \&\&\ is\_grayscale(color\_type))\ \{}
+\DoxyCodeLine{00494\ \ \ \ \ \textcolor{comment}{//\ Convert\ to\ grayscale\ from\ color}}
+\DoxyCodeLine{00495\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \ \ set\_gray(x,\ y,\ get\_bright(x,\ y));}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00499\ \ \ \ \ \}}
+\DoxyCodeLine{00500\ }
+\DoxyCodeLine{00501\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (is\_grayscale()\ \&\&\ !is\_grayscale(color\_type))\ \{}
+\DoxyCodeLine{00502\ \ \ \ \ \textcolor{comment}{//\ Convert\ to\ color\ from\ grayscale}}
+\DoxyCodeLine{00503\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ get\_gray\_val(x,\ y));}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00507\ \ \ \ \ \}}
+\DoxyCodeLine{00508\ \ \ \}}
+\DoxyCodeLine{00509\ }
+\DoxyCodeLine{00510\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ !has\_alpha(color\_type))\ \{}
+\DoxyCodeLine{00511\ \ \ \ \ \textcolor{comment}{//\ Discard\ the\ alpha\ channel}}
+\DoxyCodeLine{00512\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ PANDA\_FREE\_ARRAY(\_alpha);}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ \_alpha\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00515\ \ \ \ \ \}}
+\DoxyCodeLine{00516\ }
+\DoxyCodeLine{00517\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!has\_alpha()\ \&\&\ has\_alpha(color\_type))\ \{}
+\DoxyCodeLine{00518\ \ \ \ \ \textcolor{comment}{//\ Create\ a\ new\ alpha\ channel}}
+\DoxyCodeLine{00519\ \ \ \ \ allocate\_alpha();}
+\DoxyCodeLine{00520\ \ \ \ \ memset(\_alpha,\ 0,\ \textcolor{keyword}{sizeof}(xelval)\ *\ (\_x\_size\ *\ \_y\_size));}
+\DoxyCodeLine{00521\ \ \ \}}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00523\ \ \ \_num\_channels\ =\ (int)color\_type;}
+\DoxyCodeLine{00524\ \ \ setup\_encoding();}
+\DoxyCodeLine{00525\ \ \ setup\_rc();}
+\DoxyCodeLine{00526\ \}}
+\DoxyCodeLine{00527\ }
+\DoxyCodeLine{00542\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00543\ set\_color\_space(ColorSpace\ color\_space)\ \{}
+\DoxyCodeLine{00544\ \ \ nassertv(color\_space\ !=\ CS\_unspecified);}
+\DoxyCodeLine{00545\ }
+\DoxyCodeLine{00546\ \ \ \textcolor{keywordflow}{if}\ (color\_space\ ==\ \_color\_space)\ \{}
+\DoxyCodeLine{00547\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00548\ \ \ \}}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00550\ \ \ \textcolor{keywordflow}{if}\ (\_array\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00551\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ array\_size\ =\ \_x\_size\ *\ \_y\_size;}
+\DoxyCodeLine{00552\ }
+\DoxyCodeLine{00553\ \ \ \ \ \textcolor{comment}{//\ Note:\ only\ convert\ RGB,\ since\ alpha\ channel\ is\ always\ linear.}}
+\DoxyCodeLine{00554\ \ \ \ \ \textcolor{keywordflow}{switch}\ (color\_space)\ \{}
+\DoxyCodeLine{00555\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_linear:}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_maxval\ ==\ 255\ \&\&\ \_color\_space\ ==\ CS\_sRGB)\ \{}
+\DoxyCodeLine{00557\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{00558\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ \&col\ =\ \_array[i];}
+\DoxyCodeLine{00559\ \ \ \ \ \ \ \ \ \ \ col.r\ =\ decode\_sRGB\_uchar((\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})\ col.r);}
+\DoxyCodeLine{00560\ \ \ \ \ \ \ \ \ \ \ col.g\ =\ decode\_sRGB\_uchar((\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})\ col.g);}
+\DoxyCodeLine{00561\ \ \ \ \ \ \ \ \ \ \ col.b\ =\ decode\_sRGB\_uchar((\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})\ col.b);}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{00566\ \ \ \ \ \ \ \ \ \ \ \ \ LRGBColorf\ scaled\ =\ get\_xel(x,\ y)\ *\ \_maxval\ +\ 0.5f;}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ \&col\ =\ row(y)[x];}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \ \ \ \ \ \ col.r\ =\ clamp\_val((\textcolor{keywordtype}{int})scaled[0]);}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \ \ \ \ \ \ col.g\ =\ clamp\_val((\textcolor{keywordtype}{int})scaled[1]);}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ \ \ \ \ col.b\ =\ clamp\_val((\textcolor{keywordtype}{int})scaled[2]);}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00575\ }
+\DoxyCodeLine{00576\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_sRGB:}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_maxval\ ==\ 255\ \&\&\ \_color\_space\ ==\ CS\_linear)\ \{}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ \&col\ =\ \_array[i];}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ \ \ \ \ col.r\ =\ encode\_sRGB\_uchar((\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})\ col.r);}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \ \ \ \ col.g\ =\ encode\_sRGB\_uchar((\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})\ col.g);}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \ \ \ \ col.b\ =\ encode\_sRGB\_uchar((\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})\ col.b);}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00585\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ \&col\ =\ row(y)[x];}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \ \ \ \ \ \ encode\_sRGB\_uchar(get\_xel\_a(x,\ y),\ col);}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00592\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00593\ }
+\DoxyCodeLine{00594\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_scRGB:}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ \ \ LRGBColorf\ scaled\ =\ get\_xel(x,\ y)\ *\ 8192.f\ +\ 4096.5f;}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ \&col\ =\ row(y)[x];}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \ \ \ \ col.r\ =\ min(max(0,\ (\textcolor{keywordtype}{int})scaled[0]),\ 65535);}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ \ \ col.g\ =\ min(max(0,\ (\textcolor{keywordtype}{int})scaled[1]),\ 65535);}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ \ \ col.b\ =\ min(max(0,\ (\textcolor{keywordtype}{int})scaled[2]),\ 65535);}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \_maxval\ =\ 65535;}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00606\ }
+\DoxyCodeLine{00607\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}invalid\ color\ space"{}});}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00610\ \ \ \ \ \}}
+\DoxyCodeLine{00611\ }
+\DoxyCodeLine{00612\ \ \ \ \ \textcolor{comment}{//\ Initialize\ the\ new\ encoding\ settings.}}
+\DoxyCodeLine{00613\ \ \ \ \ \_color\_space\ =\ color\_space;}
+\DoxyCodeLine{00614\ \ \ \ \ setup\_encoding();}
+\DoxyCodeLine{00615\ \ \ \}}
+\DoxyCodeLine{00616\ \}}
+\DoxyCodeLine{00617\ }
+\DoxyCodeLine{00623\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00624\ make\_grayscale(\textcolor{keywordtype}{float}\ rc,\ \textcolor{keywordtype}{float}\ gc,\ \textcolor{keywordtype}{float}\ bc)\ \{}
+\DoxyCodeLine{00625\ \ \ \textcolor{keywordflow}{if}\ (is\_grayscale())\ \{}
+\DoxyCodeLine{00626\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00627\ \ \ \}}
+\DoxyCodeLine{00628\ }
+\DoxyCodeLine{00629\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{00630\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{00631\ \ \ \ \ \ \ set\_gray(x,\ y,\ min(get\_bright(x,\ y,\ rc,\ gc,\ bc),\ 1.0f));}
+\DoxyCodeLine{00632\ \ \ \ \ \}}
+\DoxyCodeLine{00633\ \ \ \}}
+\DoxyCodeLine{00634\ }
+\DoxyCodeLine{00635\ \ \ \_num\_channels\ =\ has\_alpha()\ ?\ 2\ :\ 1;}
+\DoxyCodeLine{00636\ \ \ setup\_encoding();}
+\DoxyCodeLine{00637\ \ \ setup\_rc();}
+\DoxyCodeLine{00638\ \}}
+\DoxyCodeLine{00639\ }
+\DoxyCodeLine{00647\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00648\ premultiply\_alpha()\ \{}
+\DoxyCodeLine{00649\ \ \ \textcolor{keywordflow}{if}\ (!has\_alpha())\ \{}
+\DoxyCodeLine{00650\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00651\ \ \ \}}
+\DoxyCodeLine{00652\ }
+\DoxyCodeLine{00653\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{00654\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ alpha\ =\ get\_alpha(x,\ y);}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ r\ =\ get\_red(x,\ y)\ *\ alpha;}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ g\ =\ get\_green(x,\ y)\ *\ alpha;}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ b\ =\ get\_blue(x,\ y)\ *\ alpha;}
+\DoxyCodeLine{00659\ \ \ \ \ \ \ set\_xel(x,\ y,\ r,\ g,\ b);}
+\DoxyCodeLine{00660\ \ \ \ \ \}}
+\DoxyCodeLine{00661\ \ \ \}}
+\DoxyCodeLine{00662\ \}}
+\DoxyCodeLine{00663\ }
+\DoxyCodeLine{00671\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00672\ unpremultiply\_alpha()\ \{}
+\DoxyCodeLine{00673\ \ \ \textcolor{keywordflow}{if}\ (!has\_alpha())\ \{}
+\DoxyCodeLine{00674\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00675\ \ \ \}}
+\DoxyCodeLine{00676\ }
+\DoxyCodeLine{00677\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{00678\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ alpha\ =\ get\_alpha(x,\ y);}
+\DoxyCodeLine{00680\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (alpha\ >\ 0)\ \{}
+\DoxyCodeLine{00681\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ r\ =\ get\_red(x,\ y)\ /\ alpha;}
+\DoxyCodeLine{00682\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ g\ =\ get\_green(x,\ y)\ /\ alpha;}
+\DoxyCodeLine{00683\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ b\ =\ get\_blue(x,\ y)\ /\ alpha;}
+\DoxyCodeLine{00684\ \ \ \ \ \ \ \ \ set\_xel(x,\ y,\ r,\ g,\ b);}
+\DoxyCodeLine{00685\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00686\ \ \ \ \ \}}
+\DoxyCodeLine{00687\ \ \ \}}
+\DoxyCodeLine{00688\ \}}
+\DoxyCodeLine{00689\ }
+\DoxyCodeLine{00693\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00694\ reverse\_rows()\ \{}
+\DoxyCodeLine{00695\ \ \ \textcolor{keywordflow}{if}\ (\_array\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00696\ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ *new\_array\ =\ (\mbox{\hyperlink{structpixel}{xel}}\ *)PANDA\_MALLOC\_ARRAY(\_x\_size\ *\ \_y\_size\ *\ \textcolor{keyword}{sizeof}(\mbox{\hyperlink{structpixel}{xel}}));}
+\DoxyCodeLine{00697\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ y++)\ \{}
+\DoxyCodeLine{00698\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ new\_y\ =\ \_y\_size\ -\/\ 1\ -\/\ y;}
+\DoxyCodeLine{00699\ \ \ \ \ \ \ memcpy(new\_array\ +\ new\_y\ *\ \_x\_size,\ \_array\ +\ y\ *\ \_x\_size,\ \_x\_size\ *\ \textcolor{keyword}{sizeof}(\mbox{\hyperlink{structpixel}{xel}}));}
+\DoxyCodeLine{00700\ \ \ \ \ \}}
+\DoxyCodeLine{00701\ \ \ \ \ PANDA\_FREE\_ARRAY(\_array);}
+\DoxyCodeLine{00702\ \ \ \ \ \_array\ =\ new\_array;}
+\DoxyCodeLine{00703\ \ \ \}}
+\DoxyCodeLine{00704\ }
+\DoxyCodeLine{00705\ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00706\ \ \ \ \ xelval\ *new\_alpha\ =\ (xelval\ *)PANDA\_MALLOC\_ARRAY(\_x\_size\ *\ \_y\_size\ *\ \textcolor{keyword}{sizeof}(xelval));}
+\DoxyCodeLine{00707\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ y++)\ \{}
+\DoxyCodeLine{00708\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ new\_y\ =\ \_y\_size\ -\/\ 1\ -\/\ y;}
+\DoxyCodeLine{00709\ \ \ \ \ \ \ memcpy(new\_alpha\ +\ new\_y\ *\ \_x\_size,\ \_alpha\ +\ y\ *\ \_x\_size,\ \_x\_size\ *\ \textcolor{keyword}{sizeof}(xelval));}
+\DoxyCodeLine{00710\ \ \ \ \ \}}
+\DoxyCodeLine{00711\ \ \ \ \ PANDA\_FREE\_ARRAY(\_alpha);}
+\DoxyCodeLine{00712\ \ \ \ \ \_alpha\ =\ new\_alpha;}
+\DoxyCodeLine{00713\ \ \ \}}
+\DoxyCodeLine{00714\ \}}
+\DoxyCodeLine{00715\ }
+\DoxyCodeLine{00723\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00724\ flip(\textcolor{keywordtype}{bool}\ flip\_x,\ \textcolor{keywordtype}{bool}\ flip\_y,\ \textcolor{keywordtype}{bool}\ transpose)\ \{}
+\DoxyCodeLine{00725\ \ \ \textcolor{keywordflow}{if}\ (transpose)\ \{}
+\DoxyCodeLine{00726\ \ \ \ \ \textcolor{comment}{//\ Transposed\ case.\ \ X\ becomes\ Y,\ Y\ becomes\ X.}}
+\DoxyCodeLine{00727\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_array\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00728\ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ *new\_array\ =\ (\mbox{\hyperlink{structpixel}{xel}}\ *)PANDA\_MALLOC\_ARRAY(\_x\_size\ *\ \_y\_size\ *\ \textcolor{keyword}{sizeof}(\mbox{\hyperlink{structpixel}{xel}}));}
+\DoxyCodeLine{00729\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ \_x\_size;\ ++xi)\ \{}
+\DoxyCodeLine{00730\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ *row\ =\ new\_array\ +\ xi\ *\ \_y\_size;}
+\DoxyCodeLine{00731\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ source\_xi\ =\ !flip\_x\ ?\ xi\ :\ \_x\_size\ -\/\ 1\ -\/\ xi;}
+\DoxyCodeLine{00732\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yi\ =\ 0;\ yi\ <\ \_y\_size;\ ++yi)\ \{}
+\DoxyCodeLine{00733\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ source\_yi\ =\ !flip\_y\ ?\ yi\ :\ \_y\_size\ -\/\ 1\ -\/\ yi;}
+\DoxyCodeLine{00734\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ *source\_row\ =\ \_array\ +\ source\_yi\ *\ \_x\_size;}
+\DoxyCodeLine{00735\ \ \ \ \ \ \ \ \ \ \ row[yi]\ =\ source\_row[source\_xi];}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00737\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00738\ \ \ \ \ \ \ PANDA\_FREE\_ARRAY(\_array);}
+\DoxyCodeLine{00739\ \ \ \ \ \ \ \_array\ =\ new\_array;}
+\DoxyCodeLine{00740\ \ \ \ \ \}}
+\DoxyCodeLine{00741\ }
+\DoxyCodeLine{00742\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ xelval\ *new\_alpha\ =\ (xelval\ *)PANDA\_MALLOC\_ARRAY(\_x\_size\ *\ \_y\_size\ *\ \textcolor{keyword}{sizeof}(xelval));}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ \_x\_size;\ ++xi)\ \{}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \ \ xelval\ *row\ =\ new\_alpha\ +\ xi\ *\ \_y\_size;}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ source\_xi\ =\ !flip\_x\ ?\ xi\ :\ \_x\_size\ -\/\ 1\ -\/\ xi;}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yi\ =\ 0;\ yi\ <\ \_y\_size;\ ++yi)\ \{}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ source\_yi\ =\ !flip\_y\ ?\ yi\ :\ \_y\_size\ -\/\ 1\ -\/\ yi;}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \ \ \ \ xelval\ *source\_row\ =\ \_alpha\ +\ source\_yi\ *\ \_x\_size;}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \ \ \ \ row[yi]\ =\ source\_row[source\_xi];}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00753\ }
+\DoxyCodeLine{00754\ \ \ \ \ \ \ PANDA\_FREE\_ARRAY(\_alpha);}
+\DoxyCodeLine{00755\ \ \ \ \ \ \ \_alpha\ =\ new\_alpha;}
+\DoxyCodeLine{00756\ \ \ \ \ \}}
+\DoxyCodeLine{00757\ }
+\DoxyCodeLine{00758\ \ \ \ \ \textcolor{keywordtype}{int}\ t\ =\ \_x\_size;}
+\DoxyCodeLine{00759\ \ \ \ \ \_x\_size\ =\ \_y\_size;}
+\DoxyCodeLine{00760\ \ \ \ \ \_y\_size\ =\ t;}
+\DoxyCodeLine{00761\ }
+\DoxyCodeLine{00762\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00763\ \ \ \ \ \textcolor{comment}{//\ Non-\/transposed.\ \ X\ is\ X,\ Y\ is\ Y.}}
+\DoxyCodeLine{00764\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_array\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00765\ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ *new\_array\ =\ (\mbox{\hyperlink{structpixel}{xel}}\ *)PANDA\_MALLOC\_ARRAY(\_x\_size\ *\ \_y\_size\ *\ \textcolor{keyword}{sizeof}(\mbox{\hyperlink{structpixel}{xel}}));}
+\DoxyCodeLine{00766\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yi\ =\ 0;\ yi\ <\ \_y\_size;\ ++yi)\ \{}
+\DoxyCodeLine{00767\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ *row\ =\ new\_array\ +\ yi\ *\ \_x\_size;}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ source\_yi\ =\ !flip\_y\ ?\ yi\ :\ \_y\_size\ -\/\ 1\ -\/\ yi;}
+\DoxyCodeLine{00769\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ *source\_row\ =\ \_array\ +\ source\_yi\ *\ \_x\_size;}
+\DoxyCodeLine{00770\ }
+\DoxyCodeLine{00771\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ \_x\_size;\ ++xi)\ \{}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ source\_xi\ =\ !flip\_x\ ?\ xi\ :\ \_x\_size\ -\/\ 1\ -\/\ xi;}
+\DoxyCodeLine{00773\ \ \ \ \ \ \ \ \ \ \ row[xi]\ =\ source\_row[source\_xi];}
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ PANDA\_FREE\_ARRAY(\_array);}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \_array\ =\ new\_array;}
+\DoxyCodeLine{00778\ \ \ \ \ \}}
+\DoxyCodeLine{00779\ }
+\DoxyCodeLine{00780\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00781\ \ \ \ \ \ \ xelval\ *new\_alpha\ =\ (xelval\ *)PANDA\_MALLOC\_ARRAY(\_x\_size\ *\ \_y\_size\ *\ \textcolor{keyword}{sizeof}(xelval));}
+\DoxyCodeLine{00782\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yi\ =\ 0;\ yi\ <\ \_y\_size;\ ++yi)\ \{}
+\DoxyCodeLine{00783\ \ \ \ \ \ \ \ \ xelval\ *row\ =\ new\_alpha\ +\ yi\ *\ \_x\_size;}
+\DoxyCodeLine{00784\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ source\_yi\ =\ !flip\_y\ ?\ yi\ :\ \_y\_size\ -\/\ 1\ -\/\ yi;}
+\DoxyCodeLine{00785\ \ \ \ \ \ \ \ \ xelval\ *source\_row\ =\ \_alpha\ +\ source\_yi\ *\ \_x\_size;}
+\DoxyCodeLine{00786\ }
+\DoxyCodeLine{00787\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ \_x\_size;\ ++xi)\ \{}
+\DoxyCodeLine{00788\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ source\_xi\ =\ !flip\_x\ ?\ xi\ :\ \_x\_size\ -\/\ 1\ -\/\ xi;}
+\DoxyCodeLine{00789\ \ \ \ \ \ \ \ \ \ \ row[xi]\ =\ source\_row[source\_xi];}
+\DoxyCodeLine{00790\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00791\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00792\ }
+\DoxyCodeLine{00793\ \ \ \ \ \ \ PANDA\_FREE\_ARRAY(\_alpha);}
+\DoxyCodeLine{00794\ \ \ \ \ \ \ \_alpha\ =\ new\_alpha;}
+\DoxyCodeLine{00795\ \ \ \ \ \}}
+\DoxyCodeLine{00796\ \ \ \}}
+\DoxyCodeLine{00797\ \}}
+\DoxyCodeLine{00798\ }
+\DoxyCodeLine{00802\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00803\ set\_maxval(xelval\ maxval)\ \{}
+\DoxyCodeLine{00804\ \ \ nassertv(maxval\ >\ 0);}
+\DoxyCodeLine{00805\ }
+\DoxyCodeLine{00806\ \ \ \textcolor{keywordflow}{if}\ (maxval\ !=\ \_maxval)\ \{}
+\DoxyCodeLine{00807\ \ \ \ \ \textcolor{keywordtype}{float}\ ratio\ =\ (float)maxval\ /\ (\textcolor{keywordtype}{float})\_maxval;}
+\DoxyCodeLine{00808\ }
+\DoxyCodeLine{00809\ \ \ \ \ \textcolor{keywordflow}{if}\ (is\_grayscale())\ \{}
+\DoxyCodeLine{00810\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{00811\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ \ \ \ \ set\_gray\_val(x,\ y,\ (xelval)((\textcolor{keywordtype}{long})get\_gray\_val(x,\ y)\ *\ ratio));}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00814\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00815\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00816\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{00817\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{00818\ \ \ \ \ \ \ \ \ \ \ set\_red\_val(x,\ y,\ (xelval)((\textcolor{keywordtype}{long})get\_red\_val(x,\ y)\ *\ ratio));}
+\DoxyCodeLine{00819\ \ \ \ \ \ \ \ \ \ \ set\_green\_val(x,\ y,\ (xelval)((\textcolor{keywordtype}{long})get\_green\_val(x,\ y)\ *\ ratio));}
+\DoxyCodeLine{00820\ \ \ \ \ \ \ \ \ \ \ set\_blue\_val(x,\ y,\ (xelval)((\textcolor{keywordtype}{long})get\_blue\_val(x,\ y)\ *\ ratio));}
+\DoxyCodeLine{00821\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00822\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00823\ \ \ \ \ \}}
+\DoxyCodeLine{00824\ }
+\DoxyCodeLine{00825\ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{00826\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{00827\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{00828\ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,}
+\DoxyCodeLine{00829\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (xelval)((\textcolor{keywordtype}{long})get\_alpha\_val(x,\ y)\ *\ ratio));}
+\DoxyCodeLine{00830\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00831\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00832\ \ \ \ \ \}}
+\DoxyCodeLine{00833\ \ \ \ \ \_maxval\ =\ maxval;}
+\DoxyCodeLine{00834\ \ \ \ \ setup\_encoding();}
+\DoxyCodeLine{00835\ \ \ \}}
+\DoxyCodeLine{00836\ \}}
+\DoxyCodeLine{00837\ }
+\DoxyCodeLine{00845\ xelval\ PNMImage::}
+\DoxyCodeLine{00846\ get\_channel\_val(\textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y,\ \textcolor{keywordtype}{int}\ channel)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00847\ \ \ \textcolor{keywordflow}{switch}\ (channel)\ \{}
+\DoxyCodeLine{00848\ \ \ \textcolor{keywordflow}{case}\ 0:}
+\DoxyCodeLine{00849\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_blue\_val(x,\ y);}
+\DoxyCodeLine{00850\ }
+\DoxyCodeLine{00851\ \ \ \textcolor{keywordflow}{case}\ 1:}
+\DoxyCodeLine{00852\ \ \ \ \ \textcolor{keywordflow}{return}\ (\_num\_channels\ ==\ 2)\ ?\ get\_alpha\_val(x,\ y)\ :\ get\_green\_val(x,\ y);}
+\DoxyCodeLine{00853\ }
+\DoxyCodeLine{00854\ \ \ \textcolor{keywordflow}{case}\ 2:}
+\DoxyCodeLine{00855\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_red\_val(x,\ y);}
+\DoxyCodeLine{00856\ }
+\DoxyCodeLine{00857\ \ \ \textcolor{keywordflow}{case}\ 3:}
+\DoxyCodeLine{00858\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_alpha\_val(x,\ y);}
+\DoxyCodeLine{00859\ }
+\DoxyCodeLine{00860\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00861\ \ \ \ \ pnmimage\_cat.error()}
+\DoxyCodeLine{00862\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ request\ for\ channel\ "{}}\ <<\ channel\ <<\ \textcolor{stringliteral}{"{}\ in\ "{}}}
+\DoxyCodeLine{00863\ \ \ \ \ \ \ <<\ get\_num\_channels()\ <<\ \textcolor{stringliteral}{"{}-\/channel\ image.\(\backslash\)n"{}};}
+\DoxyCodeLine{00864\ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}unexpected\ channel\ count"{}});}
+\DoxyCodeLine{00865\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00866\ \ \ \}}
+\DoxyCodeLine{00867\ \}}
+\DoxyCodeLine{00868\ }
+\DoxyCodeLine{00876\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00877\ set\_channel\_val(\textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y,\ \textcolor{keywordtype}{int}\ channel,\ xelval\ value)\ \{}
+\DoxyCodeLine{00878\ \ \ \textcolor{keywordflow}{switch}\ (channel)\ \{}
+\DoxyCodeLine{00879\ \ \ \textcolor{keywordflow}{case}\ 0:}
+\DoxyCodeLine{00880\ \ \ \ \ set\_blue\_val(x,\ y,\ value);}
+\DoxyCodeLine{00881\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00882\ }
+\DoxyCodeLine{00883\ \ \ \textcolor{keywordflow}{case}\ 1:}
+\DoxyCodeLine{00884\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_num\_channels\ ==\ 2)\ \{}
+\DoxyCodeLine{00885\ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ value);}
+\DoxyCodeLine{00886\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00887\ \ \ \ \ \ \ set\_green\_val(x,\ y,\ value);}
+\DoxyCodeLine{00888\ \ \ \ \ \}}
+\DoxyCodeLine{00889\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00890\ }
+\DoxyCodeLine{00891\ \ \ \textcolor{keywordflow}{case}\ 2:}
+\DoxyCodeLine{00892\ \ \ \ \ set\_red\_val(x,\ y,\ value);}
+\DoxyCodeLine{00893\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00894\ }
+\DoxyCodeLine{00895\ \ \ \textcolor{keywordflow}{case}\ 3:}
+\DoxyCodeLine{00896\ \ \ \ \ set\_alpha\_val(x,\ y,\ value);}
+\DoxyCodeLine{00897\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00898\ }
+\DoxyCodeLine{00899\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00900\ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}unexpected\ channel\ count"{}});}
+\DoxyCodeLine{00901\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00902\ \ \ \}}
+\DoxyCodeLine{00903\ \}}
+\DoxyCodeLine{00904\ }
+\DoxyCodeLine{00912\ \textcolor{keywordtype}{float}\ PNMImage::}
+\DoxyCodeLine{00913\ get\_channel(\textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y,\ \textcolor{keywordtype}{int}\ channel)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00914\ \ \ \textcolor{keywordflow}{switch}\ (channel)\ \{}
+\DoxyCodeLine{00915\ \ \ \textcolor{keywordflow}{case}\ 0:}
+\DoxyCodeLine{00916\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_blue(x,\ y);}
+\DoxyCodeLine{00917\ }
+\DoxyCodeLine{00918\ \ \ \textcolor{keywordflow}{case}\ 1:}
+\DoxyCodeLine{00919\ \ \ \ \ \textcolor{keywordflow}{return}\ (\_num\_channels\ ==\ 2)\ ?\ get\_alpha(x,\ y)\ :\ get\_green(x,\ y);}
+\DoxyCodeLine{00920\ }
+\DoxyCodeLine{00921\ \ \ \textcolor{keywordflow}{case}\ 2:}
+\DoxyCodeLine{00922\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_red(x,\ y);}
+\DoxyCodeLine{00923\ }
+\DoxyCodeLine{00924\ \ \ \textcolor{keywordflow}{case}\ 3:}
+\DoxyCodeLine{00925\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_alpha(x,\ y);}
+\DoxyCodeLine{00926\ }
+\DoxyCodeLine{00927\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00928\ \ \ \ \ pnmimage\_cat.error()}
+\DoxyCodeLine{00929\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ request\ for\ channel\ "{}}\ <<\ channel\ <<\ \textcolor{stringliteral}{"{}\ in\ "{}}}
+\DoxyCodeLine{00930\ \ \ \ \ \ \ <<\ get\_num\_channels()\ <<\ \textcolor{stringliteral}{"{}-\/channel\ image.\(\backslash\)n"{}};}
+\DoxyCodeLine{00931\ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}unexpected\ channel\ count"{}});}
+\DoxyCodeLine{00932\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00933\ \ \ \}}
+\DoxyCodeLine{00934\ \}}
+\DoxyCodeLine{00935\ }
+\DoxyCodeLine{00943\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00944\ set\_channel(\textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y,\ \textcolor{keywordtype}{int}\ channel,\ \textcolor{keywordtype}{float}\ value)\ \{}
+\DoxyCodeLine{00945\ \ \ \textcolor{keywordflow}{switch}\ (channel)\ \{}
+\DoxyCodeLine{00946\ \ \ \textcolor{keywordflow}{case}\ 0:}
+\DoxyCodeLine{00947\ \ \ \ \ set\_blue(x,\ y,\ value);}
+\DoxyCodeLine{00948\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00949\ }
+\DoxyCodeLine{00950\ \ \ \textcolor{keywordflow}{case}\ 1:}
+\DoxyCodeLine{00951\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_num\_channels\ ==\ 2)\ \{}
+\DoxyCodeLine{00952\ \ \ \ \ \ \ set\_alpha(x,\ y,\ value);}
+\DoxyCodeLine{00953\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00954\ \ \ \ \ \ \ set\_green(x,\ y,\ value);}
+\DoxyCodeLine{00955\ \ \ \ \ \}}
+\DoxyCodeLine{00956\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00957\ }
+\DoxyCodeLine{00958\ \ \ \textcolor{keywordflow}{case}\ 2:}
+\DoxyCodeLine{00959\ \ \ \ \ set\_red(x,\ y,\ value);}
+\DoxyCodeLine{00960\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00961\ }
+\DoxyCodeLine{00962\ \ \ \textcolor{keywordflow}{case}\ 3:}
+\DoxyCodeLine{00963\ \ \ \ \ set\_alpha(x,\ y,\ value);}
+\DoxyCodeLine{00964\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00965\ }
+\DoxyCodeLine{00966\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00967\ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}unexpected\ channel\ count"{}});}
+\DoxyCodeLine{00968\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00969\ \ \ \}}
+\DoxyCodeLine{00970\ \}}
+\DoxyCodeLine{00971\ }
+\DoxyCodeLine{00976\ PNMImage::PixelSpec\ PNMImage::}
+\DoxyCodeLine{00977\ get\_pixel(\textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00978\ \ \ \textcolor{keywordflow}{switch}\ (\_num\_channels)\ \{}
+\DoxyCodeLine{00979\ \ \ \textcolor{keywordflow}{case}\ 1:}
+\DoxyCodeLine{00980\ \ \ \ \ \textcolor{keywordflow}{return}\ PixelSpec(get\_gray\_val(x,\ y));}
+\DoxyCodeLine{00981\ \ \ \textcolor{keywordflow}{case}\ 2:}
+\DoxyCodeLine{00982\ \ \ \ \ \textcolor{keywordflow}{return}\ PixelSpec(get\_gray\_val(x,\ y),\ get\_alpha\_val(x,\ y));}
+\DoxyCodeLine{00983\ \ \ \textcolor{keywordflow}{case}\ 3:}
+\DoxyCodeLine{00984\ \ \ \ \ \textcolor{keywordflow}{return}\ PixelSpec(get\_xel\_val(x,\ y));}
+\DoxyCodeLine{00985\ \ \ \textcolor{keywordflow}{case}\ 4:}
+\DoxyCodeLine{00986\ \ \ \ \ \textcolor{keywordflow}{return}\ PixelSpec(get\_xel\_val(x,\ y),\ get\_alpha\_val(x,\ y));}
+\DoxyCodeLine{00987\ \ \ \}}
+\DoxyCodeLine{00988\ }
+\DoxyCodeLine{00989\ \ \ \textcolor{keywordflow}{return}\ PixelSpec(0);}
+\DoxyCodeLine{00990\ \}}
+\DoxyCodeLine{00991\ }
+\DoxyCodeLine{00996\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00997\ set\_pixel(\textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y,\ \textcolor{keyword}{const}\ PixelSpec\ \&\mbox{\hyperlink{structpixel}{pixel}})\ \{}
+\DoxyCodeLine{00998\ \ \ \mbox{\hyperlink{structpixel}{xel}}\ p;}
+\DoxyCodeLine{00999\ \ \ PPM\_ASSIGN(p,\ \mbox{\hyperlink{structpixel}{pixel}}.\_red,\ \mbox{\hyperlink{structpixel}{pixel}}.\_green,\ \mbox{\hyperlink{structpixel}{pixel}}.\_blue);}
+\DoxyCodeLine{01000\ \ \ set\_xel\_val(x,\ y,\ p);}
+\DoxyCodeLine{01001\ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01002\ \ \ \ \ set\_alpha\_val(x,\ y,\ \mbox{\hyperlink{structpixel}{pixel}}.\_alpha);}
+\DoxyCodeLine{01003\ \ \ \}}
+\DoxyCodeLine{01004\ \}}
+\DoxyCodeLine{01005\ }
+\DoxyCodeLine{01012\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01013\ blend(\textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y,\ \textcolor{keywordtype}{float}\ r,\ \textcolor{keywordtype}{float}\ g,\ \textcolor{keywordtype}{float}\ b,\ \textcolor{keywordtype}{float}\ alpha)\ \{}
+\DoxyCodeLine{01014\ \ \ \textcolor{keywordflow}{if}\ (alpha\ >=\ 1.0)\ \{}
+\DoxyCodeLine{01015\ \ \ \ \ \textcolor{comment}{//\ Completely\ replace\ the\ previous\ color.}}
+\DoxyCodeLine{01016\ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{01017\ \ \ \ \ \ \ set\_alpha(x,\ y,\ 1.0);}
+\DoxyCodeLine{01018\ \ \ \ \ \}}
+\DoxyCodeLine{01019\ \ \ \ \ set\_xel(x,\ y,\ r,\ g,\ b);}
+\DoxyCodeLine{01020\ }
+\DoxyCodeLine{01021\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (alpha\ >\ 0.0f)\ \{}
+\DoxyCodeLine{01022\ \ \ \ \ \textcolor{comment}{//\ Blend\ with\ the\ previous\ color.}}
+\DoxyCodeLine{01023\ \ \ \ \ \textcolor{keywordtype}{float}\ prev\_alpha\ =\ has\_alpha()\ ?\ get\_alpha(x,\ y)\ :\ 1.0f;}
+\DoxyCodeLine{01024\ }
+\DoxyCodeLine{01025\ \ \ \ \ \textcolor{keywordflow}{if}\ (prev\_alpha\ ==\ 0.0f)\ \{}
+\DoxyCodeLine{01026\ \ \ \ \ \ \ \textcolor{comment}{//\ Nothing\ there\ previously;\ replace\ with\ this\ new\ color.}}
+\DoxyCodeLine{01027\ \ \ \ \ \ \ set\_alpha(x,\ y,\ alpha);}
+\DoxyCodeLine{01028\ \ \ \ \ \ \ set\_xel(x,\ y,\ r,\ g,\ b);}
+\DoxyCodeLine{01029\ }
+\DoxyCodeLine{01030\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01031\ \ \ \ \ \ \ \textcolor{comment}{//\ Blend\ the\ color\ with\ the\ previous\ color.}}
+\DoxyCodeLine{01032\ \ \ \ \ \ \ LRGBColorf\ prev\_rgb\ =\ get\_xel(x,\ y);}
+\DoxyCodeLine{01033\ \ \ \ \ \ \ r\ =\ r\ +\ (1.0f\ -\/\ alpha)\ *\ (prev\_rgb[0]\ -\/\ r);}
+\DoxyCodeLine{01034\ \ \ \ \ \ \ g\ =\ g\ +\ (1.0f\ -\/\ alpha)\ *\ (prev\_rgb[1]\ -\/\ g);}
+\DoxyCodeLine{01035\ \ \ \ \ \ \ b\ =\ b\ +\ (1.0f\ -\/\ alpha)\ *\ (prev\_rgb[2]\ -\/\ b);}
+\DoxyCodeLine{01036\ \ \ \ \ \ \ alpha\ =\ prev\_alpha\ +\ alpha\ *\ (1.0f\ -\/\ prev\_alpha);}
+\DoxyCodeLine{01037\ }
+\DoxyCodeLine{01038\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{01039\ \ \ \ \ \ \ \ \ set\_alpha(x,\ y,\ alpha);}
+\DoxyCodeLine{01040\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01041\ \ \ \ \ \ \ set\_xel(x,\ y,\ r,\ g,\ b);}
+\DoxyCodeLine{01042\ \ \ \ \ \}}
+\DoxyCodeLine{01043\ \ \ \}}
+\DoxyCodeLine{01044\ \}}
+\DoxyCodeLine{01045\ }
+\DoxyCodeLine{01054\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPNMImage_a78b095cbaf9ed460db9ceccbc91cc3aa}{PNMImage::}}}
+\DoxyCodeLine{01055\ \mbox{\hyperlink{classPNMImage_a78b095cbaf9ed460db9ceccbc91cc3aa}{set\_array}}(\mbox{\hyperlink{structpixel}{xel}}\ *array)\ \{}
+\DoxyCodeLine{01056\ \ \ \textcolor{keywordflow}{if}\ (\_array\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01057\ \ \ \ \ PANDA\_FREE\_ARRAY(\_array);}
+\DoxyCodeLine{01058\ \ \ \}}
+\DoxyCodeLine{01059\ \ \ \_array\ =\ array;}
+\DoxyCodeLine{01060\ \}}
+\DoxyCodeLine{01061\ }
+\DoxyCodeLine{01070\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPNMImage_aae2e3717dd4e43e7093b73352157f90c}{PNMImage::}}}
+\DoxyCodeLine{01071\ \mbox{\hyperlink{classPNMImage_aae2e3717dd4e43e7093b73352157f90c}{set\_alpha\_array}}(xelval\ *alpha)\ \{}
+\DoxyCodeLine{01072\ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01073\ \ \ \ \ PANDA\_FREE\_ARRAY(\_alpha);}
+\DoxyCodeLine{01074\ \ \ \}}
+\DoxyCodeLine{01075\ \ \ \_alpha\ =\ alpha;}
+\DoxyCodeLine{01076\ \}}
+\DoxyCodeLine{01077\ }
+\DoxyCodeLine{01085\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01086\ copy\_sub\_image(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy,\ \textcolor{keywordtype}{int}\ xto,\ \textcolor{keywordtype}{int}\ yto,}
+\DoxyCodeLine{01087\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xfrom,\ \textcolor{keywordtype}{int}\ yfrom,\ \textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size)\ \{}
+\DoxyCodeLine{01088\ \ \ \textcolor{keywordtype}{int}\ xmin,\ ymin,\ xmax,\ ymax;}
+\DoxyCodeLine{01089\ \ \ setup\_sub\_image(copy,\ xto,\ yto,\ xfrom,\ yfrom,\ x\_size,\ y\_size,}
+\DoxyCodeLine{01090\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ xmin,\ ymin,\ xmax,\ ymax);}
+\DoxyCodeLine{01091\ }
+\DoxyCodeLine{01092\ \ \ \textcolor{keywordflow}{if}\ (get\_maxval()\ ==\ copy.get\_maxval()\ \&\&}
+\DoxyCodeLine{01093\ \ \ \ \ \ \ get\_color\_space()\ ==\ copy.get\_color\_space())\ \{}
+\DoxyCodeLine{01094\ \ \ \ \ \textcolor{comment}{//\ The\ simple\ case:\ no\ pixel\ value\ rescaling\ is\ required.}}
+\DoxyCodeLine{01095\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01096\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01097\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01098\ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ copy.get\_xel\_val(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom));}
+\DoxyCodeLine{01099\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01100\ \ \ \ \ \}}
+\DoxyCodeLine{01101\ }
+\DoxyCodeLine{01102\ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ copy.has\_alpha())\ \{}
+\DoxyCodeLine{01103\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01104\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01105\ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ copy.get\_alpha\_val(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom));}
+\DoxyCodeLine{01106\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01107\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01108\ \ \ \ \ \}}
+\DoxyCodeLine{01109\ }
+\DoxyCodeLine{01110\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01111\ \ \ \ \ \textcolor{comment}{//\ The\ harder\ case:\ rescale\ pixel\ values\ according\ to\ maxval.}}
+\DoxyCodeLine{01112\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01113\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01114\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01115\ \ \ \ \ \ \ \ \ set\_xel(x,\ y,\ copy.get\_xel(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom));}
+\DoxyCodeLine{01116\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01117\ \ \ \ \ \}}
+\DoxyCodeLine{01118\ }
+\DoxyCodeLine{01119\ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ copy.has\_alpha())\ \{}
+\DoxyCodeLine{01120\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01121\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01122\ \ \ \ \ \ \ \ \ \ \ set\_alpha(x,\ y,\ copy.get\_alpha(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom));}
+\DoxyCodeLine{01123\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01124\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01125\ \ \ \ \ \}}
+\DoxyCodeLine{01126\ \ \ \}}
+\DoxyCodeLine{01127\ \}}
+\DoxyCodeLine{01128\ }
+\DoxyCodeLine{01140\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01141\ blend\_sub\_image(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy,\ \textcolor{keywordtype}{int}\ xto,\ \textcolor{keywordtype}{int}\ yto,}
+\DoxyCodeLine{01142\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xfrom,\ \textcolor{keywordtype}{int}\ yfrom,\ \textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size,}
+\DoxyCodeLine{01143\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ pixel\_scale)\ \{}
+\DoxyCodeLine{01144\ \ \ \textcolor{keywordflow}{if}\ (!copy.has\_alpha()\ \&\&\ pixel\_scale\ ==\ 1.0)\ \{}
+\DoxyCodeLine{01145\ \ \ \ \ copy\_sub\_image(copy,\ xto,\ yto,\ xfrom,\ yfrom,\ x\_size,\ y\_size);}
+\DoxyCodeLine{01146\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01147\ \ \ \}}
+\DoxyCodeLine{01148\ }
+\DoxyCodeLine{01149\ \ \ \textcolor{keywordtype}{int}\ xmin,\ ymin,\ xmax,\ ymax;}
+\DoxyCodeLine{01150\ \ \ setup\_sub\_image(copy,\ xto,\ yto,\ xfrom,\ yfrom,\ x\_size,\ y\_size,}
+\DoxyCodeLine{01151\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ xmin,\ ymin,\ xmax,\ ymax);}
+\DoxyCodeLine{01152\ }
+\DoxyCodeLine{01153\ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01154\ \ \ \textcolor{keywordflow}{if}\ (copy.has\_alpha())\ \{}
+\DoxyCodeLine{01155\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01156\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01157\ \ \ \ \ \ \ \ \ blend(x,\ y,\ copy.get\_xel(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom),}
+\DoxyCodeLine{01158\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ copy.get\_alpha(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom)\ *\ pixel\_scale);}
+\DoxyCodeLine{01159\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01160\ \ \ \ \ \}}
+\DoxyCodeLine{01161\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01162\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01163\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01164\ \ \ \ \ \ \ \ \ blend(x,\ y,\ copy.get\_xel(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom),}
+\DoxyCodeLine{01165\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pixel\_scale);}
+\DoxyCodeLine{01166\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01167\ \ \ \ \ \}}
+\DoxyCodeLine{01168\ \ \ \}}
+\DoxyCodeLine{01169\ \}}
+\DoxyCodeLine{01170\ }
+\DoxyCodeLine{01176\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01177\ add\_sub\_image(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy,\ \textcolor{keywordtype}{int}\ xto,\ \textcolor{keywordtype}{int}\ yto,}
+\DoxyCodeLine{01178\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xfrom,\ \textcolor{keywordtype}{int}\ yfrom,\ \textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size,}
+\DoxyCodeLine{01179\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ pixel\_scale)\ \{}
+\DoxyCodeLine{01180\ \ \ \textcolor{keywordtype}{int}\ xmin,\ ymin,\ xmax,\ ymax;}
+\DoxyCodeLine{01181\ \ \ setup\_sub\_image(copy,\ xto,\ yto,\ xfrom,\ yfrom,\ x\_size,\ y\_size,}
+\DoxyCodeLine{01182\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ xmin,\ ymin,\ xmax,\ ymax);}
+\DoxyCodeLine{01183\ }
+\DoxyCodeLine{01184\ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01185\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ copy.has\_alpha())\ \{}
+\DoxyCodeLine{01186\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01187\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01188\ \ \ \ \ \ \ \ \ set\_alpha(x,\ y,\ get\_alpha(x,\ y)\ +\ copy.get\_alpha(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom)\ *\ pixel\_scale);}
+\DoxyCodeLine{01189\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01190\ \ \ \ \ \}}
+\DoxyCodeLine{01191\ \ \ \}}
+\DoxyCodeLine{01192\ }
+\DoxyCodeLine{01193\ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01194\ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01195\ \ \ \ \ \ \ LRGBColorf\ rgb1\ =\ get\_xel(x,\ y);}
+\DoxyCodeLine{01196\ \ \ \ \ \ \ LRGBColorf\ rgb2\ =\ copy.get\_xel(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom);}
+\DoxyCodeLine{01197\ \ \ \ \ \ \ set\_xel(x,\ y,}
+\DoxyCodeLine{01198\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ rgb1[0]\ +\ rgb2[0]\ *\ pixel\_scale,}
+\DoxyCodeLine{01199\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ rgb1[1]\ +\ rgb2[1]\ *\ pixel\_scale,}
+\DoxyCodeLine{01200\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ rgb1[2]\ +\ rgb2[2]\ *\ pixel\_scale);}
+\DoxyCodeLine{01201\ \ \ \ \ \}}
+\DoxyCodeLine{01202\ \ \ \}}
+\DoxyCodeLine{01203\ \}}
+\DoxyCodeLine{01204\ }
+\DoxyCodeLine{01210\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01211\ mult\_sub\_image(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy,\ \textcolor{keywordtype}{int}\ xto,\ \textcolor{keywordtype}{int}\ yto,}
+\DoxyCodeLine{01212\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xfrom,\ \textcolor{keywordtype}{int}\ yfrom,\ \textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size,}
+\DoxyCodeLine{01213\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ pixel\_scale)\ \{}
+\DoxyCodeLine{01214\ \ \ \textcolor{keywordtype}{int}\ xmin,\ ymin,\ xmax,\ ymax;}
+\DoxyCodeLine{01215\ \ \ setup\_sub\_image(copy,\ xto,\ yto,\ xfrom,\ yfrom,\ x\_size,\ y\_size,}
+\DoxyCodeLine{01216\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ xmin,\ ymin,\ xmax,\ ymax);}
+\DoxyCodeLine{01217\ }
+\DoxyCodeLine{01218\ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01219\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ copy.has\_alpha())\ \{}
+\DoxyCodeLine{01220\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01221\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01222\ \ \ \ \ \ \ \ \ set\_alpha(x,\ y,\ get\_alpha(x,\ y)\ *\ copy.get\_alpha(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom)\ *\ pixel\_scale);}
+\DoxyCodeLine{01223\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01224\ \ \ \ \ \}}
+\DoxyCodeLine{01225\ \ \ \}}
+\DoxyCodeLine{01226\ }
+\DoxyCodeLine{01227\ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01228\ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01229\ \ \ \ \ \ \ LRGBColorf\ rgb1\ =\ get\_xel(x,\ y);}
+\DoxyCodeLine{01230\ \ \ \ \ \ \ LRGBColorf\ rgb2\ =\ copy.get\_xel(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom);}
+\DoxyCodeLine{01231\ \ \ \ \ \ \ set\_xel(x,\ y,}
+\DoxyCodeLine{01232\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ rgb1[0]\ *\ rgb2[0]\ *\ pixel\_scale,}
+\DoxyCodeLine{01233\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ rgb1[1]\ *\ rgb2[1]\ *\ pixel\_scale,}
+\DoxyCodeLine{01234\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ rgb1[2]\ *\ rgb2[2]\ *\ pixel\_scale);}
+\DoxyCodeLine{01235\ \ \ \ \ \}}
+\DoxyCodeLine{01236\ \ \ \}}
+\DoxyCodeLine{01237\ \}}
+\DoxyCodeLine{01238\ }
+\DoxyCodeLine{01249\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01250\ darken\_sub\_image(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy,\ \textcolor{keywordtype}{int}\ xto,\ \textcolor{keywordtype}{int}\ yto,}
+\DoxyCodeLine{01251\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xfrom,\ \textcolor{keywordtype}{int}\ yfrom,\ \textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size,}
+\DoxyCodeLine{01252\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ pixel\_scale)\ \{}
+\DoxyCodeLine{01253\ \ \ \textcolor{keywordtype}{int}\ xmin,\ ymin,\ xmax,\ ymax;}
+\DoxyCodeLine{01254\ \ \ setup\_sub\_image(copy,\ xto,\ yto,\ xfrom,\ yfrom,\ x\_size,\ y\_size,}
+\DoxyCodeLine{01255\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ xmin,\ ymin,\ xmax,\ ymax);}
+\DoxyCodeLine{01256\ }
+\DoxyCodeLine{01257\ \ \ \textcolor{keywordflow}{if}\ (get\_maxval()\ ==\ copy.get\_maxval()\ \&\&\ pixel\_scale\ ==\ 1.0f\ \&\&}
+\DoxyCodeLine{01258\ \ \ \ \ \ \ get\_color\_space()\ ==\ CS\_linear\ \&\&\ copy.get\_color\_space()\ ==\ CS\_linear)\ \{}
+\DoxyCodeLine{01259\ \ \ \ \ \textcolor{comment}{//\ The\ simple\ case:\ no\ pixel\ value\ rescaling\ is\ required.}}
+\DoxyCodeLine{01260\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01261\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01262\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01263\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ c\ =\ copy.get\_xel\_val(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom);}
+\DoxyCodeLine{01264\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ o\ =\ get\_xel\_val(x,\ y);}
+\DoxyCodeLine{01265\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ p;}
+\DoxyCodeLine{01266\ \ \ \ \ \ \ \ \ PPM\_ASSIGN(p,\ min(c.r,\ o.r),\ min(c.g,\ o.g),\ min(c.b,\ o.b));}
+\DoxyCodeLine{01267\ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ p);}
+\DoxyCodeLine{01268\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01269\ \ \ \ \ \}}
+\DoxyCodeLine{01270\ }
+\DoxyCodeLine{01271\ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ copy.has\_alpha())\ \{}
+\DoxyCodeLine{01272\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01273\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01274\ \ \ \ \ \ \ \ \ \ \ xelval\ c\ =\ copy.get\_alpha\_val(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom);}
+\DoxyCodeLine{01275\ \ \ \ \ \ \ \ \ \ \ xelval\ o\ =\ get\_alpha\_val(x,\ y);}
+\DoxyCodeLine{01276\ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ min(c,\ o));}
+\DoxyCodeLine{01277\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01278\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01279\ \ \ \ \ \}}
+\DoxyCodeLine{01280\ }
+\DoxyCodeLine{01281\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01282\ \ \ \ \ \textcolor{comment}{//\ The\ harder\ case:\ rescale\ pixel\ values\ according\ to\ maxval.}}
+\DoxyCodeLine{01283\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01284\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01285\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01286\ \ \ \ \ \ \ \ \ LRGBColorf\ c\ =\ copy.get\_xel(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom);}
+\DoxyCodeLine{01287\ \ \ \ \ \ \ \ \ LRGBColorf\ o\ =\ get\_xel(x,\ y);}
+\DoxyCodeLine{01288\ \ \ \ \ \ \ \ \ LRGBColorf\ p;}
+\DoxyCodeLine{01289\ \ \ \ \ \ \ \ \ p.set(min(1.0f\ -\/\ ((1.0f\ -\/\ c[0])\ *\ pixel\_scale),\ o[0]),}
+\DoxyCodeLine{01290\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ min(1.0f\ -\/\ ((1.0f\ -\/\ c[1])\ *\ pixel\_scale),\ o[1]),}
+\DoxyCodeLine{01291\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ min(1.0f\ -\/\ ((1.0f\ -\/\ c[2])\ *\ pixel\_scale),\ o[2]));}
+\DoxyCodeLine{01292\ \ \ \ \ \ \ \ \ set\_xel(x,\ y,\ p);}
+\DoxyCodeLine{01293\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01294\ \ \ \ \ \}}
+\DoxyCodeLine{01295\ }
+\DoxyCodeLine{01296\ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ copy.has\_alpha())\ \{}
+\DoxyCodeLine{01297\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01298\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01299\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ c\ =\ copy.get\_alpha(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom);}
+\DoxyCodeLine{01300\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ o\ =\ get\_alpha(x,\ y);}
+\DoxyCodeLine{01301\ \ \ \ \ \ \ \ \ \ \ set\_alpha(x,\ y,\ min(1.0f\ -\/\ ((1.0f\ -\/\ c)\ *\ pixel\_scale),\ o));}
+\DoxyCodeLine{01302\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01303\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01304\ \ \ \ \ \}}
+\DoxyCodeLine{01305\ \ \ \}}
+\DoxyCodeLine{01306\ \}}
+\DoxyCodeLine{01307\ }
+\DoxyCodeLine{01316\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01317\ lighten\_sub\_image(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy,\ \textcolor{keywordtype}{int}\ xto,\ \textcolor{keywordtype}{int}\ yto,}
+\DoxyCodeLine{01318\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xfrom,\ \textcolor{keywordtype}{int}\ yfrom,\ \textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size,}
+\DoxyCodeLine{01319\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ pixel\_scale)\ \{}
+\DoxyCodeLine{01320\ \ \ \textcolor{keywordtype}{int}\ xmin,\ ymin,\ xmax,\ ymax;}
+\DoxyCodeLine{01321\ \ \ setup\_sub\_image(copy,\ xto,\ yto,\ xfrom,\ yfrom,\ x\_size,\ y\_size,}
+\DoxyCodeLine{01322\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ xmin,\ ymin,\ xmax,\ ymax);}
+\DoxyCodeLine{01323\ }
+\DoxyCodeLine{01324\ \ \ \textcolor{keywordflow}{if}\ (get\_maxval()\ ==\ copy.get\_maxval()\ \&\&\ pixel\_scale\ ==\ 1.0f\ \&\&}
+\DoxyCodeLine{01325\ \ \ \ \ \ \ get\_color\_space()\ ==\ CS\_linear\ \&\&\ copy.get\_color\_space()\ ==\ CS\_linear)\ \{}
+\DoxyCodeLine{01326\ \ \ \ \ \textcolor{comment}{//\ The\ simple\ case:\ no\ pixel\ value\ rescaling\ is\ required.}}
+\DoxyCodeLine{01327\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01328\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01329\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01330\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ c\ =\ copy.get\_xel\_val(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom);}
+\DoxyCodeLine{01331\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ o\ =\ get\_xel\_val(x,\ y);}
+\DoxyCodeLine{01332\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ p;}
+\DoxyCodeLine{01333\ \ \ \ \ \ \ \ \ PPM\_ASSIGN(p,\ max(c.r,\ o.r),\ max(c.g,\ o.g),\ max(c.b,\ o.b));}
+\DoxyCodeLine{01334\ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ p);}
+\DoxyCodeLine{01335\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01336\ \ \ \ \ \}}
+\DoxyCodeLine{01337\ }
+\DoxyCodeLine{01338\ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ copy.has\_alpha())\ \{}
+\DoxyCodeLine{01339\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01340\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01341\ \ \ \ \ \ \ \ \ \ \ xelval\ c\ =\ copy.get\_alpha\_val(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom);}
+\DoxyCodeLine{01342\ \ \ \ \ \ \ \ \ \ \ xelval\ o\ =\ get\_alpha\_val(x,\ y);}
+\DoxyCodeLine{01343\ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ max(c,\ o));}
+\DoxyCodeLine{01344\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01345\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01346\ \ \ \ \ \}}
+\DoxyCodeLine{01347\ }
+\DoxyCodeLine{01348\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01349\ \ \ \ \ \textcolor{comment}{//\ The\ harder\ case:\ rescale\ pixel\ values\ according\ to\ maxval.}}
+\DoxyCodeLine{01350\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01351\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01352\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01353\ \ \ \ \ \ \ \ \ LRGBColorf\ c\ =\ copy.get\_xel(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom);}
+\DoxyCodeLine{01354\ \ \ \ \ \ \ \ \ LRGBColorf\ o\ =\ get\_xel(x,\ y);}
+\DoxyCodeLine{01355\ \ \ \ \ \ \ \ \ LRGBColorf\ p;}
+\DoxyCodeLine{01356\ \ \ \ \ \ \ \ \ p.set(max(c[0]\ *\ pixel\_scale,\ o[0]),}
+\DoxyCodeLine{01357\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ max(c[1]\ *\ pixel\_scale,\ o[1]),}
+\DoxyCodeLine{01358\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ max(c[2]\ *\ pixel\_scale,\ o[2]));}
+\DoxyCodeLine{01359\ \ \ \ \ \ \ \ \ set\_xel(x,\ y,\ p);}
+\DoxyCodeLine{01360\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01361\ \ \ \ \ \}}
+\DoxyCodeLine{01362\ }
+\DoxyCodeLine{01363\ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ copy.has\_alpha())\ \{}
+\DoxyCodeLine{01364\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01365\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01366\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ c\ =\ copy.get\_alpha(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom);}
+\DoxyCodeLine{01367\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ o\ =\ get\_alpha(x,\ y);}
+\DoxyCodeLine{01368\ \ \ \ \ \ \ \ \ \ \ set\_alpha(x,\ y,\ max(c\ *\ pixel\_scale,\ o));}
+\DoxyCodeLine{01369\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01370\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01371\ \ \ \ \ \}}
+\DoxyCodeLine{01372\ \ \ \}}
+\DoxyCodeLine{01373\ \}}
+\DoxyCodeLine{01374\ }
+\DoxyCodeLine{01392\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01393\ threshold(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&select\_image,\ \textcolor{keywordtype}{int}\ channel,\ \textcolor{keywordtype}{float}\ threshold,}
+\DoxyCodeLine{01394\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&lt,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&ge)\ \{}
+\DoxyCodeLine{01395\ \ \ nassertv(get\_x\_size()\ <=\ select\_image.get\_x\_size()\ \&\&\ get\_y\_size()\ <=\ select\_image.get\_y\_size());}
+\DoxyCodeLine{01396\ \ \ nassertv(channel\ >=\ 0\ \&\&\ channel\ <\ select\_image.get\_num\_channels());}
+\DoxyCodeLine{01397\ }
+\DoxyCodeLine{01398\ \ \ xelval\ threshold\_val\ =\ select\_image.to\_val(threshold);}
+\DoxyCodeLine{01399\ }
+\DoxyCodeLine{01400\ \ \ \textcolor{keywordflow}{if}\ (lt.get\_x\_size()\ ==\ 1\ \&\&\ lt.get\_y\_size()\ ==\ 1\ \&\&}
+\DoxyCodeLine{01401\ \ \ \ \ \ \ ge.get\_x\_size()\ ==\ 1\ \&\&\ ge.get\_y\_size()\ ==\ 1)\ \{}
+\DoxyCodeLine{01402\ \ \ \ \ \textcolor{comment}{//\ FIXME:\ what\ if\ select\_image\ has\ different\ color\ space?\ \ 1x1\ source}}
+\DoxyCodeLine{01403\ \ \ \ \ \textcolor{comment}{//\ images.}}
+\DoxyCodeLine{01404\ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ lt\_val\ =\ lt.get\_xel\_val(0,\ 0);}
+\DoxyCodeLine{01405\ \ \ \ \ xelval\ lt\_alpha\ =\ 0;}
+\DoxyCodeLine{01406\ \ \ \ \ \textcolor{keywordflow}{if}\ (lt.has\_alpha())\ \{}
+\DoxyCodeLine{01407\ \ \ \ \ \ \ lt\_alpha\ =\ lt.get\_alpha\_val(0,\ 0);}
+\DoxyCodeLine{01408\ \ \ \ \ \}}
+\DoxyCodeLine{01409\ \ \ \ \ \textcolor{keywordflow}{if}\ (lt.get\_maxval()\ !=\ get\_maxval())\ \{}
+\DoxyCodeLine{01410\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ scale\ =\ (float)get\_maxval()\ /\ (float)lt.get\_maxval();}
+\DoxyCodeLine{01411\ \ \ \ \ \ \ PPM\_ASSIGN(lt\_val,}
+\DoxyCodeLine{01412\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (xelval)(PPM\_GETR(lt\_val)\ *\ scale\ +\ 0.5),}
+\DoxyCodeLine{01413\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (xelval)(PPM\_GETG(lt\_val)\ *\ scale\ +\ 0.5),}
+\DoxyCodeLine{01414\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (xelval)(PPM\_GETB(lt\_val)\ *\ scale\ +\ 0.5));}
+\DoxyCodeLine{01415\ \ \ \ \ \ \ lt\_alpha\ =\ (xelval)(lt\_alpha\ *\ scale\ +\ 0.5);}
+\DoxyCodeLine{01416\ \ \ \ \ \}}
+\DoxyCodeLine{01417\ }
+\DoxyCodeLine{01418\ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ ge\_val\ =\ ge.get\_xel\_val(0,\ 0);}
+\DoxyCodeLine{01419\ \ \ \ \ xelval\ ge\_alpha\ =\ 0;}
+\DoxyCodeLine{01420\ \ \ \ \ \textcolor{keywordflow}{if}\ (ge.has\_alpha())\ \{}
+\DoxyCodeLine{01421\ \ \ \ \ \ \ ge\_alpha\ =\ ge.get\_alpha\_val(0,\ 0);}
+\DoxyCodeLine{01422\ \ \ \ \ \}}
+\DoxyCodeLine{01423\ \ \ \ \ \textcolor{keywordflow}{if}\ (ge.get\_maxval()\ !=\ get\_maxval())\ \{}
+\DoxyCodeLine{01424\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ scale\ =\ (float)get\_maxval()\ /\ (float)ge.get\_maxval();}
+\DoxyCodeLine{01425\ \ \ \ \ \ \ PPM\_ASSIGN(ge\_val,}
+\DoxyCodeLine{01426\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (xelval)(PPM\_GETR(ge\_val)\ *\ scale\ +\ 0.5),}
+\DoxyCodeLine{01427\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (xelval)(PPM\_GETG(ge\_val)\ *\ scale\ +\ 0.5),}
+\DoxyCodeLine{01428\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (xelval)(PPM\_GETB(ge\_val)\ *\ scale\ +\ 0.5));}
+\DoxyCodeLine{01429\ \ \ \ \ \ \ ge\_alpha\ =\ (xelval)(ge\_alpha\ *\ scale\ +\ 0.5);}
+\DoxyCodeLine{01430\ \ \ \ \ \}}
+\DoxyCodeLine{01431\ }
+\DoxyCodeLine{01432\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01433\ }
+\DoxyCodeLine{01434\ \ \ \ \ \textcolor{keywordflow}{if}\ (channel\ ==\ 3)\ \{}
+\DoxyCodeLine{01435\ \ \ \ \ \ \ \textcolor{comment}{//\ Further\ special\ case:\ the\ alpha\ channel.}}
+\DoxyCodeLine{01436\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ lt.has\_alpha()\ \&\&\ ge.has\_alpha())\ \{}
+\DoxyCodeLine{01437\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Copy\ alpha\ channel\ too.}}
+\DoxyCodeLine{01438\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01439\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01440\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (select\_image.get\_alpha\_val(x,\ y)\ <\ threshold\_val)\ \{}
+\DoxyCodeLine{01441\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ lt\_val);}
+\DoxyCodeLine{01442\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ lt\_alpha);}
+\DoxyCodeLine{01443\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01444\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ ge\_val);}
+\DoxyCodeLine{01445\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ ge\_alpha);}
+\DoxyCodeLine{01446\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01447\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01448\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01449\ }
+\DoxyCodeLine{01450\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01451\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Don't\ copy\ alpha\ channel.}}
+\DoxyCodeLine{01452\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01453\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01454\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (select\_image.get\_alpha\_val(x,\ y)\ <\ threshold\_val)\ \{}
+\DoxyCodeLine{01455\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ lt\_val);}
+\DoxyCodeLine{01456\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01457\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ ge\_val);}
+\DoxyCodeLine{01458\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01459\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01460\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01461\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01462\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01463\ \ \ \ \ \ \ \textcolor{comment}{//\ Any\ generic\ channel.}}
+\DoxyCodeLine{01464\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ lt.has\_alpha()\ \&\&\ ge.has\_alpha())\ \{}
+\DoxyCodeLine{01465\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Copy\ alpha\ channel\ too.}}
+\DoxyCodeLine{01466\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01467\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01468\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (select\_image.get\_channel\_val(x,\ y,\ channel)\ <\ threshold\_val)\ \{}
+\DoxyCodeLine{01469\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ lt\_val);}
+\DoxyCodeLine{01470\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ lt\_alpha);}
+\DoxyCodeLine{01471\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01472\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ ge\_val);}
+\DoxyCodeLine{01473\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ ge\_alpha);}
+\DoxyCodeLine{01474\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01475\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01476\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01477\ }
+\DoxyCodeLine{01478\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01479\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Don't\ copy\ alpha\ channel.}}
+\DoxyCodeLine{01480\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01481\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01482\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (select\_image.get\_channel\_val(x,\ y,\ channel)\ <\ threshold\_val)\ \{}
+\DoxyCodeLine{01483\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ lt\_val);}
+\DoxyCodeLine{01484\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01485\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ ge\_val);}
+\DoxyCodeLine{01486\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01487\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01488\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01489\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01490\ \ \ \ \ \}}
+\DoxyCodeLine{01491\ }
+\DoxyCodeLine{01492\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01493\ \ \ \ \ \textcolor{comment}{//\ Same-\/sized\ source\ images.}}
+\DoxyCodeLine{01494\ \ \ \ \ nassertv(get\_x\_size()\ <=\ lt.get\_x\_size()\ \&\&\ get\_y\_size()\ <=\ lt.get\_y\_size());}
+\DoxyCodeLine{01495\ \ \ \ \ nassertv(get\_x\_size()\ <=\ ge.get\_x\_size()\ \&\&\ get\_y\_size()\ <=\ ge.get\_y\_size());}
+\DoxyCodeLine{01496\ }
+\DoxyCodeLine{01497\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_maxval()\ ==\ lt.get\_maxval()\ \&\&\ get\_maxval()\ ==\ ge.get\_maxval()\ \&\&}
+\DoxyCodeLine{01498\ \ \ \ \ \ \ \ \ get\_color\_space()\ ==\ lt.get\_color\_space()\ \&\&}
+\DoxyCodeLine{01499\ \ \ \ \ \ \ \ \ get\_color\_space()\ ==\ ge.get\_color\_space())\ \{}
+\DoxyCodeLine{01500\ \ \ \ \ \ \ \textcolor{comment}{//\ Simple\ case:\ the\ maxvals\ are\ all\ equal.\ \ Copy\ by\ integer\ value.}}
+\DoxyCodeLine{01501\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01502\ }
+\DoxyCodeLine{01503\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (channel\ ==\ 3)\ \{}
+\DoxyCodeLine{01504\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Further\ special\ case:\ the\ alpha\ channel.}}
+\DoxyCodeLine{01505\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ lt.has\_alpha()\ \&\&\ ge.has\_alpha())\ \{}
+\DoxyCodeLine{01506\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Copy\ alpha\ channel\ too.}}
+\DoxyCodeLine{01507\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01508\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01509\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (select\_image.get\_alpha\_val(x,\ y)\ <\ threshold\_val)\ \{}
+\DoxyCodeLine{01510\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ lt.get\_xel\_val(x,\ y));}
+\DoxyCodeLine{01511\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ lt.get\_alpha\_val(x,\ y));}
+\DoxyCodeLine{01512\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01513\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ ge.get\_xel\_val(x,\ y));}
+\DoxyCodeLine{01514\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ ge.get\_alpha\_val(x,\ y));}
+\DoxyCodeLine{01515\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01516\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01517\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01518\ }
+\DoxyCodeLine{01519\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01520\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Don't\ copy\ alpha\ channel.}}
+\DoxyCodeLine{01521\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01522\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01523\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (select\_image.get\_alpha\_val(x,\ y)\ <\ threshold\_val)\ \{}
+\DoxyCodeLine{01524\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ lt.get\_xel\_val(x,\ y));}
+\DoxyCodeLine{01525\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01526\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ ge.get\_xel\_val(x,\ y));}
+\DoxyCodeLine{01527\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01528\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01529\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01530\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01531\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01532\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Any\ generic\ channel.}}
+\DoxyCodeLine{01533\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ lt.has\_alpha()\ \&\&\ ge.has\_alpha())\ \{}
+\DoxyCodeLine{01534\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Copy\ alpha\ channel\ too.}}
+\DoxyCodeLine{01535\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01536\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01537\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (select\_image.get\_channel\_val(x,\ y,\ channel)\ <\ threshold\_val)\ \{}
+\DoxyCodeLine{01538\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ lt.get\_xel\_val(x,\ y));}
+\DoxyCodeLine{01539\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ lt.get\_alpha\_val(x,\ y));}
+\DoxyCodeLine{01540\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01541\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ ge.get\_xel\_val(x,\ y));}
+\DoxyCodeLine{01542\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ ge.get\_alpha\_val(x,\ y));}
+\DoxyCodeLine{01543\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01544\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01545\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01546\ }
+\DoxyCodeLine{01547\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01548\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Don't\ copy\ alpha\ channel.}}
+\DoxyCodeLine{01549\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01550\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01551\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (select\_image.get\_channel\_val(x,\ y,\ channel)\ <\ threshold\_val)\ \{}
+\DoxyCodeLine{01552\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ lt.get\_xel\_val(x,\ y));}
+\DoxyCodeLine{01553\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01554\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel\_val(x,\ y,\ ge.get\_xel\_val(x,\ y));}
+\DoxyCodeLine{01555\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01556\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01557\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01558\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01559\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01560\ }
+\DoxyCodeLine{01561\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01562\ \ \ \ \ \ \ \textcolor{comment}{//\ General\ case:\ the\ maxvals\ are\ different.\ \ Copy\ by\ floating-\/point}}
+\DoxyCodeLine{01563\ \ \ \ \ \ \ \textcolor{comment}{//\ value.}}
+\DoxyCodeLine{01564\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01565\ }
+\DoxyCodeLine{01566\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ lt.has\_alpha()\ \&\&\ ge.has\_alpha())\ \{}
+\DoxyCodeLine{01567\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01568\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01569\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (select\_image.get\_channel\_val(x,\ y,\ channel)\ <\ threshold\_val)\ \{}
+\DoxyCodeLine{01570\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel(x,\ y,\ lt.get\_xel(x,\ y));}
+\DoxyCodeLine{01571\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_alpha(x,\ y,\ lt.get\_alpha(x,\ y));}
+\DoxyCodeLine{01572\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01573\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel(x,\ y,\ ge.get\_xel(x,\ y));}
+\DoxyCodeLine{01574\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_alpha(x,\ y,\ ge.get\_alpha(x,\ y));}
+\DoxyCodeLine{01575\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01576\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01577\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01578\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01579\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01580\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01581\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (select\_image.get\_channel\_val(x,\ y,\ channel)\ <\ threshold\_val)\ \{}
+\DoxyCodeLine{01582\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel(x,\ y,\ lt.get\_xel(x,\ y));}
+\DoxyCodeLine{01583\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01584\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_xel(x,\ y,\ ge.get\_xel(x,\ y));}
+\DoxyCodeLine{01585\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01586\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01587\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01588\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01589\ \ \ \ \ \}}
+\DoxyCodeLine{01590\ \ \ \}}
+\DoxyCodeLine{01591\ \}}
+\DoxyCodeLine{01592\ }
+\DoxyCodeLine{01610\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01611\ fill\_distance\_inside(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&mask,\ \textcolor{keywordtype}{float}\ threshold,\ \textcolor{keywordtype}{int}\ radius,\ \textcolor{keywordtype}{bool}\ shrink\_from\_border)\ \{}
+\DoxyCodeLine{01612\ \ \ nassertv(radius\ <=\ PNM\_MAXMAXVAL);}
+\DoxyCodeLine{01613\ \ \ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ dist(mask.get\_x\_size(),\ mask.get\_y\_size(),\ 1,\ radius,\ \textcolor{keyword}{nullptr},\ CS\_linear);}
+\DoxyCodeLine{01614\ \ \ dist.fill\_val(radius);}
+\DoxyCodeLine{01615\ }
+\DoxyCodeLine{01616\ \ \ xelval\ threshold\_val\ =\ mask.to\_val(threshold);}
+\DoxyCodeLine{01617\ }
+\DoxyCodeLine{01618\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yi\ =\ 0;\ yi\ <\ mask.get\_y\_size();\ ++yi)\ \{}
+\DoxyCodeLine{01619\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ mask.get\_x\_size();\ ++xi)\ \{}
+\DoxyCodeLine{01620\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (mask.get\_gray\_val(xi,\ yi)\ <\ threshold\_val)\ \{}
+\DoxyCodeLine{01621\ \ \ \ \ \ \ \ \ dist.do\_fill\_distance(xi,\ yi,\ 0);}
+\DoxyCodeLine{01622\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01623\ \ \ \ \ \}}
+\DoxyCodeLine{01624\ \ \ \}}
+\DoxyCodeLine{01625\ }
+\DoxyCodeLine{01626\ \ \ \textcolor{keywordflow}{if}\ (shrink\_from\_border)\ \{}
+\DoxyCodeLine{01627\ \ \ \ \ \textcolor{comment}{//\ Also\ measure\ from\ the\ image\ border.}}
+\DoxyCodeLine{01628\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yi\ =\ 0;\ yi\ <\ mask.get\_y\_size();\ ++yi)\ \{}
+\DoxyCodeLine{01629\ \ \ \ \ \ \ dist.do\_fill\_distance(0,\ yi,\ 1);}
+\DoxyCodeLine{01630\ \ \ \ \ \ \ dist.do\_fill\_distance(mask.get\_x\_size()\ -\/\ 1,\ yi,\ 1);}
+\DoxyCodeLine{01631\ \ \ \ \ \}}
+\DoxyCodeLine{01632\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ mask.get\_x\_size();\ ++xi)\ \{}
+\DoxyCodeLine{01633\ \ \ \ \ \ \ dist.do\_fill\_distance(xi,\ 0,\ 1);}
+\DoxyCodeLine{01634\ \ \ \ \ \ \ dist.do\_fill\_distance(xi,\ mask.get\_y\_size()\ -\/\ 1,\ 1);}
+\DoxyCodeLine{01635\ \ \ \ \ \}}
+\DoxyCodeLine{01636\ \ \ \}}
+\DoxyCodeLine{01637\ }
+\DoxyCodeLine{01638\ \ \ take\_from(dist);}
+\DoxyCodeLine{01639\ \}}
+\DoxyCodeLine{01640\ }
+\DoxyCodeLine{01654\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01655\ fill\_distance\_outside(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&mask,\ \textcolor{keywordtype}{float}\ threshold,\ \textcolor{keywordtype}{int}\ radius)\ \{}
+\DoxyCodeLine{01656\ \ \ nassertv(radius\ <=\ PNM\_MAXMAXVAL);}
+\DoxyCodeLine{01657\ \ \ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ dist(mask.get\_x\_size(),\ mask.get\_y\_size(),\ 1,\ radius,\ \textcolor{keyword}{nullptr},\ CS\_linear);}
+\DoxyCodeLine{01658\ \ \ dist.fill\_val(radius);}
+\DoxyCodeLine{01659\ }
+\DoxyCodeLine{01660\ \ \ xelval\ threshold\_val\ =\ mask.to\_val(threshold);}
+\DoxyCodeLine{01661\ }
+\DoxyCodeLine{01662\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yi\ =\ 0;\ yi\ <\ mask.get\_y\_size();\ ++yi)\ \{}
+\DoxyCodeLine{01663\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ mask.get\_x\_size();\ ++xi)\ \{}
+\DoxyCodeLine{01664\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (mask.get\_gray\_val(xi,\ yi)\ >=\ threshold\_val)\ \{}
+\DoxyCodeLine{01665\ \ \ \ \ \ \ \ \ dist.do\_fill\_distance(xi,\ yi,\ 0);}
+\DoxyCodeLine{01666\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01667\ \ \ \ \ \}}
+\DoxyCodeLine{01668\ \ \ \}}
+\DoxyCodeLine{01669\ }
+\DoxyCodeLine{01670\ \ \ take\_from(dist);}
+\DoxyCodeLine{01671\ \}}
+\DoxyCodeLine{01672\ }
+\DoxyCodeLine{01687\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01688\ indirect\_1d\_lookup(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&index\_image,\ \textcolor{keywordtype}{int}\ channel,}
+\DoxyCodeLine{01689\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&pixel\_values)\ \{}
+\DoxyCodeLine{01690\ \ \ clear(index\_image.get\_x\_size(),\ index\_image.get\_y\_size(),}
+\DoxyCodeLine{01691\ \ \ \ \ \ \ \ \ pixel\_values.get\_num\_channels(),\ pixel\_values.get\_maxval());}
+\DoxyCodeLine{01692\ }
+\DoxyCodeLine{01693\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yi\ =\ 0;\ yi\ <\ get\_y\_size();\ ++yi)\ \{}
+\DoxyCodeLine{01694\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ get\_x\_size();\ ++xi)\ \{}
+\DoxyCodeLine{01695\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ v\ =\ int(index\_image.get\_channel(xi,\ yi,\ channel)\ *\ (pixel\_values.get\_x\_size()\ -\/\ 1)\ +\ 0.5);}
+\DoxyCodeLine{01696\ \ \ \ \ \ \ nassertv(v\ >=\ 0\ \&\&\ v\ <\ pixel\_values.get\_x\_size());}
+\DoxyCodeLine{01697\ \ \ \ \ \ \ set\_xel\_val(xi,\ yi,\ pixel\_values.get\_xel\_val(v,\ 0));}
+\DoxyCodeLine{01698\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{01699\ \ \ \ \ \ \ \ \ set\_alpha\_val(xi,\ yi,\ pixel\_values.get\_alpha\_val(v,\ 0));}
+\DoxyCodeLine{01700\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01701\ \ \ \ \ \}}
+\DoxyCodeLine{01702\ \ \ \}}
+\DoxyCodeLine{01703\ \}}
+\DoxyCodeLine{01704\ }
+\DoxyCodeLine{01711\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01712\ rescale(\textcolor{keywordtype}{float}\ min\_val,\ \textcolor{keywordtype}{float}\ max\_val)\ \{}
+\DoxyCodeLine{01713\ \ \ \textcolor{keywordtype}{float}\ scale\ =\ max\_val\ -\/\ min\_val;}
+\DoxyCodeLine{01714\ }
+\DoxyCodeLine{01715\ \ \ \textcolor{keywordflow}{if}\ (\_num\_channels\ <=\ 2)\ \{}
+\DoxyCodeLine{01716\ \ \ \ \ \textcolor{comment}{//\ Grayscale.}}
+\DoxyCodeLine{01717\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01718\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01719\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ val\ =\ get\_gray(x,\ y);}
+\DoxyCodeLine{01720\ \ \ \ \ \ \ \ \ set\_gray(x,\ y,\ (val\ -\/\ min\_val)\ /\ scale);}
+\DoxyCodeLine{01721\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01722\ \ \ \ \ \}}
+\DoxyCodeLine{01723\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01724\ \ \ \ \ \textcolor{comment}{//\ RGB(A).}}
+\DoxyCodeLine{01725\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{01726\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{01727\ \ \ \ \ \ \ \ \ LRGBColorf\ \mbox{\hyperlink{structpixel}{xel}}\ =\ get\_xel(x,\ y);}
+\DoxyCodeLine{01728\ \ \ \ \ \ \ \ \ set\_xel(x,\ y,}
+\DoxyCodeLine{01729\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\mbox{\hyperlink{structpixel}{xel}}[0]\ -\/\ min\_val)\ /\ scale,}
+\DoxyCodeLine{01730\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\mbox{\hyperlink{structpixel}{xel}}[1]\ -\/\ min\_val)\ /\ scale,}
+\DoxyCodeLine{01731\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\mbox{\hyperlink{structpixel}{xel}}[2]\ -\/\ min\_val)\ /\ scale);}
+\DoxyCodeLine{01732\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01733\ \ \ \ \ \}}
+\DoxyCodeLine{01734\ \ \ \}}
+\DoxyCodeLine{01735\ \}}
+\DoxyCodeLine{01736\ }
+\DoxyCodeLine{01741\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01742\ copy\_channel(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy,\ \textcolor{keywordtype}{int}\ xto,\ \textcolor{keywordtype}{int}\ yto,\ \textcolor{keywordtype}{int}\ cto,}
+\DoxyCodeLine{01743\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xfrom,\ \textcolor{keywordtype}{int}\ yfrom,\ \textcolor{keywordtype}{int}\ cfrom,}
+\DoxyCodeLine{01744\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size)\ \{}
+\DoxyCodeLine{01745\ \ \ \textcolor{keywordtype}{int}\ xmin,\ ymin,\ xmax,\ ymax;}
+\DoxyCodeLine{01746\ \ \ setup\_sub\_image(copy,\ xto,\ yto,\ xfrom,\ yfrom,\ x\_size,\ y\_size,}
+\DoxyCodeLine{01747\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ xmin,\ ymin,\ xmax,\ ymax);}
+\DoxyCodeLine{01748\ }
+\DoxyCodeLine{01749\ \ \ \textcolor{keywordflow}{if}\ (get\_maxval()\ ==\ copy.get\_maxval()\ \&\&}
+\DoxyCodeLine{01750\ \ \ \ \ \ \ get\_color\_space()\ ==\ copy.get\_color\_space())\ \{}
+\DoxyCodeLine{01751\ \ \ \ \ \textcolor{comment}{//\ The\ simple\ case:\ no\ pixel\ value\ rescaling\ is\ required.}}
+\DoxyCodeLine{01752\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01753\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01754\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cto\ ==\ 3\ \&\&\ cfrom\ ==\ 3)\ \{}
+\DoxyCodeLine{01755\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ To\ alpha\ channel,\ from\ alpha\ channel.}}
+\DoxyCodeLine{01756\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01757\ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ copy.get\_alpha\_val(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom));}
+\DoxyCodeLine{01758\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01759\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cto\ ==\ 3\ \&\&\ cfrom\ ==\ 0)\ \{}
+\DoxyCodeLine{01760\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ To\ alpha\ channel,\ from\ blue\ (or\ gray)\ channel.}}
+\DoxyCodeLine{01761\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01762\ \ \ \ \ \ \ \ \ \ \ set\_alpha\_val(x,\ y,\ copy.get\_blue\_val(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom));}
+\DoxyCodeLine{01763\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01764\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cto\ ==\ 0\ \&\&\ cfrom\ ==\ 3)\ \{}
+\DoxyCodeLine{01765\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ To\ blue\ (or\ gray)\ channel,\ from\ alpha\ channel.}}
+\DoxyCodeLine{01766\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01767\ \ \ \ \ \ \ \ \ \ \ set\_blue\_val(x,\ y,\ copy.get\_alpha\_val(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom));}
+\DoxyCodeLine{01768\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01769\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01770\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Generic\ channels.}}
+\DoxyCodeLine{01771\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01772\ \ \ \ \ \ \ \ \ \ \ set\_channel\_val(x,\ y,\ cto,\ copy.get\_channel\_val(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom,\ cfrom));}
+\DoxyCodeLine{01773\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01774\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01775\ \ \ \ \ \}}
+\DoxyCodeLine{01776\ }
+\DoxyCodeLine{01777\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01778\ \ \ \ \ \textcolor{comment}{//\ The\ harder\ case:\ rescale\ pixel\ values\ according\ to\ maxval.}}
+\DoxyCodeLine{01779\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{01780\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ ymin;\ y\ <\ ymax;\ y++)\ \{}
+\DoxyCodeLine{01781\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ xmin;\ x\ <\ xmax;\ x++)\ \{}
+\DoxyCodeLine{01782\ \ \ \ \ \ \ \ \ set\_channel(x,\ y,\ cto,\ copy.get\_channel(x\ -\/\ xmin\ +\ xfrom,\ y\ -\/\ ymin\ +\ yfrom,\ cfrom));}
+\DoxyCodeLine{01783\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01784\ \ \ \ \ \}}
+\DoxyCodeLine{01785\ \ \ \}}
+\DoxyCodeLine{01786\ \}}
+\DoxyCodeLine{01787\ }
+\DoxyCodeLine{01797\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01798\ render\_spot(\textcolor{keyword}{const}\ LColorf\ \&fg,\ \textcolor{keyword}{const}\ LColorf\ \&bg,}
+\DoxyCodeLine{01799\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ min\_radius,\ \textcolor{keywordtype}{float}\ max\_radius)\ \{}
+\DoxyCodeLine{01800\ \ \ \textcolor{keywordflow}{if}\ (\_x\_size\ ==\ 0\ ||\ \_y\_size\ ==\ 0)\ \{}
+\DoxyCodeLine{01801\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01802\ \ \ \}}
+\DoxyCodeLine{01803\ }
+\DoxyCodeLine{01804\ \ \ \textcolor{keywordtype}{float}\ x\_scale\ =\ 2.0\ /\ \_x\_size;}
+\DoxyCodeLine{01805\ \ \ \textcolor{keywordtype}{float}\ y\_scale\ =\ 2.0\ /\ \_y\_size;}
+\DoxyCodeLine{01806\ }
+\DoxyCodeLine{01807\ \ \ \textcolor{comment}{//\ If\ the\ width\ is\ even,\ x\_center1\ ==\ x\_center0.\ \ If\ the\ width\ is\ odd,}}
+\DoxyCodeLine{01808\ \ \ \textcolor{comment}{//\ x\_center1\ ==\ x\_center0\ +\ 1.}}
+\DoxyCodeLine{01809\ \ \ \textcolor{keywordtype}{int}\ x\_center0\ =\ \_x\_size\ /\ 2;}
+\DoxyCodeLine{01810\ \ \ \textcolor{keywordtype}{int}\ y\_center0\ =\ \_y\_size\ /\ 2;}
+\DoxyCodeLine{01811\ \ \ \textcolor{keywordtype}{int}\ x\_center1\ =\ (\_x\_size\ +\ 1)\ /\ 2;}
+\DoxyCodeLine{01812\ \ \ \textcolor{keywordtype}{int}\ y\_center1\ =\ (\_y\_size\ +\ 1)\ /\ 2;}
+\DoxyCodeLine{01813\ }
+\DoxyCodeLine{01814\ \ \ \textcolor{keywordtype}{float}\ min\_r2\ =\ min\_radius\ *\ min\_radius;}
+\DoxyCodeLine{01815\ \ \ \textcolor{keywordtype}{float}\ max\_r2\ =\ max\_radius\ *\ max\_radius;}
+\DoxyCodeLine{01816\ }
+\DoxyCodeLine{01817\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yi\ =\ 0;\ yi\ <\ y\_center1;\ ++yi)\ \{}
+\DoxyCodeLine{01818\ \ \ \ \ \textcolor{keywordtype}{float}\ y\ =\ yi\ *\ y\_scale;}
+\DoxyCodeLine{01819\ \ \ \ \ \textcolor{keywordtype}{float}\ y2\_inner\ =\ y\ *\ y;}
+\DoxyCodeLine{01820\ \ \ \ \ \textcolor{keywordtype}{float}\ y2\_outer\ =\ (y\ +\ y\_scale)\ *\ (y\ +\ y\_scale);}
+\DoxyCodeLine{01821\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xi\ =\ 0;\ xi\ <\ x\_center1;\ ++xi)\ \{}
+\DoxyCodeLine{01822\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ x\ =\ xi\ *\ x\_scale;}
+\DoxyCodeLine{01823\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ d2\_inner\ =\ (x\ *\ x\ +\ y2\_inner);}
+\DoxyCodeLine{01824\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ d2\_outer\ =\ ((x\ +\ x\_scale)\ *\ (x\ +\ x\_scale)\ +\ y2\_outer);}
+\DoxyCodeLine{01825\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ d2\_a\ =\ ((x\ +\ x\_scale)\ *\ (x\ +\ x\_scale)\ +\ y2\_inner);}
+\DoxyCodeLine{01826\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ d2\_b\ =\ (x\ *\ x\ +\ y2\_outer);}
+\DoxyCodeLine{01827\ }
+\DoxyCodeLine{01828\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((d2\_inner\ <=\ min\_r2)\ \&\&}
+\DoxyCodeLine{01829\ \ \ \ \ \ \ \ \ \ \ (d2\_outer\ <=\ min\_r2)\ \&\&}
+\DoxyCodeLine{01830\ \ \ \ \ \ \ \ \ \ \ (d2\_a\ <=\ min\_r2)\ \&\&}
+\DoxyCodeLine{01831\ \ \ \ \ \ \ \ \ \ \ (d2\_b\ <=\ min\_r2))\ \{}
+\DoxyCodeLine{01832\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ pixel\ is\ solidly\ in\ the\ center\ of\ the\ spot.}}
+\DoxyCodeLine{01833\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center1\ -\/\ 1\ -\/\ xi,\ y\_center1\ -\/\ 1\ -\/\ yi,\ fg);}
+\DoxyCodeLine{01834\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center0\ +\ xi,\ y\_center1\ -\/\ 1\ -\/\ yi,\ fg);}
+\DoxyCodeLine{01835\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center1\ -\/\ 1\ -\/\ xi,\ y\_center0\ +\ yi,\ fg);}
+\DoxyCodeLine{01836\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center0\ +\ xi,\ y\_center0\ +\ yi,\ fg);}
+\DoxyCodeLine{01837\ }
+\DoxyCodeLine{01838\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((d2\_inner\ >\ max\_r2)\ \&\&}
+\DoxyCodeLine{01839\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (d2\_outer\ >\ max\_r2)\ \&\&}
+\DoxyCodeLine{01840\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (d2\_a\ >\ max\_r2)\ \&\&}
+\DoxyCodeLine{01841\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (d2\_b\ >\ max\_r2))\ \{}
+\DoxyCodeLine{01842\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ pixel\ is\ solidly\ outside\ the\ spot.}}
+\DoxyCodeLine{01843\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center1\ -\/\ 1\ -\/\ xi,\ y\_center1\ -\/\ 1\ -\/\ yi,\ bg);}
+\DoxyCodeLine{01844\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center0\ +\ xi,\ y\_center1\ -\/\ 1\ -\/\ yi,\ bg);}
+\DoxyCodeLine{01845\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center1\ -\/\ 1\ -\/\ xi,\ y\_center0\ +\ yi,\ bg);}
+\DoxyCodeLine{01846\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center0\ +\ xi,\ y\_center0\ +\ yi,\ bg);}
+\DoxyCodeLine{01847\ }
+\DoxyCodeLine{01848\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01849\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ pixel\ is\ in\ a\ feathered\ area\ or\ along\ the\ antialiased\ edge.}}
+\DoxyCodeLine{01850\ \ \ \ \ \ \ \ \ LColorf\ c\_outer,\ c\_inner,\ c\_a,\ c\_b;}
+\DoxyCodeLine{01851\ \ \ \ \ \ \ \ \ compute\_spot\_pixel(c\_outer,\ d2\_outer,\ min\_radius,\ max\_radius,\ fg,\ bg);}
+\DoxyCodeLine{01852\ \ \ \ \ \ \ \ \ compute\_spot\_pixel(c\_inner,\ d2\_inner,\ min\_radius,\ max\_radius,\ fg,\ bg);}
+\DoxyCodeLine{01853\ \ \ \ \ \ \ \ \ compute\_spot\_pixel(c\_a,\ d2\_a,\ min\_radius,\ max\_radius,\ fg,\ bg);}
+\DoxyCodeLine{01854\ \ \ \ \ \ \ \ \ compute\_spot\_pixel(c\_b,\ d2\_b,\ min\_radius,\ max\_radius,\ fg,\ bg);}
+\DoxyCodeLine{01855\ }
+\DoxyCodeLine{01856\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ average\ all\ four\ pixels\ for\ the\ antialiased\ result.}}
+\DoxyCodeLine{01857\ \ \ \ \ \ \ \ \ LColorf\ c;}
+\DoxyCodeLine{01858\ \ \ \ \ \ \ \ \ c\ =\ (c\_outer\ +\ c\_inner\ +\ c\_a\ +\ c\_b)\ *\ 0.25;}
+\DoxyCodeLine{01859\ }
+\DoxyCodeLine{01860\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center1\ -\/\ 1\ -\/\ xi,\ y\_center1\ -\/\ 1\ -\/\ yi,\ c);}
+\DoxyCodeLine{01861\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center0\ +\ xi,\ y\_center1\ -\/\ 1\ -\/\ yi,\ c);}
+\DoxyCodeLine{01862\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center1\ -\/\ 1\ -\/\ xi,\ y\_center0\ +\ yi,\ c);}
+\DoxyCodeLine{01863\ \ \ \ \ \ \ \ \ set\_xel\_a(x\_center0\ +\ xi,\ y\_center0\ +\ yi,\ c);}
+\DoxyCodeLine{01864\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01865\ \ \ \ \ \}}
+\DoxyCodeLine{01866\ \ \ \}}
+\DoxyCodeLine{01867\ \}}
+\DoxyCodeLine{01868\ }
+\DoxyCodeLine{01875\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01876\ expand\_border(\textcolor{keywordtype}{int}\ left,\ \textcolor{keywordtype}{int}\ right,\ \textcolor{keywordtype}{int}\ bottom,\ \textcolor{keywordtype}{int}\ top,}
+\DoxyCodeLine{01877\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ LColorf\ \&\mbox{\hyperlink{structcolor}{color}})\ \{}
+\DoxyCodeLine{01878\ \ \ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ new\_image(get\_x\_size()\ +\ left\ +\ right,}
+\DoxyCodeLine{01879\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ get\_y\_size()\ +\ bottom\ +\ top,}
+\DoxyCodeLine{01880\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ get\_num\_channels(),\ get\_maxval(),}
+\DoxyCodeLine{01881\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ get\_type(),\ get\_color\_space());}
+\DoxyCodeLine{01882\ \ \ new\_image.fill(\mbox{\hyperlink{structcolor}{color}}[0],\ \mbox{\hyperlink{structcolor}{color}}[1],\ \mbox{\hyperlink{structcolor}{color}}[2]);}
+\DoxyCodeLine{01883\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{01884\ \ \ \ \ new\_image.alpha\_fill(\mbox{\hyperlink{structcolor}{color}}[3]);}
+\DoxyCodeLine{01885\ \ \ \}}
+\DoxyCodeLine{01886\ \ \ new\_image.copy\_sub\_image(*\textcolor{keyword}{this},\ left,\ top);}
+\DoxyCodeLine{01887\ }
+\DoxyCodeLine{01888\ \ \ take\_from(new\_image);}
+\DoxyCodeLine{01889\ \}}
+\DoxyCodeLine{01890\ }
+\DoxyCodeLine{01895\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01896\ unfiltered\_stretch\_from(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy)\ \{}
+\DoxyCodeLine{01897\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yt\ =\ 0;\ yt\ <\ get\_y\_size();\ yt++)\ \{}
+\DoxyCodeLine{01898\ \ \ \ \ \textcolor{keywordtype}{int}\ ys\ =\ yt\ *\ copy.get\_y\_size()\ /\ get\_y\_size();}
+\DoxyCodeLine{01899\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xt\ =\ 0;\ xt\ <\ get\_x\_size();\ xt++)\ \{}
+\DoxyCodeLine{01900\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xs\ =\ xt\ *\ copy.get\_x\_size()\ /\ get\_x\_size();}
+\DoxyCodeLine{01901\ \ \ \ \ \ \ set\_xel(xt,\ yt,\ copy.get\_xel(xs,\ ys));}
+\DoxyCodeLine{01902\ \ \ \ \ \}}
+\DoxyCodeLine{01903\ \ \ \}}
+\DoxyCodeLine{01904\ }
+\DoxyCodeLine{01905\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ copy.has\_alpha())\ \{}
+\DoxyCodeLine{01906\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ yt\ =\ 0;\ yt\ <\ get\_y\_size();\ yt++)\ \{}
+\DoxyCodeLine{01907\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ ys\ =\ yt\ *\ copy.get\_y\_size()\ /\ get\_y\_size();}
+\DoxyCodeLine{01908\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xt\ =\ 0;\ xt\ <\ get\_x\_size();\ xt++)\ \{}
+\DoxyCodeLine{01909\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xs\ =\ xt\ *\ copy.get\_x\_size()\ /\ get\_x\_size();}
+\DoxyCodeLine{01910\ \ \ \ \ \ \ \ \ set\_alpha(xt,\ yt,\ copy.get\_alpha(xs,\ ys));}
+\DoxyCodeLine{01911\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01912\ \ \ \ \ \}}
+\DoxyCodeLine{01913\ \ \ \}}
+\DoxyCodeLine{01914\ \}}
+\DoxyCodeLine{01915\ }
+\DoxyCodeLine{01919\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01920\ make\_histogram(PNMImage::Histogram\ \&histogram)\ \{}
+\DoxyCodeLine{01921\ \ \ HistMap\ hist\_map;}
+\DoxyCodeLine{01922\ \ \ PixelCount\ pixels;}
+\DoxyCodeLine{01923\ }
+\DoxyCodeLine{01924\ \ \ \textcolor{keywordtype}{int}\ num\_pixels\ =\ \_x\_size\ *\ \_y\_size;}
+\DoxyCodeLine{01925\ }
+\DoxyCodeLine{01926\ \ \ \mbox{\hyperlink{classPNMImageHeader_aa26529ef9e31a2037211861869e9621c}{compute\_histogram}}(hist\_map,\ \_array,\ \_alpha);}
+\DoxyCodeLine{01927\ }
+\DoxyCodeLine{01928\ \ \ pixels.reserve(hist\_map.size());}
+\DoxyCodeLine{01929\ \ \ HistMap::const\_iterator\ hi;}
+\DoxyCodeLine{01930\ \ \ \textcolor{keywordflow}{for}\ (hi\ =\ hist\_map.begin();\ hi\ !=\ hist\_map.end();\ ++hi)\ \{}
+\DoxyCodeLine{01931\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*hi).second\ <=\ num\_pixels)\ \{}
+\DoxyCodeLine{01932\ \ \ \ \ \ \ pixels.push\_back(PixelSpecCount((*hi).first,\ (*hi).second));}
+\DoxyCodeLine{01933\ \ \ \ \ \}}
+\DoxyCodeLine{01934\ \ \ \}}
+\DoxyCodeLine{01935\ \ \ std::sort(pixels.begin(),\ pixels.end());}
+\DoxyCodeLine{01936\ }
+\DoxyCodeLine{01937\ \ \ histogram.swap(pixels,\ hist\_map);}
+\DoxyCodeLine{01938\ \}}
+\DoxyCodeLine{01939\ }
+\DoxyCodeLine{01949\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01950\ quantize(\textcolor{keywordtype}{size\_t}\ max\_colors)\ \{}
+\DoxyCodeLine{01951\ \ \ nassertv(\_array\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01952\ \ \ nassertv(!has\_alpha());}
+\DoxyCodeLine{01953\ \ \ \textcolor{keywordtype}{size\_t}\ array\_size\ =\ \_x\_size\ *\ \_y\_size;}
+\DoxyCodeLine{01954\ }
+\DoxyCodeLine{01955\ \ \ \textcolor{comment}{//\ Get\ all\ the\ unique\ colors\ in\ this\ image.}}
+\DoxyCodeLine{01956\ \ \ \mbox{\hyperlink{classpmap}{pmap<xel,\ xel>}}\ color\_map;}
+\DoxyCodeLine{01957\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{01958\ \ \ \ \ color\_map[\_array[i]];}
+\DoxyCodeLine{01959\ \ \ \}}
+\DoxyCodeLine{01960\ }
+\DoxyCodeLine{01961\ \ \ \textcolor{keywordtype}{size\_t}\ num\_colors\ =\ color\_map.size();}
+\DoxyCodeLine{01962\ \ \ \textcolor{keywordflow}{if}\ (num\_colors\ <=\ max\_colors)\ \{}
+\DoxyCodeLine{01963\ \ \ \ \ \textcolor{comment}{//\ We\ are\ already\ down\ to\ the\ requested\ number\ of\ colors.}}
+\DoxyCodeLine{01964\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01965\ \ \ \}}
+\DoxyCodeLine{01966\ }
+\DoxyCodeLine{01967\ \ \ \textcolor{comment}{//\ Collect\ all\ the\ colors\ into\ a\ contiguous\ array.}}
+\DoxyCodeLine{01968\ \ \ \mbox{\hyperlink{structpixel}{xel}}\ *colors\ =\ (\mbox{\hyperlink{structpixel}{xel}}\ *)alloca(num\_colors\ *\ \textcolor{keyword}{sizeof}(\mbox{\hyperlink{structpixel}{xel}}));}
+\DoxyCodeLine{01969\ \ \ \textcolor{keywordtype}{size\_t}\ i\ =\ 0;}
+\DoxyCodeLine{01970\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classpmap}{pmap<xel,\ xel>::const\_iterator}}\ it\ =\ color\_map.begin();}
+\DoxyCodeLine{01971\ \ \ \ \ \ \ \ it\ !=\ color\_map.end();\ ++it)\ \{}
+\DoxyCodeLine{01972\ \ \ \ \ colors[i++]\ =\ it-\/>first;}
+\DoxyCodeLine{01973\ \ \ \}}
+\DoxyCodeLine{01974\ \ \ nassertv(i\ ==\ num\_colors);}
+\DoxyCodeLine{01975\ }
+\DoxyCodeLine{01976\ \ \ \textcolor{comment}{//\ Apply\ the\ median\ cut\ algorithm,\ which\ will\ give\ us\ a\ color\ map.}}
+\DoxyCodeLine{01977\ \ \ r\_quantize(color\_map,\ max\_colors,\ colors,\ num\_colors);}
+\DoxyCodeLine{01978\ }
+\DoxyCodeLine{01979\ \ \ \textcolor{comment}{//\ Replace\ all\ the\ existing\ colors\ with\ the\ corresponding\ bucket\ average.}}
+\DoxyCodeLine{01980\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{01981\ \ \ \ \ \_array[i]\ =\ color\_map[\_array[i]];}
+\DoxyCodeLine{01982\ \ \ \}}
+\DoxyCodeLine{01983\ \}}
+\DoxyCodeLine{01984\ }
+\DoxyCodeLine{01991\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{01992\ perlin\_noise\_fill(\textcolor{keywordtype}{float}\ sx,\ \textcolor{keywordtype}{float}\ sy,\ \textcolor{keywordtype}{int}\ table\_size,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ seed,}
+\DoxyCodeLine{01993\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ ox,\ \textcolor{keywordtype}{float}\ oy)\ \{}
+\DoxyCodeLine{01994\ \ \ \mbox{\hyperlink{classPerlinNoise2}{PerlinNoise2}}\ perlin\ (sx\ *\ \_x\_size,\ sy\ *\ \_y\_size,\ table\_size,\ seed);}
+\DoxyCodeLine{01995\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{01996\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{01997\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ noise\ =\ perlin.noise(x\ +\ ox,\ y\ +\ oy);}
+\DoxyCodeLine{01998\ \ \ \ \ \ \ set\_xel(x,\ y,\ 0.5f\ *\ (noise\ +\ 1.0f));}
+\DoxyCodeLine{01999\ \ \ \ \ \}}
+\DoxyCodeLine{02000\ \ \ \}}
+\DoxyCodeLine{02001\ \}}
+\DoxyCodeLine{02002\ }
+\DoxyCodeLine{02007\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02008\ perlin\_noise\_fill(\mbox{\hyperlink{classStackedPerlinNoise2}{StackedPerlinNoise2}}\ \&perlin)\ \{}
+\DoxyCodeLine{02009\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02010\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02011\ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ noise\ =\ perlin.noise(x\ /\ (\textcolor{keywordtype}{float})\ \_x\_size,\ y\ /\ (\textcolor{keywordtype}{float})\ \_y\_size);}
+\DoxyCodeLine{02012\ \ \ \ \ \ \ set\_xel(x,\ y,\ 0.5f\ *\ (noise\ +\ 1.0f));}
+\DoxyCodeLine{02013\ \ \ \ \ \}}
+\DoxyCodeLine{02014\ \ \ \}}
+\DoxyCodeLine{02015\ \}}
+\DoxyCodeLine{02016\ }
+\DoxyCodeLine{02021\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02022\ remix\_channels(\textcolor{keyword}{const}\ LMatrix4\ \&conv)\ \{}
+\DoxyCodeLine{02023\ \ \ \textcolor{keywordtype}{int}\ nchannels\ =\ get\_num\_channels();}
+\DoxyCodeLine{02024\ \ \ nassertv((nchannels\ >=\ 3)\ \&\&\ (nchannels\ <=\ 4));}
+\DoxyCodeLine{02025\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_y\_size();\ y++)\ \{}
+\DoxyCodeLine{02026\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_x\_size();\ x++)\ \{}
+\DoxyCodeLine{02027\ \ \ \ \ \ \ LVector3\ inv(get\_red(x,y),\ get\_green(x,y),\ get\_blue(x,y));}
+\DoxyCodeLine{02028\ \ \ \ \ \ \ LVector3\ outv(conv.xform\_point(inv));}
+\DoxyCodeLine{02029\ \ \ \ \ \ \ set\_xel(x,\ y,\ outv[0],\ outv[1],\ outv[2]);}
+\DoxyCodeLine{02030\ \ \ \ \ \}}
+\DoxyCodeLine{02031\ \ \ \}}
+\DoxyCodeLine{02032\ \}}
+\DoxyCodeLine{02033\ }
+\DoxyCodeLine{02040\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02041\ apply\_exponent(\textcolor{keywordtype}{float}\ red\_exponent,\ \textcolor{keywordtype}{float}\ green\_exponent,\ \textcolor{keywordtype}{float}\ blue\_exponent,}
+\DoxyCodeLine{02042\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ alpha\_exponent)\ \{}
+\DoxyCodeLine{02043\ \ \ \textcolor{keywordtype}{int}\ num\_channels\ =\ \_num\_channels;}
+\DoxyCodeLine{02044\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha()\ \&\&\ alpha\_exponent\ ==\ 1.0f)\ \{}
+\DoxyCodeLine{02045\ \ \ \ \ \textcolor{comment}{//\ If\ the\ alpha\_exponent\ is\ 1,\ don't\ bother\ to\ apply\ it.}}
+\DoxyCodeLine{02046\ \ \ \ \ -\/-\/num\_channels;}
+\DoxyCodeLine{02047\ \ \ \}}
+\DoxyCodeLine{02048\ }
+\DoxyCodeLine{02049\ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{02050\ }
+\DoxyCodeLine{02051\ \ \ \textcolor{keywordflow}{if}\ (red\_exponent\ ==\ 1.0f\ \&\&\ green\_exponent\ ==\ 1.0f\ \&\&\ blue\_exponent\ ==\ 1.0f)\ \{}
+\DoxyCodeLine{02052\ \ \ \ \ \textcolor{comment}{//\ If\ the\ RGB\ components\ are\ all\ 1,\ apply\ only\ to\ the\ alpha\ channel.}}
+\DoxyCodeLine{02053\ \ \ \ \ \textcolor{keywordflow}{switch}\ (num\_channels)\ \{}
+\DoxyCodeLine{02054\ \ \ \ \ \textcolor{keywordflow}{case}\ 1:}
+\DoxyCodeLine{02055\ \ \ \ \ \textcolor{keywordflow}{case}\ 3:}
+\DoxyCodeLine{02056\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02057\ }
+\DoxyCodeLine{02058\ \ \ \ \ \textcolor{keywordflow}{case}\ 2:}
+\DoxyCodeLine{02059\ \ \ \ \ \textcolor{keywordflow}{case}\ 4:}
+\DoxyCodeLine{02060\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02061\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02062\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ alpha\ =\ get\_alpha(x,\ y);}
+\DoxyCodeLine{02063\ \ \ \ \ \ \ \ \ \ \ alpha\ =\ cpow(alpha,\ blue\_exponent);}
+\DoxyCodeLine{02064\ \ \ \ \ \ \ \ \ \ \ set\_alpha(x,\ y,\ alpha);}
+\DoxyCodeLine{02065\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02066\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02067\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02068\ \ \ \ \ \}}
+\DoxyCodeLine{02069\ }
+\DoxyCodeLine{02070\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02071\ \ \ \ \ \textcolor{comment}{//\ Apply\ to\ the\ color\ andor\ alpha\ channels.}}
+\DoxyCodeLine{02072\ }
+\DoxyCodeLine{02073\ \ \ \ \ \textcolor{keywordflow}{switch}\ (num\_channels)\ \{}
+\DoxyCodeLine{02074\ \ \ \ \ \textcolor{keywordflow}{case}\ 1:}
+\DoxyCodeLine{02075\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02076\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02077\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ gray\ =\ get\_gray(x,\ y);}
+\DoxyCodeLine{02078\ \ \ \ \ \ \ \ \ \ \ gray\ =\ cpow(gray,\ blue\_exponent);}
+\DoxyCodeLine{02079\ \ \ \ \ \ \ \ \ \ \ set\_gray(x,\ y,\ gray);}
+\DoxyCodeLine{02080\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02081\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02082\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02083\ }
+\DoxyCodeLine{02084\ \ \ \ \ \textcolor{keywordflow}{case}\ 2:}
+\DoxyCodeLine{02085\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02086\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02087\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ gray\ =\ get\_gray(x,\ y);}
+\DoxyCodeLine{02088\ \ \ \ \ \ \ \ \ \ \ gray\ =\ cpow(gray,\ blue\_exponent);}
+\DoxyCodeLine{02089\ \ \ \ \ \ \ \ \ \ \ set\_gray(x,\ y,\ gray);}
+\DoxyCodeLine{02090\ }
+\DoxyCodeLine{02091\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ alpha\ =\ get\_alpha(x,\ y);}
+\DoxyCodeLine{02092\ \ \ \ \ \ \ \ \ \ \ alpha\ =\ cpow(alpha,\ blue\_exponent);}
+\DoxyCodeLine{02093\ \ \ \ \ \ \ \ \ \ \ set\_alpha(x,\ y,\ alpha);}
+\DoxyCodeLine{02094\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02095\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02096\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02097\ }
+\DoxyCodeLine{02098\ \ \ \ \ \textcolor{keywordflow}{case}\ 3:}
+\DoxyCodeLine{02099\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02100\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02101\ \ \ \ \ \ \ \ \ \ \ LRGBColorf\ \mbox{\hyperlink{structcolor}{color}}\ =\ get\_xel(x,\ y);}
+\DoxyCodeLine{02102\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}[0]\ =\ cpow(\mbox{\hyperlink{structcolor}{color}}[0],\ red\_exponent);}
+\DoxyCodeLine{02103\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}[1]\ =\ cpow(\mbox{\hyperlink{structcolor}{color}}[1],\ green\_exponent);}
+\DoxyCodeLine{02104\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}[2]\ =\ cpow(\mbox{\hyperlink{structcolor}{color}}[2],\ blue\_exponent);}
+\DoxyCodeLine{02105\ \ \ \ \ \ \ \ \ \ \ set\_xel(x,\ y,\ \mbox{\hyperlink{structcolor}{color}});}
+\DoxyCodeLine{02106\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02107\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02108\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02109\ }
+\DoxyCodeLine{02110\ \ \ \ \ \textcolor{keywordflow}{case}\ 4:}
+\DoxyCodeLine{02111\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02112\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02113\ \ \ \ \ \ \ \ \ \ \ LColorf\ \mbox{\hyperlink{structcolor}{color}}\ =\ get\_xel\_a(x,\ y);}
+\DoxyCodeLine{02114\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}[0]\ =\ cpow(\mbox{\hyperlink{structcolor}{color}}[0],\ red\_exponent);}
+\DoxyCodeLine{02115\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}[1]\ =\ cpow(\mbox{\hyperlink{structcolor}{color}}[1],\ green\_exponent);}
+\DoxyCodeLine{02116\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}[2]\ =\ cpow(\mbox{\hyperlink{structcolor}{color}}[2],\ blue\_exponent);}
+\DoxyCodeLine{02117\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}[3]\ =\ cpow(\mbox{\hyperlink{structcolor}{color}}[3],\ alpha\_exponent);}
+\DoxyCodeLine{02118\ \ \ \ \ \ \ \ \ \ \ set\_xel\_a(x,\ y,\ \mbox{\hyperlink{structcolor}{color}});}
+\DoxyCodeLine{02119\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02120\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02121\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02122\ \ \ \ \ \}}
+\DoxyCodeLine{02123\ \ \ \}}
+\DoxyCodeLine{02124\ \}}
+\DoxyCodeLine{02125\ }
+\DoxyCodeLine{02131\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02132\ setup\_rc()\ \{}
+\DoxyCodeLine{02133\ \ \ \textcolor{keywordflow}{if}\ (is\_grayscale())\ \{}
+\DoxyCodeLine{02134\ \ \ \ \ \_default\_rc\ =\ 0.0;}
+\DoxyCodeLine{02135\ \ \ \ \ \_default\_gc\ =\ 0.0;}
+\DoxyCodeLine{02136\ \ \ \ \ \_default\_bc\ =\ 1.0;}
+\DoxyCodeLine{02137\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02138\ \ \ \ \ \_default\_rc\ =\ lumin\_red;}
+\DoxyCodeLine{02139\ \ \ \ \ \_default\_gc\ =\ lumin\_grn;}
+\DoxyCodeLine{02140\ \ \ \ \ \_default\_bc\ =\ lumin\_blu;}
+\DoxyCodeLine{02141\ \ \ \}}
+\DoxyCodeLine{02142\ \}}
+\DoxyCodeLine{02143\ }
+\DoxyCodeLine{02150\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02151\ setup\_encoding()\ \{}
+\DoxyCodeLine{02152\ \ \ \textcolor{keywordflow}{if}\ (\_maxval\ ==\ 0)\ \{}
+\DoxyCodeLine{02153\ \ \ \ \ \_inv\_maxval\ =\ 0.0f;}
+\DoxyCodeLine{02154\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02155\ \ \ \ \ \_inv\_maxval\ =\ 1.0f\ /\ (float)\_maxval;}
+\DoxyCodeLine{02156\ \ \ \}}
+\DoxyCodeLine{02157\ }
+\DoxyCodeLine{02158\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{02159\ \ \ \ \ \textcolor{keywordflow}{switch}\ (\_color\_space)\ \{}
+\DoxyCodeLine{02160\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_linear:}
+\DoxyCodeLine{02161\ \ \ \ \ \ \ \_xel\_encoding\ =\ XE\_generic\_alpha;}
+\DoxyCodeLine{02162\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02163\ }
+\DoxyCodeLine{02164\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_sRGB:}
+\DoxyCodeLine{02165\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_maxval()\ ==\ 255)\ \{}
+\DoxyCodeLine{02166\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_sse2\_sRGB\_encode())\ \{}
+\DoxyCodeLine{02167\ \ \ \ \ \ \ \ \ \ \ \_xel\_encoding\ =\ XE\_uchar\_sRGB\_alpha\_sse2;}
+\DoxyCodeLine{02168\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02169\ \ \ \ \ \ \ \ \ \ \ \_xel\_encoding\ =\ XE\_uchar\_sRGB\_alpha;}
+\DoxyCodeLine{02170\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02171\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02172\ \ \ \ \ \ \ \ \ \_xel\_encoding\ =\ XE\_generic\_sRGB\_alpha;}
+\DoxyCodeLine{02173\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02174\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02175\ }
+\DoxyCodeLine{02176\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_scRGB:}
+\DoxyCodeLine{02177\ \ \ \ \ \ \ \_xel\_encoding\ =\ XE\_scRGB\_alpha;}
+\DoxyCodeLine{02178\ \ \ \ \ \ \ nassertv(get\_maxval()\ ==\ 65535);}
+\DoxyCodeLine{02179\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02180\ }
+\DoxyCodeLine{02181\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{02182\ \ \ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}invalid\ color\ space"{}});}
+\DoxyCodeLine{02183\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02184\ \ \ \ \ \}}
+\DoxyCodeLine{02185\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02186\ \ \ \ \ \textcolor{keywordflow}{switch}\ (\_color\_space)\ \{}
+\DoxyCodeLine{02187\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_linear:}
+\DoxyCodeLine{02188\ \ \ \ \ \ \ \_xel\_encoding\ =\ XE\_generic;}
+\DoxyCodeLine{02189\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02190\ }
+\DoxyCodeLine{02191\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_sRGB:}
+\DoxyCodeLine{02192\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_maxval()\ ==\ 255)\ \{}
+\DoxyCodeLine{02193\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_sse2\_sRGB\_encode())\ \{}
+\DoxyCodeLine{02194\ \ \ \ \ \ \ \ \ \ \ \_xel\_encoding\ =\ XE\_uchar\_sRGB\_sse2;}
+\DoxyCodeLine{02195\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02196\ \ \ \ \ \ \ \ \ \ \ \_xel\_encoding\ =\ XE\_uchar\_sRGB;}
+\DoxyCodeLine{02197\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02198\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02199\ \ \ \ \ \ \ \ \ \_xel\_encoding\ =\ XE\_generic\_sRGB;}
+\DoxyCodeLine{02200\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02201\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02202\ }
+\DoxyCodeLine{02203\ \ \ \ \ \textcolor{keywordflow}{case}\ CS\_scRGB:}
+\DoxyCodeLine{02204\ \ \ \ \ \ \ \_xel\_encoding\ =\ XE\_scRGB;}
+\DoxyCodeLine{02205\ \ \ \ \ \ \ nassertv(get\_maxval()\ ==\ 65535);}
+\DoxyCodeLine{02206\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02207\ }
+\DoxyCodeLine{02208\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{02209\ \ \ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}invalid\ color\ space"{}});}
+\DoxyCodeLine{02210\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02211\ \ \ \ \ \}}
+\DoxyCodeLine{02212\ \ \ \}}
+\DoxyCodeLine{02213\ \}}
+\DoxyCodeLine{02214\ }
+\DoxyCodeLine{02218\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02219\ r\_quantize(\mbox{\hyperlink{classpmap}{pmap<xel,\ xel>}}\ \&color\_map,\ \textcolor{keywordtype}{size\_t}\ max\_colors,}
+\DoxyCodeLine{02220\ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ *colors,\ \textcolor{keywordtype}{size\_t}\ num\_colors)\ \{}
+\DoxyCodeLine{02221\ \ \ \textcolor{keywordflow}{if}\ (num\_colors\ <=\ max\_colors)\ \{}
+\DoxyCodeLine{02222\ \ \ \ \ \textcolor{comment}{//\ All\ points\ in\ this\ bucket\ can\ be\ preserved\ 1:1.}}
+\DoxyCodeLine{02223\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ num\_colors;\ ++i)\ \{}
+\DoxyCodeLine{02224\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structpixel}{xel}}\ \&col\ =\ colors[i];}
+\DoxyCodeLine{02225\ \ \ \ \ \ \ color\_map[col]\ =\ col;}
+\DoxyCodeLine{02226\ \ \ \ \ \}}
+\DoxyCodeLine{02227\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{02228\ \ \ \}}
+\DoxyCodeLine{02229\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (max\_colors\ ==\ 1)\ \{}
+\DoxyCodeLine{02230\ \ \ \ \ \textcolor{comment}{//\ We've\ reached\ the\ target.\ \ Calculate\ the\ average,\ in\ linear\ space.}}
+\DoxyCodeLine{02231\ \ \ \ \ LRGBColorf\ avg(0);}
+\DoxyCodeLine{02232\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ num\_colors;\ ++i)\ \{}
+\DoxyCodeLine{02233\ \ \ \ \ \ \ avg\ +=\ from\_val(colors[i]);}
+\DoxyCodeLine{02234\ \ \ \ \ \}}
+\DoxyCodeLine{02235\ \ \ \ \ avg\ *=\ 1.0f\ /\ num\_colors;}
+\DoxyCodeLine{02236\ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ avg\_val\ =\ to\_val(avg);}
+\DoxyCodeLine{02237\ }
+\DoxyCodeLine{02238\ \ \ \ \ \textcolor{comment}{//\ Map\ all\ colors\ in\ this\ bucket\ to\ the\ avg.}}
+\DoxyCodeLine{02239\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ num\_colors;\ ++i)\ \{}
+\DoxyCodeLine{02240\ \ \ \ \ \ \ color\_map[colors[i]]\ =\ avg\_val;}
+\DoxyCodeLine{02241\ \ \ \ \ \}}
+\DoxyCodeLine{02242\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{02243\ \ \ \}}
+\DoxyCodeLine{02244\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (max\_colors\ ==\ 0)\ \{}
+\DoxyCodeLine{02245\ \ \ \ \ \textcolor{comment}{//\ Not\ sure\ how\ this\ happens,\ but\ we\ can't\ preserve\ any\ color\ here.}}
+\DoxyCodeLine{02246\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{02247\ \ \ \}}
+\DoxyCodeLine{02248\ }
+\DoxyCodeLine{02249\ \ \ \textcolor{comment}{//\ Find\ the\ minimum/maximum\ RGB\ values.\ \ We\ should\ probably\ do\ this\ in}}
+\DoxyCodeLine{02250\ \ \ \textcolor{comment}{//\ linear\ space,\ but\ eh.}}
+\DoxyCodeLine{02251\ \ \ xelval\ min\_r\ =\ \_maxval;}
+\DoxyCodeLine{02252\ \ \ xelval\ min\_g\ =\ \_maxval;}
+\DoxyCodeLine{02253\ \ \ xelval\ min\_b\ =\ \_maxval;}
+\DoxyCodeLine{02254\ \ \ xelval\ max\_r\ =\ 0,\ max\_g\ =\ 0,\ max\_b\ =\ 0;}
+\DoxyCodeLine{02255\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ num\_colors;\ ++i)\ \{}
+\DoxyCodeLine{02256\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{structpixel}{xel}}\ \&col\ =\ colors[i];}
+\DoxyCodeLine{02257\ \ \ \ \ min\_r\ =\ std::min(min\_r,\ col.r);}
+\DoxyCodeLine{02258\ \ \ \ \ max\_r\ =\ std::max(max\_r,\ col.r);}
+\DoxyCodeLine{02259\ \ \ \ \ min\_g\ =\ std::min(min\_g,\ col.g);}
+\DoxyCodeLine{02260\ \ \ \ \ max\_g\ =\ std::max(max\_g,\ col.g);}
+\DoxyCodeLine{02261\ \ \ \ \ min\_b\ =\ std::min(min\_b,\ col.b);}
+\DoxyCodeLine{02262\ \ \ \ \ max\_b\ =\ std::max(max\_b,\ col.b);}
+\DoxyCodeLine{02263\ \ \ \}}
+\DoxyCodeLine{02264\ }
+\DoxyCodeLine{02265\ \ \ \textcolor{keywordtype}{int}\ diff\_r\ =\ max\_r\ -\/\ min\_r;}
+\DoxyCodeLine{02266\ \ \ \textcolor{keywordtype}{int}\ diff\_g\ =\ max\_g\ -\/\ min\_g;}
+\DoxyCodeLine{02267\ \ \ \textcolor{keywordtype}{int}\ diff\_b\ =\ max\_b\ -\/\ min\_b;}
+\DoxyCodeLine{02268\ }
+\DoxyCodeLine{02269\ \ \ \textcolor{keyword}{auto}\ sort\_by\_red\ =\ [](\textcolor{keyword}{const}\ \mbox{\hyperlink{structpixel}{xel}}\ \&c1,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{structpixel}{xel}}\ \&c2)\ \{}
+\DoxyCodeLine{02270\ \ \ \ \ \textcolor{keywordflow}{return}\ c1.r\ <\ c2.r;}
+\DoxyCodeLine{02271\ \ \ \};}
+\DoxyCodeLine{02272\ \ \ \textcolor{keyword}{auto}\ sort\_by\_green\ =\ [](\textcolor{keyword}{const}\ \mbox{\hyperlink{structpixel}{xel}}\ \&c1,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{structpixel}{xel}}\ \&c2)\ \{}
+\DoxyCodeLine{02273\ \ \ \ \ \textcolor{keywordflow}{return}\ c1.g\ <\ c2.g;}
+\DoxyCodeLine{02274\ \ \ \};}
+\DoxyCodeLine{02275\ \ \ \textcolor{keyword}{auto}\ sort\_by\_blue\ =\ [](\textcolor{keyword}{const}\ \mbox{\hyperlink{structpixel}{xel}}\ \&c1,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{structpixel}{xel}}\ \&c2)\ \{}
+\DoxyCodeLine{02276\ \ \ \ \ \textcolor{keywordflow}{return}\ c1.b\ <\ c2.b;}
+\DoxyCodeLine{02277\ \ \ \};}
+\DoxyCodeLine{02278\ }
+\DoxyCodeLine{02279\ \ \ \textcolor{comment}{//\ Sort\ by\ the\ component\ with\ the\ most\ variation.}}
+\DoxyCodeLine{02280\ \ \ \textcolor{keywordflow}{if}\ (diff\_g\ >=\ diff\_r)\ \{}
+\DoxyCodeLine{02281\ \ \ \ \ \textcolor{keywordflow}{if}\ (diff\_g\ >=\ diff\_b)\ \{}
+\DoxyCodeLine{02282\ \ \ \ \ \ \ std::sort(colors,\ colors\ +\ num\_colors,\ sort\_by\_green);}
+\DoxyCodeLine{02283\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02284\ \ \ \ \ \ \ std::sort(colors,\ colors\ +\ num\_colors,\ sort\_by\_blue);}
+\DoxyCodeLine{02285\ \ \ \ \ \}}
+\DoxyCodeLine{02286\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (diff\_r\ >=\ diff\_b)\ \{}
+\DoxyCodeLine{02287\ \ \ \ \ std::sort(colors,\ colors\ +\ num\_colors,\ sort\_by\_red);}
+\DoxyCodeLine{02288\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02289\ \ \ \ \ std::sort(colors,\ colors\ +\ num\_colors,\ sort\_by\_blue);}
+\DoxyCodeLine{02290\ \ \ \}}
+\DoxyCodeLine{02291\ }
+\DoxyCodeLine{02292\ \ \ \textcolor{comment}{//\ Subdivide\ the\ sorted\ colors\ into\ two\ buckets,\ and\ recurse.}}
+\DoxyCodeLine{02293\ \ \ \textcolor{keywordtype}{size\_t}\ max\_colors\_1\ =\ max\_colors\ /\ 2;}
+\DoxyCodeLine{02294\ \ \ \textcolor{keywordtype}{size\_t}\ max\_colors\_2\ =\ max\_colors\ -\/\ max\_colors\_1;}
+\DoxyCodeLine{02295\ \ \ \textcolor{keywordtype}{size\_t}\ num\_colors\_1\ =\ num\_colors\ /\ 2;}
+\DoxyCodeLine{02296\ \ \ \textcolor{keywordtype}{size\_t}\ num\_colors\_2\ =\ num\_colors\ -\/\ num\_colors\_1;}
+\DoxyCodeLine{02297\ \ \ r\_quantize(color\_map,\ max\_colors\_1,\ colors,\ num\_colors\_1);}
+\DoxyCodeLine{02298\ \ \ r\_quantize(color\_map,\ max\_colors\_2,\ colors\ +\ num\_colors\_1,\ num\_colors\_2);}
+\DoxyCodeLine{02299\ \}}
+\DoxyCodeLine{02300\ }
+\DoxyCodeLine{02305\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02306\ do\_fill\_distance(\textcolor{keywordtype}{int}\ xi,\ \textcolor{keywordtype}{int}\ yi,\ \textcolor{keywordtype}{int}\ d)\ \{}
+\DoxyCodeLine{02307\ \ \ \textcolor{keywordflow}{if}\ (xi\ <\ 0\ ||\ xi\ >=\ get\_x\_size()\ ||}
+\DoxyCodeLine{02308\ \ \ \ \ \ \ yi\ <\ 0\ ||\ yi\ >=\ get\_y\_size())\ \{}
+\DoxyCodeLine{02309\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{02310\ \ \ \}}
+\DoxyCodeLine{02311\ \ \ \textcolor{keywordflow}{if}\ (get\_gray\_val(xi,\ yi)\ <=\ d)\ \{}
+\DoxyCodeLine{02312\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{02313\ \ \ \}}
+\DoxyCodeLine{02314\ \ \ set\_gray\_val(xi,\ yi,\ d);}
+\DoxyCodeLine{02315\ }
+\DoxyCodeLine{02316\ \ \ do\_fill\_distance(xi\ +\ 1,\ yi,\ d\ +\ 1);}
+\DoxyCodeLine{02317\ \ \ do\_fill\_distance(xi\ -\/\ 1,\ yi,\ d\ +\ 1);}
+\DoxyCodeLine{02318\ \ \ do\_fill\_distance(xi,\ yi\ +\ 1,\ d\ +\ 1);}
+\DoxyCodeLine{02319\ \ \ do\_fill\_distance(xi,\ yi\ -\/\ 1,\ d\ +\ 1);}
+\DoxyCodeLine{02320\ \}}
+\DoxyCodeLine{02321\ }
+\DoxyCodeLine{02325\ LRGBColorf\ PNMImage::}
+\DoxyCodeLine{02326\ get\_average\_xel()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02327\ \ \ LRGBColorf\ \mbox{\hyperlink{structcolor}{color}}\ (LRGBColorf::zero());}
+\DoxyCodeLine{02328\ \ \ \textcolor{keywordflow}{if}\ (\_x\_size\ ==\ 0\ ||\ \_y\_size\ ==\ 0)\ \{}
+\DoxyCodeLine{02329\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structcolor}{color}};}
+\DoxyCodeLine{02330\ \ \ \}}
+\DoxyCodeLine{02331\ }
+\DoxyCodeLine{02332\ \ \ \textcolor{keywordtype}{float}\ factor\ =\ 1.0f\ /\ (float)(\_x\_size\ *\ \_y\_size);}
+\DoxyCodeLine{02333\ }
+\DoxyCodeLine{02334\ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{02335\ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02336\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02337\ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}\ +=\ get\_xel(x,\ y)\ *\ factor;}
+\DoxyCodeLine{02338\ \ \ \ \ \}}
+\DoxyCodeLine{02339\ \ \ \}}
+\DoxyCodeLine{02340\ }
+\DoxyCodeLine{02341\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structcolor}{color}};}
+\DoxyCodeLine{02342\ \}}
+\DoxyCodeLine{02343\ }
+\DoxyCodeLine{02348\ LColorf\ PNMImage::}
+\DoxyCodeLine{02349\ get\_average\_xel\_a()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02350\ \ \ LColorf\ \mbox{\hyperlink{structcolor}{color}}\ (LColorf::zero());}
+\DoxyCodeLine{02351\ \ \ \textcolor{keywordflow}{if}\ (\_x\_size\ ==\ 0\ ||\ \_y\_size\ ==\ 0)\ \{}
+\DoxyCodeLine{02352\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structcolor}{color}};}
+\DoxyCodeLine{02353\ \ \ \}}
+\DoxyCodeLine{02354\ }
+\DoxyCodeLine{02355\ \ \ \textcolor{keywordtype}{float}\ factor\ =\ 1.0f\ /\ (float)(\_x\_size\ *\ \_y\_size);}
+\DoxyCodeLine{02356\ }
+\DoxyCodeLine{02357\ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{02358\ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02359\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02360\ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}\ +=\ get\_xel\_a(x,\ y)\ *\ factor;}
+\DoxyCodeLine{02361\ \ \ \ \ \}}
+\DoxyCodeLine{02362\ \ \ \}}
+\DoxyCodeLine{02363\ }
+\DoxyCodeLine{02364\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structcolor}{color}};}
+\DoxyCodeLine{02365\ \}}
+\DoxyCodeLine{02366\ }
+\DoxyCodeLine{02370\ \textcolor{keywordtype}{float}\ PNMImage::}
+\DoxyCodeLine{02371\ get\_average\_gray()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02372\ \ \ \textcolor{keywordtype}{float}\ gray\ =\ 0.0;}
+\DoxyCodeLine{02373\ \ \ \textcolor{keywordflow}{if}\ (\_x\_size\ ==\ 0\ ||\ \_y\_size\ ==\ 0)\ \{}
+\DoxyCodeLine{02374\ \ \ \ \ \textcolor{keywordflow}{return}\ gray;}
+\DoxyCodeLine{02375\ \ \ \}}
+\DoxyCodeLine{02376\ }
+\DoxyCodeLine{02377\ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{02378\ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02379\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02380\ \ \ \ \ \ \ gray\ +=\ get\_gray(x,\ y);}
+\DoxyCodeLine{02381\ \ \ \ \ \}}
+\DoxyCodeLine{02382\ \ \ \}}
+\DoxyCodeLine{02383\ }
+\DoxyCodeLine{02384\ \ \ gray\ /=\ (float)(\_x\_size\ *\ \_y\_size);}
+\DoxyCodeLine{02385\ \ \ \textcolor{keywordflow}{return}\ gray;}
+\DoxyCodeLine{02386\ \}}
+\DoxyCodeLine{02387\ }
+\DoxyCodeLine{02392\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ PNMImage::}
+\DoxyCodeLine{02393\ operator\ \string~\ ()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02394\ \ \ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ target\ (*\textcolor{keyword}{this});}
+\DoxyCodeLine{02395\ \ \ \textcolor{keywordtype}{size\_t}\ array\_size\ =\ \_x\_size\ *\ \_y\_size;}
+\DoxyCodeLine{02396\ }
+\DoxyCodeLine{02397\ \ \ \textcolor{keywordflow}{if}\ (\_array\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ \_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02398\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02399\ \ \ \ \ \ \ target.\_array[i].r\ =\ \_maxval\ -\/\ \_array[i].r;}
+\DoxyCodeLine{02400\ \ \ \ \ \ \ target.\_array[i].g\ =\ \_maxval\ -\/\ \_array[i].g;}
+\DoxyCodeLine{02401\ \ \ \ \ \ \ target.\_array[i].b\ =\ \_maxval\ -\/\ \_array[i].b;}
+\DoxyCodeLine{02402\ \ \ \ \ \ \ target.\_alpha[i]\ =\ \_maxval\ -\/\ \_alpha[i];}
+\DoxyCodeLine{02403\ \ \ \ \ \}}
+\DoxyCodeLine{02404\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_array\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02405\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02406\ \ \ \ \ \ \ target.\_array[i].r\ =\ \_maxval\ -\/\ \_array[i].r;}
+\DoxyCodeLine{02407\ \ \ \ \ \ \ target.\_array[i].g\ =\ \_maxval\ -\/\ \_array[i].g;}
+\DoxyCodeLine{02408\ \ \ \ \ \ \ target.\_array[i].b\ =\ \_maxval\ -\/\ \_array[i].b;}
+\DoxyCodeLine{02409\ \ \ \ \ \}}
+\DoxyCodeLine{02410\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02411\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02412\ \ \ \ \ \ \ target.\_alpha[i]\ =\ \_maxval\ -\/\ \_alpha[i];}
+\DoxyCodeLine{02413\ \ \ \ \ \}}
+\DoxyCodeLine{02414\ \ \ \}}
+\DoxyCodeLine{02415\ \ \ \textcolor{keywordflow}{return}\ target;}
+\DoxyCodeLine{02416\ \}}
+\DoxyCodeLine{02417\ }
+\DoxyCodeLine{02422\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02423\ operator\ +=\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&other)\ \{}
+\DoxyCodeLine{02424\ \ \ nassertv(is\_valid()\ \&\&\ other.is\_valid());}
+\DoxyCodeLine{02425\ \ \ nassertv(\_x\_size\ ==\ other.\_x\_size\ \&\&\ \_y\_size\ ==\ other.\_y\_size);}
+\DoxyCodeLine{02426\ }
+\DoxyCodeLine{02427\ \ \ \textcolor{keywordflow}{if}\ (get\_maxval()\ ==\ other.get\_maxval()\ \&\&}
+\DoxyCodeLine{02428\ \ \ \ \ \ \ get\_color\_space()\ ==\ CS\_linear\ \&\&}
+\DoxyCodeLine{02429\ \ \ \ \ \ \ other.get\_color\_space()\ ==\ CS\_linear)\ \{}
+\DoxyCodeLine{02430\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ array\_size\ =\ \_x\_size\ *\ \_y\_size;}
+\DoxyCodeLine{02431\ }
+\DoxyCodeLine{02432\ \ \ \ \ \textcolor{comment}{//\ Simple\ case:\ add\ vals\ directly.}}
+\DoxyCodeLine{02433\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ other.\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02434\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02435\ \ \ \ \ \ \ \ \ \_array[i].r\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].r\ +\ (\textcolor{keywordtype}{int})other.\_array[i].r);}
+\DoxyCodeLine{02436\ \ \ \ \ \ \ \ \ \_array[i].g\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].g\ +\ (\textcolor{keywordtype}{int})other.\_array[i].g);}
+\DoxyCodeLine{02437\ \ \ \ \ \ \ \ \ \_array[i].b\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].b\ +\ (\textcolor{keywordtype}{int})other.\_array[i].b);}
+\DoxyCodeLine{02438\ \ \ \ \ \ \ \ \ \_alpha[i]\ =\ clamp\_val((\textcolor{keywordtype}{int})\_alpha[i]\ +\ (\textcolor{keywordtype}{int})other.\_alpha[i]);}
+\DoxyCodeLine{02439\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02440\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02441\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02442\ \ \ \ \ \ \ \ \ \_array[i].r\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].r\ +\ (\textcolor{keywordtype}{int})other.\_array[i].r);}
+\DoxyCodeLine{02443\ \ \ \ \ \ \ \ \ \_array[i].g\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].g\ +\ (\textcolor{keywordtype}{int})other.\_array[i].g);}
+\DoxyCodeLine{02444\ \ \ \ \ \ \ \ \ \_array[i].b\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].b\ +\ (\textcolor{keywordtype}{int})other.\_array[i].b);}
+\DoxyCodeLine{02445\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02446\ \ \ \ \ \}}
+\DoxyCodeLine{02447\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02448\ \ \ \ \ \textcolor{comment}{//\ Not\ a\ linear\ color\ space:\ convert\ back\ and\ forth.}}
+\DoxyCodeLine{02449\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{02450\ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02451\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02452\ \ \ \ \ \ \ \ \ set\_xel\_a(x,\ y,\ get\_xel\_a(x,\ y)\ +\ other.get\_xel\_a(x,\ y));}
+\DoxyCodeLine{02453\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02454\ \ \ \ \ \}}
+\DoxyCodeLine{02455\ \ \ \}}
+\DoxyCodeLine{02456\ \}}
+\DoxyCodeLine{02457\ }
+\DoxyCodeLine{02461\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02462\ operator\ +=\ (\textcolor{keyword}{const}\ LColorf\ \&other)\ \{}
+\DoxyCodeLine{02463\ \ \ nassertv(is\_valid());}
+\DoxyCodeLine{02464\ }
+\DoxyCodeLine{02465\ \ \ \textcolor{keywordflow}{if}\ (get\_color\_space()\ ==\ CS\_linear)\ \{}
+\DoxyCodeLine{02466\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ array\_size\ =\ \_x\_size\ *\ \_y\_size;}
+\DoxyCodeLine{02467\ }
+\DoxyCodeLine{02468\ \ \ \ \ \textcolor{comment}{//\ Note:\ don't\ use\ to\_val\ here\ because\ it\ clamps\ values\ below\ 0}}
+\DoxyCodeLine{02469\ \ \ \ \ \textcolor{keywordtype}{int}\ add\_r\ =\ (int)(other.get\_x()\ *\ get\_maxval()\ +\ 0.5);}
+\DoxyCodeLine{02470\ \ \ \ \ \textcolor{keywordtype}{int}\ add\_g\ =\ (int)(other.get\_y()\ *\ get\_maxval()\ +\ 0.5);}
+\DoxyCodeLine{02471\ \ \ \ \ \textcolor{keywordtype}{int}\ add\_b\ =\ (int)(other.get\_z()\ *\ get\_maxval()\ +\ 0.5);}
+\DoxyCodeLine{02472\ \ \ \ \ \textcolor{keywordtype}{int}\ add\_a\ =\ (int)(other.get\_w()\ *\ get\_maxval()\ +\ 0.5);}
+\DoxyCodeLine{02473\ }
+\DoxyCodeLine{02474\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02475\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02476\ \ \ \ \ \ \ \ \ \_array[i].r\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].r\ +\ add\_r);}
+\DoxyCodeLine{02477\ \ \ \ \ \ \ \ \ \_array[i].g\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].g\ +\ add\_g);}
+\DoxyCodeLine{02478\ \ \ \ \ \ \ \ \ \_array[i].b\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].b\ +\ add\_b);}
+\DoxyCodeLine{02479\ \ \ \ \ \ \ \ \ \_alpha[i]\ =\ clamp\_val((\textcolor{keywordtype}{int})\_alpha[i]\ +\ add\_a);}
+\DoxyCodeLine{02480\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02481\ }
+\DoxyCodeLine{02482\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02483\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02484\ \ \ \ \ \ \ \ \ \_array[i].r\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].r\ +\ add\_r);}
+\DoxyCodeLine{02485\ \ \ \ \ \ \ \ \ \_array[i].g\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].g\ +\ add\_g);}
+\DoxyCodeLine{02486\ \ \ \ \ \ \ \ \ \_array[i].b\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].b\ +\ add\_b);}
+\DoxyCodeLine{02487\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02488\ \ \ \ \ \}}
+\DoxyCodeLine{02489\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02490\ \ \ \ \ \textcolor{comment}{//\ Not\ a\ linear\ color\ space:\ convert\ back\ and\ forth.}}
+\DoxyCodeLine{02491\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{02492\ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02493\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02494\ \ \ \ \ \ \ \ \ set\_xel\_a(x,\ y,\ get\_xel\_a(x,\ y)\ +\ other);}
+\DoxyCodeLine{02495\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02496\ \ \ \ \ \}}
+\DoxyCodeLine{02497\ \ \ \}}
+\DoxyCodeLine{02498\ \}}
+\DoxyCodeLine{02499\ }
+\DoxyCodeLine{02504\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02505\ operator\ -\/=\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&other)\ \{}
+\DoxyCodeLine{02506\ \ \ nassertv(is\_valid()\ \&\&\ other.is\_valid());}
+\DoxyCodeLine{02507\ \ \ nassertv(\_x\_size\ ==\ other.\_x\_size\ \&\&\ \_y\_size\ ==\ other.\_y\_size);}
+\DoxyCodeLine{02508\ }
+\DoxyCodeLine{02509\ \ \ \textcolor{keywordflow}{if}\ (get\_maxval()\ ==\ other.get\_maxval()\ \&\&}
+\DoxyCodeLine{02510\ \ \ \ \ \ \ get\_color\_space()\ ==\ CS\_linear\ \&\&}
+\DoxyCodeLine{02511\ \ \ \ \ \ \ other.get\_color\_space()\ ==\ CS\_linear)\ \{}
+\DoxyCodeLine{02512\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ array\_size\ =\ \_x\_size\ *\ \_y\_size;}
+\DoxyCodeLine{02513\ }
+\DoxyCodeLine{02514\ \ \ \ \ \textcolor{comment}{//\ Simple\ case:\ subtract\ vals\ directly.}}
+\DoxyCodeLine{02515\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ other.\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02516\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02517\ \ \ \ \ \ \ \ \ \_array[i].r\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].r\ -\/\ (\textcolor{keywordtype}{int})other.\_array[i].r);}
+\DoxyCodeLine{02518\ \ \ \ \ \ \ \ \ \_array[i].g\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].g\ -\/\ (\textcolor{keywordtype}{int})other.\_array[i].g);}
+\DoxyCodeLine{02519\ \ \ \ \ \ \ \ \ \_array[i].b\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].b\ -\/\ (\textcolor{keywordtype}{int})other.\_array[i].b);}
+\DoxyCodeLine{02520\ \ \ \ \ \ \ \ \ \_alpha[i]\ =\ clamp\_val((\textcolor{keywordtype}{int})\_alpha[i]\ -\/\ (\textcolor{keywordtype}{int})other.\_alpha[i]);}
+\DoxyCodeLine{02521\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02522\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02523\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02524\ \ \ \ \ \ \ \ \ \_array[i].r\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].r\ -\/\ (\textcolor{keywordtype}{int})other.\_array[i].r);}
+\DoxyCodeLine{02525\ \ \ \ \ \ \ \ \ \_array[i].g\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].g\ -\/\ (\textcolor{keywordtype}{int})other.\_array[i].g);}
+\DoxyCodeLine{02526\ \ \ \ \ \ \ \ \ \_array[i].b\ =\ clamp\_val((\textcolor{keywordtype}{int})\_array[i].b\ -\/\ (\textcolor{keywordtype}{int})other.\_array[i].b);}
+\DoxyCodeLine{02527\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02528\ \ \ \ \ \}}
+\DoxyCodeLine{02529\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02530\ \ \ \ \ \textcolor{comment}{//\ Not\ a\ linear\ color\ space:\ convert\ back\ and\ forth.}}
+\DoxyCodeLine{02531\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{02532\ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02533\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02534\ \ \ \ \ \ \ \ \ set\_xel\_a(x,\ y,\ get\_xel\_a(x,\ y)\ -\/\ other.get\_xel\_a(x,\ y));}
+\DoxyCodeLine{02535\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02536\ \ \ \ \ \}}
+\DoxyCodeLine{02537\ \ \ \}}
+\DoxyCodeLine{02538\ \}}
+\DoxyCodeLine{02539\ }
+\DoxyCodeLine{02543\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02544\ operator\ -\/=\ (\textcolor{keyword}{const}\ LColorf\ \&other)\ \{}
+\DoxyCodeLine{02545\ \ \ (*this)\ +=\ -\/other;}
+\DoxyCodeLine{02546\ \}}
+\DoxyCodeLine{02547\ }
+\DoxyCodeLine{02554\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02555\ operator\ *=\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&other)\ \{}
+\DoxyCodeLine{02556\ \ \ nassertv(is\_valid()\ \&\&\ other.is\_valid());}
+\DoxyCodeLine{02557\ \ \ nassertv(\_x\_size\ ==\ other.\_x\_size\ \&\&\ \_y\_size\ ==\ other.\_y\_size);}
+\DoxyCodeLine{02558\ }
+\DoxyCodeLine{02559\ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{02560\ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02561\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02562\ \ \ \ \ \ \ set\_xel\_a(x,\ y,\ get\_xel\_a(x,\ y)\ -\/\ other.get\_xel\_a(x,\ y));}
+\DoxyCodeLine{02563\ \ \ \ \ \}}
+\DoxyCodeLine{02564\ \ \ \}}
+\DoxyCodeLine{02565\ \}}
+\DoxyCodeLine{02566\ }
+\DoxyCodeLine{02571\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02572\ operator\ *=\ (\textcolor{keywordtype}{float}\ multiplier)\ \{}
+\DoxyCodeLine{02573\ \ \ nassertv(is\_valid());}
+\DoxyCodeLine{02574\ }
+\DoxyCodeLine{02575\ \ \ \textcolor{keywordflow}{if}\ (get\_color\_space()\ ==\ CS\_linear)\ \{}
+\DoxyCodeLine{02576\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ array\_size\ =\ \_x\_size\ *\ \_y\_size;}
+\DoxyCodeLine{02577\ }
+\DoxyCodeLine{02578\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02579\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02580\ \ \ \ \ \ \ \ \ \_array[i].r\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].r\ *\ multiplier\ +\ 0.5f));}
+\DoxyCodeLine{02581\ \ \ \ \ \ \ \ \ \_array[i].g\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].g\ *\ multiplier\ +\ 0.5f));}
+\DoxyCodeLine{02582\ \ \ \ \ \ \ \ \ \_array[i].b\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].b\ *\ multiplier\ +\ 0.5f));}
+\DoxyCodeLine{02583\ \ \ \ \ \ \ \ \ \_alpha[i]\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_alpha[i]\ *\ multiplier\ +\ 0.5f));}
+\DoxyCodeLine{02584\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02585\ }
+\DoxyCodeLine{02586\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02587\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02588\ \ \ \ \ \ \ \ \ \_array[i].r\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].r\ *\ multiplier\ +\ 0.5f));}
+\DoxyCodeLine{02589\ \ \ \ \ \ \ \ \ \_array[i].g\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].g\ *\ multiplier\ +\ 0.5f));}
+\DoxyCodeLine{02590\ \ \ \ \ \ \ \ \ \_array[i].b\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].b\ *\ multiplier\ +\ 0.5f));}
+\DoxyCodeLine{02591\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02592\ \ \ \ \ \}}
+\DoxyCodeLine{02593\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02594\ \ \ \ \ \textcolor{comment}{//\ Not\ a\ linear\ color\ space:\ convert\ back\ and\ forth.}}
+\DoxyCodeLine{02595\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{02596\ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02597\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02598\ \ \ \ \ \ \ \ \ set\_xel\_a(x,\ y,\ get\_xel\_a(x,\ y)\ *\ multiplier);}
+\DoxyCodeLine{02599\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02600\ \ \ \ \ \}}
+\DoxyCodeLine{02601\ \ \ \}}
+\DoxyCodeLine{02602\ \}}
+\DoxyCodeLine{02603\ }
+\DoxyCodeLine{02608\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{02609\ operator\ *=\ (\textcolor{keyword}{const}\ LColorf\ \&other)\ \{}
+\DoxyCodeLine{02610\ \ \ nassertv(is\_valid());}
+\DoxyCodeLine{02611\ }
+\DoxyCodeLine{02612\ \ \ \textcolor{keywordflow}{if}\ (get\_color\_space()\ ==\ CS\_linear)\ \{}
+\DoxyCodeLine{02613\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ array\_size\ =\ \_x\_size\ *\ \_y\_size;}
+\DoxyCodeLine{02614\ }
+\DoxyCodeLine{02615\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_alpha\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02616\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02617\ \ \ \ \ \ \ \ \ \_array[i].r\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].r\ *\ other[0]\ +\ 0.5f));}
+\DoxyCodeLine{02618\ \ \ \ \ \ \ \ \ \_array[i].g\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].g\ *\ other[1]\ +\ 0.5f));}
+\DoxyCodeLine{02619\ \ \ \ \ \ \ \ \ \_array[i].b\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].b\ *\ other[2]\ +\ 0.5f));}
+\DoxyCodeLine{02620\ \ \ \ \ \ \ \ \ \_alpha[i]\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_alpha[i]\ *\ other[3]\ +\ 0.5f));}
+\DoxyCodeLine{02621\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02622\ }
+\DoxyCodeLine{02623\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02624\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ array\_size;\ ++i)\ \{}
+\DoxyCodeLine{02625\ \ \ \ \ \ \ \ \ \_array[i].r\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].r\ *\ other[0]\ +\ 0.5f));}
+\DoxyCodeLine{02626\ \ \ \ \ \ \ \ \ \_array[i].g\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].g\ *\ other[1]\ +\ 0.5f));}
+\DoxyCodeLine{02627\ \ \ \ \ \ \ \ \ \_array[i].b\ =\ clamp\_val((\textcolor{keywordtype}{int})(\_array[i].b\ *\ other[2]\ +\ 0.5f));}
+\DoxyCodeLine{02628\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02629\ \ \ \ \ \}}
+\DoxyCodeLine{02630\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02631\ \ \ \ \ \textcolor{comment}{//\ Not\ a\ linear\ color\ space:\ convert\ back\ and\ forth.}}
+\DoxyCodeLine{02632\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y;}
+\DoxyCodeLine{02633\ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{02634\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{02635\ \ \ \ \ \ \ \ \ LColorf\ \mbox{\hyperlink{structcolor}{color}}\ =\ get\_xel\_a(x,\ y);}
+\DoxyCodeLine{02636\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}.componentwise\_mult(other);}
+\DoxyCodeLine{02637\ \ \ \ \ \ \ \ \ set\_xel\_a(x,\ y,\ \mbox{\hyperlink{structcolor}{color}});}
+\DoxyCodeLine{02638\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02639\ \ \ \ \ \}}
+\DoxyCodeLine{02640\ \ \ \}}
+\DoxyCodeLine{02641\ \}}
+
+\end{DoxyCode}

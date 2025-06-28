@@ -1,0 +1,930 @@
+\doxysection{panda\+File\+Stream\+Buf.\+cxx}
+\hypertarget{pandaFileStreamBuf_8cxx_source}{}\label{pandaFileStreamBuf_8cxx_source}\index{dtool/src/dtoolutil/pandaFileStreamBuf.cxx@{dtool/src/dtoolutil/pandaFileStreamBuf.cxx}}
+\mbox{\hyperlink{pandaFileStreamBuf_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pandaFileStreamBuf_8h}{pandaFileStreamBuf.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{memoryHook_8h}{memoryHook.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{filename_8h}{filename.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{textEncoder_8h}{textEncoder.h}}"{}}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#ifdef\ USE\_PANDAFILESTREAM}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#ifndef\ \_WIN32}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ <sys/types.h>}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ <sys/stat.h>}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ <fcntl.h>}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <errno.h>}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{keyword}{using\ }std::cerr;}
+\DoxyCodeLine{00029\ \textcolor{keyword}{using\ }std::dec;}
+\DoxyCodeLine{00030\ \textcolor{keyword}{using\ }std::hex;}
+\DoxyCodeLine{00031\ \textcolor{keyword}{using\ }std::ios;}
+\DoxyCodeLine{00032\ \textcolor{keyword}{using\ }std::istream;}
+\DoxyCodeLine{00033\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00034\ \textcolor{keyword}{using\ }std::streamoff;}
+\DoxyCodeLine{00035\ \textcolor{keyword}{using\ }std::streampos;}
+\DoxyCodeLine{00036\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ PandaFileStreamBuf::NewlineMode\ PandaFileStreamBuf::\_newline\_mode\ =\ NM\_native;}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ file\_buffer\_size\ =\ 4096;}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00045\ PandaFileStreamBuf::}
+\DoxyCodeLine{00046\ PandaFileStreamBuf()\ \{}
+\DoxyCodeLine{00047\ \ \ \_is\_open\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00048\ \ \ \_open\_mode\ =\ (ios::openmode)0;}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \ \ \_last\_read\_nl\ =\ 0;}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00053\ \ \ \textcolor{comment}{//\ Windows\ case.}}
+\DoxyCodeLine{00054\ \ \ \_handle\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00055\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00056\ \ \ \_fd\ =\ -\/1;}
+\DoxyCodeLine{00057\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00059\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_IOSTREAM}}
+\DoxyCodeLine{00060\ \ \ \_buffer\ =\ (\textcolor{keywordtype}{char}\ *)PANDA\_MALLOC\_ARRAY(file\_buffer\_size\ *\ 2);}
+\DoxyCodeLine{00061\ \ \ \textcolor{keywordtype}{char}\ *ebuf\ =\ \_buffer\ +\ file\_buffer\_size\ *\ 2;}
+\DoxyCodeLine{00062\ \ \ \textcolor{keywordtype}{char}\ *mbuf\ =\ \_buffer\ +\ file\_buffer\_size;}
+\DoxyCodeLine{00063\ \ \ setg(\_buffer,\ mbuf,\ mbuf);}
+\DoxyCodeLine{00064\ \ \ setp(mbuf,\ ebuf);}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00067\ \ \ allocate();}
+\DoxyCodeLine{00068\ \ \ \textcolor{comment}{//\ Chop\ the\ buffer\ in\ half.\ \ The\ bottom\ half\ goes\ to\ the\ get\ buffer;\ the\ top}}
+\DoxyCodeLine{00069\ \ \ \textcolor{comment}{//\ half\ goes\ to\ the\ put\ buffer.}}
+\DoxyCodeLine{00070\ \ \ \textcolor{keywordtype}{char}\ *b\ =\ base();}
+\DoxyCodeLine{00071\ \ \ \textcolor{keywordtype}{char}\ *t\ =\ ebuf();}
+\DoxyCodeLine{00072\ \ \ \textcolor{keywordtype}{char}\ *m\ =\ b\ +\ (t\ -\/\ b)\ /\ 2;}
+\DoxyCodeLine{00073\ \ \ setg(b,\ m,\ m);}
+\DoxyCodeLine{00074\ \ \ setp(b,\ m);}
+\DoxyCodeLine{00075\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00077\ \ \ \_gpos\ =\ 0;}
+\DoxyCodeLine{00078\ \ \ \_ppos\ =\ 0;}
+\DoxyCodeLine{00079\ \}}
+\DoxyCodeLine{00080\ }
+\DoxyCodeLine{00084\ PandaFileStreamBuf::}
+\DoxyCodeLine{00085\ \string~PandaFileStreamBuf()\ \{}
+\DoxyCodeLine{00086\ \ \ close();}
+\DoxyCodeLine{00087\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_IOSTREAM}}
+\DoxyCodeLine{00088\ \ \ PANDA\_FREE\_ARRAY(\_buffer);}
+\DoxyCodeLine{00089\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00090\ \}}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00095\ \textcolor{keywordtype}{void}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00096\ open(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *filename,\ ios::openmode\ mode)\ \{}
+\DoxyCodeLine{00097\ \ \ close();}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \_filename\ =\ filename;}
+\DoxyCodeLine{00100\ \ \ \_open\_mode\ =\ mode;}
+\DoxyCodeLine{00101\ \ \ \_is\_open\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00103\ \ \ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::app)\ \{}
+\DoxyCodeLine{00104\ \ \ \ \ \textcolor{comment}{//\ ios::app\ implies\ ios::out.}}
+\DoxyCodeLine{00105\ \ \ \ \ \_open\_mode\ |=\ ios::out;}
+\DoxyCodeLine{00106\ \ \ \}}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00108\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00109\ \ \ \textcolor{comment}{//\ Windows\ case.}}
+\DoxyCodeLine{00110\ \ \ DWORD\ access\ =\ 0;}
+\DoxyCodeLine{00111\ \ \ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::in)\ \{}
+\DoxyCodeLine{00112\ \ \ \ \ access\ |=\ GENERIC\_READ;}
+\DoxyCodeLine{00113\ \ \ \}}
+\DoxyCodeLine{00114\ \ \ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::out)\ \{}
+\DoxyCodeLine{00115\ \ \ \ \ access\ |=\ GENERIC\_WRITE;}
+\DoxyCodeLine{00116\ \ \ \}}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \ \ DWORD\ share\_mode\ =\ FILE\_SHARE\_READ\ |\ FILE\_SHARE\_WRITE\ |\ FILE\_SHARE\_DELETE;}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ \ \ DWORD\ creation\_disposition\ =\ 0;}
+\DoxyCodeLine{00121\ \ \ \textcolor{keywordflow}{if}\ ((\_open\_mode\ \&\ (ios::trunc\ |\ ios::out))\ ==\ (ios::trunc\ |\ ios::out))\ \{}
+\DoxyCodeLine{00122\ \ \ \ \ creation\_disposition\ =\ CREATE\_ALWAYS;}
+\DoxyCodeLine{00123\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::out)\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ creation\_disposition\ =\ OPEN\_ALWAYS;}
+\DoxyCodeLine{00125\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00126\ \ \ \ \ creation\_disposition\ =\ OPEN\_EXISTING;}
+\DoxyCodeLine{00127\ \ \ \}}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00129\ \ \ DWORD\ flags\ =\ 0;}
+\DoxyCodeLine{00130\ }
+\DoxyCodeLine{00131\ \ \ \textcolor{keywordflow}{if}\ (!(\_open\_mode\ \&\ ios::out))\ \{}
+\DoxyCodeLine{00132\ \ \ \ \ flags\ |=\ FILE\_ATTRIBUTE\_READONLY;}
+\DoxyCodeLine{00133\ \ \ \}}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00135\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00136\ \ \ \textcolor{comment}{//\ In\ SIMPLE\_THREADS\ mode,\ we\ use\ "{}overlapped"{}\ IO.}}
+\DoxyCodeLine{00137\ \ \ flags\ |=\ FILE\_FLAG\_OVERLAPPED;}
+\DoxyCodeLine{00138\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ \ \ \mbox{\hyperlink{classTextEncoder}{TextEncoder}}\ encoder;}
+\DoxyCodeLine{00141\ \ \ encoder.set\_encoding(Filename::get\_filesystem\_encoding());}
+\DoxyCodeLine{00142\ \ \ encoder.set\_text(\_filename);}
+\DoxyCodeLine{00143\ \ \ std::wstring\ wfilename\ =\ encoder.get\_wtext();}
+\DoxyCodeLine{00144\ \ \ \_handle\ =\ CreateFileW(wfilename.c\_str(),\ access,\ share\_mode,}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{nullptr},\ creation\_disposition,\ flags,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00146\ \ \ \textcolor{keywordflow}{if}\ (\_handle\ !=\ INVALID\_HANDLE\_VALUE)\ \{}
+\DoxyCodeLine{00147\ \ \ \ \ \textcolor{comment}{//\ The\ file\ was\ successfully\ opened\ and\ locked.}}
+\DoxyCodeLine{00148\ \ \ \ \ \_is\_open\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00149\ \ \ \}}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00151\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00152\ \ \ \textcolor{comment}{//\ Posix\ case.}}
+\DoxyCodeLine{00153\ \ \ \textcolor{keywordtype}{int}\ flags\ =\ 0;}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ \textcolor{keywordflow}{if}\ ((\_open\_mode\ \&\ (ios::in\ |\ ios::out))\ ==\ (ios::in\ |\ ios::out))\ \{}
+\DoxyCodeLine{00156\ \ \ \ \ flags\ |=\ O\_RDWR\ |\ O\_CREAT;}
+\DoxyCodeLine{00157\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::in)\ \{}
+\DoxyCodeLine{00158\ \ \ \ \ flags\ |=\ O\_RDONLY;}
+\DoxyCodeLine{00159\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::out)\ \{}
+\DoxyCodeLine{00160\ \ \ \ \ flags\ |=\ O\_WRONLY\ |\ O\_CREAT;}
+\DoxyCodeLine{00161\ \ \ \}}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00163\ \ \ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::app)\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ flags\ |=\ O\_APPEND;}
+\DoxyCodeLine{00165\ \ \ \}}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00167\ \ \ \textcolor{keywordflow}{if}\ ((\_open\_mode\ \&\ (ios::trunc\ |\ ios::out))\ ==\ (ios::trunc\ |\ ios::out))\ \{}
+\DoxyCodeLine{00168\ \ \ \ \ flags\ |=\ O\_TRUNC;}
+\DoxyCodeLine{00169\ \ \ \}}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00171\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00172\ \ \ \textcolor{comment}{//\ In\ SIMPLE\_THREADS\ mode,\ we\ use\ non-\/blocking\ IO.}}
+\DoxyCodeLine{00173\ \ \ flags\ |=\ O\_NONBLOCK;}
+\DoxyCodeLine{00174\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00176\ \ \ \_fd\ =\ ::open(\_filename.c\_str(),\ flags,\ 0666);}
+\DoxyCodeLine{00177\ \ \ \textcolor{keywordflow}{while}\ (\_fd\ ==\ -\/1\ \&\&\ errno\ ==\ EAGAIN)\ \{}
+\DoxyCodeLine{00178\ \ \ \ \ thread\_yield();}
+\DoxyCodeLine{00179\ \ \ \ \ \_fd\ =\ ::open(\_filename.c\_str(),\ flags,\ 0666);}
+\DoxyCodeLine{00180\ \ \ \}}
+\DoxyCodeLine{00181\ }
+\DoxyCodeLine{00182\ \ \ \textcolor{keywordflow}{if}\ (\_fd\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00183\ \ \ \ \ \_is\_open\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00184\ \ \ \}}
+\DoxyCodeLine{00185\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00186\ }
+\DoxyCodeLine{00187\ \}}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00197\ \textcolor{keywordtype}{void}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00198\ attach(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *filename,\ HANDLE\ handle,\ ios::openmode\ mode)\ \{}
+\DoxyCodeLine{00199\ \ \ close();}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ \_filename\ =\ filename;}
+\DoxyCodeLine{00202\ \ \ \_open\_mode\ =\ mode;}
+\DoxyCodeLine{00203\ \ \ \_is\_open\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00205\ \ \ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::app)\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \textcolor{comment}{//\ ios::app\ implies\ ios::out.}}
+\DoxyCodeLine{00207\ \ \ \ \ \_open\_mode\ |=\ ios::out;}
+\DoxyCodeLine{00208\ \ \ \}}
+\DoxyCodeLine{00209\ }
+\DoxyCodeLine{00210\ \ \ \_handle\ =\ handle;}
+\DoxyCodeLine{00211\ \ \ \textcolor{keywordflow}{if}\ (\_handle\ !=\ INVALID\_HANDLE\_VALUE)\ \{}
+\DoxyCodeLine{00212\ \ \ \ \ \textcolor{comment}{//\ Presumably\ the\ handle\ is\ valid.}}
+\DoxyCodeLine{00213\ \ \ \ \ \_is\_open\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00214\ \ \ \}}
+\DoxyCodeLine{00215\ \}}
+\DoxyCodeLine{00216\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00218\ \textcolor{preprocessor}{\#ifndef\ \_WIN32}}
+\DoxyCodeLine{00226\ \textcolor{keywordtype}{void}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00227\ attach(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *filename,\ \textcolor{keywordtype}{int}\ fd,\ ios::openmode\ mode)\ \{}
+\DoxyCodeLine{00228\ \ \ close();}
+\DoxyCodeLine{00229\ }
+\DoxyCodeLine{00230\ \ \ \_filename\ =\ filename;}
+\DoxyCodeLine{00231\ \ \ \_open\_mode\ =\ mode;}
+\DoxyCodeLine{00232\ \ \ \_is\_open\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00233\ }
+\DoxyCodeLine{00234\ \ \ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::app)\ \{}
+\DoxyCodeLine{00235\ \ \ \ \ \textcolor{comment}{//\ ios::app\ implies\ ios::out.}}
+\DoxyCodeLine{00236\ \ \ \ \ \_open\_mode\ |=\ ios::out;}
+\DoxyCodeLine{00237\ \ \ \}}
+\DoxyCodeLine{00238\ }
+\DoxyCodeLine{00239\ \ \ \_fd\ =\ fd;}
+\DoxyCodeLine{00240\ \ \ \textcolor{keywordflow}{if}\ (\_fd\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00241\ \ \ \ \ \textcolor{comment}{//\ Presumably\ the\ file\ descriptor\ is\ valid.}}
+\DoxyCodeLine{00242\ \ \ \ \ \_is\_open\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00243\ \ \ \}}
+\DoxyCodeLine{00244\ \}}
+\DoxyCodeLine{00245\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00246\ }
+\DoxyCodeLine{00250\ \textcolor{keywordtype}{bool}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00251\ is\_open()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00252\ \ \ \textcolor{keywordflow}{return}\ \_is\_open;}
+\DoxyCodeLine{00253\ \}}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00258\ \textcolor{keywordtype}{void}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00259\ close()\ \{}
+\DoxyCodeLine{00260\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ write\ buffer\ is\ flushed.}}
+\DoxyCodeLine{00261\ \ \ sync();}
+\DoxyCodeLine{00262\ }
+\DoxyCodeLine{00263\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00264\ \ \ \textcolor{keywordflow}{if}\ (\_handle\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00265\ \ \ \ \ CloseHandle(\_handle);}
+\DoxyCodeLine{00266\ \ \ \}}
+\DoxyCodeLine{00267\ \ \ \_handle\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00268\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00269\ \ \ \textcolor{keywordflow}{if}\ (\_fd\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \textcolor{keywordflow}{if}\ (::close(\_fd)\ <\ 0)\ \{}
+\DoxyCodeLine{00271\ \textcolor{preprocessor}{\#ifdef\ NDEBUG}}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ perror(\textcolor{stringliteral}{"{}close"{}});}
+\DoxyCodeLine{00273\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ *str\ =\ (\textcolor{keywordtype}{char}\ *)alloca(\_filename.size()\ +\ 32);}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ sprintf(str,\ \textcolor{stringliteral}{"{}close(\%d\ \(\backslash\)"{}\%s\(\backslash\)"{})"{}},\ \_fd,\ \_filename.c\_str());}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ perror(str);}
+\DoxyCodeLine{00277\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00278\ \ \ \ \ \}}
+\DoxyCodeLine{00279\ \ \ \}}
+\DoxyCodeLine{00280\ \ \ \_fd\ =\ -\/1;}
+\DoxyCodeLine{00281\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00283\ \ \ \_is\_open\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00284\ \ \ \_open\_mode\ =\ (ios::openmode)0;}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \_gpos\ =\ 0;}
+\DoxyCodeLine{00287\ \ \ \_ppos\ =\ 0;}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ pbump(pbase()\ -\/\ pptr());}
+\DoxyCodeLine{00290\ \ \ gbump(egptr()\ -\/\ gptr());}
+\DoxyCodeLine{00291\ \}}
+\DoxyCodeLine{00292\ }
+\DoxyCodeLine{00296\ streampos\ PandaFileStreamBuf::}
+\DoxyCodeLine{00297\ seekoff(streamoff\ off,\ ios\_seekdir\ dir,\ ios\_openmode\ which)\ \{}
+\DoxyCodeLine{00298\ \ \ streampos\ result\ =\ -\/1;}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00300\ \ \ \textcolor{keywordflow}{if}\ (!(\_open\_mode\ \&\ ios::binary))\ \{}
+\DoxyCodeLine{00301\ \ \ \ \ \textcolor{comment}{//\ Seeking\ on\ text\ files\ is\ only\ supported\ for\ seeks\ to\ the\ beginning\ of}}
+\DoxyCodeLine{00302\ \ \ \ \ \textcolor{comment}{//\ the\ file.}}
+\DoxyCodeLine{00303\ \ \ \ \ \textcolor{keywordflow}{if}\ (off\ !=\ 0\ ||\ dir\ !=\ ios::beg)\ \{}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00305\ \ \ \ \ \}}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00307\ \ \ \ \ \_last\_read\_nl\ =\ 0;}
+\DoxyCodeLine{00308\ \ \ \}}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ \textcolor{comment}{//\ Sync\ the\ iostream\ buffer\ first.}}
+\DoxyCodeLine{00311\ \ \ sync();}
+\DoxyCodeLine{00312\ }
+\DoxyCodeLine{00313\ \ \ \textcolor{keywordflow}{if}\ (which\ \&\ ios::in)\ \{}
+\DoxyCodeLine{00314\ \ \ \ \ \textcolor{comment}{//\ Determine\ the\ current\ file\ position.}}
+\DoxyCodeLine{00315\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ egptr()\ -\/\ gptr();}
+\DoxyCodeLine{00316\ \ \ \ \ gbump(n);}
+\DoxyCodeLine{00317\ \ \ \ \ \_gpos\ -\/=\ n;}
+\DoxyCodeLine{00318\ \ \ \ \ assert(\_gpos\ >=\ 0);}
+\DoxyCodeLine{00319\ \ \ \ \ streampos\ cur\_pos\ =\ \_gpos;}
+\DoxyCodeLine{00320\ \ \ \ \ streampos\ new\_pos\ =\ cur\_pos;}
+\DoxyCodeLine{00321\ }
+\DoxyCodeLine{00322\ \ \ \ \ \textcolor{comment}{//\ Now\ adjust\ the\ data\ pointer\ appropriately.}}
+\DoxyCodeLine{00323\ \ \ \ \ \textcolor{keywordflow}{switch}\ (dir)\ \{}
+\DoxyCodeLine{00324\ \ \ \ \ \textcolor{keywordflow}{case}\ ios::beg:}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ new\_pos\ =\ (streampos)off;}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00327\ }
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{keywordflow}{case}\ ios::cur:}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ new\_pos\ =\ (streampos)(cur\_pos\ +\ off);}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00331\ }
+\DoxyCodeLine{00332\ \ \ \ \ \textcolor{keywordflow}{case}\ ios::end:}
+\DoxyCodeLine{00333\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \textcolor{comment}{//\ Windows\ case.}}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ LARGE\_INTEGER\ li;}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ GetFileSizeEx(\_handle,\ \&li);}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ new\_pos\ =\ (streampos)li.QuadPart\ +\ off;}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00340\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \textcolor{comment}{//\ Posix\ case.}}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ off\_t\ li\ =\ lseek(\_fd,\ off,\ SEEK\_END);}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (li\ ==\ (off\_t)-\/1\ ||\ (\textcolor{keyword}{sizeof}(off\_t)\ ==\ 8\ \&\&\ li\ ==\ 0x7fffffffffffffff))\ \{}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ new\_pos\ =\ (size\_t)li;}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00349\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \textcolor{comment}{//\ Shouldn't\ get\ here.}}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00355\ \ \ \ \ \}}
+\DoxyCodeLine{00356\ }
+\DoxyCodeLine{00357\ \ \ \ \ \_gpos\ =\ new\_pos;}
+\DoxyCodeLine{00358\ \ \ \ \ assert(\_gpos\ >=\ 0);}
+\DoxyCodeLine{00359\ \ \ \ \ result\ =\ new\_pos;}
+\DoxyCodeLine{00360\ \ \ \}}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ \textcolor{keywordflow}{if}\ (which\ \&\ ios::out)\ \{}
+\DoxyCodeLine{00363\ \ \ \ \ \textcolor{comment}{//\ Determine\ the\ current\ file\ position.}}
+\DoxyCodeLine{00364\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ pptr()\ -\/\ pbase();}
+\DoxyCodeLine{00365\ \ \ \ \ streampos\ cur\_pos\ =\ \_ppos\ +\ (streamoff)n;}
+\DoxyCodeLine{00366\ \ \ \ \ streampos\ new\_pos\ =\ cur\_pos;}
+\DoxyCodeLine{00367\ }
+\DoxyCodeLine{00368\ \ \ \ \ \textcolor{comment}{//\ Now\ adjust\ the\ data\ pointer\ appropriately.}}
+\DoxyCodeLine{00369\ \ \ \ \ \textcolor{keywordflow}{switch}\ (dir)\ \{}
+\DoxyCodeLine{00370\ \ \ \ \ \textcolor{keywordflow}{case}\ ios::beg:}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ new\_pos\ =\ (streampos)off;}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00373\ }
+\DoxyCodeLine{00374\ \ \ \ \ \textcolor{keywordflow}{case}\ ios::cur:}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ new\_pos\ =\ (streampos)(cur\_pos\ +\ off);}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00377\ }
+\DoxyCodeLine{00378\ \ \ \ \ \textcolor{keywordflow}{case}\ ios::end:}
+\DoxyCodeLine{00379\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \textcolor{comment}{//\ Windows\ case.}}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \ \ LARGE\_INTEGER\ li;}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \ \ GetFileSizeEx(\_handle,\ \&li);}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ new\_pos\ =\ (streampos)li.QuadPart\ +\ off;}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00386\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \textcolor{comment}{//\ Posix\ case.}}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ new\_pos\ =\ lseek(\_fd,\ off,\ SEEK\_END);}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_pos\ ==\ (streampos)-\/1)\ \{}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00392\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00394\ }
+\DoxyCodeLine{00395\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \textcolor{comment}{//\ Shouldn't\ get\ here.}}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00398\ \ \ \ \ \}}
+\DoxyCodeLine{00399\ }
+\DoxyCodeLine{00400\ \ \ \ \ \_ppos\ =\ new\_pos;}
+\DoxyCodeLine{00401\ \ \ \ \ assert(\_ppos\ >=\ 0);}
+\DoxyCodeLine{00402\ \ \ \ \ result\ =\ new\_pos;}
+\DoxyCodeLine{00403\ \ \ \}}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00405\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00406\ \}}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00417\ streampos\ PandaFileStreamBuf::}
+\DoxyCodeLine{00418\ seekpos(streampos\ pos,\ ios\_openmode\ which)\ \{}
+\DoxyCodeLine{00419\ \ \ \textcolor{keywordflow}{return}\ seekoff(pos,\ ios::beg,\ which);}
+\DoxyCodeLine{00420\ \}}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00426\ \textcolor{keywordtype}{int}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00427\ overflow(\textcolor{keywordtype}{int}\ ch)\ \{}
+\DoxyCodeLine{00428\ \ \ \textcolor{keywordtype}{bool}\ okflag\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00429\ }
+\DoxyCodeLine{00430\ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ pptr()\ -\/\ pbase();}
+\DoxyCodeLine{00431\ \ \ \textcolor{keywordflow}{if}\ (n\ !=\ 0)\ \{}
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ wrote\ =\ write\_chars(pbase(),\ n);}
+\DoxyCodeLine{00433\ \ \ \ \ pbump(-\/(streamoff)wrote);}
+\DoxyCodeLine{00434\ \ \ \ \ \textcolor{keywordflow}{if}\ (wrote\ !=\ n)\ \{}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ okflag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00436\ \ \ \ \ \}}
+\DoxyCodeLine{00437\ \ \ \}}
+\DoxyCodeLine{00438\ }
+\DoxyCodeLine{00439\ \ \ \textcolor{keywordflow}{if}\ (okflag\ \&\&\ ch\ !=\ EOF)\ \{}
+\DoxyCodeLine{00440\ \ \ \ \ \textcolor{keywordflow}{if}\ (pptr()\ !=\ epptr())\ \{}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \textcolor{comment}{//\ Store\ the\ extra\ character\ back\ in\ the\ buffer.}}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ *(pptr())\ =\ ch;}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ pbump(1);}
+\DoxyCodeLine{00444\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ \textcolor{comment}{//\ No\ room\ to\ store\ ch.}}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ okflag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00447\ \ \ \ \ \}}
+\DoxyCodeLine{00448\ \ \ \}}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00450\ \ \ \textcolor{keywordflow}{if}\ (!okflag)\ \{}
+\DoxyCodeLine{00451\ \ \ \ \ \textcolor{keywordflow}{return}\ EOF;}
+\DoxyCodeLine{00452\ \ \ \}}
+\DoxyCodeLine{00453\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00454\ \}}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00460\ \textcolor{keywordtype}{int}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00461\ sync()\ \{}
+\DoxyCodeLine{00462\ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ pptr()\ -\/\ pbase();}
+\DoxyCodeLine{00463\ }
+\DoxyCodeLine{00464\ \ \ \textcolor{keywordtype}{size\_t}\ wrote\ =\ write\_chars(pbase(),\ n);}
+\DoxyCodeLine{00465\ \ \ pbump(-\/(streamoff)wrote);}
+\DoxyCodeLine{00466\ }
+\DoxyCodeLine{00467\ \ \ \textcolor{keywordflow}{if}\ (n\ !=\ wrote)\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \textcolor{keywordflow}{return}\ EOF;}
+\DoxyCodeLine{00469\ \ \ \}}
+\DoxyCodeLine{00470\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00471\ \}}
+\DoxyCodeLine{00472\ }
+\DoxyCodeLine{00477\ \textcolor{keywordtype}{int}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00478\ underflow()\ \{}
+\DoxyCodeLine{00479\ \ \ \textcolor{comment}{//\ Sometimes\ underflow()\ is\ called\ even\ if\ the\ buffer\ is\ not\ empty.}}
+\DoxyCodeLine{00480\ \ \ \textcolor{keywordflow}{if}\ (gptr()\ >=\ egptr())\ \{}
+\DoxyCodeLine{00481\ \ \ \ \ sync();}
+\DoxyCodeLine{00482\ }
+\DoxyCodeLine{00483\ \ \ \ \ \textcolor{comment}{//\ Mark\ the\ buffer\ filled\ (with\ buffer\_size\ bytes).}}
+\DoxyCodeLine{00484\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ egptr()\ -\/\ eback();}
+\DoxyCodeLine{00485\ \ \ \ \ gbump(-\/(streamoff)buffer\_size);}
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00487\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ num\_bytes\ =\ buffer\_size;}
+\DoxyCodeLine{00488\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ read\_count\ =\ read\_chars(gptr(),\ buffer\_size);}
+\DoxyCodeLine{00489\ }
+\DoxyCodeLine{00490\ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_count\ !=\ num\_bytes)\ \{}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \textcolor{comment}{//\ Oops,\ we\ didn't\ read\ what\ we\ thought\ we\ would.}}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00493\ \ \ \ \ \ \ \ \ gbump(num\_bytes);}
+\DoxyCodeLine{00494\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EOF;}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \textcolor{comment}{//\ Slide\ what\ we\ did\ read\ to\ the\ top\ of\ the\ buffer.}}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ assert(read\_count\ <\ num\_bytes);}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ delta\ =\ num\_bytes\ -\/\ read\_count;}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ memmove(gptr()\ +\ delta,\ gptr(),\ read\_count);}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ gbump(delta);}
+\DoxyCodeLine{00502\ \ \ \ \ \}}
+\DoxyCodeLine{00503\ \ \ \}}
+\DoxyCodeLine{00504\ }
+\DoxyCodeLine{00505\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})*gptr();}
+\DoxyCodeLine{00506\ \}}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00512\ \textcolor{keywordtype}{size\_t}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00513\ read\_chars(\textcolor{keywordtype}{char}\ *start,\ \textcolor{keywordtype}{size\_t}\ length)\ \{}
+\DoxyCodeLine{00514\ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0\ ||\ !\_is\_open)\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \textcolor{comment}{//\ Trivial\ no-\/op.}}
+\DoxyCodeLine{00516\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00517\ \ \ \}}
+\DoxyCodeLine{00518\ }
+\DoxyCodeLine{00519\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ write\ buffer\ is\ flushed.}}
+\DoxyCodeLine{00520\ \ \ sync();}
+\DoxyCodeLine{00521\ }
+\DoxyCodeLine{00522\ \ \ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::binary)\ \{}
+\DoxyCodeLine{00523\ \ \ \ \ \textcolor{comment}{//\ If\ the\ file\ is\ opened\ in\ binary\ mode,\ just\ read\ the\ data\ in\ the\ file.}}
+\DoxyCodeLine{00524\ \ \ \ \ \textcolor{keywordflow}{return}\ read\_chars\_raw(start,\ length);}
+\DoxyCodeLine{00525\ \ \ \}}
+\DoxyCodeLine{00526\ }
+\DoxyCodeLine{00527\ \ \ \textcolor{comment}{//\ The\ file\ is\ opened\ in\ text\ mode.\ \ We\ have\ to\ decode\ newline\ characters\ in}}
+\DoxyCodeLine{00528\ \ \ \textcolor{comment}{//\ the\ file.}}
+\DoxyCodeLine{00529\ \ \ \textcolor{keywordflow}{if}\ (\_newline\_mode\ ==\ NM\_binary)\ \{}
+\DoxyCodeLine{00530\ \ \ \ \ \textcolor{comment}{//\ Unless\ we're\ configured\ to\ always\ use\ binary\ mode.}}
+\DoxyCodeLine{00531\ \ \ \ \ \textcolor{keywordflow}{return}\ read\_chars\_raw(start,\ length);}
+\DoxyCodeLine{00532\ \ \ \}}
+\DoxyCodeLine{00533\ }
+\DoxyCodeLine{00534\ \ \ \textcolor{keywordtype}{char}\ *buffer\ =\ (\textcolor{keywordtype}{char}\ *)alloca(length);}
+\DoxyCodeLine{00535\ }
+\DoxyCodeLine{00536\ \ \ \textcolor{keywordtype}{size\_t}\ read\_length;}
+\DoxyCodeLine{00537\ \ \ \textcolor{keywordtype}{size\_t}\ final\_length;}
+\DoxyCodeLine{00538\ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00539\ \ \ \ \ read\_length\ =\ length\ -\/\ 1;}
+\DoxyCodeLine{00540\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_last\_read\_nl\ !=\ 0)\ \{}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ a\ newline\ character\ to\ grow\ on,\ we\ might\ need\ to\ expand}}
+\DoxyCodeLine{00542\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ buffer\ we\ read\ from\ the\ file\ by\ one\ character.\ \ In\ that\ case,}}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \textcolor{comment}{//\ read\ one\ character\ less\ to\ make\ room\ for\ it.\ \ (Otherwise,\ we\ are}}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \textcolor{comment}{//\ confident\ that\ the\ buffer\ will\ not\ expand\ when\ we\ decode\ the}}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \textcolor{comment}{//\ newlines.)}}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ -\/-\/read\_length;}
+\DoxyCodeLine{00547\ \ \ \ \ \}}
+\DoxyCodeLine{00548\ \ \ \ \ read\_length\ =\ read\_chars\_raw(buffer,\ read\_length);}
+\DoxyCodeLine{00549\ \ \ \ \ final\_length\ =\ decode\_newlines(start,\ length,\ buffer,\ read\_length);}
+\DoxyCodeLine{00550\ }
+\DoxyCodeLine{00551\ \ \ \ \ \textcolor{comment}{//\ If\ we\ decoded\ all\ of\ the\ characters\ away,\ but\ we\ read\ nonzero}}
+\DoxyCodeLine{00552\ \ \ \ \ \textcolor{comment}{//\ characters,\ go\ back\ and\ get\ some\ more.}}
+\DoxyCodeLine{00553\ \ \ \}\ \textcolor{keywordflow}{while}\ (read\_length\ !=\ 0\ \&\&\ final\_length\ ==\ 0);}
+\DoxyCodeLine{00554\ }
+\DoxyCodeLine{00555\ \ \ \textcolor{keywordflow}{return}\ final\_length;}
+\DoxyCodeLine{00556\ \}}
+\DoxyCodeLine{00557\ }
+\DoxyCodeLine{00561\ \textcolor{keywordtype}{size\_t}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00562\ write\_chars(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *start,\ \textcolor{keywordtype}{size\_t}\ length)\ \{}
+\DoxyCodeLine{00563\ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0)\ \{}
+\DoxyCodeLine{00564\ \ \ \ \ \textcolor{comment}{//\ Trivial\ no-\/op.}}
+\DoxyCodeLine{00565\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00566\ \ \ \}}
+\DoxyCodeLine{00567\ }
+\DoxyCodeLine{00568\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ read\ buffer\ is\ flushed.}}
+\DoxyCodeLine{00569\ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ egptr()\ -\/\ gptr();}
+\DoxyCodeLine{00570\ \ \ gbump(n);}
+\DoxyCodeLine{00571\ \ \ \_gpos\ -\/=\ n;}
+\DoxyCodeLine{00572\ \ \ assert(\_gpos\ >=\ 0);}
+\DoxyCodeLine{00573\ }
+\DoxyCodeLine{00574\ \ \ \textcolor{comment}{//\ Windows\ case.}}
+\DoxyCodeLine{00575\ \ \ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::binary)\ \{}
+\DoxyCodeLine{00576\ \ \ \ \ \textcolor{comment}{//\ If\ the\ file\ is\ opened\ in\ binary\ mode,\ just\ write\ the\ data\ to\ the\ file.}}
+\DoxyCodeLine{00577\ \ \ \ \ \textcolor{keywordflow}{return}\ write\_chars\_raw(start,\ length);}
+\DoxyCodeLine{00578\ \ \ \}}
+\DoxyCodeLine{00579\ }
+\DoxyCodeLine{00580\ \ \ \textcolor{comment}{//\ The\ file\ is\ opened\ in\ text\ mode.\ \ We\ have\ to\ encode\ newline\ characters\ to}}
+\DoxyCodeLine{00581\ \ \ \textcolor{comment}{//\ the\ file.}}
+\DoxyCodeLine{00582\ }
+\DoxyCodeLine{00583\ \ \ NewlineMode\ this\_newline\_mode\ =\ \_newline\_mode;}
+\DoxyCodeLine{00584\ \ \ \textcolor{keywordflow}{if}\ (this\_newline\_mode\ ==\ NM\_native)\ \{}
+\DoxyCodeLine{00585\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00586\ \ \ \ \ this\_newline\_mode\ =\ NM\_msdos;}
+\DoxyCodeLine{00587\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00588\ \ \ \ \ \textcolor{comment}{//\ Even\ the\ Mac\ uses\ Unix-\/style\ EOL\ characters\ these\ days.}}
+\DoxyCodeLine{00589\ \ \ \ \ this\_newline\_mode\ =\ NM\_unix;}
+\DoxyCodeLine{00590\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00591\ \ \ \}}
+\DoxyCodeLine{00592\ }
+\DoxyCodeLine{00593\ \ \ \textcolor{keywordflow}{if}\ (this\_newline\_mode\ ==\ NM\_binary)\ \{}
+\DoxyCodeLine{00594\ \ \ \ \ \textcolor{keywordflow}{return}\ write\_chars\_raw(start,\ length);}
+\DoxyCodeLine{00595\ \ \ \}}
+\DoxyCodeLine{00596\ }
+\DoxyCodeLine{00597\ \ \ \textcolor{keywordtype}{size\_t}\ buffer\_length\ =\ length;}
+\DoxyCodeLine{00598\ \ \ \textcolor{keywordflow}{if}\ (this\_newline\_mode\ ==\ NM\_msdos)\ \{}
+\DoxyCodeLine{00599\ \ \ \ \ \textcolor{comment}{//\ Windows\ requires\ a\ larger\ buffer\ here,\ since\ we\ are\ writing\ two\ newline}}
+\DoxyCodeLine{00600\ \ \ \ \ \textcolor{comment}{//\ characters\ for\ every\ one.}}
+\DoxyCodeLine{00601\ \ \ \ \ buffer\_length\ *=\ 2;}
+\DoxyCodeLine{00602\ \ \ \}}
+\DoxyCodeLine{00603\ \ \ \textcolor{keywordtype}{char}\ *buffer\ =\ (\textcolor{keywordtype}{char}\ *)alloca(buffer\_length);}
+\DoxyCodeLine{00604\ }
+\DoxyCodeLine{00605\ \ \ \textcolor{keywordtype}{size\_t}\ write\_length;}
+\DoxyCodeLine{00606\ \ \ \textcolor{keywordflow}{switch}\ (this\_newline\_mode)\ \{}
+\DoxyCodeLine{00607\ \ \ \textcolor{keywordflow}{case}\ NM\_msdos:}
+\DoxyCodeLine{00608\ \ \ \ \ write\_length\ =\ encode\_newlines\_msdos(buffer,\ buffer\_length,\ start,\ length);}
+\DoxyCodeLine{00609\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00610\ }
+\DoxyCodeLine{00611\ \ \ \textcolor{keywordflow}{case}\ NM\_mac:}
+\DoxyCodeLine{00612\ \ \ \ \ write\_length\ =\ encode\_newlines\_mac(buffer,\ buffer\_length,\ start,\ length);}
+\DoxyCodeLine{00613\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00614\ }
+\DoxyCodeLine{00615\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00616\ \ \ \ \ write\_length\ =\ encode\_newlines\_unix(buffer,\ buffer\_length,\ start,\ length);}
+\DoxyCodeLine{00617\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00618\ \ \ \}}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00620\ \ \ \textcolor{keywordflow}{if}\ (write\_length\ ==\ write\_chars\_raw(buffer,\ write\_length))\ \{}
+\DoxyCodeLine{00621\ \ \ \ \ \textcolor{comment}{//\ Success.\ \ Return\ the\ number\ of\ original\ characters.}}
+\DoxyCodeLine{00622\ \ \ \ \ \textcolor{keywordflow}{return}\ length;}
+\DoxyCodeLine{00623\ \ \ \}}
+\DoxyCodeLine{00624\ }
+\DoxyCodeLine{00625\ \ \ \textcolor{comment}{//\ Error.\ \ Pretend\ we\ wrote\ nothing.}}
+\DoxyCodeLine{00626\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00627\ \}}
+\DoxyCodeLine{00628\ }
+\DoxyCodeLine{00633\ \textcolor{keywordtype}{size\_t}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00634\ read\_chars\_raw(\textcolor{keywordtype}{char}\ *start,\ \textcolor{keywordtype}{size\_t}\ length)\ \{}
+\DoxyCodeLine{00635\ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0)\ \{}
+\DoxyCodeLine{00636\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00637\ \ \ \}}
+\DoxyCodeLine{00638\ }
+\DoxyCodeLine{00639\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00640\ \ \ \textcolor{comment}{//\ Windows\ case.}}
+\DoxyCodeLine{00641\ \ \ OVERLAPPED\ overlapped;}
+\DoxyCodeLine{00642\ \ \ memset(\&overlapped,\ 0,\ \textcolor{keyword}{sizeof}(overlapped));}
+\DoxyCodeLine{00643\ \ \ LARGE\_INTEGER\ gpos;}
+\DoxyCodeLine{00644\ \ \ gpos.QuadPart\ =\ \_gpos;}
+\DoxyCodeLine{00645\ \ \ overlapped.Offset\ =\ gpos.LowPart;}
+\DoxyCodeLine{00646\ \ \ overlapped.OffsetHigh\ =\ gpos.HighPart;}
+\DoxyCodeLine{00647\ }
+\DoxyCodeLine{00648\ \ \ DWORD\ bytes\_read\ =\ 0;}
+\DoxyCodeLine{00649\ \ \ BOOL\ success\ =\ ReadFile(\_handle,\ start,\ length,\ \&bytes\_read,\ \&overlapped);}
+\DoxyCodeLine{00650\ \ \ \textcolor{keywordtype}{int}\ pass\ =\ 0;}
+\DoxyCodeLine{00651\ \ \ \textcolor{keywordflow}{while}\ (!success)\ \{}
+\DoxyCodeLine{00652\ \ \ \ \ DWORD\ error\ =\ GetLastError();}
+\DoxyCodeLine{00653\ \ \ \ \ \textcolor{keywordflow}{if}\ (error\ ==\ ERROR\_IO\_INCOMPLETE\ ||\ error\ ==\ ERROR\_IO\_PENDING)\ \{}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ \textcolor{comment}{//\ Wait\ for\ more\ later,\ but\ don't\ actually\ yield\ until\ we\ have\ made\ the}}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ \textcolor{comment}{//\ first\ call\ to\ GetOverlappedResult().\ \ (Apparently,\ Vista\ and\ Windows}}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \textcolor{comment}{//\ 7\ *always*\ return\ ERROR\_IO\_INCOMPLETE\ after\ the\ first\ call\ to}}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \textcolor{comment}{//\ ReadFile.)}}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pass\ >\ 0)\ \{}
+\DoxyCodeLine{00659\ \ \ \ \ \ \ \ \ thread\_yield();}
+\DoxyCodeLine{00660\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00661\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (error\ ==\ ERROR\_HANDLE\_EOF\ ||\ error\ ==\ ERROR\_BROKEN\_PIPE)\ \{}
+\DoxyCodeLine{00662\ \ \ \ \ \ \ \textcolor{comment}{//\ End-\/of-\/file,\ normal\ result.}}
+\DoxyCodeLine{00663\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00664\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00665\ \ \ \ \ \ \ cerr}
+\DoxyCodeLine{00666\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ reading\ "{}}\ <<\ length}
+\DoxyCodeLine{00667\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes\ from\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{},\ windows\ error\ code\ 0x"{}}\ <<\ hex}
+\DoxyCodeLine{00668\ \ \ \ \ \ \ \ \ <<\ error\ <<\ dec\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00669\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00670\ \ \ \ \ \}}
+\DoxyCodeLine{00671\ \ \ \ \ ++pass;}
+\DoxyCodeLine{00672\ \ \ \ \ success\ =\ GetOverlappedResult(\_handle,\ \&overlapped,\ \&bytes\_read,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00673\ \ \ \}}
+\DoxyCodeLine{00674\ }
+\DoxyCodeLine{00675\ \ \ length\ =\ bytes\_read;}
+\DoxyCodeLine{00676\ }
+\DoxyCodeLine{00677\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00678\ \ \ \textcolor{comment}{//\ Posix\ case.}}
+\DoxyCodeLine{00679\ \ \ \textcolor{keywordflow}{if}\ (lseek(\_fd,\ \_gpos,\ SEEK\_SET)\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00680\ \ \ \ \ cerr}
+\DoxyCodeLine{00681\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ seeking\ to\ position\ "{}}\ <<\ \_gpos\ <<\ \textcolor{stringliteral}{"{}\ in\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00682\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00683\ \ \ \}}
+\DoxyCodeLine{00684\ }
+\DoxyCodeLine{00685\ \ \ \textcolor{keywordtype}{int}\ result\ =\ ::read(\_fd,\ start,\ length);}
+\DoxyCodeLine{00686\ \ \ \textcolor{keywordflow}{while}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00687\ \ \ \ \ \textcolor{keywordflow}{if}\ (errno\ ==\ EAGAIN)\ \{}
+\DoxyCodeLine{00688\ \ \ \ \ \ \ thread\_yield();}
+\DoxyCodeLine{00689\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00690\ \ \ \ \ \ \ cerr}
+\DoxyCodeLine{00691\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ reading\ "{}}\ <<\ length\ <<\ \textcolor{stringliteral}{"{}\ bytes\ from\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00692\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00693\ \ \ \ \ \}}
+\DoxyCodeLine{00694\ \ \ \ \ result\ =\ ::read(\_fd,\ start,\ length);}
+\DoxyCodeLine{00695\ \ \ \}}
+\DoxyCodeLine{00696\ }
+\DoxyCodeLine{00697\ \ \ length\ =\ result;}
+\DoxyCodeLine{00698\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00699\ }
+\DoxyCodeLine{00700\ \ \ \_gpos\ +=\ length;}
+\DoxyCodeLine{00701\ \ \ assert(\_gpos\ >=\ 0);}
+\DoxyCodeLine{00702\ \ \ \textcolor{keywordflow}{return}\ length;}
+\DoxyCodeLine{00703\ \}}
+\DoxyCodeLine{00704\ }
+\DoxyCodeLine{00709\ \textcolor{keywordtype}{size\_t}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00710\ write\_chars\_raw(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *start,\ \textcolor{keywordtype}{size\_t}\ length)\ \{}
+\DoxyCodeLine{00711\ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0\ ||\ !\_is\_open)\ \{}
+\DoxyCodeLine{00712\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00713\ \ \ \}}
+\DoxyCodeLine{00714\ }
+\DoxyCodeLine{00715\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00716\ \ \ \textcolor{comment}{//\ Windows\ case.}}
+\DoxyCodeLine{00717\ \ \ OVERLAPPED\ overlapped;}
+\DoxyCodeLine{00718\ \ \ memset(\&overlapped,\ 0,\ \textcolor{keyword}{sizeof}(overlapped));}
+\DoxyCodeLine{00719\ \ \ LARGE\_INTEGER\ ppos;}
+\DoxyCodeLine{00720\ \ \ ppos.QuadPart\ =\ \_ppos;}
+\DoxyCodeLine{00721\ \ \ overlapped.Offset\ =\ ppos.LowPart;}
+\DoxyCodeLine{00722\ \ \ overlapped.OffsetHigh\ =\ ppos.HighPart;}
+\DoxyCodeLine{00723\ }
+\DoxyCodeLine{00724\ \ \ \textcolor{keywordflow}{if}\ (\_open\_mode\ \&\ ios::app)\ \{}
+\DoxyCodeLine{00725\ \ \ \ \ overlapped.Offset\ =\ -\/1;}
+\DoxyCodeLine{00726\ \ \ \ \ overlapped.OffsetHigh\ =\ -\/1;}
+\DoxyCodeLine{00727\ \ \ \}}
+\DoxyCodeLine{00728\ }
+\DoxyCodeLine{00729\ \ \ DWORD\ bytes\_written\ =\ 0;}
+\DoxyCodeLine{00730\ \ \ BOOL\ success\ =\ WriteFile(\_handle,\ start,\ length,\ \&bytes\_written,\ \&overlapped);}
+\DoxyCodeLine{00731\ \ \ \textcolor{keywordtype}{int}\ pass\ =\ 0;}
+\DoxyCodeLine{00732\ \ \ \textcolor{keywordflow}{while}\ (!success)\ \{}
+\DoxyCodeLine{00733\ \ \ \ \ DWORD\ error\ =\ GetLastError();}
+\DoxyCodeLine{00734\ \ \ \ \ \textcolor{keywordflow}{if}\ (error\ ==\ ERROR\_IO\_INCOMPLETE\ ||\ error\ ==\ ERROR\_IO\_PENDING)\ \{}
+\DoxyCodeLine{00735\ \ \ \ \ \ \ \textcolor{comment}{//\ Wait\ for\ more\ later,\ but\ don't\ actually\ yield\ until\ we\ have\ made\ the}}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ \textcolor{comment}{//\ first\ call\ to\ GetOverlappedResult().\ \ (Apparently,\ Vista\ and\ Windows}}
+\DoxyCodeLine{00737\ \ \ \ \ \ \ \textcolor{comment}{//\ 7\ *always*\ return\ ERROR\_IO\_INCOMPLETE\ after\ the\ first\ call\ to}}
+\DoxyCodeLine{00738\ \ \ \ \ \ \ \textcolor{comment}{//\ WriteFile.)}}
+\DoxyCodeLine{00739\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pass\ >\ 0)\ \{}
+\DoxyCodeLine{00740\ \ \ \ \ \ \ \ \ thread\_yield();}
+\DoxyCodeLine{00741\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00742\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (error\ ==\ ERROR\_BROKEN\_PIPE)\ \{}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ \textcolor{comment}{//\ Broken\ pipe,\ we're\ done.}}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}Pipe\ closed\ on\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ bytes\_written;}
+\DoxyCodeLine{00746\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ cerr}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ writing\ "{}}\ <<\ length}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes\ to\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{},\ windows\ error\ code\ 0x"{}}\ <<\ hex}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \ \ <<\ error\ <<\ dec\ <<\ \textcolor{stringliteral}{"{}.\ \ Disk\ full?\(\backslash\)n"{}};}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ bytes\_written;}
+\DoxyCodeLine{00752\ \ \ \ \ \}}
+\DoxyCodeLine{00753\ \ \ \ \ ++pass;}
+\DoxyCodeLine{00754\ \ \ \ \ success\ =\ GetOverlappedResult(\_handle,\ \&overlapped,\ \&bytes\_written,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00755\ \ \ \}}
+\DoxyCodeLine{00756\ \ \ assert(bytes\_written\ ==\ length);}
+\DoxyCodeLine{00757\ \ \ \_ppos\ +=\ bytes\_written;}
+\DoxyCodeLine{00758\ \ \ assert(\_ppos\ >=\ 0);}
+\DoxyCodeLine{00759\ }
+\DoxyCodeLine{00760\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00761\ \ \ \textcolor{comment}{//\ Posix\ case.}}
+\DoxyCodeLine{00762\ \ \ \textcolor{keywordflow}{if}\ (!(\_open\_mode\ \&\ ios::app))\ \{}
+\DoxyCodeLine{00763\ \ \ \ \ \textcolor{keywordflow}{if}\ (lseek(\_fd,\ \_ppos,\ SEEK\_SET)\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00764\ \ \ \ \ \ \ cerr}
+\DoxyCodeLine{00765\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ seeking\ to\ position\ "{}}\ <<\ \_ppos\ <<\ \textcolor{stringliteral}{"{}\ in\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00766\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00767\ \ \ \ \ \}}
+\DoxyCodeLine{00768\ \ \ \}}
+\DoxyCodeLine{00769\ }
+\DoxyCodeLine{00770\ \ \ \textcolor{keywordtype}{size\_t}\ remaining\ =\ length;}
+\DoxyCodeLine{00771\ \ \ \textcolor{keywordflow}{while}\ (remaining\ >\ 0)\ \{}
+\DoxyCodeLine{00772\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ ::write(\_fd,\ start,\ remaining);}
+\DoxyCodeLine{00773\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (errno\ ==\ EAGAIN)\ \{}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ \ \ thread\_yield();}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \ \ cerr}
+\DoxyCodeLine{00778\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ writing\ "{}}\ <<\ remaining\ <<\ \textcolor{stringliteral}{"{}\ bytes\ to\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00779\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ length\ -\/\ remaining;}
+\DoxyCodeLine{00780\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00781\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00782\ \ \ \ \ \}}
+\DoxyCodeLine{00783\ }
+\DoxyCodeLine{00784\ \ \ \ \ start\ +=\ result;}
+\DoxyCodeLine{00785\ \ \ \ \ remaining\ -\/=\ result;}
+\DoxyCodeLine{00786\ \ \ \ \ \_ppos\ +=\ result;}
+\DoxyCodeLine{00787\ \ \ \ \ assert(\_ppos\ >=\ 0);}
+\DoxyCodeLine{00788\ \ \ \}}
+\DoxyCodeLine{00789\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00790\ }
+\DoxyCodeLine{00791\ \ \ \textcolor{keywordflow}{return}\ length;}
+\DoxyCodeLine{00792\ \}}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00801\ \textcolor{keywordtype}{size\_t}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00802\ decode\_newlines(\textcolor{keywordtype}{char}\ *dest,\ \textcolor{keywordtype}{size\_t}\ dest\_length,}
+\DoxyCodeLine{00803\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *source,\ \textcolor{keywordtype}{size\_t}\ source\_length)\ \{}
+\DoxyCodeLine{00804\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *p\ =\ source;\ \ \textcolor{comment}{//\ Read\ from\ p}}
+\DoxyCodeLine{00805\ \ \ \textcolor{keywordtype}{char}\ *q\ =\ dest;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Write\ to\ q}}
+\DoxyCodeLine{00806\ }
+\DoxyCodeLine{00807\ \ \ \textcolor{keywordflow}{if}\ (source\_length\ ==\ 0)\ \{}
+\DoxyCodeLine{00808\ \ \ \ \ \textcolor{comment}{//\ A\ special\ case:\ this\ is\ at\ end-\/of-\/file.\ \ Resolve\ the\ hanging\ newline.}}
+\DoxyCodeLine{00809\ \ \ \ \ \textcolor{keywordflow}{switch}\ (\_last\_read\_nl)\ \{}
+\DoxyCodeLine{00810\ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)n'}:}
+\DoxyCodeLine{00811\ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)r'}:}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ \textcolor{comment}{//\ Close\ the\ newline\ to\ grow\ on.}}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ assert(q\ <\ dest\ +\ dest\_length);}
+\DoxyCodeLine{00814\ \ \ \ \ \ \ *q++\ =\ \textcolor{charliteral}{'\(\backslash\)n'};}
+\DoxyCodeLine{00815\ \ \ \ \ \ \ \_last\_read\_nl\ =\ 0;}
+\DoxyCodeLine{00816\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00817\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00818\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00819\ \ \ \ \ \}}
+\DoxyCodeLine{00820\ \ \ \}}
+\DoxyCodeLine{00821\ }
+\DoxyCodeLine{00822\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ source\ +\ source\_length)\ \{}
+\DoxyCodeLine{00823\ \ \ \ \ assert(q\ <\ dest\ +\ dest\_length);}
+\DoxyCodeLine{00824\ \ \ \ \ \textcolor{keywordflow}{switch}\ (*p)\ \{}
+\DoxyCodeLine{00825\ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)n'}:}
+\DoxyCodeLine{00826\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (\_last\_read\_nl)\ \{}
+\DoxyCodeLine{00827\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)r'}:}
+\DoxyCodeLine{00828\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \(\backslash\)r\(\backslash\)n\ is\ an\ MS-\/DOS\ newline.}}
+\DoxyCodeLine{00829\ \ \ \ \ \ \ \ \ *q++\ =\ \textcolor{charliteral}{'\(\backslash\)n'};}
+\DoxyCodeLine{00830\ \ \ \ \ \ \ \ \ \_last\_read\_nl\ =\ 0;}
+\DoxyCodeLine{00831\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00832\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)n'}:}
+\DoxyCodeLine{00833\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \(\backslash\)n\(\backslash\)n\ means\ one\ Unix\ newline,\ and\ one\ more\ to\ grow\ on.}}
+\DoxyCodeLine{00834\ \ \ \ \ \ \ \ \ *q++\ =\ \textcolor{charliteral}{'\(\backslash\)n'};}
+\DoxyCodeLine{00835\ \ \ \ \ \ \ \ \ \_last\_read\_nl\ =\ \textcolor{charliteral}{'\(\backslash\)n'};}
+\DoxyCodeLine{00836\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00837\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ A\ lone\ \(\backslash\)n\ is\ a\ newline\ to\ grow\ on.}}
+\DoxyCodeLine{00839\ \ \ \ \ \ \ \ \ \_last\_read\_nl\ =\ \textcolor{charliteral}{'\(\backslash\)n'};}
+\DoxyCodeLine{00840\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00841\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00842\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00843\ }
+\DoxyCodeLine{00844\ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)r'}:}
+\DoxyCodeLine{00845\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (\_last\_read\_nl)\ \{}
+\DoxyCodeLine{00846\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)n'}:}
+\DoxyCodeLine{00847\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \(\backslash\)n\(\backslash\)r\ is\ an\ MS-\/DOS\ newline.}}
+\DoxyCodeLine{00848\ \ \ \ \ \ \ \ \ *q++\ =\ \textcolor{charliteral}{'\(\backslash\)n'};}
+\DoxyCodeLine{00849\ \ \ \ \ \ \ \ \ \_last\_read\_nl\ =\ 0;}
+\DoxyCodeLine{00850\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00851\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)r'}:}
+\DoxyCodeLine{00852\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \(\backslash\)r\(\backslash\)r\ means\ one\ Apple\ newline,\ and\ one\ more\ to\ grow\ on.}}
+\DoxyCodeLine{00853\ \ \ \ \ \ \ \ \ *q++\ =\ \textcolor{charliteral}{'\(\backslash\)n'};}
+\DoxyCodeLine{00854\ \ \ \ \ \ \ \ \ \_last\_read\_nl\ =\ \textcolor{charliteral}{'\(\backslash\)r'};}
+\DoxyCodeLine{00855\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00856\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00857\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ A\ lone\ \(\backslash\)r\ is\ a\ newline\ to\ grow\ on.}}
+\DoxyCodeLine{00858\ \ \ \ \ \ \ \ \ \_last\_read\_nl\ =\ \textcolor{charliteral}{'\(\backslash\)r'};}
+\DoxyCodeLine{00859\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00860\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00861\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00862\ }
+\DoxyCodeLine{00863\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (\_last\_read\_nl)\ \{}
+\DoxyCodeLine{00865\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)n'}:}
+\DoxyCodeLine{00866\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)r'}:}
+\DoxyCodeLine{00867\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Close\ the\ newline\ to\ grow\ on.}}
+\DoxyCodeLine{00868\ \ \ \ \ \ \ \ \ *q++\ =\ \textcolor{charliteral}{'\(\backslash\)n'};}
+\DoxyCodeLine{00869\ \ \ \ \ \ \ \ \ \_last\_read\_nl\ =\ 0;}
+\DoxyCodeLine{00870\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00871\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00872\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00873\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00874\ \ \ \ \ \ \ assert(q\ <\ dest\ +\ dest\_length);}
+\DoxyCodeLine{00875\ \ \ \ \ \ \ *q++\ =\ *p;}
+\DoxyCodeLine{00876\ \ \ \ \ \}}
+\DoxyCodeLine{00877\ \ \ \ \ ++p;}
+\DoxyCodeLine{00878\ \ \ \}}
+\DoxyCodeLine{00879\ }
+\DoxyCodeLine{00880\ \ \ \textcolor{keywordflow}{return}\ q\ -\/\ dest;}
+\DoxyCodeLine{00881\ \}}
+\DoxyCodeLine{00882\ }
+\DoxyCodeLine{00891\ \textcolor{keywordtype}{size\_t}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00892\ encode\_newlines\_msdos(\textcolor{keywordtype}{char}\ *dest,\ \textcolor{keywordtype}{size\_t}\ dest\_length,}
+\DoxyCodeLine{00893\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *source,\ \textcolor{keywordtype}{size\_t}\ source\_length)\ \{}
+\DoxyCodeLine{00894\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *p\ =\ source;\ \ \textcolor{comment}{//\ Read\ from\ p}}
+\DoxyCodeLine{00895\ \ \ \textcolor{keywordtype}{char}\ *q\ =\ dest;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Write\ to\ q}}
+\DoxyCodeLine{00896\ }
+\DoxyCodeLine{00897\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ source\ +\ source\_length)\ \{}
+\DoxyCodeLine{00898\ \ \ \ \ assert(q\ <\ dest\ +\ dest\_length);}
+\DoxyCodeLine{00899\ \ \ \ \ \textcolor{keywordflow}{switch}\ (*p)\ \{}
+\DoxyCodeLine{00900\ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)n'}:}
+\DoxyCodeLine{00901\ \ \ \ \ \ \ *q++\ =\ \textcolor{charliteral}{'\(\backslash\)r'};}
+\DoxyCodeLine{00902\ \ \ \ \ \ \ assert(q\ <\ dest\ +\ dest\_length);}
+\DoxyCodeLine{00903\ \ \ \ \ \ \ *q++\ =\ \textcolor{charliteral}{'\(\backslash\)n'};}
+\DoxyCodeLine{00904\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00905\ }
+\DoxyCodeLine{00906\ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)r'}:}
+\DoxyCodeLine{00907\ \ \ \ \ \ \ \textcolor{comment}{//\ Huh,\ shouldn't\ have\ one\ of\ these.}}
+\DoxyCodeLine{00908\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00909\ }
+\DoxyCodeLine{00910\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00911\ \ \ \ \ \ \ *q++\ =\ *p;}
+\DoxyCodeLine{00912\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00913\ \ \ \ \ \}}
+\DoxyCodeLine{00914\ }
+\DoxyCodeLine{00915\ \ \ \ \ ++p;}
+\DoxyCodeLine{00916\ \ \ \}}
+\DoxyCodeLine{00917\ }
+\DoxyCodeLine{00918\ \ \ \textcolor{keywordflow}{return}\ q\ -\/\ dest;}
+\DoxyCodeLine{00919\ \}}
+\DoxyCodeLine{00920\ }
+\DoxyCodeLine{00931\ \textcolor{keywordtype}{size\_t}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00932\ encode\_newlines\_unix(\textcolor{keywordtype}{char}\ *dest,\ \textcolor{keywordtype}{size\_t}\ dest\_length,}
+\DoxyCodeLine{00933\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *source,\ \textcolor{keywordtype}{size\_t}\ source\_length)\ \{}
+\DoxyCodeLine{00934\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *p\ =\ source;\ \ \textcolor{comment}{//\ Read\ from\ p}}
+\DoxyCodeLine{00935\ \ \ \textcolor{keywordtype}{char}\ *q\ =\ dest;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Write\ to\ q}}
+\DoxyCodeLine{00936\ }
+\DoxyCodeLine{00937\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ source\ +\ source\_length)\ \{}
+\DoxyCodeLine{00938\ \ \ \ \ assert(q\ <\ dest\ +\ dest\_length);}
+\DoxyCodeLine{00939\ \ \ \ \ \textcolor{keywordflow}{switch}\ (*p)\ \{}
+\DoxyCodeLine{00940\ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)r'}:}
+\DoxyCodeLine{00941\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00942\ }
+\DoxyCodeLine{00943\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00944\ \ \ \ \ \ \ *q++\ =\ *p;}
+\DoxyCodeLine{00945\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00946\ \ \ \ \ \}}
+\DoxyCodeLine{00947\ }
+\DoxyCodeLine{00948\ \ \ \ \ ++p;}
+\DoxyCodeLine{00949\ \ \ \}}
+\DoxyCodeLine{00950\ }
+\DoxyCodeLine{00951\ \ \ \textcolor{keywordflow}{return}\ q\ -\/\ dest;}
+\DoxyCodeLine{00952\ \}}
+\DoxyCodeLine{00953\ }
+\DoxyCodeLine{00959\ \textcolor{keywordtype}{size\_t}\ PandaFileStreamBuf::}
+\DoxyCodeLine{00960\ encode\_newlines\_mac(\textcolor{keywordtype}{char}\ *dest,\ \textcolor{keywordtype}{size\_t}\ dest\_length,}
+\DoxyCodeLine{00961\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *source,\ \textcolor{keywordtype}{size\_t}\ source\_length)\ \{}
+\DoxyCodeLine{00962\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *p\ =\ source;\ \ \textcolor{comment}{//\ Read\ from\ p}}
+\DoxyCodeLine{00963\ \ \ \textcolor{keywordtype}{char}\ *q\ =\ dest;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Write\ to\ q}}
+\DoxyCodeLine{00964\ }
+\DoxyCodeLine{00965\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ source\ +\ source\_length)\ \{}
+\DoxyCodeLine{00966\ \ \ \ \ assert(q\ <\ dest\ +\ dest\_length);}
+\DoxyCodeLine{00967\ \ \ \ \ \textcolor{keywordflow}{switch}\ (*p)\ \{}
+\DoxyCodeLine{00968\ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)n'}:}
+\DoxyCodeLine{00969\ \ \ \ \ \ \ *q++\ =\ \textcolor{charliteral}{'\(\backslash\)r'};}
+\DoxyCodeLine{00970\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00971\ }
+\DoxyCodeLine{00972\ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)r'}:}
+\DoxyCodeLine{00973\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00974\ }
+\DoxyCodeLine{00975\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00976\ \ \ \ \ \ \ *q++\ =\ *p;}
+\DoxyCodeLine{00977\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00978\ \ \ \ \ \}}
+\DoxyCodeLine{00979\ }
+\DoxyCodeLine{00980\ \ \ \ \ ++p;}
+\DoxyCodeLine{00981\ \ \ \}}
+\DoxyCodeLine{00982\ }
+\DoxyCodeLine{00983\ \ \ \textcolor{keywordflow}{return}\ q\ -\/\ dest;}
+\DoxyCodeLine{00984\ \}}
+\DoxyCodeLine{00985\ }
+\DoxyCodeLine{00986\ ostream\ \&}
+\DoxyCodeLine{00987\ operator\ <<\ (ostream\ \&out,\ PandaFileStreamBuf::NewlineMode\ newline\_mode)\ \{}
+\DoxyCodeLine{00988\ \ \ \textcolor{keywordflow}{switch}\ (newline\_mode)\ \{}
+\DoxyCodeLine{00989\ \ \ \textcolor{keywordflow}{case}\ PandaFileStreamBuf::NM\_native:}
+\DoxyCodeLine{00990\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}native"{}};}
+\DoxyCodeLine{00991\ }
+\DoxyCodeLine{00992\ \ \ \textcolor{keywordflow}{case}\ PandaFileStreamBuf::NM\_binary:}
+\DoxyCodeLine{00993\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}binary"{}};}
+\DoxyCodeLine{00994\ }
+\DoxyCodeLine{00995\ \ \ \textcolor{keywordflow}{case}\ PandaFileStreamBuf::NM\_msdos:}
+\DoxyCodeLine{00996\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}msdos"{}};}
+\DoxyCodeLine{00997\ }
+\DoxyCodeLine{00998\ \ \ \textcolor{keywordflow}{case}\ PandaFileStreamBuf::NM\_unix:}
+\DoxyCodeLine{00999\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}unix"{}};}
+\DoxyCodeLine{01000\ }
+\DoxyCodeLine{01001\ \ \ \textcolor{keywordflow}{case}\ PandaFileStreamBuf::NM\_mac:}
+\DoxyCodeLine{01002\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}mac"{}};}
+\DoxyCodeLine{01003\ \ \ \}}
+\DoxyCodeLine{01004\ }
+\DoxyCodeLine{01005\ \ \ cerr}
+\DoxyCodeLine{01006\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ NewlineMode\ value:\ "{}}\ <<\ (int)newline\_mode\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01007\ \ \ \textcolor{keywordflow}{return}\ out;}
+\DoxyCodeLine{01008\ \}}
+\DoxyCodeLine{01009\ }
+\DoxyCodeLine{01010\ istream\ \&}
+\DoxyCodeLine{01011\ operator\ >>\ (istream\ \&in,\ PandaFileStreamBuf::NewlineMode\ \&newline\_mode)\ \{}
+\DoxyCodeLine{01012\ \ \ \textcolor{keywordtype}{string}\ word;}
+\DoxyCodeLine{01013\ \ \ in\ >>\ word;}
+\DoxyCodeLine{01014\ }
+\DoxyCodeLine{01015\ \ \ \textcolor{keywordflow}{if}\ (word\ ==\ \textcolor{stringliteral}{"{}native"{}})\ \{}
+\DoxyCodeLine{01016\ \ \ \ \ newline\_mode\ =\ PandaFileStreamBuf::NM\_native;}
+\DoxyCodeLine{01017\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (word\ ==\ \textcolor{stringliteral}{"{}binary"{}})\ \{}
+\DoxyCodeLine{01018\ \ \ \ \ newline\_mode\ =\ PandaFileStreamBuf::NM\_binary;}
+\DoxyCodeLine{01019\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (word\ ==\ \textcolor{stringliteral}{"{}msdos"{}})\ \{}
+\DoxyCodeLine{01020\ \ \ \ \ newline\_mode\ =\ PandaFileStreamBuf::NM\_msdos;}
+\DoxyCodeLine{01021\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (word\ ==\ \textcolor{stringliteral}{"{}unix"{}})\ \{}
+\DoxyCodeLine{01022\ \ \ \ \ newline\_mode\ =\ PandaFileStreamBuf::NM\_unix;}
+\DoxyCodeLine{01023\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (word\ ==\ \textcolor{stringliteral}{"{}mac"{}})\ \{}
+\DoxyCodeLine{01024\ \ \ \ \ newline\_mode\ =\ PandaFileStreamBuf::NM\_mac;}
+\DoxyCodeLine{01025\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01026\ \ \ \ \ cerr}
+\DoxyCodeLine{01027\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ NewlineMode\ value:\ "{}}\ <<\ word\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01028\ \ \ \ \ newline\_mode\ =\ PandaFileStreamBuf::NM\_native;}
+\DoxyCodeLine{01029\ \ \ \}}
+\DoxyCodeLine{01030\ }
+\DoxyCodeLine{01031\ \ \ \textcolor{keywordflow}{return}\ in;}
+\DoxyCodeLine{01032\ \}}
+\DoxyCodeLine{01033\ }
+\DoxyCodeLine{01034\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ USE\_PANDAFILESTREAM}}
+
+\end{DoxyCode}

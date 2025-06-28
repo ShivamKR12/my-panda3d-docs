@@ -1,0 +1,565 @@
+\doxysection{pnm\+File\+Type\+BMPReader.\+cxx}
+\hypertarget{pnmFileTypeBMPReader_8cxx_source}{}\label{pnmFileTypeBMPReader_8cxx_source}\index{panda/src/pnmimagetypes/pnmFileTypeBMPReader.cxx@{panda/src/pnmimagetypes/pnmFileTypeBMPReader.cxx}}
+\mbox{\hyperlink{pnmFileTypeBMPReader_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmFileTypeBMP_8h}{pnmFileTypeBMP.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ HAVE\_BMP}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pnmimagetypes_8h}{config\_pnmimagetypes.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bmp_8h}{bmp.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}pnmbitio.h"{}}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \textcolor{keyword}{using\ }std::istream;}
+\DoxyCodeLine{00023\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{comment}{//\ Much\ code\ in\ this\ file\ is\ borrowed\ from\ Netpbm,\ specifically\ bmptoppm.c.}}
+\DoxyCodeLine{00026\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00027\ \textcolor{comment}{\ *\ bmptoppm.c\ -\/\ Converts\ from\ a\ Microsoft\ Windows\ or\ OS/2\ .BMP\ file\ to\ a}}
+\DoxyCodeLine{00028\ \textcolor{comment}{\ *\ PPM\ file.}}
+\DoxyCodeLine{00029\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00030\ \textcolor{comment}{\ *\ The\ current\ implementation\ is\ probably\ not\ complete,\ but\ it\ works\ for}}
+\DoxyCodeLine{00031\ \textcolor{comment}{\ *\ all\ the\ BMP\ files\ I\ have.\ \ I\ welcome\ feedback.}}
+\DoxyCodeLine{00032\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00033\ \textcolor{comment}{\ *\ Copyright\ (C)\ 1992\ by\ David\ W.\ Sanderson.}}
+\DoxyCodeLine{00034\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00035\ \textcolor{comment}{\ *\ Permission\ to\ use,\ copy,\ modify,\ and\ distribute\ this\ software\ and\ its}}
+\DoxyCodeLine{00036\ \textcolor{comment}{\ *\ documentation\ for\ any\ purpose\ and\ without\ fee\ is\ hereby\ granted,}}
+\DoxyCodeLine{00037\ \textcolor{comment}{\ *\ provided\ that\ the\ above\ copyright\ notice\ appear\ in\ all\ copies\ and}}
+\DoxyCodeLine{00038\ \textcolor{comment}{\ *\ that\ both\ that\ copyright\ notice\ and\ this\ permission\ notice\ appear}}
+\DoxyCodeLine{00039\ \textcolor{comment}{\ *\ in\ supporting\ documentation.\ \ This\ software\ is\ provided\ "{}as\ is"{}}}
+\DoxyCodeLine{00040\ \textcolor{comment}{\ *\ without\ express\ or\ implied\ warranty.}}
+\DoxyCodeLine{00041\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00044\ \textcolor{comment}{\ *\ Utilities}}
+\DoxyCodeLine{00045\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00047\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}\ GetByte\ (istream\ *\ fp);}
+\DoxyCodeLine{00048\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{short}\ GetShort\ (istream\ *\ fp);}
+\DoxyCodeLine{00049\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{long}\ GetLong\ (istream\ *\ fp);}
+\DoxyCodeLine{00050\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ readto\ (istream\ *fp,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ *ppos,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ dst);}
+\DoxyCodeLine{00051\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ BMPreadfileheader\ (istream\ *fp,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ *ppos,}
+\DoxyCodeLine{00052\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ *poffBits);}
+\DoxyCodeLine{00053\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ BMPreadinfoheader\ (istream\ *fp,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ *ppos,}
+\DoxyCodeLine{00054\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ *pcx,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ *pcy,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ *pcBitCount,}
+\DoxyCodeLine{00055\ \ \ \ \ \textcolor{keywordtype}{int}\ *pclassv);}
+\DoxyCodeLine{00056\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}\ BMPreadrgbtable\ (istream\ *fp,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ *ppos,}
+\DoxyCodeLine{00057\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ cBitCount,\ \textcolor{keywordtype}{int}\ classv,\ pixval\ *R,\ pixval\ *G,\ pixval\ *B);}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00059\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *ifname\ =\ \textcolor{stringliteral}{"{}BMP"{}};}
+\DoxyCodeLine{00060\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{char}\ \ \ \ \ er\_read[]\ =\ \textcolor{stringliteral}{"{}\%s:\ read\ error"{}};}
+\DoxyCodeLine{00061\ \textcolor{comment}{//\ static\ char\ \ \ \ \ er\_seek[]\ =\ "{}\%s:\ seek\ error"{};}}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00063\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}}
+\DoxyCodeLine{00064\ GetByte(istream\ *fp)}
+\DoxyCodeLine{00065\ \{}
+\DoxyCodeLine{00066\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \ \ \ \ \ \ \ \ \ \ v;}
+\DoxyCodeLine{00067\ }
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((v\ =\ fp-\/>get())\ ==\ EOF)}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(er\_read,\ ifname);}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00072\ }
+\DoxyCodeLine{00073\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ v;}
+\DoxyCodeLine{00074\ \}}
+\DoxyCodeLine{00075\ }
+\DoxyCodeLine{00076\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{short}}
+\DoxyCodeLine{00077\ GetShort(istream\ *fp)}
+\DoxyCodeLine{00078\ \{}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{short}\ \ \ \ \ \ \ \ \ \ \ v;}
+\DoxyCodeLine{00080\ }
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pm\_readlittleshort(fp,\ \&v)\ ==\ -\/1)}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(er\_read,\ ifname);}
+\DoxyCodeLine{00084\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00086\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ v;}
+\DoxyCodeLine{00087\ \}}
+\DoxyCodeLine{00088\ }
+\DoxyCodeLine{00089\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{long}}
+\DoxyCodeLine{00090\ GetLong(istream\ *fp)}
+\DoxyCodeLine{00091\ \{}
+\DoxyCodeLine{00092\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{long}\ \ \ \ \ \ \ \ \ \ \ \ v;}
+\DoxyCodeLine{00093\ }
+\DoxyCodeLine{00094\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pm\_readlittlelong(fp,\ \&v)\ ==\ -\/1)}
+\DoxyCodeLine{00095\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00096\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(er\_read,\ ifname);}
+\DoxyCodeLine{00097\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ v;}
+\DoxyCodeLine{00100\ \}}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00103\ \textcolor{comment}{\ *\ readto\ -\/\ read\ as\ many\ bytes\ as\ necessary\ to\ position\ the}}
+\DoxyCodeLine{00104\ \textcolor{comment}{\ *\ file\ at\ the\ desired\ offset.}}
+\DoxyCodeLine{00105\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00108\ readto(istream\ \ \ \ \ \ \ \ \ \ \ *fp,}
+\DoxyCodeLine{00109\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ *ppos,\ \ \ \textcolor{comment}{/*\ pointer\ to\ number\ of\ bytes\ read\ from\ fp\ */}}
+\DoxyCodeLine{00110\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ dst)}
+\DoxyCodeLine{00111\ \{}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ pos;}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}(!fp\ ||\ !ppos)}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ pos\ =\ *ppos;}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}(pos\ >\ dst)}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}\%s:\ internal\ error\ in\ readto()"{}},\ ifname);}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}(;\ pos\ <\ dst;\ pos++)}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (fp-\/>get()\ ==\ EOF)}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(er\_read,\ ifname);}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00129\ }
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \ \ *ppos\ =\ pos;}
+\DoxyCodeLine{00131\ \}}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00135\ \textcolor{comment}{\ *\ BMP\ reading\ routines}}
+\DoxyCodeLine{00136\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00139\ BMPreadfileheader(}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ istream\ \ \ \ \ \ \ \ \ \ \ *fp,}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ *ppos,\ \ \ \textcolor{comment}{/*\ number\ of\ bytes\ read\ from\ fp\ */}}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ *poffBits)}
+\DoxyCodeLine{00143\ \{}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00145\ \textcolor{comment}{\ \ \ \ \ \ \ \ unsigned\ long\ \ \ cbSize;}}
+\DoxyCodeLine{00146\ \textcolor{comment}{\ \ \ \ \ \ \ \ unsigned\ short\ \ xHotSpot;}}
+\DoxyCodeLine{00147\ \textcolor{comment}{\ \ \ \ \ \ \ \ unsigned\ short\ \ yHotSpot;}}
+\DoxyCodeLine{00148\ \textcolor{comment}{\ \ \ \ \ \ \ \ */}}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ offBits;}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00152\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ We've\ already\ read\ the\ magic\ number.}}
+\DoxyCodeLine{00153\ \textcolor{comment}{\ \ \ \ \ \ \ \ if\ (GetByte(fp)\ !=\ 'B')}}
+\DoxyCodeLine{00154\ \textcolor{comment}{\ \ \ \ \ \ \ \ \{}}
+\DoxyCodeLine{00155\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pm\_error("{}\%s\ is\ not\ a\ BMP\ file"{},\ ifname);}}
+\DoxyCodeLine{00156\ \textcolor{comment}{\ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00157\ \textcolor{comment}{\ \ \ \ \ \ \ \ if\ (GetByte(fp)\ !=\ 'M')}}
+\DoxyCodeLine{00158\ \textcolor{comment}{\ \ \ \ \ \ \ \ \{}}
+\DoxyCodeLine{00159\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pm\_error("{}\%s\ is\ not\ a\ BMP\ file"{},\ ifname);}}
+\DoxyCodeLine{00160\ \textcolor{comment}{\ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{00161\ \textcolor{comment}{\ \ \ \ \ \ \ \ */}}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ \textcolor{comment}{/*\ cbSize\ =\ */}\ GetLong(fp);}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ \textcolor{comment}{/*\ xHotSpot\ =\ */}\ GetShort(fp);}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \ \ \textcolor{comment}{/*\ yHotSpot\ =\ */}\ GetShort(fp);}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ offBits\ =\ GetLong(fp);}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ *poffBits\ =\ offBits;}
+\DoxyCodeLine{00169\ }
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ *ppos\ +=\ 14;}
+\DoxyCodeLine{00171\ \}}
+\DoxyCodeLine{00172\ }
+\DoxyCodeLine{00173\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00174\ BMPreadinfoheader(}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ istream\ \ \ \ \ \ \ \ \ \ \ *fp,}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ *ppos,\ \ \ \textcolor{comment}{/*\ number\ of\ bytes\ read\ from\ fp\ */}}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ *pcx,}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ *pcy,}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ *pcBitCount,}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ *pcCompression,}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \ \ \ \ \ \ \ \ \ *pclassv)}
+\DoxyCodeLine{00182\ \{}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ cbFix;}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \ cPlanes\ =\ 0;}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ cx\ =\ 0;}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ cy\ =\ 0;}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \ cBitCount\ =\ 0;}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ cCompression\ =\ 0;}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \ \ \ \ \ \ \ \ \ \ classv\ =\ 0;}
+\DoxyCodeLine{00191\ }
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ cbFix\ =\ GetLong(fp);}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (cbFix)}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 12:}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ classv\ =\ C\_OS2;}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 40:\ \ \textcolor{comment}{//\ BITMAPINFOHEADER}}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ classv\ =\ C\_WIN;}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 52:\ \ \textcolor{comment}{//\ BITMAPV2INFOHEADER}}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ classv\ =\ C\_WINV2;}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 56:\ \ \textcolor{comment}{//\ BITMAPV3INFOHEADER}}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ classv\ =\ C\_WINV3;}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 108:\ \ \textcolor{comment}{//\ BITMAPV4HEADER}}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ classv\ =\ C\_WINV4;}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ 124:\ \ \textcolor{comment}{//\ BITMAPV5HEADER}}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ classv\ =\ C\_WINV5;}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}\%s:\ unknown\ cbFix:\ \%d"{}},\ ifname,\ cbFix);}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (classv\ ==\ C\_OS2)\ \{}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cx\ =\ GetShort(fp);}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cy\ =\ GetShort(fp);}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cx\ =\ GetLong(fp);}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cy\ =\ GetLong(fp);}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ cPlanes\ =\ GetShort(fp);}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ cBitCount\ =\ GetShort(fp);}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00230\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ *\ We've\ read\ 16\ bytes\ so\ far,\ need\ to\ read\ more}}
+\DoxyCodeLine{00231\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ *\ for\ the\ required\ total.}}
+\DoxyCodeLine{00232\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ */}}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (classv\ !=\ C\_OS2)\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ \ \ \ \ cCompression\ =\ GetLong(fp);}
+\DoxyCodeLine{00235\ }
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (int)cbFix\ -\/\ 20;\ i\ +=\ 4)\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GetLong(fp);}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cPlanes\ !=\ 1)}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}\%s:\ don't\ know\ how\ to\ handle\ cPlanes\ =\ \%d"{}}}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,ifname}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,cPlanes);}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (classv)}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ C\_WIN:}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_ad068a2eb73e7fdeb9c4bf9bfb3dfb05c}{pm\_message}}(\textcolor{stringliteral}{"{}Windows\ BMP,\ \%dx\%dx\%d"{}}}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,cx}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,cy}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,cBitCount);}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ C\_WINV2:}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ C\_WINV3:}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ C\_WINV4:}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ C\_WINV5:}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_ad068a2eb73e7fdeb9c4bf9bfb3dfb05c}{pm\_message}}(\textcolor{stringliteral}{"{}Windows\ BMP\ V\%d,\ \%dx\%dx\%d"{}}}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,(classv\ -\/\ C\_WINV2\ +\ 2)}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,cx}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,cy}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,cBitCount);}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ C\_OS2:}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_ad068a2eb73e7fdeb9c4bf9bfb3dfb05c}{pm\_message}}(\textcolor{stringliteral}{"{}OS/2\ BMP,\ \%dx\%dx\%d"{}}}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,cx}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,cy}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ,cBitCount);}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \textcolor{preprocessor}{\#ifdef\ DEBUG}}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_ad068a2eb73e7fdeb9c4bf9bfb3dfb05c}{pm\_message}}(\textcolor{stringliteral}{"{}cbFix:\ \%d"{}},\ cbFix);}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_ad068a2eb73e7fdeb9c4bf9bfb3dfb05c}{pm\_message}}(\textcolor{stringliteral}{"{}cx:\ \%d"{}},\ cx);}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_ad068a2eb73e7fdeb9c4bf9bfb3dfb05c}{pm\_message}}(\textcolor{stringliteral}{"{}cy:\ \%d"{}},\ cy);}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_ad068a2eb73e7fdeb9c4bf9bfb3dfb05c}{pm\_message}}(\textcolor{stringliteral}{"{}cPlanes:\ \%d"{}},\ cPlanes);}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_ad068a2eb73e7fdeb9c4bf9bfb3dfb05c}{pm\_message}}(\textcolor{stringliteral}{"{}cBitCount:\ \%d"{}},\ cBitCount);}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_ad068a2eb73e7fdeb9c4bf9bfb3dfb05c}{pm\_message}}(\textcolor{stringliteral}{"{}cCompression:\ \%d"{}},\ cCompression);}
+\DoxyCodeLine{00281\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ *pcx\ =\ cx;}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ *pcy\ =\ cy;}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \ \ *pcBitCount\ =\ cBitCount;}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ \ \ *pcCompression\ =\ cCompression;}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ *pclassv\ =\ classv;}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \ \ *ppos\ +=\ cbFix;}
+\DoxyCodeLine{00290\ \}}
+\DoxyCodeLine{00291\ }
+\DoxyCodeLine{00292\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00293\ \textcolor{comment}{\ *\ returns\ the\ number\ of\ bytes\ read,\ or\ -\/1\ on\ error.}}
+\DoxyCodeLine{00294\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00295\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}}
+\DoxyCodeLine{00296\ BMPreadrgbtable(}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \ \ istream\ \ \ \ \ \ \ \ \ \ \ *fp,}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ *ppos,\ \ \ \textcolor{comment}{/*\ number\ of\ bytes\ read\ from\ fp\ */}}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \ cBitCount,}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \ \ \ \ \ \ \ \ \ \ classv,}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ pixval\ \ \ \ \ \ \ \ \ *R,}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \ \ pixval\ \ \ \ \ \ \ \ \ *G,}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \ \ pixval\ \ \ \ \ \ \ \ \ *B)}
+\DoxyCodeLine{00304\ \{}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \ \ \ \ \ \ \ \ \ \ i;}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \ \ \ \ \ \ \ \ \ \ nbyte\ =\ 0;}
+\DoxyCodeLine{00307\ }
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{long}\ \ \ \ \ \ \ \ \ \ \ \ ncolors\ =\ (1\ <<\ cBitCount);}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ ncolors;\ i++)}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ B[i]\ =\ (pixval)\ GetByte(fp);}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ G[i]\ =\ (pixval)\ GetByte(fp);}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ R[i]\ =\ (pixval)\ GetByte(fp);}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ nbyte\ +=\ 3;}
+\DoxyCodeLine{00316\ }
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (classv\ !=\ C\_OS2)}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (void)\ GetByte(fp);}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ nbyte++;}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00323\ }
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ *ppos\ +=\ nbyte;}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ nbyte;}
+\DoxyCodeLine{00326\ \}}
+\DoxyCodeLine{00327\ }
+\DoxyCodeLine{00328\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00329\ \textcolor{comment}{\ *\ returns\ the\ number\ of\ bytes\ read,\ or\ -\/1\ on\ error.}}
+\DoxyCodeLine{00330\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00331\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}}
+\DoxyCodeLine{00332\ BMPreadrow(}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ istream\ \ \ \ \ \ \ \ \ \ \ *fp,}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ *ppos,\ \ \ \textcolor{comment}{/*\ number\ of\ bytes\ read\ from\ fp\ */}}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structpixel}{pixel}}\ \ \ \ \ \ \ \ \ \ *row,}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ xelval\ \ \ \ \ \ \ \ \ *alpha\_row,}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ cx,}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \ cBitCount,}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \ \ \ \ \ \ \ \ \ \ indexed,}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ pixval\ \ \ \ \ \ \ \ \ *R,}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ pixval\ \ \ \ \ \ \ \ \ *G,}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ pixval\ \ \ \ \ \ \ \ \ *B)}
+\DoxyCodeLine{00343\ \{}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structbitstream}{BITSTREAM}}\ \ \ \ \ \ \ b\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \ \ \ \ \ \ \ nbyte\ =\ 0;}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \ \ \ \ \ \ \ \ \ \ rc;}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \ \ \ \ \ \ \ x;}
+\DoxyCodeLine{00348\ }
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (indexed)\ \{}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((b\ =\ pm\_bitinit(fp,\ \textcolor{stringliteral}{"{}r"{}}))\ ==\ \textcolor{keyword}{nullptr})}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00355\ }
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (x\ =\ 0;\ x\ <\ cx;\ x++,\ row++)}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ v;}
+\DoxyCodeLine{00359\ }
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!indexed)\ \{}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ r,\ g,\ b;}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ b\ =\ GetByte(fp);}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ g\ =\ GetByte(fp);}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ r\ =\ GetByte(fp);}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cBitCount\ >\ 24)\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ *(alpha\_row++)\ =\ GetByte(fp);}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ++nbyte;}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ nbyte\ +=\ 3;}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ PPM\_ASSIGN(*row,\ r,\ g,\ b);}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((rc\ =\ pm\_bitread(b,\ cBitCount,\ \&v))\ ==\ -\/1)}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ nbyte\ +=\ rc;}
+\DoxyCodeLine{00377\ }
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ PPM\_ASSIGN(*row,\ R[v],\ G[v],\ B[v]);}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00381\ }
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (indexed)\ \{}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((rc\ =\ pm\_bitfini(b))\ !=\ 0)}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00388\ }
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00390\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ *\ Make\ sure\ we\ read\ a\ multiple\ of\ 4\ bytes.}}
+\DoxyCodeLine{00391\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ */}}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (nbyte\ \%\ 4)}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GetByte(fp);}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ nbyte++;}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00397\ }
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ *ppos\ +=\ nbyte;}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ nbyte;}
+\DoxyCodeLine{00400\ \}}
+\DoxyCodeLine{00401\ }
+\DoxyCodeLine{00402\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00403\ BMPreadbits(\mbox{\hyperlink{structpixel}{xel}}\ *array,\ xelval\ *alpha\_array,}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ istream\ \ \ \ \ \ \ \ \ \ \ *fp,}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ *ppos,\ \ \ \textcolor{comment}{/*\ number\ of\ bytes\ read\ from\ fp\ */}}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ offBits,}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ cx,}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ cy,}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \ cBitCount,}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ cCompression,}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \ \ \ \ \ \ \ \ \ \ indexed,}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ pixval\ \ \ \ \ \ \ \ \ *R,}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \ \ pixval\ \ \ \ \ \ \ \ \ *G,}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ pixval\ \ \ \ \ \ \ \ \ *B)}
+\DoxyCodeLine{00415\ \{}
+\DoxyCodeLine{00416\ \ \ \textcolor{keywordtype}{long}\ y;}
+\DoxyCodeLine{00417\ }
+\DoxyCodeLine{00418\ \ \ readto(fp,\ ppos,\ offBits);}
+\DoxyCodeLine{00419\ }
+\DoxyCodeLine{00420\ \ \ \textcolor{keywordflow}{if}\ (cBitCount\ >\ 24\ \&\&\ cBitCount\ !=\ 32)\ \{}
+\DoxyCodeLine{00421\ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}\%s:\ cannot\ handle\ cBitCount:\ \%d"{}},\ ifname,\ cBitCount);}
+\DoxyCodeLine{00422\ \ \ \}}
+\DoxyCodeLine{00423\ }
+\DoxyCodeLine{00424\ \ \ \textcolor{keywordflow}{if}\ (cCompression\ ==\ 1)\ \{}
+\DoxyCodeLine{00425\ \ \ \ \ \textcolor{comment}{//\ RLE8\ compression}}
+\DoxyCodeLine{00426\ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ *row\ =\ array\ +\ (cy\ -\/\ 1)\ *\ cx;}
+\DoxyCodeLine{00427\ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}\ *p\ =\ row;}
+\DoxyCodeLine{00428\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ nbyte\ =\ 0;}
+\DoxyCodeLine{00429\ \ \ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00430\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ first\ =\ GetByte(fp);}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ second\ =\ GetByte(fp);}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ nbyte\ +=\ 2;}
+\DoxyCodeLine{00433\ }
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (first\ !=\ 0)\ \{}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Repeated\ index.}}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ first;\ ++i)\ \{}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \ \ \ \ PPM\_ASSIGN(*p,\ R[second],\ G[second],\ B[second]);}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ \ \ \ \ ++p;}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (second\ ==\ 0)\ \{}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ End\ of\ line.}}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \ \ row\ -\/=\ cx;}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \ \ p\ =\ row;}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (second\ ==\ 1)\ \{}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ End\ of\ image.}}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (second\ ==\ 2)\ \{}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Delta.}}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xoffset\ =\ GetByte(fp);}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ yoffset\ =\ GetByte(fp);}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \ \ nbyte\ +=\ 2;}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \ \ row\ -\/=\ cx\ *\ yoffset;}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ p\ +=\ xoffset\ -\/\ cx\ *\ yoffset;}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Absolute\ run.}}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ second;\ ++i)\ \{}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ v\ =\ GetByte(fp);}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ \ \ \ \ ++nbyte;}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ \ \ \ \ PPM\_ASSIGN(*p,\ R[v],\ G[v],\ B[v]);}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \ \ \ \ ++p;}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \ \ nbyte\ +=\ second;}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (second\ \%\ 2)\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Pad\ to\ 16-\/bit\ boundary.}}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \ \ \ \ GetByte(fp);}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ \ \ \ \ ++nbyte;}
+\DoxyCodeLine{00471\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00473\ \ \ \ \ \}}
+\DoxyCodeLine{00474\ \ \ \ \ *ppos\ +=\ nbyte;}
+\DoxyCodeLine{00475\ \ \ \}}
+\DoxyCodeLine{00476\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00477\ \ \ \ \ \textcolor{comment}{//\ The\ picture\ is\ stored\ bottom\ line\ first,\ top\ line\ last}}
+\DoxyCodeLine{00478\ \ \ \ \ \textcolor{keywordflow}{for}\ (y\ =\ (\textcolor{keywordtype}{long})cy\ -\/\ 1;\ y\ >=\ 0;\ y-\/-\/)\ \{}
+\DoxyCodeLine{00479\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ rc\ =\ BMPreadrow(fp,\ ppos,\ array\ +\ y*cx,\ alpha\_array\ +\ y*cx,\ cx,\ cBitCount,\ indexed,\ R,\ G,\ B);}
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (rc\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}\%s:\ couldn't\ read\ row\ \%d"{}},\ ifname,\ y);}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (rc\ \%\ 4)\ \{}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}\%s:\ row\ had\ bad\ number\ of\ bytes:\ \%d"{}},\ ifname,\ rc);}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00486\ \ \ \ \ \}}
+\DoxyCodeLine{00487\ \ \ \}}
+\DoxyCodeLine{00488\ \}}
+\DoxyCodeLine{00489\ }
+\DoxyCodeLine{00493\ PNMFileTypeBMP::Reader::}
+\DoxyCodeLine{00494\ Reader(\mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type,\ istream\ *file,\ \textcolor{keywordtype}{bool}\ owns\_file,\ \textcolor{keywordtype}{string}\ magic\_number)\ :}
+\DoxyCodeLine{00495\ \ \ \mbox{\hyperlink{classPNMReader}{PNMReader}}(type,\ file,\ owns\_file)}
+\DoxyCodeLine{00496\ \{}
+\DoxyCodeLine{00497\ \ \ \textcolor{keywordflow}{if}\ (!read\_magic\_number(\_file,\ magic\_number,\ 2))\ \{}
+\DoxyCodeLine{00498\ \ \ \ \ \textcolor{comment}{//\ No\ magic\ number,\ no\ image.}}
+\DoxyCodeLine{00499\ \ \ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_bmp\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ pnmimage\_bmp\_cat.debug()}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}BMP\ image\ file\ appears\ to\ be\ empty.\(\backslash\)n"{}};}
+\DoxyCodeLine{00502\ \ \ \ \ \}}
+\DoxyCodeLine{00503\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00504\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00505\ \ \ \}}
+\DoxyCodeLine{00506\ }
+\DoxyCodeLine{00507\ \ \ \textcolor{keywordflow}{if}\ (magic\_number\ !=\ \textcolor{keywordtype}{string}(\textcolor{stringliteral}{"{}BM"{}}))\ \{}
+\DoxyCodeLine{00508\ \ \ \ \ pnmimage\_bmp\_cat.error()}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}File\ is\ not\ a\ valid\ BMP\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00510\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00511\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00512\ \ \ \}}
+\DoxyCodeLine{00513\ }
+\DoxyCodeLine{00514\ \ \ \textcolor{keywordtype}{int}\ \ \ \ \ \ \ \ \ \ \ \ \ rc;}
+\DoxyCodeLine{00515\ }
+\DoxyCodeLine{00516\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ cx;}
+\DoxyCodeLine{00517\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ \ \ cy;}
+\DoxyCodeLine{00518\ }
+\DoxyCodeLine{00519\ \ \ pos\ =\ 0;}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ \ \ BMPreadfileheader(file,\ \&pos,\ \&offBits);}
+\DoxyCodeLine{00522\ \ \ BMPreadinfoheader(file,\ \&pos,\ \&cx,\ \&cy,\ \&cBitCount,\ \&cCompression,\ \&classv);}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00524\ \ \ \textcolor{keywordflow}{if}\ (offBits\ !=\ BMPoffbits(classv,\ cBitCount))\ \{}
+\DoxyCodeLine{00525\ \ \ \ \ pnmimage\_bmp\_cat.warning()}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}offBits\ is\ "{}}\ <<\ offBits\ <<\ \textcolor{stringliteral}{"{},\ expected\ "{}}}
+\DoxyCodeLine{00527\ \ \ \ \ \ \ <<\ BMPoffbits(classv,\ cBitCount)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00528\ \ \ \}}
+\DoxyCodeLine{00529\ }
+\DoxyCodeLine{00530\ \ \ indexed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00531\ }
+\DoxyCodeLine{00532\ \ \ \textcolor{keywordflow}{if}\ (cBitCount\ <=\ 8)\ \{}
+\DoxyCodeLine{00533\ \ \ \ \ indexed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00534\ \ \ \ \ rc\ =\ BMPreadrgbtable(file,\ \&pos,\ cBitCount,\ classv,\ R,\ G,\ B);}
+\DoxyCodeLine{00535\ }
+\DoxyCodeLine{00536\ \ \ \ \ \textcolor{keywordflow}{if}\ (rc\ !=\ (\textcolor{keywordtype}{int})BMPlenrgbtable(classv,\ cBitCount))\ \{}
+\DoxyCodeLine{00537\ \ \ \ \ \ \ pnmimage\_bmp\_cat.warning()}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \ \ <<\ rc\ <<\ \textcolor{stringliteral}{"{}-\/byte\ RGB\ table,\ expected\ "{}}}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \ \ <<\ BMPlenrgbtable(classv,\ cBitCount)\ <<\ \textcolor{stringliteral}{"{}\ bytes\(\backslash\)n"{}};}
+\DoxyCodeLine{00540\ \ \ \ \ \}}
+\DoxyCodeLine{00541\ \ \ \}}
+\DoxyCodeLine{00542\ }
+\DoxyCodeLine{00543\ \ \ \textcolor{keywordflow}{if}\ (cBitCount\ >\ 24)\ \{}
+\DoxyCodeLine{00544\ \ \ \ \ \_num\_channels\ =\ 4;}
+\DoxyCodeLine{00545\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00546\ \ \ \ \ \_num\_channels\ =\ 3;}
+\DoxyCodeLine{00547\ \ \ \}}
+\DoxyCodeLine{00548\ \ \ \_x\_size\ =\ (int)cx;}
+\DoxyCodeLine{00549\ \ \ \_y\_size\ =\ (int)cy;}
+\DoxyCodeLine{00550\ \ \ \_maxval\ =\ 255;}
+\DoxyCodeLine{00551\ }
+\DoxyCodeLine{00552\ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_bmp\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00553\ \ \ \ \ pnmimage\_bmp\_cat.debug()}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reading\ BMP\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00555\ \ \ \}}
+\DoxyCodeLine{00556\ \}}
+\DoxyCodeLine{00557\ }
+\DoxyCodeLine{00558\ }
+\DoxyCodeLine{00568\ \textcolor{keywordtype}{int}\ PNMFileTypeBMP::Reader::}
+\DoxyCodeLine{00569\ read\_data(\mbox{\hyperlink{structpixel}{xel}}\ *array,\ xelval\ *alpha\_array)\ \{}
+\DoxyCodeLine{00570\ \ \ BMPreadbits(array,\ alpha\_array,\ \_file,\ \&pos,\ offBits,\ \_x\_size,\ \_y\_size,}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cBitCount,\ cCompression,\ indexed,\ R,\ G,\ B);}
+\DoxyCodeLine{00572\ }
+\DoxyCodeLine{00573\ \ \ \textcolor{keywordflow}{if}\ (cCompression\ !=\ 1\ \&\&}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ pos\ !=\ BMPlenfile(classv,\ cBitCount,\ \_x\_size,\ \_y\_size))\ \{}
+\DoxyCodeLine{00575\ \ \ \ \ pnmimage\_bmp\_cat.warning()}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Read\ "{}}\ <<\ pos\ <<\ \textcolor{stringliteral}{"{}\ bytes,\ expected\ to\ read\ "{}}}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ <<\ BMPlenfile(classv,\ cBitCount,\ \_x\_size,\ \_y\_size)\ <<\ \textcolor{stringliteral}{"{}\ bytes\(\backslash\)n"{}};}
+\DoxyCodeLine{00578\ \ \ \}}
+\DoxyCodeLine{00579\ }
+\DoxyCodeLine{00580\ \ \ \textcolor{keywordflow}{return}\ \_y\_size;}
+\DoxyCodeLine{00581\ \}}
+\DoxyCodeLine{00582\ }
+\DoxyCodeLine{00583\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_BMP}}
+
+\end{DoxyCode}

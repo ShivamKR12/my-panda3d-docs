@@ -1,0 +1,529 @@
+\doxysection{memory\+Hook.\+cxx}
+\hypertarget{memoryHook_8cxx_source}{}\label{memoryHook_8cxx_source}\index{dtool/src/dtoolbase/memoryHook.cxx@{dtool/src/dtoolbase/memoryHook.cxx}}
+\mbox{\hyperlink{memoryHook_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{memoryHook_8h}{memoryHook.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{deletedBufferChain_8h}{deletedBufferChain.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ <stdlib.h>}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{typeRegistry_8h}{typeRegistry.h}}"{}}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{comment}{//\ Windows\ case.}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#ifndef\ WIN32\_LEAN\_AND\_MEAN}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#define\ WIN32\_LEAN\_AND\_MEAN\ 1}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{windows_8h}{windows.h}}>}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{comment}{//\ Posix\ case.}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ <unistd.h>}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ <sys/types.h>}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ <sys/mman.h>}}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#ifndef\ MAP\_ANON}}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#define\ MAP\_ANON\ 0x1000}}
+\DoxyCodeLine{00036\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ WIN32}}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \textcolor{keyword}{using\ }std::cerr;}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ \textcolor{comment}{//\ Ensure\ we\ made\ the\ right\ decisions\ about\ the\ alignment\ size.}}
+\DoxyCodeLine{00043\ \textcolor{keyword}{static\_assert}(MEMORY\_HOOK\_ALIGNMENT\ >=\ \textcolor{keyword}{sizeof}(size\_t),}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}MEMORY\_HOOK\_ALIGNMENT\ should\ at\ least\ be\ sizeof(size\_t)"{}});}
+\DoxyCodeLine{00045\ \textcolor{keyword}{static\_assert}(MEMORY\_HOOK\_ALIGNMENT\ >=\ \textcolor{keyword}{sizeof}(\textcolor{keywordtype}{void}\ *),}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}MEMORY\_HOOK\_ALIGNMENT\ should\ at\ least\ be\ sizeof(void\ *)"{}});}
+\DoxyCodeLine{00047\ \textcolor{keyword}{static\_assert}(MEMORY\_HOOK\_ALIGNMENT\ *\ 8\ >=\ NATIVE\_WORDSIZE,}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}MEMORY\_HOOK\_ALIGNMENT\ *\ 8\ should\ at\ least\ be\ NATIVE\_WORDSIZE"{}});}
+\DoxyCodeLine{00049\ \textcolor{keyword}{static\_assert}((MEMORY\_HOOK\_ALIGNMENT\ \&\ (MEMORY\_HOOK\_ALIGNMENT\ -\/\ 1))\ ==\ 0,}
+\DoxyCodeLine{00050\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}MEMORY\_HOOK\_ALIGNMENT\ should\ be\ a\ power\ of\ two"{}});}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \textcolor{preprocessor}{\#if\ defined(CPPPARSER)}}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \textcolor{preprocessor}{\#elif\ defined(USE\_MEMORY\_MIMALLOC)}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \textcolor{comment}{//\ mimalloc\ is\ a\ modern\ memory\ manager\ by\ Microsoft\ that\ is\ very\ fast\ as\ well}}
+\DoxyCodeLine{00057\ \textcolor{comment}{//\ as\ thread-\/safe.}}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00059\ \textcolor{preprocessor}{\#include\ "{}mimalloc.h"{}}}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00061\ \textcolor{preprocessor}{\#define\ call\_malloc\ mi\_malloc}}
+\DoxyCodeLine{00062\ \textcolor{preprocessor}{\#define\ call\_realloc\ mi\_realloc}}
+\DoxyCodeLine{00063\ \textcolor{preprocessor}{\#define\ call\_free\ mi\_free}}
+\DoxyCodeLine{00064\ \textcolor{preprocessor}{\#undef\ MEMORY\_HOOK\_MALLOC\_LOCK}}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \textcolor{preprocessor}{\#elif\ defined(USE\_MEMORY\_DLMALLOC)}}
+\DoxyCodeLine{00067\ }
+\DoxyCodeLine{00068\ \textcolor{comment}{//\ Memory\ manager:\ DLMALLOC\ This\ is\ Doug\ Lea's\ memory\ manager.\ \ It\ is\ very}}
+\DoxyCodeLine{00069\ \textcolor{comment}{//\ fast,\ but\ it\ is\ not\ thread-\/safe.\ \ However,\ we\ provide\ thread\ locking\ within}}
+\DoxyCodeLine{00070\ \textcolor{comment}{//\ MemoryHook.}}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00072\ \textcolor{preprocessor}{\#define\ DLMALLOC\_EXPORT\ static}}
+\DoxyCodeLine{00073\ \textcolor{preprocessor}{\#define\ USE\_DL\_PREFIX\ 1}}
+\DoxyCodeLine{00074\ \textcolor{preprocessor}{\#define\ NO\_MALLINFO\ 1}}
+\DoxyCodeLine{00075\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00076\ \textcolor{preprocessor}{\ \ \#define\ DEBUG\ 1}}
+\DoxyCodeLine{00077\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00078\ \textcolor{comment}{//\ dlmalloc\ can\ do\ the\ alignment\ we\ ask\ for.}}
+\DoxyCodeLine{00079\ \textcolor{preprocessor}{\#define\ MALLOC\_ALIGNMENT\ MEMORY\_HOOK\_ALIGNMENT}}
+\DoxyCodeLine{00080\ }
+\DoxyCodeLine{00081\ \textcolor{preprocessor}{\#include\ "{}dlmalloc\_src.cxx"{}}}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00083\ \textcolor{preprocessor}{\#define\ call\_malloc\ dlmalloc}}
+\DoxyCodeLine{00084\ \textcolor{preprocessor}{\#define\ call\_realloc\ dlrealloc}}
+\DoxyCodeLine{00085\ \textcolor{preprocessor}{\#define\ call\_free\ dlfree}}
+\DoxyCodeLine{00086\ \textcolor{preprocessor}{\#define\ MEMORY\_HOOK\_MALLOC\_LOCK\ 1}}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00088\ \textcolor{preprocessor}{\#elif\ defined(USE\_MEMORY\_PTMALLOC2)}}
+\DoxyCodeLine{00089\ \textcolor{comment}{//\ This\ doesn't\ appear\ to\ work\ in\ Linux;\ perhaps\ it\ is\ clashing\ with\ the}}
+\DoxyCodeLine{00090\ \textcolor{comment}{//\ system\ library.\ \ It\ also\ doesn't\ appear\ to\ be\ thread-\/safe\ on\ OSX.}}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00092\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00093\ \textcolor{comment}{\ *\ Memory\ manager:\ PTMALLOC2\ Ptmalloc2\ is\ a\ derivative\ of\ Doug\ Lea's\ memory}}
+\DoxyCodeLine{00094\ \textcolor{comment}{\ *\ manager\ that\ was\ made\ thread-\/safe\ by\ Wolfram\ Gloger,\ then\ was\ ported\ to}}
+\DoxyCodeLine{00095\ \textcolor{comment}{\ *\ windows\ by\ Niall\ Douglas.\ \ It\ is\ not\ quite\ as\ fast\ as\ dlmalloc\ (because\ the}}
+\DoxyCodeLine{00096\ \textcolor{comment}{\ *\ thread-\/safety\ constructs\ take\ a\ certain\ amount\ of\ CPU\ time),\ but\ it's\ still}}
+\DoxyCodeLine{00097\ \textcolor{comment}{\ *\ much\ faster\ than\ the\ windows\ allocator.}}
+\DoxyCodeLine{00098\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00099\ }
+\DoxyCodeLine{00100\ \textcolor{preprocessor}{\#define\ USE\_DL\_PREFIX\ 1}}
+\DoxyCodeLine{00101\ \textcolor{preprocessor}{\#define\ NO\_MALLINFO\ 1}}
+\DoxyCodeLine{00102\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00103\ \textcolor{preprocessor}{\ \ \#define\ MALLOC\_DEBUG\ 2}}
+\DoxyCodeLine{00104\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00105\ \textcolor{preprocessor}{\#include\ "{}ptmalloc2\_smp\_src.cxx"{}}}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \textcolor{preprocessor}{\#define\ call\_malloc\ dlmalloc}}
+\DoxyCodeLine{00108\ \textcolor{preprocessor}{\#define\ call\_realloc\ dlrealloc}}
+\DoxyCodeLine{00109\ \textcolor{preprocessor}{\#define\ call\_free\ dlfree}}
+\DoxyCodeLine{00110\ \textcolor{preprocessor}{\#undef\ MEMORY\_HOOK\_MALLOC\_LOCK}}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00114\ \textcolor{comment}{//\ Memory\ manager:\ MALLOC\ This\ option\ uses\ the\ built-\/in\ system\ allocator.}}
+\DoxyCodeLine{00115\ \textcolor{comment}{//\ This\ is\ a\ good\ choice\ on\ linux,\ but\ it's\ a\ terrible\ choice\ on\ windows.}}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00117\ \textcolor{preprocessor}{\#define\ call\_malloc\ malloc}}
+\DoxyCodeLine{00118\ \textcolor{preprocessor}{\#define\ call\_realloc\ realloc}}
+\DoxyCodeLine{00119\ \textcolor{preprocessor}{\#define\ call\_free\ free}}
+\DoxyCodeLine{00120\ \textcolor{preprocessor}{\#undef\ MEMORY\_HOOK\_MALLOC\_LOCK}}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00122\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ USE\_MEMORY\_*}}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00128\ INLINE\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{size\_t}}
+\DoxyCodeLine{00129\ inflate\_size(\textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00130\ \textcolor{preprocessor}{\#if\ defined(MEMORY\_HOOK\_DO\_ALIGN)}}
+\DoxyCodeLine{00131\ \ \ \textcolor{comment}{//\ If\ we're\ aligning,\ we\ need\ to\ request\ the\ header\ size,\ plus\ extra\ bytes}}
+\DoxyCodeLine{00132\ \ \ \textcolor{comment}{//\ to\ give\ us\ wiggle\ room\ to\ adjust\ the\ pointer.}}
+\DoxyCodeLine{00133\ \ \ \textcolor{keywordflow}{return}\ size\ +\ \textcolor{keyword}{sizeof}(uintptr\_t)\ *\ 2\ +\ MEMORY\_HOOK\_ALIGNMENT\ -\/\ 1;}
+\DoxyCodeLine{00134\ \textcolor{preprocessor}{\#elif\ defined(USE\_MEMORY\_DLMALLOC)\ ||\ defined(USE\_MEMORY\_PTMALLOC2)}}
+\DoxyCodeLine{00135\ \ \ \textcolor{comment}{//\ If\ we\ are\ can\ access\ the\ allocator's\ bookkeeping\ to\ figure\ out\ how\ many}}
+\DoxyCodeLine{00136\ \ \ \textcolor{comment}{//\ bytes\ were\ allocated,\ we\ don't\ need\ to\ add\ our\ own\ information.}}
+\DoxyCodeLine{00137\ \ \ \textcolor{keywordflow}{return}\ size;}
+\DoxyCodeLine{00138\ \textcolor{preprocessor}{\#elif\ defined(DO\_MEMORY\_USAGE)}}
+\DoxyCodeLine{00139\ \ \ \textcolor{comment}{//\ If\ we're\ not\ aligning,\ but\ we're\ tracking\ memory\ allocations,\ we\ just}}
+\DoxyCodeLine{00140\ \ \ \textcolor{comment}{//\ need\ the\ header\ size\ extra\ (this\ gives\ us\ a\ place\ to\ store\ the\ size\ of}}
+\DoxyCodeLine{00141\ \ \ \textcolor{comment}{//\ the\ allocated\ block).\ \ However,\ we\ do\ need\ to\ make\ sure\ that\ any}}
+\DoxyCodeLine{00142\ \ \ \textcolor{comment}{//\ alignment\ guarantee\ is\ kept.}}
+\DoxyCodeLine{00143\ \ \ \textcolor{keywordflow}{return}\ size\ +\ MEMORY\_HOOK\_ALIGNMENT;}
+\DoxyCodeLine{00144\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00145\ \ \ \textcolor{comment}{//\ If\ we're\ not\ doing\ any\ of\ that,\ we\ can\ just\ allocate\ the\ precise}}
+\DoxyCodeLine{00146\ \ \ \textcolor{comment}{//\ requested\ amount.}}
+\DoxyCodeLine{00147\ \ \ \textcolor{keywordflow}{return}\ size;}
+\DoxyCodeLine{00148\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00149\ \}}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00155\ INLINE\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ *}
+\DoxyCodeLine{00156\ alloc\_to\_ptr(\textcolor{keywordtype}{void}\ *alloc,\ \textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00157\ \textcolor{preprocessor}{\#if\ defined(MEMORY\_HOOK\_DO\_ALIGN)}}
+\DoxyCodeLine{00158\ \ \ \textcolor{comment}{//\ Add\ room\ for\ two\ uintptr\_t\ values.}}
+\DoxyCodeLine{00159\ \ \ uintptr\_t\ *root\ =\ (uintptr\_t\ *)((\textcolor{keywordtype}{char}\ *)alloc\ +\ \textcolor{keyword}{sizeof}(uintptr\_t)\ *\ 2);}
+\DoxyCodeLine{00160\ \ \ \textcolor{comment}{//\ Align\ this\ to\ the\ requested\ boundary.}}
+\DoxyCodeLine{00161\ \ \ root\ =\ (uintptr\_t\ *)(((uintptr\_t)root\ +\ MEMORY\_HOOK\_ALIGNMENT\ -\/\ 1)\ \&\ \string~(MEMORY\_HOOK\_ALIGNMENT\ -\/\ 1));}
+\DoxyCodeLine{00162\ \ \ root[-\/2]\ =\ size;}
+\DoxyCodeLine{00163\ \ \ root[-\/1]\ =\ (uintptr\_t)alloc;\ \ \textcolor{comment}{//\ Save\ the\ pointer\ we\ originally\ allocated.}}
+\DoxyCodeLine{00164\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{void}\ *)root;}
+\DoxyCodeLine{00165\ \textcolor{preprocessor}{\#elif\ defined(USE\_MEMORY\_DLMALLOC)\ ||\ defined(USE\_MEMORY\_PTMALLOC2)}}
+\DoxyCodeLine{00166\ \ \ \textcolor{keywordflow}{return}\ alloc;}
+\DoxyCodeLine{00167\ \textcolor{preprocessor}{\#elif\ defined(DO\_MEMORY\_USAGE)}}
+\DoxyCodeLine{00168\ \ \ \textcolor{keywordtype}{size\_t}\ *root\ =\ (\textcolor{keywordtype}{size\_t}\ *)alloc;}
+\DoxyCodeLine{00169\ \ \ root[0]\ =\ size;}
+\DoxyCodeLine{00170\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{void}\ *)((\textcolor{keywordtype}{char}\ *)root\ +\ MEMORY\_HOOK\_ALIGNMENT);}
+\DoxyCodeLine{00171\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00172\ \ \ \textcolor{keywordflow}{return}\ alloc;}
+\DoxyCodeLine{00173\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00174\ \}}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00181\ INLINE\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ *}
+\DoxyCodeLine{00182\ ptr\_to\_alloc(\textcolor{keywordtype}{void}\ *ptr,\ \textcolor{keywordtype}{size\_t}\ \&size)\ \{}
+\DoxyCodeLine{00183\ \textcolor{preprocessor}{\#if\ defined(MEMORY\_HOOK\_DO\_ALIGN)}}
+\DoxyCodeLine{00184\ \ \ uintptr\_t\ *root\ =\ (uintptr\_t\ *)ptr;}
+\DoxyCodeLine{00185\ \ \ size\ =\ root[-\/2];}
+\DoxyCodeLine{00186\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{void}\ *)root[-\/1];\ \textcolor{comment}{//\ Get\ the\ pointer\ we\ originally\ allocated.}}
+\DoxyCodeLine{00187\ \textcolor{preprocessor}{\#elif\ defined(USE\_MEMORY\_DLMALLOC)\ ||\ defined(USE\_MEMORY\_PTMALLOC2)}}
+\DoxyCodeLine{00188\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00189\ \ \ size\ =\ MemoryHook::get\_ptr\_size(ptr);}
+\DoxyCodeLine{00190\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00191\ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00192\ \textcolor{preprocessor}{\#elif\ defined(DO\_MEMORY\_USAGE)}}
+\DoxyCodeLine{00193\ \ \ \textcolor{keywordtype}{size\_t}\ *root\ =\ (\textcolor{keywordtype}{size\_t}\ *)((\textcolor{keywordtype}{char}\ *)ptr\ -\/\ MEMORY\_HOOK\_ALIGNMENT);}
+\DoxyCodeLine{00194\ \ \ size\ =\ root[0];}
+\DoxyCodeLine{00195\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{void}\ *)root;}
+\DoxyCodeLine{00196\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00197\ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00198\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00199\ \}}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00204\ MemoryHook::}
+\DoxyCodeLine{00205\ MemoryHook(\textcolor{keyword}{const}\ \mbox{\hyperlink{classMemoryHook}{MemoryHook}}\ \&copy)\ :}
+\DoxyCodeLine{00206\ \ \ \_total\_heap\_single\_size(copy.\_total\_heap\_single\_size.load(std::memory\_order\_relaxed)),}
+\DoxyCodeLine{00207\ \ \ \_total\_heap\_array\_size(copy.\_total\_heap\_array\_size.load(std::memory\_order\_relaxed)),}
+\DoxyCodeLine{00208\ \ \ \_requested\_heap\_size(copy.\_requested\_heap\_size.load(std::memory\_order\_relaxed)),}
+\DoxyCodeLine{00209\ \ \ \_total\_mmap\_size(copy.\_total\_mmap\_size.load(std::memory\_order\_relaxed)),}
+\DoxyCodeLine{00210\ \ \ \_max\_heap\_size(copy.\_max\_heap\_size)}
+\DoxyCodeLine{00211\ \#ifndef\ \_\_EMSCRIPTEN\_\_}
+\DoxyCodeLine{00212\ \ \ ,}
+\DoxyCodeLine{00213\ \ \ \_page\_size(copy.\_page\_size)}
+\DoxyCodeLine{00214\ \#endif}
+\DoxyCodeLine{00215\ \{}
+\DoxyCodeLine{00216\ \}}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00226\ \textcolor{keywordtype}{void}\ *\mbox{\hyperlink{classMemoryHook_a7555492ddf2d21b4e4257b4492532ed7}{MemoryHook::}}}
+\DoxyCodeLine{00227\ \mbox{\hyperlink{classMemoryHook_a7555492ddf2d21b4e4257b4492532ed7}{heap\_alloc\_single}}(\textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordtype}{size\_t}\ inflated\_size\ =\ inflate\_size(size);}
+\DoxyCodeLine{00229\ }
+\DoxyCodeLine{00230\ \textcolor{preprocessor}{\#ifdef\ MEMORY\_HOOK\_MALLOC\_LOCK}}
+\DoxyCodeLine{00231\ \ \ \_lock.lock();}
+\DoxyCodeLine{00232\ \ \ \textcolor{keywordtype}{void}\ *alloc\ =\ call\_malloc(inflated\_size);}
+\DoxyCodeLine{00233\ \ \ \_lock.unlock();}
+\DoxyCodeLine{00234\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00235\ \ \ \textcolor{keywordtype}{void}\ *alloc\ =\ call\_malloc(inflated\_size);}
+\DoxyCodeLine{00236\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00237\ }
+\DoxyCodeLine{00238\ \ \ \textcolor{keywordflow}{while}\ (alloc\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00239\ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a3ca590278137439b1f3b12a5ac896bf9}{alloc\_fail}}(inflated\_size);}
+\DoxyCodeLine{00240\ \textcolor{preprocessor}{\#ifdef\ MEMORY\_HOOK\_MALLOC\_LOCK}}
+\DoxyCodeLine{00241\ \ \ \ \ \_lock.lock();}
+\DoxyCodeLine{00242\ \ \ \ \ alloc\ =\ call\_malloc(inflated\_size);}
+\DoxyCodeLine{00243\ \ \ \ \ \_lock.unlock();}
+\DoxyCodeLine{00244\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00245\ \ \ \ \ alloc\ =\ call\_malloc(inflated\_size);}
+\DoxyCodeLine{00246\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00247\ \ \ \}}
+\DoxyCodeLine{00248\ }
+\DoxyCodeLine{00249\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00250\ \ \ \textcolor{comment}{//\ In\ the\ DO\_MEMORY\_USAGE\ case,\ we\ want\ to\ track\ the\ total\ size\ of\ allocated}}
+\DoxyCodeLine{00251\ \ \ \textcolor{comment}{//\ bytes\ on\ the\ heap.}}
+\DoxyCodeLine{00252\ \textcolor{preprocessor}{\#if\ defined(USE\_MEMORY\_DLMALLOC)\ ||\ defined(USE\_MEMORY\_PTMALLOC2)}}
+\DoxyCodeLine{00253\ \ \ \textcolor{comment}{//\ dlmalloc\ may\ slightly\ overallocate,\ however.}}
+\DoxyCodeLine{00254\ \ \ size\ =\ get\_ptr\_size(alloc);}
+\DoxyCodeLine{00255\ \ \ inflated\_size\ =\ size;}
+\DoxyCodeLine{00256\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00257\ \ \ \_total\_heap\_single\_size.fetch\_add(size,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00258\ \ \ \textcolor{keywordflow}{if}\ (\_total\_heap\_single\_size.load(std::memory\_order\_relaxed)\ +}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \_total\_heap\_array\_size.load(std::memory\_order\_relaxed)\ >}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \_max\_heap\_size)\ \{}
+\DoxyCodeLine{00261\ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a384863305e12229f4f5e9d292c2e8146}{overflow\_heap\_size}}();}
+\DoxyCodeLine{00262\ \ \ \}}
+\DoxyCodeLine{00263\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00265\ \ \ \textcolor{keywordtype}{void}\ *ptr\ =\ alloc\_to\_ptr(alloc,\ size);}
+\DoxyCodeLine{00266\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00267\ \ \ assert(((uintptr\_t)ptr\ \%\ MEMORY\_HOOK\_ALIGNMENT)\ ==\ 0);}
+\DoxyCodeLine{00268\ \ \ assert(ptr\ >=\ alloc\ \&\&\ (\textcolor{keywordtype}{char}\ *)ptr\ +\ size\ <=\ (\textcolor{keywordtype}{char}\ *)alloc\ +\ inflated\_size);}
+\DoxyCodeLine{00269\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00270\ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00271\ \}}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00276\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classMemoryHook_a898d872432e052aaa04113be37b53fa5}{MemoryHook::}}}
+\DoxyCodeLine{00277\ \mbox{\hyperlink{classMemoryHook_a898d872432e052aaa04113be37b53fa5}{heap\_free\_single}}(\textcolor{keywordtype}{void}\ *ptr)\ \{}
+\DoxyCodeLine{00278\ \ \ \textcolor{keywordtype}{size\_t}\ size;}
+\DoxyCodeLine{00279\ \ \ \textcolor{keywordtype}{void}\ *alloc\ =\ ptr\_to\_alloc(ptr,\ size);}
+\DoxyCodeLine{00280\ }
+\DoxyCodeLine{00281\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00282\ \ \ assert(size\ <=\ \_total\_heap\_single\_size.load(std::memory\_order\_relaxed));}
+\DoxyCodeLine{00283\ \ \ \_total\_heap\_single\_size.fetch\_sub(size,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00284\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \textcolor{preprocessor}{\#ifdef\ MEMORY\_HOOK\_MALLOC\_LOCK}}
+\DoxyCodeLine{00287\ \ \ \_lock.lock();}
+\DoxyCodeLine{00288\ \ \ call\_free(alloc);}
+\DoxyCodeLine{00289\ \ \ \_lock.unlock();}
+\DoxyCodeLine{00290\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00291\ \ \ call\_free(alloc);}
+\DoxyCodeLine{00292\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00293\ \}}
+\DoxyCodeLine{00294\ }
+\DoxyCodeLine{00303\ \textcolor{keywordtype}{void}\ *\mbox{\hyperlink{classMemoryHook_a48f518b2d475945b0e0dc4f256c68626}{MemoryHook::}}}
+\DoxyCodeLine{00304\ \mbox{\hyperlink{classMemoryHook_a48f518b2d475945b0e0dc4f256c68626}{heap\_alloc\_array}}(\textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordtype}{size\_t}\ inflated\_size\ =\ inflate\_size(size);}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00307\ \textcolor{preprocessor}{\#ifdef\ MEMORY\_HOOK\_MALLOC\_LOCK}}
+\DoxyCodeLine{00308\ \ \ \_lock.lock();}
+\DoxyCodeLine{00309\ \ \ \textcolor{keywordtype}{void}\ *alloc\ =\ call\_malloc(inflated\_size);}
+\DoxyCodeLine{00310\ \ \ \_lock.unlock();}
+\DoxyCodeLine{00311\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00312\ \ \ \textcolor{keywordtype}{void}\ *alloc\ =\ call\_malloc(inflated\_size);}
+\DoxyCodeLine{00313\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00314\ }
+\DoxyCodeLine{00315\ \ \ \textcolor{keywordflow}{while}\ (alloc\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00316\ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a3ca590278137439b1f3b12a5ac896bf9}{alloc\_fail}}(inflated\_size);}
+\DoxyCodeLine{00317\ \textcolor{preprocessor}{\#ifdef\ MEMORY\_HOOK\_MALLOC\_LOCK}}
+\DoxyCodeLine{00318\ \ \ \ \ \_lock.lock();}
+\DoxyCodeLine{00319\ \ \ \ \ alloc\ =\ call\_malloc(inflated\_size);}
+\DoxyCodeLine{00320\ \ \ \ \ \_lock.unlock();}
+\DoxyCodeLine{00321\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00322\ \ \ \ \ alloc\ =\ call\_malloc(inflated\_size);}
+\DoxyCodeLine{00323\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00324\ \ \ \}}
+\DoxyCodeLine{00325\ }
+\DoxyCodeLine{00326\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00327\ \ \ \textcolor{comment}{//\ In\ the\ DO\_MEMORY\_USAGE\ case,\ we\ want\ to\ track\ the\ total\ size\ of\ allocated}}
+\DoxyCodeLine{00328\ \ \ \textcolor{comment}{//\ bytes\ on\ the\ heap.}}
+\DoxyCodeLine{00329\ \textcolor{preprocessor}{\#if\ defined(USE\_MEMORY\_DLMALLOC)\ ||\ defined(USE\_MEMORY\_PTMALLOC2)}}
+\DoxyCodeLine{00330\ \ \ \textcolor{comment}{//\ dlmalloc\ may\ slightly\ overallocate,\ however.}}
+\DoxyCodeLine{00331\ \ \ size\ =\ get\_ptr\_size(alloc);}
+\DoxyCodeLine{00332\ \ \ inflated\_size\ =\ size;}
+\DoxyCodeLine{00333\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00334\ \ \ \_total\_heap\_array\_size.fetch\_add(size,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00335\ \ \ \textcolor{keywordflow}{if}\ (\_total\_heap\_single\_size.load(std::memory\_order\_relaxed)\ +}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \_total\_heap\_array\_size.load(std::memory\_order\_relaxed)\ >}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \_max\_heap\_size)\ \{}
+\DoxyCodeLine{00338\ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a384863305e12229f4f5e9d292c2e8146}{overflow\_heap\_size}}();}
+\DoxyCodeLine{00339\ \ \ \}}
+\DoxyCodeLine{00340\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00341\ }
+\DoxyCodeLine{00342\ \ \ \textcolor{keywordtype}{void}\ *ptr\ =\ alloc\_to\_ptr(alloc,\ size);}
+\DoxyCodeLine{00343\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00344\ \ \ assert(((uintptr\_t)ptr\ \%\ MEMORY\_HOOK\_ALIGNMENT)\ ==\ 0);}
+\DoxyCodeLine{00345\ \ \ assert(ptr\ >=\ alloc\ \&\&\ (\textcolor{keywordtype}{char}\ *)ptr\ +\ size\ <=\ (\textcolor{keywordtype}{char}\ *)alloc\ +\ inflated\_size);}
+\DoxyCodeLine{00346\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00347\ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00348\ \}}
+\DoxyCodeLine{00349\ }
+\DoxyCodeLine{00353\ \textcolor{keywordtype}{void}\ *\mbox{\hyperlink{classMemoryHook_ab6dd724d878249f8902bab6d51e96b72}{MemoryHook::}}}
+\DoxyCodeLine{00354\ \mbox{\hyperlink{classMemoryHook_ab6dd724d878249f8902bab6d51e96b72}{heap\_realloc\_array}}(\textcolor{keywordtype}{void}\ *ptr,\ \textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00355\ \ \ \textcolor{keywordtype}{size\_t}\ orig\_size;}
+\DoxyCodeLine{00356\ \ \ \textcolor{keywordtype}{void}\ *alloc\ =\ ptr\_to\_alloc(ptr,\ orig\_size);}
+\DoxyCodeLine{00357\ }
+\DoxyCodeLine{00358\ \ \ \textcolor{keywordtype}{size\_t}\ inflated\_size\ =\ inflate\_size(size);}
+\DoxyCodeLine{00359\ }
+\DoxyCodeLine{00360\ \ \ \textcolor{keywordtype}{void}\ *alloc1\ =\ alloc;}
+\DoxyCodeLine{00361\ \textcolor{preprocessor}{\#ifdef\ MEMORY\_HOOK\_MALLOC\_LOCK}}
+\DoxyCodeLine{00362\ \ \ \_lock.lock();}
+\DoxyCodeLine{00363\ \ \ alloc1\ =\ call\_realloc(alloc1,\ inflated\_size);}
+\DoxyCodeLine{00364\ \ \ \_lock.unlock();}
+\DoxyCodeLine{00365\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00366\ \ \ alloc1\ =\ call\_realloc(alloc1,\ inflated\_size);}
+\DoxyCodeLine{00367\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00369\ \ \ \textcolor{keywordflow}{while}\ (alloc1\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00370\ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a3ca590278137439b1f3b12a5ac896bf9}{alloc\_fail}}(inflated\_size);}
+\DoxyCodeLine{00371\ }
+\DoxyCodeLine{00372\ \ \ \ \ \textcolor{comment}{//\ Recover\ the\ original\ pointer.}}
+\DoxyCodeLine{00373\ \ \ \ \ alloc1\ =\ alloc;}
+\DoxyCodeLine{00374\ }
+\DoxyCodeLine{00375\ \textcolor{preprocessor}{\#ifdef\ MEMORY\_HOOK\_MALLOC\_LOCK}}
+\DoxyCodeLine{00376\ \ \ \ \ \_lock.lock();}
+\DoxyCodeLine{00377\ \ \ \ \ alloc1\ =\ call\_realloc(alloc1,\ inflated\_size);}
+\DoxyCodeLine{00378\ \ \ \ \ \_lock.unlock();}
+\DoxyCodeLine{00379\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00380\ \ \ \ \ alloc1\ =\ call\_realloc(alloc1,\ inflated\_size);}
+\DoxyCodeLine{00381\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00382\ \ \ \}}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00384\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00385\ \textcolor{preprocessor}{\#if\ defined(USE\_MEMORY\_DLMALLOC)\ ||\ defined(USE\_MEMORY\_PTMALLOC2)}}
+\DoxyCodeLine{00386\ \ \ \textcolor{comment}{//\ dlmalloc\ may\ slightly\ overallocate,\ however.}}
+\DoxyCodeLine{00387\ \ \ size\ =\ get\_ptr\_size(alloc1);}
+\DoxyCodeLine{00388\ \ \ inflated\_size\ =\ size;}
+\DoxyCodeLine{00389\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00390\ \ \ assert(orig\_size\ <=\ \_total\_heap\_array\_size.load(std::memory\_order\_relaxed));}
+\DoxyCodeLine{00391\ \ \ \_total\_heap\_array\_size.fetch\_add(size\ -\/\ orig\_size,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00392\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00393\ }
+\DoxyCodeLine{00394\ \ \ \textcolor{comment}{//\ Align\ this\ to\ the\ requested\ boundary.}}
+\DoxyCodeLine{00395\ \textcolor{preprocessor}{\#ifdef\ MEMORY\_HOOK\_DO\_ALIGN}}
+\DoxyCodeLine{00396\ \ \ \textcolor{comment}{//\ This\ copies\ the\ code\ from\ alloc\_to\_ptr,\ since\ we\ can't\ write\ the\ size\ and}}
+\DoxyCodeLine{00397\ \ \ \textcolor{comment}{//\ pointer\ until\ after\ we\ have\ done\ the\ memmove.}}
+\DoxyCodeLine{00398\ \ \ uintptr\_t\ *root\ =\ (uintptr\_t\ *)((\textcolor{keywordtype}{char}\ *)alloc1\ +\ \textcolor{keyword}{sizeof}(uintptr\_t)\ *\ 2);}
+\DoxyCodeLine{00399\ \ \ root\ =\ (uintptr\_t\ *)(((uintptr\_t)root\ +\ MEMORY\_HOOK\_ALIGNMENT\ -\/\ 1)\ \&\ \string~(MEMORY\_HOOK\_ALIGNMENT\ -\/\ 1));}
+\DoxyCodeLine{00400\ \ \ \textcolor{keywordtype}{void}\ *ptr1\ =\ (\textcolor{keywordtype}{void}\ *)root;}
+\DoxyCodeLine{00401\ }
+\DoxyCodeLine{00402\ \ \ \textcolor{keywordtype}{size\_t}\ orig\_delta\ =\ (\textcolor{keywordtype}{char}\ *)ptr\ -\/\ (\textcolor{keywordtype}{char}\ *)alloc;}
+\DoxyCodeLine{00403\ \ \ \textcolor{keywordtype}{size\_t}\ new\_delta\ =\ (\textcolor{keywordtype}{char}\ *)ptr1\ -\/\ (\textcolor{keywordtype}{char}\ *)alloc1;}
+\DoxyCodeLine{00404\ \ \ \textcolor{keywordflow}{if}\ (orig\_delta\ !=\ new\_delta)\ \{}
+\DoxyCodeLine{00405\ \ \ \ \ memmove((\textcolor{keywordtype}{char}\ *)alloc1\ +\ new\_delta,\ (\textcolor{keywordtype}{char}\ *)alloc1\ +\ orig\_delta,\ std::min(size,\ orig\_size));}
+\DoxyCodeLine{00406\ \ \ \}}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00408\ \ \ root[-\/2]\ =\ size;}
+\DoxyCodeLine{00409\ \ \ root[-\/1]\ =\ (uintptr\_t)alloc1;\ \ \textcolor{comment}{//\ Save\ the\ pointer\ we\ originally\ allocated.}}
+\DoxyCodeLine{00410\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00411\ \ \ \textcolor{keywordtype}{void}\ *ptr1\ =\ alloc\_to\_ptr(alloc1,\ size);}
+\DoxyCodeLine{00412\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00413\ }
+\DoxyCodeLine{00414\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00415\ \ \ assert(ptr1\ >=\ alloc1\ \&\&\ (\textcolor{keywordtype}{char}\ *)ptr1\ +\ size\ <=\ (\textcolor{keywordtype}{char}\ *)alloc1\ +\ inflated\_size);}
+\DoxyCodeLine{00416\ \ \ assert(((uintptr\_t)ptr1\ \%\ MEMORY\_HOOK\_ALIGNMENT)\ ==\ 0);}
+\DoxyCodeLine{00417\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00418\ \ \ \textcolor{keywordflow}{return}\ ptr1;}
+\DoxyCodeLine{00419\ \}}
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00424\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classMemoryHook_a6c1598f606ff745dc1cb1e2c593ebd47}{MemoryHook::}}}
+\DoxyCodeLine{00425\ \mbox{\hyperlink{classMemoryHook_a6c1598f606ff745dc1cb1e2c593ebd47}{heap\_free\_array}}(\textcolor{keywordtype}{void}\ *ptr)\ \{}
+\DoxyCodeLine{00426\ \ \ \textcolor{keywordtype}{size\_t}\ size;}
+\DoxyCodeLine{00427\ \ \ \textcolor{keywordtype}{void}\ *alloc\ =\ ptr\_to\_alloc(ptr,\ size);}
+\DoxyCodeLine{00428\ }
+\DoxyCodeLine{00429\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00430\ \ \ assert(size\ <=\ \_total\_heap\_array\_size);}
+\DoxyCodeLine{00431\ \ \ \_total\_heap\_array\_size.fetch\_sub(size,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00432\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00433\ }
+\DoxyCodeLine{00434\ \textcolor{preprocessor}{\#ifdef\ MEMORY\_HOOK\_MALLOC\_LOCK}}
+\DoxyCodeLine{00435\ \ \ \_lock.lock();}
+\DoxyCodeLine{00436\ \ \ call\_free(alloc);}
+\DoxyCodeLine{00437\ \ \ \_lock.unlock();}
+\DoxyCodeLine{00438\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00439\ \ \ call\_free(alloc);}
+\DoxyCodeLine{00440\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00441\ \}}
+\DoxyCodeLine{00442\ }
+\DoxyCodeLine{00452\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classMemoryHook_aacb42686df80c3f38bbaa59232d71f29}{MemoryHook::}}}
+\DoxyCodeLine{00453\ \mbox{\hyperlink{classMemoryHook_aacb42686df80c3f38bbaa59232d71f29}{heap\_trim}}(\textcolor{keywordtype}{size\_t}\ pad)\ \{}
+\DoxyCodeLine{00454\ \ \ \textcolor{keywordtype}{bool}\ trimmed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00456\ \textcolor{preprocessor}{\#if\ defined(USE\_MEMORY\_DLMALLOC)\ ||\ defined(USE\_MEMORY\_PTMALLOC2)}}
+\DoxyCodeLine{00457\ \ \ \textcolor{comment}{//\ Since\ malloc\_trim()\ isn't\ standard\ C,\ we\ can't\ be\ sure\ it\ exists\ on\ a}}
+\DoxyCodeLine{00458\ \ \ \textcolor{comment}{//\ given\ platform.\ \ But\ if\ we're\ using\ dlmalloc,\ we\ know\ we\ have}}
+\DoxyCodeLine{00459\ \ \ \textcolor{comment}{//\ dlmalloc\_trim.}}
+\DoxyCodeLine{00460\ \ \ \_lock.lock();}
+\DoxyCodeLine{00461\ \ \ \textcolor{keywordflow}{if}\ (dlmalloc\_trim(pad))\ \{}
+\DoxyCodeLine{00462\ \ \ \ \ trimmed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00463\ \ \ \}}
+\DoxyCodeLine{00464\ \ \ \_lock.unlock();}
+\DoxyCodeLine{00465\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00466\ }
+\DoxyCodeLine{00467\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00468\ \ \ \textcolor{comment}{//\ Also,\ on\ Windows\ we\ have\ \_heapmin().}}
+\DoxyCodeLine{00469\ \ \ \textcolor{keywordflow}{if}\ (\_heapmin()\ ==\ 0)\ \{}
+\DoxyCodeLine{00470\ \ \ \ \ trimmed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00471\ \ \ \}}
+\DoxyCodeLine{00472\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00473\ }
+\DoxyCodeLine{00474\ \ \ \textcolor{keywordflow}{return}\ trimmed;}
+\DoxyCodeLine{00475\ \}}
+\DoxyCodeLine{00476\ }
+\DoxyCodeLine{00488\ \textcolor{keywordtype}{void}\ *\mbox{\hyperlink{classMemoryHook_a1bf6209c089890e81f127b4f1f429cb8}{MemoryHook::}}}
+\DoxyCodeLine{00489\ \mbox{\hyperlink{classMemoryHook_a1bf6209c089890e81f127b4f1f429cb8}{mmap\_alloc}}(\textcolor{keywordtype}{size\_t}\ size,\ \textcolor{keywordtype}{bool}\ allow\_exec)\ \{}
+\DoxyCodeLine{00490\ \textcolor{preprocessor}{\#ifndef\ \_\_EMSCRIPTEN\_\_}}
+\DoxyCodeLine{00491\ \ \ \textcolor{keywordflow}{if}\ (\_page\_size\ ==\ 0)\ \{}
+\DoxyCodeLine{00492\ \ \ \ \ \mbox{\hyperlink{classMemoryHook_a50fbd1025459bf0cfd59cbce39e506d9}{determine\_page\_size}}();}
+\DoxyCodeLine{00493\ \ \ \}}
+\DoxyCodeLine{00494\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00495\ \ \ assert((size\ \%\ \_page\_size)\ ==\ 0);}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00497\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00498\ \ \ \_total\_mmap\_size.fetch\_add(size,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00499\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00500\ }
+\DoxyCodeLine{00501\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00502\ }
+\DoxyCodeLine{00503\ \ \ \textcolor{comment}{//\ Windows\ case.}}
+\DoxyCodeLine{00504\ \ \ \textcolor{keywordtype}{void}\ *ptr\ =\ VirtualAlloc(\textcolor{keyword}{nullptr},\ size,\ MEM\_COMMIT\ |\ MEM\_RESERVE,}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ allow\_exec\ ?\ PAGE\_EXECUTE\_READWRITE\ :\ PAGE\_READWRITE);}
+\DoxyCodeLine{00506\ \ \ \textcolor{keywordflow}{if}\ (ptr\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00507\ \ \ \ \ DWORD\ err\ =\ GetLastError();}
+\DoxyCodeLine{00508\ \ \ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}Couldn't\ allocate\ memory\ page\ of\ size\ "{}}\ <<\ size\ <<\ \textcolor{stringliteral}{"{}:\ "{}};}
+\DoxyCodeLine{00509\ }
+\DoxyCodeLine{00510\ \ \ \ \ PVOID\ buffer;}
+\DoxyCodeLine{00511\ \ \ \ \ DWORD\ length\ =}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ FormatMessage(FORMAT\_MESSAGE\_ALLOCATE\_BUFFER\ |\ FORMAT\_MESSAGE\_FROM\_SYSTEM,}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{nullptr},\ err,\ 0,\ (LPTSTR)\&buffer,\ 0,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00514\ \ \ \ \ \textcolor{keywordflow}{if}\ (length\ !=\ 0)\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ cerr\ <<\ (\textcolor{keywordtype}{char}\ *)buffer\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00516\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}Error\ code\ "{}}\ <<\ err\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00518\ \ \ \ \ \}}
+\DoxyCodeLine{00519\ \ \ \ \ LocalFree(buffer);}
+\DoxyCodeLine{00520\ \ \ \ \ abort();}
+\DoxyCodeLine{00521\ \ \ \}}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00523\ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00524\ }
+\DoxyCodeLine{00525\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00526\ }
+\DoxyCodeLine{00527\ \ \ \textcolor{comment}{//\ Posix\ case.}}
+\DoxyCodeLine{00528\ \ \ \textcolor{keywordtype}{int}\ prot\ =\ PROT\_READ\ |\ PROT\_WRITE;}
+\DoxyCodeLine{00529\ \ \ \textcolor{keywordflow}{if}\ (allow\_exec)\ \{}
+\DoxyCodeLine{00530\ \ \ \ \ prot\ |=\ PROT\_EXEC;}
+\DoxyCodeLine{00531\ \ \ \}}
+\DoxyCodeLine{00532\ \ \ \textcolor{keywordtype}{void}\ *ptr\ =\ mmap(\textcolor{keyword}{nullptr},\ size,\ prot,\ MAP\_PRIVATE\ |\ MAP\_ANON,\ -\/1,\ 0);}
+\DoxyCodeLine{00533\ \ \ \textcolor{keywordflow}{if}\ (ptr\ ==\ (\textcolor{keywordtype}{void}\ *)-\/1)\ \{}
+\DoxyCodeLine{00534\ \ \ \ \ perror(\textcolor{stringliteral}{"{}mmap"{}});}
+\DoxyCodeLine{00535\ \ \ \ \ abort();}
+\DoxyCodeLine{00536\ \ \ \}}
+\DoxyCodeLine{00537\ }
+\DoxyCodeLine{00538\ \ \ \textcolor{keywordflow}{return}\ ptr;}
+\DoxyCodeLine{00539\ }
+\DoxyCodeLine{00540\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ WIN32}}
+\DoxyCodeLine{00541\ \}}
+\DoxyCodeLine{00542\ }
+\DoxyCodeLine{00547\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classMemoryHook_a1db3083e6f6274e9e94b4171f36f7163}{MemoryHook::}}}
+\DoxyCodeLine{00548\ \mbox{\hyperlink{classMemoryHook_a1db3083e6f6274e9e94b4171f36f7163}{mmap\_free}}(\textcolor{keywordtype}{void}\ *ptr,\ \textcolor{keywordtype}{size\_t}\ size)\ \{}
+\DoxyCodeLine{00549\ \ \ assert(\_page\_size\ !=\ 0);}
+\DoxyCodeLine{00550\ \ \ assert((size\ \%\ \_page\_size)\ ==\ 0);}
+\DoxyCodeLine{00551\ }
+\DoxyCodeLine{00552\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00553\ \ \ assert(size\ <=\ \_total\_mmap\_size.load(std::memory\_order\_relaxed));}
+\DoxyCodeLine{00554\ \ \ \_total\_mmap\_size.fetch\_sub(size,\ std::memory\_order\_relaxed);}
+\DoxyCodeLine{00555\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00556\ }
+\DoxyCodeLine{00557\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00558\ \ \ VirtualFree(ptr,\ 0,\ MEM\_RELEASE);}
+\DoxyCodeLine{00559\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00560\ \ \ munmap(ptr,\ size);}
+\DoxyCodeLine{00561\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00562\ \}}
+\DoxyCodeLine{00563\ }
+\DoxyCodeLine{00571\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classMemoryHook_a7d3d40238b568141a6fedfc8f58f9202}{MemoryHook::}}}
+\DoxyCodeLine{00572\ \mbox{\hyperlink{classMemoryHook_a7d3d40238b568141a6fedfc8f58f9202}{mark\_pointer}}(\textcolor{keywordtype}{void}\ *,\ \textcolor{keywordtype}{size\_t},\ \mbox{\hyperlink{classReferenceCount}{ReferenceCount}}\ *)\ \{}
+\DoxyCodeLine{00573\ \}}
+\DoxyCodeLine{00574\ }
+\DoxyCodeLine{00587\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classMemoryHook_a3ca590278137439b1f3b12a5ac896bf9}{MemoryHook::}}}
+\DoxyCodeLine{00588\ \mbox{\hyperlink{classMemoryHook_a3ca590278137439b1f3b12a5ac896bf9}{alloc\_fail}}(\textcolor{keywordtype}{size\_t}\ attempted\_size)\ \{}
+\DoxyCodeLine{00589\ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}Out\ of\ memory\ allocating\ "{}}\ <<\ attempted\_size\ <<\ \textcolor{stringliteral}{"{}\ bytes\(\backslash\)n"{}};}
+\DoxyCodeLine{00590\ \ \ abort();}
+\DoxyCodeLine{00591\ \}}
+\DoxyCodeLine{00592\ }
+\DoxyCodeLine{00601\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classMemoryHook_a384863305e12229f4f5e9d292c2e8146}{MemoryHook::}}}
+\DoxyCodeLine{00602\ \mbox{\hyperlink{classMemoryHook_a384863305e12229f4f5e9d292c2e8146}{overflow\_heap\_size}}()\ \{}
+\DoxyCodeLine{00603\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00604\ \ \ \_max\_heap\_size\ =\ \string~(size\_t)0;}
+\DoxyCodeLine{00605\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00606\ \}}
+\DoxyCodeLine{00607\ }
+\DoxyCodeLine{00611\ \textcolor{preprocessor}{\#ifndef\ \_\_EMSCRIPTEN\_\_}}
+\DoxyCodeLine{00612\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classMemoryHook_a50fbd1025459bf0cfd59cbce39e506d9}{MemoryHook::}}}
+\DoxyCodeLine{00613\ \mbox{\hyperlink{classMemoryHook_a50fbd1025459bf0cfd59cbce39e506d9}{determine\_page\_size}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00614\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00615\ \ \ \textcolor{comment}{//\ Windows\ case.}}
+\DoxyCodeLine{00616\ \ \ SYSTEM\_INFO\ sysinfo;}
+\DoxyCodeLine{00617\ \ \ GetSystemInfo(\&sysinfo);}
+\DoxyCodeLine{00618\ }
+\DoxyCodeLine{00619\ \ \ \_page\_size\ =\ (size\_t)sysinfo.dwPageSize;}
+\DoxyCodeLine{00620\ }
+\DoxyCodeLine{00621\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00622\ \ \ \textcolor{comment}{//\ Posix\ case.}}
+\DoxyCodeLine{00623\ \ \ \_page\_size\ =\ sysconf(\_SC\_PAGESIZE);}
+\DoxyCodeLine{00624\ }
+\DoxyCodeLine{00625\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ WIN32}}
+\DoxyCodeLine{00626\ }
+\DoxyCodeLine{00627\ \ \ assert(\_page\_size\ !=\ 0);}
+\DoxyCodeLine{00628\ \}}
+\DoxyCodeLine{00629\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ !\_\_EMSCRIPTEN\_\_}}
+
+\end{DoxyCode}

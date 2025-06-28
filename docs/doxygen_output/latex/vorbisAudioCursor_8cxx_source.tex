@@ -1,0 +1,278 @@
+\doxysection{vorbis\+Audio\+Cursor.\+cxx}
+\hypertarget{vorbisAudioCursor_8cxx_source}{}\label{vorbisAudioCursor_8cxx_source}\index{panda/src/movies/vorbisAudioCursor.cxx@{panda/src/movies/vorbisAudioCursor.cxx}}
+\mbox{\hyperlink{vorbisAudioCursor_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{vorbisAudioCursor_8h}{vorbisAudioCursor.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__movies_8h}{config\_movies.h}}"{}}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{vorbisAudio_8h}{vorbisAudio.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFileSystem_8h}{virtualFileSystem.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#ifdef\ HAVE\_VORBIS}}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{keyword}{using\ }std::istream;}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ VorbisAudioCursor::\_type\_handle;}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00031\ VorbisAudioCursor::}
+\DoxyCodeLine{00032\ VorbisAudioCursor(VorbisAudio\ *src,\ istream\ *stream)\ :}
+\DoxyCodeLine{00033\ \ \ \mbox{\hyperlink{classMovieAudioCursor}{MovieAudioCursor}}(src),}
+\DoxyCodeLine{00034\ \ \ \_is\_valid(false),}
+\DoxyCodeLine{00035\ \ \ \_bitstream(0)}
+\DoxyCodeLine{00036\ \{}
+\DoxyCodeLine{00037\ \ \ nassertv(stream\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00038\ \ \ nassertv(stream-\/>good());}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \ \ \textcolor{comment}{//\ Set\ up\ the\ callbacks\ to\ read\ via\ the\ VFS.}}
+\DoxyCodeLine{00041\ \ \ ov\_callbacks\ callbacks;}
+\DoxyCodeLine{00042\ \ \ callbacks.read\_func\ =\ \&cb\_read\_func;}
+\DoxyCodeLine{00043\ \ \ callbacks.close\_func\ =\ \&cb\_close\_func;}
+\DoxyCodeLine{00044\ \ \ callbacks.tell\_func\ =\ \&cb\_tell\_func;}
+\DoxyCodeLine{00045\ }
+\DoxyCodeLine{00046\ \ \ \textcolor{keywordflow}{if}\ (vorbis\_enable\_seek)\ \{}
+\DoxyCodeLine{00047\ \ \ \ \ callbacks.seek\_func\ =\ \&cb\_seek\_func;}
+\DoxyCodeLine{00048\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00049\ \ \ \ \ callbacks.seek\_func\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00050\ \ \ \}}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \ \ \textcolor{keywordflow}{if}\ (ov\_open\_callbacks((\textcolor{keywordtype}{void}*)\ stream,\ \&\_ov,\ \textcolor{keyword}{nullptr},\ 0,\ callbacks)\ !=\ 0)\ \{}
+\DoxyCodeLine{00053\ \ \ \ \ movies\_cat.error()}
+\DoxyCodeLine{00054\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ read\ Ogg\ Vorbis\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00055\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00056\ \ \ \}}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00058\ \ \ \textcolor{keywordtype}{double}\ time\_total\ =\ ov\_time\_total(\&\_ov,\ -\/1);}
+\DoxyCodeLine{00059\ \ \ \textcolor{keywordflow}{if}\ (time\_total\ !=\ OV\_EINVAL)\ \{}
+\DoxyCodeLine{00060\ \ \ \ \ \_length\ =\ time\_total;}
+\DoxyCodeLine{00061\ \ \ \}}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00063\ \ \ vorbis\_info\ *vi\ =\ ov\_info(\&\_ov,\ -\/1);}
+\DoxyCodeLine{00064\ \ \ \_audio\_channels\ =\ vi-\/>channels;}
+\DoxyCodeLine{00065\ \ \ \_audio\_rate\ =\ vi-\/>rate;}
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00067\ \ \ \_can\_seek\ =\ vorbis\_enable\_seek\ \&\&\ (ov\_seekable(\&\_ov)\ !=\ 0);}
+\DoxyCodeLine{00068\ \ \ \_can\_seek\_fast\ =\ \_can\_seek;}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ \ \ \_is\_valid\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00071\ \}}
+\DoxyCodeLine{00072\ }
+\DoxyCodeLine{00076\ VorbisAudioCursor::}
+\DoxyCodeLine{00077\ \string~VorbisAudioCursor()\ \{}
+\DoxyCodeLine{00078\ \ \ ov\_clear(\&\_ov);}
+\DoxyCodeLine{00079\ \}}
+\DoxyCodeLine{00080\ }
+\DoxyCodeLine{00085\ \textcolor{keywordtype}{void}\ VorbisAudioCursor::}
+\DoxyCodeLine{00086\ seek(\textcolor{keywordtype}{double}\ t)\ \{}
+\DoxyCodeLine{00087\ \ \ \textcolor{keywordflow}{if}\ (!vorbis\_enable\_seek)\ \{}
+\DoxyCodeLine{00088\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00089\ \ \ \}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \ \ t\ =\ std::max(t,\ 0.0);}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00093\ \ \ \textcolor{comment}{//\ Use\ ov\_time\_seek\_lap\ if\ cross-\/lapping\ is\ enabled.}}
+\DoxyCodeLine{00094\ \ \ \textcolor{keywordtype}{int}\ result;}
+\DoxyCodeLine{00095\ \ \ \textcolor{keywordflow}{if}\ (vorbis\_seek\_lap)\ \{}
+\DoxyCodeLine{00096\ \ \ \ \ result\ =\ ov\_time\_seek\_lap(\&\_ov,\ t);}
+\DoxyCodeLine{00097\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00098\ \ \ \ \ result\ =\ ov\_time\_seek(\&\_ov,\ t);}
+\DoxyCodeLine{00099\ \ \ \}}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \ \ \textcolor{comment}{//\ Special\ case\ for\ seeking\ to\ the\ beginning;\ if\ normal\ seek\ fails,\ we\ may}}
+\DoxyCodeLine{00102\ \ \ \textcolor{comment}{//\ be\ able\ to\ explicitly\ seek\ to\ the\ beginning\ of\ the\ file\ and\ call\ ov\_open}}
+\DoxyCodeLine{00103\ \ \ \textcolor{comment}{//\ again.\ \ This\ allows\ looping\ compressed\ .ogg\ files.}}
+\DoxyCodeLine{00104\ \ \ \textcolor{keywordflow}{if}\ (result\ ==\ OV\_ENOSEEK\ \&\&\ t\ ==\ 0.0)\ \{}
+\DoxyCodeLine{00105\ \ \ \ \ std::istream\ *stream\ =\ (std::istream\ *)\_ov.datasource;}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \ \ \ \ \textcolor{keywordflow}{if}\ (stream-\/>rdbuf()-\/>pubseekpos(0,\ std::ios::in)\ ==\ (std::streampos)0)\ \{}
+\DoxyCodeLine{00108\ \ \ \ \ \ \ \textcolor{comment}{//\ Back\ up\ the\ callbacks,\ then\ destroy\ the\ stream,\ making\ sure\ to\ first}}
+\DoxyCodeLine{00109\ \ \ \ \ \ \ \textcolor{comment}{//\ unset\ the\ datasource\ so\ that\ it\ won't\ close\ the\ file.}}
+\DoxyCodeLine{00110\ \ \ \ \ \ \ ov\_callbacks\ callbacks\ =\ \_ov.callbacks;}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ \_ov.datasource\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ ov\_clear(\&\_ov);}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ov\_open\_callbacks((\textcolor{keywordtype}{void}\ *)stream,\ \&\_ov,\ \textcolor{keyword}{nullptr},\ 0,\ callbacks)\ !=\ 0)\ \{}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ movies\_cat.error()}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ reopen\ Ogg\ Vorbis\ file\ to\ seek\ to\ beginning.\(\backslash\)n"{}};}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \textcolor{comment}{//\ Reset\ these\ fields\ for\ good\ measure,\ just\ in\ case\ the\ file\ changed.}}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ vorbis\_info\ *vi\ =\ ov\_info(\&\_ov,\ -\/1);}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \_audio\_channels\ =\ vi-\/>channels;}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \_audio\_rate\ =\ vi-\/>rate;}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \_last\_seek\ =\ 0.0;}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \_samples\_read\ =\ 0;}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00128\ \ \ \ \ \}}
+\DoxyCodeLine{00129\ \ \ \}}
+\DoxyCodeLine{00130\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00131\ \ \ \ \ movies\_cat.error()}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Seek\ failed.\ \ Ogg\ Vorbis\ stream\ may\ not\ be\ seekable.\(\backslash\)n"{}};}
+\DoxyCodeLine{00133\ \ \ \}}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00135\ \ \ \_last\_seek\ =\ ov\_time\_tell(\&\_ov);}
+\DoxyCodeLine{00136\ \ \ \_samples\_read\ =\ 0;}
+\DoxyCodeLine{00137\ \}}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00144\ \textcolor{keywordtype}{int}\ VorbisAudioCursor::}
+\DoxyCodeLine{00145\ read\_samples(\textcolor{keywordtype}{int}\ n,\ int16\_t\ *data)\ \{}
+\DoxyCodeLine{00146\ \ \ \textcolor{keywordtype}{int}\ desired\ =\ n\ *\ \_audio\_channels;}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \ \ \textcolor{keywordtype}{char}\ *buffer\ =\ (\textcolor{keywordtype}{char}*)\ data;}
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordtype}{int}\ length\ =\ desired\ *\ 2;}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00151\ \ \ \textcolor{comment}{//\ Call\ ov\_read\ repeatedly\ until\ the\ buffer\ is\ full.}}
+\DoxyCodeLine{00152\ \ \ \textcolor{keywordflow}{while}\ (length\ >\ 0)\ \{}
+\DoxyCodeLine{00153\ \ \ \ \ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{structbitstream}{bitstream}};}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ \ \ \textcolor{comment}{//\ ov\_read\ can\ give\ it\ to\ us\ in\ the\ exact\ format\ we\ need.\ \ Nifty!}}
+\DoxyCodeLine{00156\ \ \ \ \ \textcolor{keywordtype}{long}\ read\_bytes\ =\ ov\_read(\&\_ov,\ buffer,\ length,\ 0,\ 2,\ 1,\ \&\mbox{\hyperlink{structbitstream}{bitstream}});}
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_bytes\ >\ 0)\ \{}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ buffer\ +=\ read\_bytes;}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ length\ -\/=\ read\_bytes;}
+\DoxyCodeLine{00160\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_bytes\ ==\ 0\ \&\&\ \_length\ ==\ 1.0E10)\ \{}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ \_length\ =\ ov\_time\_tell(\&\_ov);}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00165\ \ \ \ \ \}}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00167\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_bitstream\ !=\ \mbox{\hyperlink{structbitstream}{bitstream}})\ \{}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \textcolor{comment}{//\ It\ is\ technically\ possible\ for\ it\ to\ change\ parameters\ from\ one}}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \textcolor{comment}{//\ bitstream\ to\ the\ next.\ \ However,\ we\ don't\ offer\ this\ flexibility.}}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ vorbis\_info\ *vi\ =\ ov\_info(\&\_ov,\ -\/1);}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (vi-\/>channels\ !=\ \_audio\_channels\ ||\ vi-\/>rate\ !=\ \_audio\_rate)\ \{}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ movies\_cat.error()}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Ogg\ Vorbis\ file\ has\ non-\/matching\ bitstreams!\(\backslash\)n"{}};}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We'll\ change\ it\ anyway.\ \ Not\ sure\ what\ happens\ next.}}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ \_audio\_channels\ =\ vi-\/>channels;}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \ \ \_audio\_rate\ =\ vi-\/>rate;}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \_bitstream\ =\ \mbox{\hyperlink{structbitstream}{bitstream}};}
+\DoxyCodeLine{00182\ \ \ \ \ \}}
+\DoxyCodeLine{00183\ \ \ \}}
+\DoxyCodeLine{00184\ }
+\DoxyCodeLine{00185\ \ \ \textcolor{comment}{//\ Fill\ the\ rest\ of\ the\ buffer\ with\ silence.}}
+\DoxyCodeLine{00186\ \ \ \textcolor{keywordflow}{if}\ (length\ >\ 0)\ \{}
+\DoxyCodeLine{00187\ \ \ \ \ memset(buffer,\ 0,\ length);}
+\DoxyCodeLine{00188\ \ \ \ \ n\ -\/=\ length\ /\ 2\ /\ \_audio\_channels;}
+\DoxyCodeLine{00189\ \ \ \}}
+\DoxyCodeLine{00190\ }
+\DoxyCodeLine{00191\ \ \ \_samples\_read\ +=\ n;}
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordflow}{return}\ n;}
+\DoxyCodeLine{00193\ \}}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00199\ \textcolor{keywordtype}{size\_t}\ VorbisAudioCursor::}
+\DoxyCodeLine{00200\ cb\_read\_func(\textcolor{keywordtype}{void}\ *ptr,\ \textcolor{keywordtype}{size\_t}\ size,\ \textcolor{keywordtype}{size\_t}\ nmemb,\ \textcolor{keywordtype}{void}\ *datasource)\ \{}
+\DoxyCodeLine{00201\ \ \ istream\ *stream\ =\ (istream*)\ datasource;}
+\DoxyCodeLine{00202\ \ \ nassertr(stream\ !=\ \textcolor{keyword}{nullptr},\ -\/1);}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00204\ \ \ stream-\/>read((\textcolor{keywordtype}{char}\ *)ptr,\ size\ *\ nmemb);}
+\DoxyCodeLine{00205\ }
+\DoxyCodeLine{00206\ \ \ \textcolor{keywordflow}{if}\ (stream-\/>eof())\ \{}
+\DoxyCodeLine{00207\ \ \ \ \ \textcolor{comment}{//\ Gracefully\ handle\ EOF.}}
+\DoxyCodeLine{00208\ \ \ \ \ stream-\/>clear();}
+\DoxyCodeLine{00209\ \ \ \}}
+\DoxyCodeLine{00210\ }
+\DoxyCodeLine{00211\ \ \ \textcolor{keywordflow}{return}\ stream-\/>gcount();}
+\DoxyCodeLine{00212\ \}}
+\DoxyCodeLine{00213\ }
+\DoxyCodeLine{00218\ \textcolor{keywordtype}{int}\ VorbisAudioCursor::}
+\DoxyCodeLine{00219\ cb\_seek\_func(\textcolor{keywordtype}{void}\ *datasource,\ ogg\_int64\_t\ offset,\ \textcolor{keywordtype}{int}\ whence)\ \{}
+\DoxyCodeLine{00220\ \ \ \textcolor{keywordflow}{if}\ (!vorbis\_enable\_seek)\ \{}
+\DoxyCodeLine{00221\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00222\ \ \ \}}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00224\ \ \ istream\ *stream\ =\ (istream*)\ datasource;}
+\DoxyCodeLine{00225\ \ \ nassertr(stream\ !=\ \textcolor{keyword}{nullptr},\ -\/1);}
+\DoxyCodeLine{00226\ }
+\DoxyCodeLine{00227\ \ \ \textcolor{keywordflow}{switch}\ (whence)\ \{}
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordflow}{case}\ SEEK\_SET:}
+\DoxyCodeLine{00229\ \ \ \ \ stream-\/>seekg(offset,\ std::ios::beg);}
+\DoxyCodeLine{00230\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00231\ }
+\DoxyCodeLine{00232\ \ \ \textcolor{keywordflow}{case}\ SEEK\_CUR:}
+\DoxyCodeLine{00233\ \ \ \ \ \textcolor{comment}{//\ Vorbis\ uses\ a\ seek\ with\ offset\ 0\ to\ determine\ whether\ seeking\ is}}
+\DoxyCodeLine{00234\ \ \ \ \ \textcolor{comment}{//\ supported,\ but\ this\ is\ not\ good\ enough.\ \ We\ seek\ to\ the\ end\ and\ back.}}
+\DoxyCodeLine{00235\ \ \ \ \ \textcolor{keywordflow}{if}\ (offset\ ==\ 0)\ \{}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ std::streambuf\ *buf\ =\ stream-\/>rdbuf();}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ std::streampos\ pos\ =\ buf-\/>pubseekoff(0,\ std::ios::cur,\ std::ios::in);}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pos\ <\ 0)\ \{}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (buf-\/>pubseekoff(0,\ std::ios::end,\ std::ios::in)\ >=\ 0)\ \{}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ It\ worked;\ seek\ back\ to\ the\ previous\ location.}}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ buf-\/>pubseekpos(pos,\ std::ios::in);}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00248\ \ \ \ \ \}}
+\DoxyCodeLine{00249\ \ \ \ \ stream-\/>seekg(offset,\ std::ios::cur);}
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \ \ \textcolor{keywordflow}{case}\ SEEK\_END:}
+\DoxyCodeLine{00253\ \ \ \ \ stream-\/>seekg(offset,\ std::ios::end);}
+\DoxyCodeLine{00254\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00255\ }
+\DoxyCodeLine{00256\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00257\ \ \ \ \ movies\_cat.error()}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Illegal\ parameter\ to\ seek\ in\ VorbisAudioCursor::cb\_seek\_func\(\backslash\)n"{}};}
+\DoxyCodeLine{00259\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00260\ \ \ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \ \ \textcolor{keywordflow}{if}\ (stream-\/>fail())\ \{}
+\DoxyCodeLine{00263\ \ \ \ \ \textcolor{comment}{//\ This\ is\ a\ fatal\ error\ and\ usually\ leads\ to\ a\ libvorbis\ crash.}}
+\DoxyCodeLine{00264\ \ \ \ \ movies\_cat.error()}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failure\ to\ seek\ to\ byte\ "{}}\ <<\ offset;}
+\DoxyCodeLine{00266\ }
+\DoxyCodeLine{00267\ \ \ \ \ \textcolor{keywordflow}{switch}\ (whence)\ \{}
+\DoxyCodeLine{00268\ \ \ \ \ \textcolor{keywordflow}{case}\ SEEK\_CUR:}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ movies\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ from\ current\ location!\(\backslash\)n"{}};}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00273\ \ \ \ \ \textcolor{keywordflow}{case}\ SEEK\_END:}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ movies\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ from\ end\ of\ file!\(\backslash\)n"{}};}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ movies\_cat.error(\textcolor{keyword}{false})\ <<\ \textcolor{stringliteral}{"{}!\(\backslash\)n"{}};}
+\DoxyCodeLine{00280\ \ \ \ \ \}}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00283\ \ \ \}}
+\DoxyCodeLine{00284\ }
+\DoxyCodeLine{00285\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00286\ \}}
+\DoxyCodeLine{00287\ }
+\DoxyCodeLine{00292\ \textcolor{keywordtype}{int}\ VorbisAudioCursor::}
+\DoxyCodeLine{00293\ cb\_close\_func(\textcolor{keywordtype}{void}\ *datasource)\ \{}
+\DoxyCodeLine{00294\ \ \ istream\ *stream\ =\ (istream*)\ datasource;}
+\DoxyCodeLine{00295\ \ \ nassertr(stream\ !=\ \textcolor{keyword}{nullptr},\ -\/1);}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00298\ \ \ vfs-\/>close\_read\_file(stream);}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00300\ \ \ \textcolor{comment}{//\ Return\ value\ isn't\ checked,\ but\ let's\ be\ predictable}}
+\DoxyCodeLine{00301\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00302\ \}}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00308\ \textcolor{keywordtype}{long}\ VorbisAudioCursor::}
+\DoxyCodeLine{00309\ cb\_tell\_func(\textcolor{keywordtype}{void}\ *datasource)\ \{}
+\DoxyCodeLine{00310\ \ \ istream\ *stream\ =\ (istream*)\ datasource;}
+\DoxyCodeLine{00311\ \ \ nassertr(stream\ !=\ \textcolor{keyword}{nullptr},\ -\/1);}
+\DoxyCodeLine{00312\ }
+\DoxyCodeLine{00313\ \ \ \textcolor{keywordflow}{return}\ stream-\/>tellg();}
+\DoxyCodeLine{00314\ \}}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ HAVE\_VORBIS}}
+
+\end{DoxyCode}

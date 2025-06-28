@@ -1,0 +1,1124 @@
+\doxysection{evdev\+Input\+Device.\+cxx}
+\hypertarget{evdevInputDevice_8cxx_source}{}\label{evdevInputDevice_8cxx_source}\index{panda/src/device/evdevInputDevice.cxx@{panda/src/device/evdevInputDevice.cxx}}
+\mbox{\hyperlink{evdevInputDevice_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{evdevInputDevice_8h}{evdevInputDevice.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_LINUX\_INPUT\_H}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{gamepadButton_8h}{gamepadButton.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{keyboardButton_8h}{keyboardButton.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{mouseButton_8h}{mouseButton.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{linuxInputDeviceManager_8h}{linuxInputDeviceManager.h}}"{}}}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ <fcntl.h>}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ <linux/input.h>}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#ifndef\ BTN\_DPAD\_UP}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#define\ BTN\_DPAD\_UP\ 0x220}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#define\ BTN\_DPAD\_DOWN\ 0x221}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#define\ BTN\_DPAD\_LEFT\ 0x222}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#define\ BTN\_DPAD\_RIGHT\ 0x223}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{comment}{//\ Android\ introduces\ these\ in\ API\ level\ 21.}}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#ifndef\ BTN\_TRIGGER\_HAPPY}}
+\DoxyCodeLine{00036\ \textcolor{preprocessor}{\#define\ BTN\_TRIGGER\_HAPPY\ 0x2c0}}
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\#define\ BTN\_TRIGGER\_HAPPY1\ 0x2c0}}
+\DoxyCodeLine{00038\ \textcolor{preprocessor}{\#define\ BTN\_TRIGGER\_HAPPY2\ 0x2c1}}
+\DoxyCodeLine{00039\ \textcolor{preprocessor}{\#define\ BTN\_TRIGGER\_HAPPY3\ 0x2c2}}
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\#define\ BTN\_TRIGGER\_HAPPY4\ 0x2c3}}
+\DoxyCodeLine{00041\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \textcolor{preprocessor}{\#define\ test\_bit(bit,\ array)\ ((array)[(bit)>>3]\ \&\ (1<<((bit)\&7)))}}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \textcolor{keyword}{enum}\ QuirkBits\ \{}
+\DoxyCodeLine{00046\ \ \ \textcolor{comment}{//\ Right\ stick\ uses\ Z\ and\ Rz\ inputs.}}
+\DoxyCodeLine{00047\ \ \ QB\_rstick\_from\_z\ =\ 1,}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \ \ \textcolor{comment}{//\ Throttle\ goes\ from\ -\/1\ to\ 1\ rather\ than\ from\ 0\ to\ 1.}}
+\DoxyCodeLine{00050\ \ \ QB\_centered\_throttle\ =\ 2,}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \ \ \textcolor{comment}{//\ Throttle\ is\ reversed.}}
+\DoxyCodeLine{00053\ \ \ QB\_reversed\_throttle\ =\ 4,}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00055\ \ \ \textcolor{comment}{//\ Only\ consider\ the\ device\ "{}connected"{}\ if\ all\ axes\ are\ non-\/zero.}}
+\DoxyCodeLine{00056\ \ \ QB\_connect\_if\_nonzero\ =\ 8,}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00058\ \ \ \textcolor{comment}{//\ ABS\_THROTTLE\ maps\ to\ rudder}}
+\DoxyCodeLine{00059\ \ \ QB\_rudder\_from\_throttle\ =\ 16,}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00061\ \ \ \textcolor{comment}{//\ Special\ handling\ for\ Steam\ Controller,\ which\ has\ many\ peculiarities.}}
+\DoxyCodeLine{00062\ \ \ \textcolor{comment}{//\ We\ only\ connect\ it\ if\ it\ is\ reporting\ any\ events,\ because\ when\ Steam\ is}}
+\DoxyCodeLine{00063\ \ \ \textcolor{comment}{//\ running,\ the\ Steam\ controller\ is\ muted\ in\ favour\ of\ a\ dummy\ Xbox\ device.}}
+\DoxyCodeLine{00064\ \ \ QB\_steam\_controller\ =\ 32,}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \ \ \textcolor{comment}{//\ Axes\ on\ the\ right\ stick\ are\ swapped,\ using\ x\ for\ y\ and\ vice\ versa.}}
+\DoxyCodeLine{00067\ \ \ QB\_right\_axes\_swapped\ =\ 64,}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00069\ \ \ \textcolor{comment}{//\ Has\ no\ trigger\ axes.}}
+\DoxyCodeLine{00070\ \ \ QB\_no\_analog\_triggers\ =\ 128,}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00072\ \ \ \textcolor{comment}{//\ Alternate\ button\ mapping.}}
+\DoxyCodeLine{00073\ \ \ QB\_alt\_button\_mapping\ =\ 256,}
+\DoxyCodeLine{00074\ \};}
+\DoxyCodeLine{00075\ }
+\DoxyCodeLine{00076\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keyword}{struct\ }DeviceMapping\ \{}
+\DoxyCodeLine{00077\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ vendor;}
+\DoxyCodeLine{00078\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ product;}
+\DoxyCodeLine{00079\ \ \ InputDevice::DeviceClass\ device\_class;}
+\DoxyCodeLine{00080\ \ \ \textcolor{keywordtype}{int}\ quirks;}
+\DoxyCodeLine{00081\ \}\ mapping\_presets[]\ =\ \{}
+\DoxyCodeLine{00082\ \ \ \textcolor{comment}{//\ NVIDIA\ Shield\ Controller}}
+\DoxyCodeLine{00083\ \ \ \{0x0955,\ 0x7214,\ InputDevice::DeviceClass::GAMEPAD,\ QB\_rstick\_from\_z\},}
+\DoxyCodeLine{00084\ \ \ \textcolor{comment}{//\ T.Flight\ Hotas\ X}}
+\DoxyCodeLine{00085\ \ \ \{0x044f,\ 0xb108,\ InputDevice::DeviceClass::FLIGHT\_STICK,\ QB\_centered\_throttle\ |\ QB\_reversed\_throttle\ |\ QB\_rudder\_from\_throttle\},}
+\DoxyCodeLine{00086\ \ \ \textcolor{comment}{//\ Xbox\ 360\ Wireless\ Controller}}
+\DoxyCodeLine{00087\ \ \ \{0x045e,\ 0x0719,\ InputDevice::DeviceClass::GAMEPAD,\ QB\_connect\_if\_nonzero\},}
+\DoxyCodeLine{00088\ \ \ \textcolor{comment}{//\ Steam\ Controller\ (wired)}}
+\DoxyCodeLine{00089\ \ \ \{0x28de,\ 0x1102,\ InputDevice::DeviceClass::UNKNOWN,\ QB\_steam\_controller\},}
+\DoxyCodeLine{00090\ \ \ \textcolor{comment}{//\ Steam\ Controller\ (wireless)}}
+\DoxyCodeLine{00091\ \ \ \{0x28de,\ 0x1142,\ InputDevice::DeviceClass::UNKNOWN,\ QB\_steam\_controller\},}
+\DoxyCodeLine{00092\ \ \ \textcolor{comment}{//\ Jess\ Tech\ Colour\ Rumble\ Pad}}
+\DoxyCodeLine{00093\ \ \ \{0x0f30,\ 0x0111,\ InputDevice::DeviceClass::GAMEPAD,\ QB\_rstick\_from\_z\ |\ QB\_right\_axes\_swapped\},}
+\DoxyCodeLine{00094\ \ \ \textcolor{comment}{//\ Trust\ GXT\ 24}}
+\DoxyCodeLine{00095\ \ \ \{0x0079,\ 0x0006,\ InputDevice::DeviceClass::GAMEPAD,\ QB\_no\_analog\_triggers\ |\ QB\_alt\_button\_mapping\},}
+\DoxyCodeLine{00096\ \ \ \textcolor{comment}{//\ 8bitdo\ N30\ Pro\ Controller}}
+\DoxyCodeLine{00097\ \ \ \{0x2dc8,\ 0x9001,\ InputDevice::DeviceClass::GAMEPAD,\ QB\_rstick\_from\_z\},}
+\DoxyCodeLine{00098\ \ \ \textcolor{comment}{//\ Generic\ gamepad}}
+\DoxyCodeLine{00099\ \ \ \{0x0810,\ 0x0001,\ InputDevice::DeviceClass::GAMEPAD,\ QB\_no\_analog\_triggers\ |\ QB\_alt\_button\_mapping\ |\ QB\_rstick\_from\_z\ |\ QB\_right\_axes\_swapped\},}
+\DoxyCodeLine{00100\ \ \ \textcolor{comment}{//\ Generic\ gamepad\ without\ sticks}}
+\DoxyCodeLine{00101\ \ \ \{0x0810,\ 0xe501,\ InputDevice::DeviceClass::GAMEPAD,\ QB\_no\_analog\_triggers\ |\ QB\_alt\_button\_mapping\},}
+\DoxyCodeLine{00102\ \ \ \textcolor{comment}{//\ 3Dconnexion\ Space\ Traveller\ 3D\ Mouse}}
+\DoxyCodeLine{00103\ \ \ \{0x046d,\ 0xc623,\ InputDevice::DeviceClass::SPATIAL\_MOUSE,\ 0\},}
+\DoxyCodeLine{00104\ \ \ \textcolor{comment}{//\ 3Dconnexion\ Space\ Pilot\ 3D\ Mouse}}
+\DoxyCodeLine{00105\ \ \ \{0x046d,\ 0xc625,\ InputDevice::DeviceClass::SPATIAL\_MOUSE,\ 0\},}
+\DoxyCodeLine{00106\ \ \ \textcolor{comment}{//\ 3Dconnexion\ Space\ Navigator\ 3D\ Mouse}}
+\DoxyCodeLine{00107\ \ \ \{0x046d,\ 0xc626,\ InputDevice::DeviceClass::SPATIAL\_MOUSE,\ 0\},}
+\DoxyCodeLine{00108\ \ \ \textcolor{comment}{//\ 3Dconnexion\ Space\ Explorer\ 3D\ Mouse}}
+\DoxyCodeLine{00109\ \ \ \{0x046d,\ 0xc627,\ InputDevice::DeviceClass::SPATIAL\_MOUSE,\ 0\},}
+\DoxyCodeLine{00110\ \ \ \textcolor{comment}{//\ 3Dconnexion\ Space\ Navigator\ for\ Notebooks}}
+\DoxyCodeLine{00111\ \ \ \{0x046d,\ 0xc628,\ InputDevice::DeviceClass::SPATIAL\_MOUSE,\ 0\},}
+\DoxyCodeLine{00112\ \ \ \textcolor{comment}{//\ 3Dconnexion\ SpacePilot\ Pro\ 3D\ Mouse}}
+\DoxyCodeLine{00113\ \ \ \{0x046d,\ 0xc629,\ InputDevice::DeviceClass::SPATIAL\_MOUSE,\ 0\},}
+\DoxyCodeLine{00114\ \ \ \textcolor{comment}{//\ 3Dconnexion\ Space\ Mouse\ Pro}}
+\DoxyCodeLine{00115\ \ \ \{0x046d,\ 0xc62b,\ InputDevice::DeviceClass::SPATIAL\_MOUSE,\ 0\},}
+\DoxyCodeLine{00116\ \ \ \textcolor{comment}{//\ FrSky\ Simulator}}
+\DoxyCodeLine{00117\ \ \ \{0x0483,\ 0x5720,\ InputDevice::DeviceClass::FLIGHT\_STICK,\ 0\},}
+\DoxyCodeLine{00118\ \ \ \{0\},}
+\DoxyCodeLine{00119\ \};}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00121\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ EvdevInputDevice::\_type\_handle;}
+\DoxyCodeLine{00122\ }
+\DoxyCodeLine{00126\ EvdevInputDevice::}
+\DoxyCodeLine{00127\ EvdevInputDevice(LinuxInputDeviceManager\ *manager,\ \textcolor{keywordtype}{size\_t}\ index)\ :}
+\DoxyCodeLine{00128\ \ \ \_manager(manager),}
+\DoxyCodeLine{00129\ \ \ \_fd(-\/1),}
+\DoxyCodeLine{00130\ \ \ \_quirks(0),}
+\DoxyCodeLine{00131\ \ \ \_index(index),}
+\DoxyCodeLine{00132\ \ \ \_can\_write(false),}
+\DoxyCodeLine{00133\ \ \ \_ff\_id(-\/1),}
+\DoxyCodeLine{00134\ \ \ \_ff\_playing(false),}
+\DoxyCodeLine{00135\ \ \ \_ff\_strong(-\/1),}
+\DoxyCodeLine{00136\ \ \ \_ff\_weak(-\/1),}
+\DoxyCodeLine{00137\ \ \ \_dpad\_x\_axis(-\/1),}
+\DoxyCodeLine{00138\ \ \ \_dpad\_y\_axis(-\/1),}
+\DoxyCodeLine{00139\ \ \ \_dpad\_left\_button(-\/1),}
+\DoxyCodeLine{00140\ \ \ \_dpad\_up\_button(-\/1),}
+\DoxyCodeLine{00141\ \ \ \_ltrigger\_code(-\/1),}
+\DoxyCodeLine{00142\ \ \ \_rtrigger\_code(-\/1)}
+\DoxyCodeLine{00143\ \{}
+\DoxyCodeLine{00144\ \ \ \textcolor{keywordtype}{char}\ path[64];}
+\DoxyCodeLine{00145\ \ \ sprintf(path,\ \textcolor{stringliteral}{"{}/dev/input/event\%zd"{}},\ index);}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00147\ \ \ \_fd\ =\ open(path,\ O\_RDWR\ |\ O\_NONBLOCK);}
+\DoxyCodeLine{00148\ \ \ \textcolor{keywordflow}{if}\ (\_fd\ >=\ 0)\ \{}
+\DoxyCodeLine{00149\ \ \ \ \ \_can\_write\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00150\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ \textcolor{comment}{//\ On\ failure,\ open\ device\ as\ read-\/only.}}
+\DoxyCodeLine{00152\ \ \ \ \ \_fd\ =\ open(path,\ O\_RDONLY\ |\ O\_NONBLOCK);}
+\DoxyCodeLine{00153\ \ \ \}}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ \textcolor{keywordflow}{if}\ (\_fd\ >=\ 0)\ \{}
+\DoxyCodeLine{00156\ \ \ \ \ init\_device();}
+\DoxyCodeLine{00157\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00158\ \ \ \ \ \_is\_connected\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00159\ \ \ \ \ device\_cat.error()}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Opening\ raw\ input\ device:\ "{}}\ <<\ strerror(errno)\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ path\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00161\ \ \ \}}
+\DoxyCodeLine{00162\ \}}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00167\ EvdevInputDevice::}
+\DoxyCodeLine{00168\ \string~EvdevInputDevice()\ \{}
+\DoxyCodeLine{00169\ \ \ \textcolor{keywordflow}{if}\ (\_fd\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00170\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_ff\_id\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \textcolor{comment}{//\ Remove\ force-\/feedback\ effect.}}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ EvdevInputDevice::do\_set\_vibration(0,\ 0);}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ ioctl(\_fd,\ EVIOCRMFF,\ \_ff\_id);}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \_ff\_id\ =\ -\/1;}
+\DoxyCodeLine{00175\ \ \ \ \ \}}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00177\ \ \ \ \ close(\_fd);}
+\DoxyCodeLine{00178\ \ \ \ \ \_fd\ =\ -\/1;}
+\DoxyCodeLine{00179\ \ \ \}}
+\DoxyCodeLine{00180\ \}}
+\DoxyCodeLine{00181\ }
+\DoxyCodeLine{00187\ \textcolor{keywordtype}{void}\ EvdevInputDevice::}
+\DoxyCodeLine{00188\ do\_set\_vibration(\textcolor{keywordtype}{double}\ strong,\ \textcolor{keywordtype}{double}\ weak)\ \{}
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordflow}{if}\ (\_fd\ ==\ -\/1\ ||\ !\_can\_write)\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00191\ \ \ \}}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00193\ \ \ \textcolor{keywordtype}{int}\ strong\_level\ =\ strong\ *\ 0xffff;}
+\DoxyCodeLine{00194\ \ \ \textcolor{keywordtype}{int}\ weak\_level\ =\ weak\ *\ 0xffff;}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ \textcolor{keywordflow}{if}\ (strong\_level\ ==\ \_ff\_strong\ \&\&\ weak\_level\ ==\ \_ff\_weak)\ \{}
+\DoxyCodeLine{00197\ \ \ \ \ \textcolor{comment}{//\ No\ change.}}
+\DoxyCodeLine{00198\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00199\ \ \ \}}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ \textcolor{comment}{//\ Upload\ the\ new\ effect\ parameters.\ \ Do\ this\ even\ if\ we\ are\ about}}
+\DoxyCodeLine{00202\ \ \ \textcolor{comment}{//\ to\ stop\ the\ effect,\ because\ some\ drivers\ don't\ respond\ to\ simply}}
+\DoxyCodeLine{00203\ \ \ \textcolor{comment}{//\ stopping\ the\ effect.}}
+\DoxyCodeLine{00204\ \ \ \textcolor{keyword}{struct\ }ff\_effect\ effect;}
+\DoxyCodeLine{00205\ \ \ effect.type\ =\ FF\_RUMBLE;}
+\DoxyCodeLine{00206\ \ \ effect.id\ =\ \_ff\_id;}
+\DoxyCodeLine{00207\ \ \ effect.direction\ =\ 0;}
+\DoxyCodeLine{00208\ \ \ effect.trigger.button\ =\ 0;}
+\DoxyCodeLine{00209\ \ \ effect.trigger.interval\ =\ 0;}
+\DoxyCodeLine{00210\ \ \ effect.replay.length\ =\ 0;}
+\DoxyCodeLine{00211\ \ \ effect.replay.delay\ =\ 0;}
+\DoxyCodeLine{00212\ \ \ effect.u.rumble.strong\_magnitude\ =\ strong\_level;}
+\DoxyCodeLine{00213\ \ \ effect.u.rumble.weak\_magnitude\ =\ weak\_level;}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordflow}{if}\ (ioctl(\_fd,\ EVIOCSFF,\ \&effect)\ <\ 0)\ \{}
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00217\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00218\ \ \ \ \ \_ff\_id\ =\ effect.id;}
+\DoxyCodeLine{00219\ \ \ \ \ \_ff\_strong\ =\ strong\_level;}
+\DoxyCodeLine{00220\ \ \ \ \ \_ff\_weak\ =\ weak\_level;}
+\DoxyCodeLine{00221\ \ \ \}}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00223\ \ \ \textcolor{keywordflow}{if}\ (!\_ff\_playing)\ \{}
+\DoxyCodeLine{00224\ \ \ \ \ \textcolor{comment}{//\ Start\ the\ effect.\ \ We\ could\ pass\ 0\ as\ value\ to\ stop\ the\ effect}}
+\DoxyCodeLine{00225\ \ \ \ \ \textcolor{comment}{//\ when\ a\ level\ of\ 0\ is\ requested,\ but\ my\ driver\ seems\ to\ ignore\ it.}}
+\DoxyCodeLine{00226\ \ \ \ \ \_ff\_playing\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \ \ \textcolor{keyword}{struct\ }input\_event\ play;}
+\DoxyCodeLine{00229\ \ \ \ \ play.type\ =\ EV\_FF;}
+\DoxyCodeLine{00230\ \ \ \ \ play.code\ =\ \_ff\_id;}
+\DoxyCodeLine{00231\ \ \ \ \ play.value\ =\ 1;}
+\DoxyCodeLine{00232\ }
+\DoxyCodeLine{00233\ \ \ \ \ \textcolor{keywordflow}{if}\ (write(\_fd,\ \&play,\ \textcolor{keyword}{sizeof}(play))\ <\ 0)\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ device\_cat.warning()}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ write\ force-\/feedback\ event:\ "{}}\ <<\ strerror(errno)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00236\ \ \ \ \ \}}
+\DoxyCodeLine{00237\ \ \ \}}
+\DoxyCodeLine{00238\ \}}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00246\ \textcolor{keywordtype}{bool}\ EvdevInputDevice::}
+\DoxyCodeLine{00247\ reactivate\_steam\_controller()\ \{}
+\DoxyCodeLine{00248\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00249\ \ \ \textcolor{keywordflow}{if}\ (!\_is\_connected\ \&\&\ (\_quirks\ \&\ QB\_steam\_controller)\ !=\ 0)\ \{}
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{comment}{//\ Just\ check\ to\ make\ sure\ the\ device\ is\ still\ readable.}}
+\DoxyCodeLine{00251\ \ \ \ \ process\_events();}
+\DoxyCodeLine{00252\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fd\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \_is\_connected\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00255\ \ \ \ \ \}}
+\DoxyCodeLine{00256\ \ \ \}}
+\DoxyCodeLine{00257\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00258\ \}}
+\DoxyCodeLine{00259\ }
+\DoxyCodeLine{00265\ \textcolor{keywordtype}{void}\ EvdevInputDevice::}
+\DoxyCodeLine{00266\ do\_poll()\ \{}
+\DoxyCodeLine{00267\ \ \ \textcolor{keywordflow}{if}\ (\_fd\ !=\ -\/1\ \&\&\ process\_events())\ \{}
+\DoxyCodeLine{00268\ \ \ \ \ \textcolor{keywordflow}{while}\ (process\_events())\ \{\}}
+\DoxyCodeLine{00269\ }
+\DoxyCodeLine{00270\ \ \ \ \ \textcolor{comment}{//\ If\ we\ got\ events,\ we\ are\ obviously\ connected.\ \ Mark\ us\ so.}}
+\DoxyCodeLine{00271\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_is\_connected\ \&\&\ \_fd\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \_is\_connected\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \ \ \_manager-\/>add\_device(\textcolor{keyword}{this});}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00276\ \ \ \ \ \}}
+\DoxyCodeLine{00277\ \ \ \}}
+\DoxyCodeLine{00278\ \}}
+\DoxyCodeLine{00279\ }
+\DoxyCodeLine{00283\ \textcolor{keywordtype}{bool}\ EvdevInputDevice::}
+\DoxyCodeLine{00284\ init\_device()\ \{}
+\DoxyCodeLine{00285\ \ \ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \ \ nassertr(\_fd\ >=\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00291\ \ \ uint8\_t\ evtypes[(EV\_MAX\ +\ 8)\ >>\ 3]\ =\ \{0\};}
+\DoxyCodeLine{00292\ \ \ \textcolor{keywordtype}{char}\ name[128];}
+\DoxyCodeLine{00293\ \ \ \textcolor{keywordflow}{if}\ (ioctl(\_fd,\ EVIOCGNAME(\textcolor{keyword}{sizeof}(name)),\ name)\ <\ 0\ ||}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ ioctl(\_fd,\ EVIOCGBIT(0,\ \textcolor{keyword}{sizeof}(evtypes)),\ evtypes)\ <\ 0)\ \{}
+\DoxyCodeLine{00295\ \ \ \ \ close(\_fd);}
+\DoxyCodeLine{00296\ \ \ \ \ \_fd\ =\ -\/1;}
+\DoxyCodeLine{00297\ \ \ \ \ \_is\_connected\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00298\ \ \ \ \ device\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Opening\ raw\ input\ device:\ ioctl\ failed\(\backslash\)n"{}};}
+\DoxyCodeLine{00299\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00300\ \ \ \}}
+\DoxyCodeLine{00301\ }
+\DoxyCodeLine{00302\ \ \ \_name.assign(name);}
+\DoxyCodeLine{00303\ \ \ \textcolor{comment}{//cerr\ <<\ "{}\#\#\#\#\#\ Now\ initializing\ device\ "{}\ <<\ name\ <<\ "{}\(\backslash\)n"{};}}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \textcolor{keyword}{struct\ }input\_id\ id;}
+\DoxyCodeLine{00306\ \ \ \textcolor{keywordflow}{if}\ (ioctl(\_fd,\ EVIOCGID,\ \&\textcolor{keywordtype}{id})\ >=\ 0)\ \{}
+\DoxyCodeLine{00307\ \ \ \ \ \_vendor\_id\ =\ \textcolor{keywordtype}{id}.vendor;}
+\DoxyCodeLine{00308\ \ \ \ \ \_product\_id\ =\ \textcolor{keywordtype}{id}.product;}
+\DoxyCodeLine{00309\ \ \ \}}
+\DoxyCodeLine{00310\ }
+\DoxyCodeLine{00311\ \ \ \textcolor{keywordtype}{bool}\ all\_values\_zero\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00312\ \ \ \textcolor{keywordtype}{bool}\ emulate\_dpad\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00313\ \ \ \textcolor{keywordtype}{bool}\ have\_analog\_triggers\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00314\ }
+\DoxyCodeLine{00315\ \ \ \textcolor{keywordtype}{bool}\ has\_keys\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00316\ \ \ \textcolor{keywordtype}{bool}\ has\_axes\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00318\ \ \ uint8\_t\ keys[(KEY\_MAX\ +\ 8)\ >>\ 3]\ =\ \{0\};}
+\DoxyCodeLine{00319\ \ \ \textcolor{keywordflow}{if}\ (test\_bit(EV\_KEY,\ evtypes))\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ \textcolor{comment}{//\ Check\ which\ buttons\ are\ on\ the\ device.}}
+\DoxyCodeLine{00321\ \ \ \ \ ioctl(\_fd,\ EVIOCGBIT(EV\_KEY,\ \textcolor{keyword}{sizeof}(keys)),\ keys);}
+\DoxyCodeLine{00322\ \ \ \ \ has\_keys\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00323\ }
+\DoxyCodeLine{00324\ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(KEY\_A,\ keys)\ \&\&\ test\_bit(KEY\_Z,\ keys))\ \{}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ enable\_feature(Feature::KEYBOARD);}
+\DoxyCodeLine{00326\ \ \ \ \ \}}
+\DoxyCodeLine{00327\ \ \ \}}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00329\ \ \ \textcolor{keywordtype}{int}\ num\_bits\ =\ 0;}
+\DoxyCodeLine{00330\ \ \ uint8\_t\ axes[(ABS\_MAX\ +\ 8)\ >>\ 3]\ =\ \{0\};}
+\DoxyCodeLine{00331\ \ \ \textcolor{keywordflow}{if}\ (test\_bit(EV\_ABS,\ evtypes))\ \{}
+\DoxyCodeLine{00332\ \ \ \ \ \textcolor{comment}{//\ Check\ which\ axes\ are\ on\ the\ device.}}
+\DoxyCodeLine{00333\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ ioctl(\_fd,\ EVIOCGBIT(EV\_ABS,\ \textcolor{keyword}{sizeof}(axes)),\ axes);}
+\DoxyCodeLine{00334\ \textcolor{preprocessor}{\#ifdef\ \_\_FreeBSD\_\_}}
+\DoxyCodeLine{00335\ \ \ \ \ \textcolor{comment}{//\ Older\ kernels\ had\ a\ bug\ where\ this\ would\ always\ return\ 0,\ see\ D28218}}
+\DoxyCodeLine{00336\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ ==\ 0)\ \{}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ ABS\_MAX;\ i\ >=\ 0;\ -\/-\/i)\ \{}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(i,\ axes))\ \{}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ \ \ num\_bits\ =\ i\ +\ 1;}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00343\ \ \ \ \ \}}
+\DoxyCodeLine{00344\ \ \ \ \ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00345\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00346\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ >\ 0)\ \{}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ num\_bits\ =\ result\ <<\ 3;}
+\DoxyCodeLine{00348\ \ \ \ \ \}}
+\DoxyCodeLine{00349\ \ \ \ \ has\_axes\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00350\ \ \ \}}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ \ \ \textcolor{comment}{//\ Do\ we\ have\ a\ preset\ device\ mapping?}}
+\DoxyCodeLine{00353\ \ \ \textcolor{keywordtype}{int}\ quirks\ =\ 0;}
+\DoxyCodeLine{00354\ \ \ \textcolor{keyword}{const}\ DeviceMapping\ *mapping\ =\ mapping\_presets;}
+\DoxyCodeLine{00355\ \ \ \textcolor{keywordflow}{while}\ (mapping-\/>vendor\ !=\ 0)\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_vendor\_id\ ==\ mapping-\/>vendor\ \&\&\ \_product\_id\ ==\ mapping-\/>product)\ \{}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \_device\_class\ =\ mapping-\/>device\_class;}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ quirks\ =\ mapping-\/>quirks;}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00360\ \ \ \ \ \}}
+\DoxyCodeLine{00361\ \ \ \ \ ++mapping;}
+\DoxyCodeLine{00362\ \ \ \}}
+\DoxyCodeLine{00363\ }
+\DoxyCodeLine{00364\ \ \ \textcolor{comment}{//\ The\ Steam\ Controller\ reports\ as\ multiple\ devices,\ one\ of\ which\ a\ gamepad.}}
+\DoxyCodeLine{00365\ \ \ \textcolor{keywordflow}{if}\ (quirks\ \&\ QB\_steam\_controller)\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(BTN\_GAMEPAD,\ keys))\ \{}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \_device\_class\ =\ DeviceClass::GAMEPAD;}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ a\ virtual\ gamepad\ on\ the\ system,\ then\ careful:\ if\ Steam\ is}}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \textcolor{comment}{//\ running,\ it\ may\ disable\ its\ own\ gamepad\ in\ favour\ of\ the\ virtual}}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \textcolor{comment}{//\ device\ it\ registers.\ \ If\ the\ virtual\ device\ is\ present,\ we\ will\ only}}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \textcolor{comment}{//\ register\ this\ gamepad\ as\ connected\ when\ it\ registers\ input.}}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager-\/>has\_virtual\_device(0x28de,\ 0x11ff))\ \{}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Detected\ Steam\ virtual\ gamepad,\ disabling\ Steam\ Controller\(\backslash\)n"{}};}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ quirks\ |=\ QB\_connect\_if\_nonzero;}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00378\ \ \ \ \ \}}
+\DoxyCodeLine{00379\ \ \ \}}
+\DoxyCodeLine{00380\ \ \ \_quirks\ =\ quirks;}
+\DoxyCodeLine{00381\ }
+\DoxyCodeLine{00382\ \ \ \textcolor{comment}{//\ Try\ to\ detect\ which\ type\ of\ device\ we\ have\ here}}
+\DoxyCodeLine{00383\ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::UNKNOWN)\ \{}
+\DoxyCodeLine{00384\ \ \ \ \ \textcolor{keywordtype}{int}\ device\_scores[(size\_t)DeviceClass::DIGITIZER\ +\ 1]\ =\ \{0\};}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00386\ \ \ \ \ \textcolor{comment}{//\ Test\ for\ specific\ keys}}
+\DoxyCodeLine{00387\ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(BTN\_GAMEPAD,\ keys)\ \&\&\ test\_bit(ABS\_X,\ axes)\ \&\&\ test\_bit(ABS\_RX,\ axes))\ \{}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::GAMEPAD]\ +=\ 5;}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::STEERING\_WHEEL]\ +=\ 5;}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::FLIGHT\_STICK]\ +=\ 5;}
+\DoxyCodeLine{00391\ \ \ \ \ \}}
+\DoxyCodeLine{00392\ }
+\DoxyCodeLine{00393\ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(ABS\_WHEEL,\ axes)\ \&\&\ test\_bit(ABS\_GAS,\ axes)\ \&\&\ test\_bit(ABS\_BRAKE,\ axes))\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::STEERING\_WHEEL]\ +=\ 10;}
+\DoxyCodeLine{00395\ \ \ \ \ \}}
+\DoxyCodeLine{00396\ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(BTN\_GEAR\_DOWN,\ keys)\ \&\&\ test\_bit(BTN\_GEAR\_UP,\ keys))\ \{}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::STEERING\_WHEEL]\ +=\ 10;}
+\DoxyCodeLine{00398\ \ \ \ \ \}}
+\DoxyCodeLine{00399\ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(BTN\_JOYSTICK,\ keys)\ \&\&\ test\_bit(ABS\_X,\ axes))\ \{}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::FLIGHT\_STICK]\ +=\ 10;}
+\DoxyCodeLine{00401\ \ \ \ \ \}}
+\DoxyCodeLine{00402\ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(BTN\_MOUSE,\ keys)\ \&\&\ test\_bit(EV\_REL,\ evtypes))\ \{}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::MOUSE]\ +=\ 20;}
+\DoxyCodeLine{00404\ \ \ \ \ \}}
+\DoxyCodeLine{00405\ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(BTN\_DIGI,\ keys)\ \&\&\ test\_bit(EV\_ABS,\ evtypes))\ \{}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::DIGITIZER]\ +=\ 20;}
+\DoxyCodeLine{00407\ \ \ \ \ \}}
+\DoxyCodeLine{00408\ \ \ \ \ uint8\_t\ unknown\_keys[]\ =\ \{KEY\_POWER\};}
+\DoxyCodeLine{00409\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ 1;\ i++)\ \{}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(unknown\_keys[i],\ keys))\ \{}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (unknown\_keys[i]\ ==\ KEY\_POWER)\ \{}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::UNKNOWN]\ +=\ 20;}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00415\ \ \ \ \ \}}
+\DoxyCodeLine{00416\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_features\ \&\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int})Feature::KEYBOARD)\ \{}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::KEYBOARD]\ +=\ 20;}
+\DoxyCodeLine{00418\ \ \ \ \ \}}
+\DoxyCodeLine{00419\ }
+\DoxyCodeLine{00420\ \ \ \ \ \textcolor{comment}{//\ Test\ for\ specific\ name\ tags}}
+\DoxyCodeLine{00421\ \ \ \ \ \textcolor{keywordtype}{string}\ lowercase\_name\ =\ \_name;}
+\DoxyCodeLine{00422\ \ \ \ \ \textcolor{keywordflow}{for}(\textcolor{keywordtype}{size\_t}\ x\ =\ 0;\ x\ <\ \_name.length();\ ++x)\ \{}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ lowercase\_name[x]\ =\ tolower(lowercase\_name[x]);}
+\DoxyCodeLine{00424\ \ \ \ \ \}}
+\DoxyCodeLine{00425\ \ \ \ \ \textcolor{keywordflow}{if}\ (lowercase\_name.find(\textcolor{stringliteral}{"{}gamepad"{}})\ !=\ string::npos)\ \{}
+\DoxyCodeLine{00426\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::GAMEPAD]\ +=\ 10;}
+\DoxyCodeLine{00427\ \ \ \ \ \}}
+\DoxyCodeLine{00428\ \ \ \ \ \textcolor{keywordflow}{if}\ (lowercase\_name.find(\textcolor{stringliteral}{"{}wheel"{}})\ !=\ string::npos)\ \{}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::STEERING\_WHEEL]\ +=\ 10;}
+\DoxyCodeLine{00430\ \ \ \ \ \}}
+\DoxyCodeLine{00431\ \ \ \ \ \textcolor{keywordflow}{if}\ (lowercase\_name.find(\textcolor{stringliteral}{"{}mouse"{}})\ !=\ string::npos\ ||\ lowercase\_name.find(\textcolor{stringliteral}{"{}touchpad"{}})\ !=\ string::npos)\ \{}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::MOUSE]\ +=\ 10;}
+\DoxyCodeLine{00433\ \ \ \ \ \}}
+\DoxyCodeLine{00434\ \ \ \ \ \textcolor{keywordflow}{if}\ (lowercase\_name.find(\textcolor{stringliteral}{"{}keyboard"{}})\ !=\ string::npos)\ \{}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::KEYBOARD]\ +=\ 10;}
+\DoxyCodeLine{00436\ \ \ \ \ \}}
+\DoxyCodeLine{00437\ \ \ \ \ \textcolor{comment}{//\ List\ of\ lowercase\ names\ that\ occur\ in\ unknown\ devices}}
+\DoxyCodeLine{00438\ \ \ \ \ \textcolor{keywordtype}{string}\ unknown\_names[]\ =\ \{\textcolor{stringliteral}{"{}video\ bus"{}},\ \textcolor{stringliteral}{"{}power\ button"{}},\ \textcolor{stringliteral}{"{}sleep\ button"{}}\};}
+\DoxyCodeLine{00439\ \ \ \ \ \textcolor{keywordflow}{for}(\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ 3;\ i++)\ \{}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (lowercase\_name.find(unknown\_names[i])\ !=\ string::npos)\ \{}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \ \ device\_scores[(size\_t)DeviceClass::UNKNOWN]\ +=\ 20;}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00443\ \ \ \ \ \}}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \ \ \ \ \textcolor{comment}{//\ Check\ which\ device\ type\ got\ the\ most\ points}}
+\DoxyCodeLine{00446\ \ \ \ \ \textcolor{keywordtype}{int}\ highest\_score\ =\ 0;}
+\DoxyCodeLine{00447\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <=\ (size\_t)DeviceClass::DIGITIZER;\ i++)\ \{}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (device\_scores[i]\ >\ highest\_score)\ \{}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \ \ highest\_score\ =\ device\_scores[i];}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \ \ \_device\_class\ =\ (DeviceClass)i;}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00452\ \ \ \ \ \}}
+\DoxyCodeLine{00453\ \ \ \ \ \textcolor{comment}{//std::cerr\ <<\ "{}Found\ highscore\ class\ "{}\ <<\ \_device\_class\ <<\ "{}\ with\ this\ score:\ "{}\ <<\ highest\_score\ <<\ "{}\(\backslash\)n"{};}}
+\DoxyCodeLine{00454\ \ \ \}}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00456\ \ \ \textcolor{keywordflow}{if}\ (has\_keys)\ \{}
+\DoxyCodeLine{00457\ \ \ \ \ \textcolor{comment}{//\ Also\ check\ whether\ the\ buttons\ are\ currently\ pressed.}}
+\DoxyCodeLine{00458\ \ \ \ \ uint8\_t\ states[(KEY\_MAX\ +\ 8)\ >>\ 3]\ =\ \{0\};}
+\DoxyCodeLine{00459\ \ \ \ \ ioctl(\_fd,\ EVIOCGKEY(\textcolor{keyword}{sizeof}(states)),\ states);}
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00461\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <=\ KEY\_MAX;\ ++i)\ \{}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(i,\ keys))\ \{}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ \ \ ButtonState\ button;}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \ \ button.handle\ =\ map\_button(i,\ \_device\_class,\ quirks);}
+\DoxyCodeLine{00465\ }
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ button\_index\ =\ (int)\_buttons.size();}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (button.handle\ ==\ ButtonHandle::none())\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \ \ \ \ \ \ device\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}Unmapped\ /dev/input/event"{}}\ <<\ \_index}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ button\ "{}}\ <<\ button\_index\ <<\ \textcolor{stringliteral}{"{}:\ 0x"{}}\ <<\ std::hex\ <<\ i\ <<\ std::dec\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00471\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00473\ }
+\DoxyCodeLine{00474\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(i,\ states))\ \{}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ \ \ \ \ button.\_state\ =\ S\_down;}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \ \ \ \ all\_values\_zero\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00478\ \ \ \ \ \ \ \ \ \ \ button.\_state\ =\ S\_up;}
+\DoxyCodeLine{00479\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (button.handle\ ==\ GamepadButton::dpad\_left())\ \{}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ \ \ \ \ emulate\_dpad\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (button.handle\ ==\ GamepadButton::ltrigger())\ \{}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ \ \ \ \ \_ltrigger\_code\ =\ i;}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (button.handle\ ==\ GamepadButton::rtrigger())\ \{}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \ \ \ \ \_rtrigger\_code\ =\ i;}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00487\ }
+\DoxyCodeLine{00488\ \ \ \ \ \ \ \ \ \_buttons.push\_back(button);}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{size\_t})i\ >=\ \_button\_indices.size())\ \{}
+\DoxyCodeLine{00490\ \ \ \ \ \ \ \ \ \ \ \_button\_indices.resize(i\ +\ 1,\ -\/1);}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \ \ \_button\_indices[i]\ =\ button\_index;}
+\DoxyCodeLine{00493\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00494\ \ \ \ \ \}}
+\DoxyCodeLine{00495\ \ \ \}}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00497\ \ \ \textcolor{keywordflow}{if}\ (has\_axes)\ \{}
+\DoxyCodeLine{00498\ \ \ \ \ \_axis\_indices.resize(num\_bits,\ -\/1);}
+\DoxyCodeLine{00499\ }
+\DoxyCodeLine{00500\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_bits;\ ++i)\ \{}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(i,\ axes))\ \{}
+\DoxyCodeLine{00502\ \ \ \ \ \ \ \ \ Axis\ axis\ =\ Axis::NONE;}
+\DoxyCodeLine{00503\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (i)\ \{}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_X:}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::LEFT\_X;}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::FLIGHT\_STICK)\ \{}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::ROLL;}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00510\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::X;}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_Y:}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::LEFT\_Y;}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::FLIGHT\_STICK)\ \{}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::PITCH;}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00519\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::Y;}
+\DoxyCodeLine{00520\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00521\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_Z:}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (quirks\ \&\ QB\_rstick\_from\_z)\ \{}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (quirks\ \&\ QB\_right\_axes\_swapped)\ \{}
+\DoxyCodeLine{00525\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_Y;}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00527\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_X;}
+\DoxyCodeLine{00528\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((quirks\ \&\ QB\_no\_analog\_triggers)\ ==\ 0)\ \{}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::LEFT\_TRIGGER;}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ have\_analog\_triggers\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00533\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00534\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::SPATIAL\_MOUSE)\ \{}
+\DoxyCodeLine{00535\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::Z;}
+\DoxyCodeLine{00536\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00537\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::THROTTLE;}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_RX:}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::SPATIAL\_MOUSE)\ \{}
+\DoxyCodeLine{00542\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::PITCH;}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((quirks\ \&\ QB\_rstick\_from\_z)\ ==\ 0)\ \{}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_X;}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00547\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_RY:}
+\DoxyCodeLine{00548\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::SPATIAL\_MOUSE)\ \{}
+\DoxyCodeLine{00549\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::ROLL;}
+\DoxyCodeLine{00550\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((quirks\ \&\ QB\_rstick\_from\_z)\ ==\ 0)\ \{}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_Y;}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00553\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_RZ:}
+\DoxyCodeLine{00555\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (quirks\ \&\ QB\_rstick\_from\_z)\ \{}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (quirks\ \&\ QB\_right\_axes\_swapped)\ \{}
+\DoxyCodeLine{00557\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_X;}
+\DoxyCodeLine{00558\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00559\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_Y;}
+\DoxyCodeLine{00560\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00561\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((quirks\ \&\ QB\_no\_analog\_triggers)\ ==\ 0)\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_TRIGGER;}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ have\_analog\_triggers\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00566\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Special\ weird\ case\ for\ Trust\ GXT\ 24}}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_Y;}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::YAW;}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_THROTTLE:}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (quirks\ \&\ QB\_rudder\_from\_throttle)\ \{}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RUDDER;}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::THROTTLE;}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_RUDDER:}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RUDDER;}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_WHEEL:}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::WHEEL;}
+\DoxyCodeLine{00585\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_GAS:}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((quirks\ \&\ QB\_no\_analog\_triggers)\ ==\ 0)\ \{}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_TRIGGER;}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ have\_analog\_triggers\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00592\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00593\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::ACCELERATOR;}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_BRAKE:}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::LEFT\_TRIGGER;}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \ \ \ \ \ \ have\_analog\_triggers\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::BRAKE;}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_HAT0X:}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (emulate\_dpad)\ \{}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \ \ \ \ \ \ \_dpad\_x\_axis\ =\ i;}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ \ \ \ \ \_dpad\_left\_button\ =\ (int)\_buttons.size();}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::dpad\_left()));}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::dpad\_right()));}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::hat\_left()));}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::hat\_right()));}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00615\ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons[\_dpad\_left\_button].\_state\ =\ S\_up;}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons[\_dpad\_left\_button+1].\_state\ =\ S\_up;}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_HAT0Y:}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (emulate\_dpad)\ \{}
+\DoxyCodeLine{00621\ \ \ \ \ \ \ \ \ \ \ \ \ \_dpad\_y\_axis\ =\ i;}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \ \ \ \ \ \ \_dpad\_up\_button\ =\ (int)\_buttons.size();}
+\DoxyCodeLine{00623\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{00624\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::dpad\_up()));}
+\DoxyCodeLine{00625\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::dpad\_down()));}
+\DoxyCodeLine{00626\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::hat\_up()));}
+\DoxyCodeLine{00628\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons.push\_back(ButtonState(GamepadButton::hat\_down()));}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons[\_dpad\_up\_button].\_state\ =\ S\_up;}
+\DoxyCodeLine{00631\ \ \ \ \ \ \ \ \ \ \ \ \ \_buttons[\_dpad\_up\_button+1].\_state\ =\ S\_up;}
+\DoxyCodeLine{00632\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00633\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00634\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_HAT2X:}
+\DoxyCodeLine{00635\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (quirks\ \&\ QB\_steam\_controller)\ \{}
+\DoxyCodeLine{00636\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::RIGHT\_TRIGGER;}
+\DoxyCodeLine{00637\ \ \ \ \ \ \ \ \ \ \ \ \ have\_analog\_triggers\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00640\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_HAT2Y:}
+\DoxyCodeLine{00641\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (quirks\ \&\ QB\_steam\_controller)\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::LEFT\_TRIGGER;}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \ \ \ \ \ \ have\_analog\_triggers\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ ABS\_PRESSURE:}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ \ \ \ \ axis\ =\ Axis::PRESSURE;}
+\DoxyCodeLine{00648\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00649\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00650\ }
+\DoxyCodeLine{00651\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Check\ the\ initial\ value\ and\ ranges.}}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \ \ \textcolor{keyword}{struct\ }input\_absinfo\ absinfo;}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ioctl(\_fd,\ EVIOCGABS(i),\ \&absinfo)\ >=\ 0)\ \{}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ index;}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We'd\ like\ to\ reverse\ the\ Y\ axis\ to\ match\ the\ XInput\ behavior.}}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Also\ reverse\ the\ yaw\ axis\ to\ match\ right-\/hand\ coordinate\ system.}}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Also\ T.Flight\ Hotas\ X\ throttle\ is\ reversed\ and\ can\ go\ backwards.}}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (axis\ ==\ Axis::YAW\ ||\ axis\ ==\ Axis::RUDDER\ ||\ axis\ ==\ Axis::LEFT\_Y\ ||\ axis\ ==\ Axis::RIGHT\_Y\ ||}
+\DoxyCodeLine{00659\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (axis\ ==\ Axis::THROTTLE\ \&\&\ (quirks\ \&\ QB\_reversed\_throttle)\ !=\ 0)\ ||}
+\DoxyCodeLine{00660\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\_device\_class\ ==\ DeviceClass::SPATIAL\_MOUSE\ \&\&\ (axis\ ==\ Axis::Y\ ||\ axis\ ==\ Axis::Z\ ||\ axis\ ==\ Axis::ROLL))\ ||}
+\DoxyCodeLine{00661\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\_device\_class\ ==\ DeviceClass::DIGITIZER\ \&\&\ axis\ ==\ Axis::Y))\ \{}
+\DoxyCodeLine{00662\ \ \ \ \ \ \ \ \ \ \ \ \ std::swap(absinfo.maximum,\ absinfo.minimum);}
+\DoxyCodeLine{00663\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00664\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (axis\ ==\ Axis::THROTTLE\ \&\&\ (quirks\ \&\ QB\_centered\_throttle)\ !=\ 0)\ \{}
+\DoxyCodeLine{00665\ \ \ \ \ \ \ \ \ \ \ \ \ index\ =\ add\_axis(axis,\ absinfo.minimum,\ absinfo.maximum,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00666\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00667\ \ \ \ \ \ \ \ \ \ \ \ \ index\ =\ add\_axis(axis,\ absinfo.minimum,\ absinfo.maximum);}
+\DoxyCodeLine{00668\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00669\ \ \ \ \ \ \ \ \ \ \ axis\_changed(index,\ absinfo.value);}
+\DoxyCodeLine{00670\ \ \ \ \ \ \ \ \ \ \ \_axis\_indices[i]\ =\ index;}
+\DoxyCodeLine{00671\ }
+\DoxyCodeLine{00672\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (absinfo.value\ !=\ 0)\ \{}
+\DoxyCodeLine{00673\ \ \ \ \ \ \ \ \ \ \ \ \ all\_values\_zero\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00674\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00675\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00676\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00677\ \ \ \ \ \}}
+\DoxyCodeLine{00678\ \ \ \}}
+\DoxyCodeLine{00679\ }
+\DoxyCodeLine{00680\ \ \ \textcolor{keywordflow}{if}\ (test\_bit(EV\_REL,\ evtypes))\ \{}
+\DoxyCodeLine{00681\ \ \ \ \ enable\_feature(Feature::POINTER);}
+\DoxyCodeLine{00682\ \ \ \ \ add\_pointer(PointerType::UNKNOWN,\ 0);}
+\DoxyCodeLine{00683\ \ \ \}}
+\DoxyCodeLine{00684\ }
+\DoxyCodeLine{00685\ \ \ \textcolor{keywordflow}{if}\ (test\_bit(EV\_FF,\ evtypes))\ \{}
+\DoxyCodeLine{00686\ \ \ \ \ uint8\_t\ effects[(FF\_MAX\ +\ 8)\ >>\ 3]\ =\ \{0\};}
+\DoxyCodeLine{00687\ \ \ \ \ ioctl(\_fd,\ EVIOCGBIT(EV\_FF,\ \textcolor{keyword}{sizeof}(effects)),\ effects);}
+\DoxyCodeLine{00688\ }
+\DoxyCodeLine{00689\ \ \ \ \ \textcolor{keywordflow}{if}\ (test\_bit(FF\_RUMBLE,\ effects))\ \{}
+\DoxyCodeLine{00690\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_can\_write)\ \{}
+\DoxyCodeLine{00691\ \ \ \ \ \ \ \ \ enable\_feature(Feature::VIBRATION);}
+\DoxyCodeLine{00692\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00693\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Let\ the\ user\ know\ what\ he's\ missing\ out\ on.}}
+\DoxyCodeLine{00694\ \ \ \ \ \ \ \ \ device\_cat.warning()}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}/dev/input/event"{}}\ <<\ \_index\ <<\ \textcolor{stringliteral}{"{}\ is\ not\ writable,\ vibration\ "{}}}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}effects\ will\ be\ unavailable.\(\backslash\)n"{}};}
+\DoxyCodeLine{00697\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00698\ \ \ \ \ \}}
+\DoxyCodeLine{00699\ \ \ \}}
+\DoxyCodeLine{00700\ }
+\DoxyCodeLine{00701\ \ \ \textcolor{keywordflow}{if}\ (\_ltrigger\_code\ >=\ 0\ \&\&\ \_rtrigger\_code\ >=\ 0\ \&\&\ !have\_analog\_triggers)\ \{}
+\DoxyCodeLine{00702\ \ \ \ \ \textcolor{comment}{//\ Emulate\ analog\ triggers.}}
+\DoxyCodeLine{00703\ \ \ \ \ \_ltrigger\_axis\ =\ (int)\_axes.size();}
+\DoxyCodeLine{00704\ \ \ \ \ add\_axis(Axis::LEFT\_TRIGGER,\ 0,\ 1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00705\ \ \ \ \ add\_axis(Axis::RIGHT\_TRIGGER,\ 0,\ 1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00706\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00707\ \ \ \ \ \_ltrigger\_code\ =\ -\/1;}
+\DoxyCodeLine{00708\ \ \ \ \ \_rtrigger\_code\ =\ -\/1;}
+\DoxyCodeLine{00709\ \ \ \}}
+\DoxyCodeLine{00710\ }
+\DoxyCodeLine{00711\ \textcolor{preprocessor}{\#ifndef\ \_\_FreeBSD\_\_}}
+\DoxyCodeLine{00712\ \ \ \textcolor{keywordtype}{char}\ path[64];}
+\DoxyCodeLine{00713\ \ \ \textcolor{keywordtype}{char}\ buffer[256];}
+\DoxyCodeLine{00714\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *parent\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00715\ \ \ sprintf(path,\ \textcolor{stringliteral}{"{}/sys/class/input/event\%zd/device/device/../product"{}},\ \_index);}
+\DoxyCodeLine{00716\ \ \ FILE\ *f\ =\ fopen(path,\ \textcolor{stringliteral}{"{}r"{}});}
+\DoxyCodeLine{00717\ \ \ \textcolor{keywordflow}{if}\ (!f)\ \{}
+\DoxyCodeLine{00718\ \ \ \ \ parent\ =\ \textcolor{stringliteral}{"{}../"{}};}
+\DoxyCodeLine{00719\ \ \ \ \ sprintf(path,\ \textcolor{stringliteral}{"{}/sys/class/input/event\%zd/device/device/\%s../product"{}},\ \_index,\ parent);}
+\DoxyCodeLine{00720\ \ \ \ \ f\ =\ fopen(path,\ \textcolor{stringliteral}{"{}r"{}});}
+\DoxyCodeLine{00721\ \ \ \}}
+\DoxyCodeLine{00722\ \ \ \textcolor{keywordflow}{if}\ (f)\ \{}
+\DoxyCodeLine{00723\ \ \ \ \ \textcolor{keywordflow}{if}\ (fgets(buffer,\ \textcolor{keyword}{sizeof}(buffer),\ f)\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00724\ \ \ \ \ \ \ buffer[strcspn(buffer,\ \textcolor{stringliteral}{"{}\(\backslash\)r\(\backslash\)n"{}})]\ =\ 0;}
+\DoxyCodeLine{00725\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (buffer[0]\ !=\ 0)\ \{}
+\DoxyCodeLine{00726\ \ \ \ \ \ \ \ \ \_name.assign(buffer);}
+\DoxyCodeLine{00727\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00728\ \ \ \ \ \}}
+\DoxyCodeLine{00729\ \ \ \ \ fclose(f);}
+\DoxyCodeLine{00730\ \ \ \}}
+\DoxyCodeLine{00731\ \ \ sprintf(path,\ \textcolor{stringliteral}{"{}/sys/class/input/event\%zd/device/device/\%s../manufacturer"{}},\ \_index,\ parent);}
+\DoxyCodeLine{00732\ \ \ f\ =\ fopen(path,\ \textcolor{stringliteral}{"{}r"{}});}
+\DoxyCodeLine{00733\ \ \ \textcolor{keywordflow}{if}\ (f)\ \{}
+\DoxyCodeLine{00734\ \ \ \ \ \textcolor{keywordflow}{if}\ (fgets(buffer,\ \textcolor{keyword}{sizeof}(buffer),\ f)\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00735\ \ \ \ \ \ \ buffer[strcspn(buffer,\ \textcolor{stringliteral}{"{}\(\backslash\)r\(\backslash\)n"{}})]\ =\ 0;}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ \_manufacturer.assign(buffer);}
+\DoxyCodeLine{00737\ \ \ \ \ \}}
+\DoxyCodeLine{00738\ \ \ \ \ fclose(f);}
+\DoxyCodeLine{00739\ \ \ \}}
+\DoxyCodeLine{00740\ \ \ sprintf(path,\ \textcolor{stringliteral}{"{}/sys/class/input/event\%zd/device/device/\%s../serial"{}},\ \_index,\ parent);}
+\DoxyCodeLine{00741\ \ \ f\ =\ fopen(path,\ \textcolor{stringliteral}{"{}r"{}});}
+\DoxyCodeLine{00742\ \ \ \textcolor{keywordflow}{if}\ (f)\ \{}
+\DoxyCodeLine{00743\ \ \ \ \ \textcolor{keywordflow}{if}\ (fgets(buffer,\ \textcolor{keyword}{sizeof}(buffer),\ f)\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ buffer[strcspn(buffer,\ \textcolor{stringliteral}{"{}\(\backslash\)r\(\backslash\)n"{}})]\ =\ 0;}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \_serial\_number.assign(buffer);}
+\DoxyCodeLine{00746\ \ \ \ \ \}}
+\DoxyCodeLine{00747\ \ \ \ \ fclose(f);}
+\DoxyCodeLine{00748\ \ \ \}}
+\DoxyCodeLine{00749\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00750\ }
+\DoxyCodeLine{00751\ \ \ \textcolor{comment}{//\ Special-\/case\ fix\ for\ Xbox\ 360\ Wireless\ Receiver:\ the\ Linux\ kernel}}
+\DoxyCodeLine{00752\ \ \ \textcolor{comment}{//\ driver\ always\ reports\ 4\ connected\ gamepads,\ regardless\ of\ the\ number}}
+\DoxyCodeLine{00753\ \ \ \textcolor{comment}{//\ of\ gamepads\ actually\ present.\ \ This\ hack\ partially\ remedies\ this.}}
+\DoxyCodeLine{00754\ \ \ \textcolor{keywordflow}{if}\ (all\_values\_zero\ \&\&\ (quirks\ \&\ QB\_connect\_if\_nonzero)\ !=\ 0)\ \{}
+\DoxyCodeLine{00755\ \ \ \ \ \_is\_connected\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00756\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00757\ \ \ \ \ \_is\_connected\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00758\ \ \ \}}
+\DoxyCodeLine{00759\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00760\ \}}
+\DoxyCodeLine{00761\ }
+\DoxyCodeLine{00766\ \textcolor{keywordtype}{bool}\ EvdevInputDevice::}
+\DoxyCodeLine{00767\ process\_events()\ \{}
+\DoxyCodeLine{00768\ \ \ \textcolor{comment}{//\ Read\ 8\ events\ at\ a\ time.}}
+\DoxyCodeLine{00769\ \ \ \textcolor{keyword}{struct\ }input\_event\ events[8];}
+\DoxyCodeLine{00770\ }
+\DoxyCodeLine{00771\ \ \ \textcolor{keywordtype}{int}\ n\_read\ =\ read(\_fd,\ events,\ \textcolor{keyword}{sizeof}(events));}
+\DoxyCodeLine{00772\ \ \ \textcolor{keywordflow}{if}\ (n\_read\ <\ 0)\ \{}
+\DoxyCodeLine{00773\ \ \ \ \ \textcolor{keywordflow}{if}\ (errno\ ==\ EAGAIN\ ||\ errno\ ==\ EWOULDBLOCK)\ \{}
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \textcolor{comment}{//\ No\ data\ available\ for\ now.}}
+\DoxyCodeLine{00775\ }
+\DoxyCodeLine{00776\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (errno\ ==\ ENODEV\ ||\ errno\ ==\ EINVAL)\ \{}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ device\ ceased\ to\ exist,\ so\ we\ better\ close\ it.\ \ No\ need}}
+\DoxyCodeLine{00778\ \ \ \ \ \ \ \textcolor{comment}{//\ to\ worry\ about\ removing\ it\ from\ the\ InputDeviceManager,\ as\ it}}
+\DoxyCodeLine{00779\ \ \ \ \ \ \ \textcolor{comment}{//\ will\ get\ an\ inotify\ event\ sooner\ or\ later\ about\ this.}}
+\DoxyCodeLine{00780\ \ \ \ \ \ \ close(\_fd);}
+\DoxyCodeLine{00781\ \ \ \ \ \ \ \_fd\ =\ -\/1;}
+\DoxyCodeLine{00782\ \ \ \ \ \ \ \textcolor{comment}{//\_is\_connected\ =\ false;}}
+\DoxyCodeLine{00783\ \ \ \ \ \ \ errno\ =\ 0;}
+\DoxyCodeLine{00784\ }
+\DoxyCodeLine{00785\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00786\ \ \ \ \ \ \ device\_cat.error()\ <<\ \textcolor{stringliteral}{"{}read:\ "{}}\ <<\ strerror(errno)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00787\ \ \ \ \ \}}
+\DoxyCodeLine{00788\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00789\ \ \ \}}
+\DoxyCodeLine{00790\ }
+\DoxyCodeLine{00791\ \ \ \textcolor{keywordflow}{if}\ (n\_read\ ==\ 0)\ \{}
+\DoxyCodeLine{00792\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00793\ \ \ \}}
+\DoxyCodeLine{00794\ }
+\DoxyCodeLine{00795\ \ \ n\_read\ /=\ \textcolor{keyword}{sizeof}(\textcolor{keyword}{struct\ }input\_event);}
+\DoxyCodeLine{00796\ }
+\DoxyCodeLine{00797\ \ \ \textcolor{keywordtype}{int}\ rel\_x\ =\ 0;}
+\DoxyCodeLine{00798\ \ \ \textcolor{keywordtype}{int}\ rel\_y\ =\ 0;}
+\DoxyCodeLine{00799\ \ \ \textcolor{keywordtype}{double}\ time\ =\ ClockObject::get\_global\_clock()-\/>get\_frame\_time();}
+\DoxyCodeLine{00800\ \ \ \textcolor{keywordtype}{int}\ index;}
+\DoxyCodeLine{00801\ }
+\DoxyCodeLine{00802\ \ \ \textcolor{comment}{//\ It\ seems\ that\ some\ devices\ send\ a\ single\ EV\_SYN\ event\ when\ being}}
+\DoxyCodeLine{00803\ \ \ \textcolor{comment}{//\ unplugged.\ \ Boo.\ \ Ignore\ it.}}
+\DoxyCodeLine{00804\ \ \ \textcolor{keywordflow}{if}\ (n\_read\ ==\ 1\ \&\&\ events[0].code\ ==\ EV\_SYN)\ \{}
+\DoxyCodeLine{00805\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00806\ \ \ \}}
+\DoxyCodeLine{00807\ }
+\DoxyCodeLine{00808\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ n\_read;\ ++i)\ \{}
+\DoxyCodeLine{00809\ \ \ \ \ \textcolor{keywordtype}{int}\ code\ =\ events[i].code;}
+\DoxyCodeLine{00810\ }
+\DoxyCodeLine{00811\ \ \ \ \ \textcolor{keywordflow}{switch}\ (events[i].type)\ \{}
+\DoxyCodeLine{00812\ \ \ \ \ \textcolor{keywordflow}{case}\ EV\_SYN:}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00814\ }
+\DoxyCodeLine{00815\ \ \ \ \ \textcolor{keywordflow}{case}\ EV\_REL:}
+\DoxyCodeLine{00816\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (code\ ==\ REL\_X)\ rel\_x\ +=\ events[i].value;}
+\DoxyCodeLine{00817\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (code\ ==\ REL\_Y)\ rel\_y\ +=\ events[i].value;}
+\DoxyCodeLine{00818\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00819\ }
+\DoxyCodeLine{00820\ \ \ \ \ \textcolor{keywordflow}{case}\ EV\_ABS:}
+\DoxyCodeLine{00821\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (code\ ==\ \_dpad\_x\_axis)\ \{}
+\DoxyCodeLine{00822\ \ \ \ \ \ \ \ \ button\_changed(\_dpad\_left\_button,\ events[i].value\ <\ 0);}
+\DoxyCodeLine{00823\ \ \ \ \ \ \ \ \ button\_changed(\_dpad\_left\_button+1,\ events[i].value\ >\ 0);}
+\DoxyCodeLine{00824\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (code\ ==\ \_dpad\_y\_axis)\ \{}
+\DoxyCodeLine{00825\ \ \ \ \ \ \ \ \ button\_changed(\_dpad\_up\_button,\ events[i].value\ <\ 0);}
+\DoxyCodeLine{00826\ \ \ \ \ \ \ \ \ button\_changed(\_dpad\_up\_button+1,\ events[i].value\ >\ 0);}
+\DoxyCodeLine{00827\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00828\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (code\ >=\ 0\ \&\&\ (\textcolor{keywordtype}{size\_t})code\ <\ \_axis\_indices.size())\ \{}
+\DoxyCodeLine{00829\ \ \ \ \ \ \ \ \ index\ =\ \_axis\_indices[code];}
+\DoxyCodeLine{00830\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ >=\ 0)\ \{}
+\DoxyCodeLine{00831\ \ \ \ \ \ \ \ \ \ \ axis\_changed(index,\ events[i].value);}
+\DoxyCodeLine{00832\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00833\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00834\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00835\ \ \ \ \ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00836\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Ignoring\ EV\_ABS\ event\ with\ unknown\ code\ "{}}\ <<\ code\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00837\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00839\ }
+\DoxyCodeLine{00840\ \ \ \ \ \textcolor{keywordflow}{case}\ EV\_KEY:}
+\DoxyCodeLine{00841\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (code\ >=\ 0\ \&\&\ (\textcolor{keywordtype}{size\_t})code\ <\ \_button\_indices.size())\ \{}
+\DoxyCodeLine{00842\ \ \ \ \ \ \ \ \ index\ =\ \_button\_indices[code];}
+\DoxyCodeLine{00843\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ >=\ 0)\ \{}
+\DoxyCodeLine{00844\ \ \ \ \ \ \ \ \ \ \ button\_changed(index,\ events[i].value\ !=\ 0);}
+\DoxyCodeLine{00845\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00846\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (code\ ==\ \_ltrigger\_code)\ \{}
+\DoxyCodeLine{00847\ \ \ \ \ \ \ \ \ \ \ axis\_changed(\_ltrigger\_axis,\ events[i].value);}
+\DoxyCodeLine{00848\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (code\ ==\ \_rtrigger\_code)\ \{}
+\DoxyCodeLine{00849\ \ \ \ \ \ \ \ \ \ \ axis\_changed(\_ltrigger\_axis\ +\ 1,\ events[i].value);}
+\DoxyCodeLine{00850\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00851\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00852\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00853\ \ \ \ \ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00854\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Ignoring\ EV\_KEY\ event\ with\ unknown\ code\ "{}}\ <<\ code\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00855\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00856\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00857\ }
+\DoxyCodeLine{00858\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00859\ \ \ \ \ \ \ \textcolor{comment}{//cerr\ <<\ "{}event\ "{}\ <<\ events[i].type\ <<\ "{}\ -\/\ "{}\ <<\ events[i].code\ <<\ "{}\ -\/\ "{}\ <<\ events[i].value\ <<\ "{}\(\backslash\)n"{};}}
+\DoxyCodeLine{00860\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00861\ \ \ \ \ \}}
+\DoxyCodeLine{00862\ \ \ \}}
+\DoxyCodeLine{00863\ }
+\DoxyCodeLine{00864\ \ \ \textcolor{keywordflow}{if}\ (rel\_x\ !=\ 0\ ||\ rel\_y\ !=\ 0)\ \{}
+\DoxyCodeLine{00865\ \ \ \ \ pointer\_moved(0,\ rel\_x,\ rel\_y,\ time);}
+\DoxyCodeLine{00866\ \ \ \}}
+\DoxyCodeLine{00867\ }
+\DoxyCodeLine{00868\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00869\ \}}
+\DoxyCodeLine{00870\ }
+\DoxyCodeLine{00874\ \mbox{\hyperlink{classButtonHandle}{ButtonHandle}}\ EvdevInputDevice::}
+\DoxyCodeLine{00875\ map\_button(\textcolor{keywordtype}{int}\ code,\ DeviceClass\ device\_class,\ \textcolor{keywordtype}{int}\ quirks)\ \{}
+\DoxyCodeLine{00876\ \ \ \textcolor{keywordflow}{if}\ (code\ >=\ 0\ \&\&\ code\ <\ 0x80)\ \{}
+\DoxyCodeLine{00877\ \ \ \ \ \textcolor{comment}{//\ See\ linux/input.h\ for\ the\ source\ of\ this\ mapping.}}
+\DoxyCodeLine{00878\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classButtonHandle}{ButtonHandle}}\ keyboard\_map[]\ =\ \{}
+\DoxyCodeLine{00879\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00880\ \ \ \ \ \ \ KeyboardButton::escape(),}
+\DoxyCodeLine{00881\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'1'}),}
+\DoxyCodeLine{00882\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'2'}),}
+\DoxyCodeLine{00883\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'3'}),}
+\DoxyCodeLine{00884\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'4'}),}
+\DoxyCodeLine{00885\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'5'}),}
+\DoxyCodeLine{00886\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'6'}),}
+\DoxyCodeLine{00887\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'7'}),}
+\DoxyCodeLine{00888\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'8'}),}
+\DoxyCodeLine{00889\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'9'}),}
+\DoxyCodeLine{00890\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'0'}),}
+\DoxyCodeLine{00891\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'-\/'}),}
+\DoxyCodeLine{00892\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'='}),}
+\DoxyCodeLine{00893\ \ \ \ \ \ \ KeyboardButton::backspace(),}
+\DoxyCodeLine{00894\ \ \ \ \ \ \ KeyboardButton::tab(),}
+\DoxyCodeLine{00895\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'q'}),}
+\DoxyCodeLine{00896\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'w'}),}
+\DoxyCodeLine{00897\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'e'}),}
+\DoxyCodeLine{00898\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'r'}),}
+\DoxyCodeLine{00899\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'t'}),}
+\DoxyCodeLine{00900\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'y'}),}
+\DoxyCodeLine{00901\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'u'}),}
+\DoxyCodeLine{00902\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'i'}),}
+\DoxyCodeLine{00903\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'o'}),}
+\DoxyCodeLine{00904\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'p'}),}
+\DoxyCodeLine{00905\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'['}),}
+\DoxyCodeLine{00906\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{']'}),}
+\DoxyCodeLine{00907\ \ \ \ \ \ \ KeyboardButton::enter(),}
+\DoxyCodeLine{00908\ \ \ \ \ \ \ KeyboardButton::lcontrol(),}
+\DoxyCodeLine{00909\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'a'}),}
+\DoxyCodeLine{00910\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'s'}),}
+\DoxyCodeLine{00911\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'d'}),}
+\DoxyCodeLine{00912\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'f'}),}
+\DoxyCodeLine{00913\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'g'}),}
+\DoxyCodeLine{00914\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'h'}),}
+\DoxyCodeLine{00915\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'j'}),}
+\DoxyCodeLine{00916\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'k'}),}
+\DoxyCodeLine{00917\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'l'}),}
+\DoxyCodeLine{00918\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{';'}),}
+\DoxyCodeLine{00919\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'\(\backslash\)''}),}
+\DoxyCodeLine{00920\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'`'}),}
+\DoxyCodeLine{00921\ \ \ \ \ \ \ KeyboardButton::lshift(),}
+\DoxyCodeLine{00922\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'\(\backslash\)\(\backslash\)'}),}
+\DoxyCodeLine{00923\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'z'}),}
+\DoxyCodeLine{00924\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'x'}),}
+\DoxyCodeLine{00925\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'c'}),}
+\DoxyCodeLine{00926\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'v'}),}
+\DoxyCodeLine{00927\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'b'}),}
+\DoxyCodeLine{00928\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'n'}),}
+\DoxyCodeLine{00929\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'m'}),}
+\DoxyCodeLine{00930\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{','}),}
+\DoxyCodeLine{00931\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'.'}),}
+\DoxyCodeLine{00932\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'/'}),}
+\DoxyCodeLine{00933\ \ \ \ \ \ \ KeyboardButton::rshift(),}
+\DoxyCodeLine{00934\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'*'}),}
+\DoxyCodeLine{00935\ \ \ \ \ \ \ KeyboardButton::lalt(),}
+\DoxyCodeLine{00936\ \ \ \ \ \ \ KeyboardButton::space(),}
+\DoxyCodeLine{00937\ \ \ \ \ \ \ KeyboardButton::caps\_lock(),}
+\DoxyCodeLine{00938\ \ \ \ \ \ \ KeyboardButton::f1(),}
+\DoxyCodeLine{00939\ \ \ \ \ \ \ KeyboardButton::f2(),}
+\DoxyCodeLine{00940\ \ \ \ \ \ \ KeyboardButton::f3(),}
+\DoxyCodeLine{00941\ \ \ \ \ \ \ KeyboardButton::f4(),}
+\DoxyCodeLine{00942\ \ \ \ \ \ \ KeyboardButton::f5(),}
+\DoxyCodeLine{00943\ \ \ \ \ \ \ KeyboardButton::f6(),}
+\DoxyCodeLine{00944\ \ \ \ \ \ \ KeyboardButton::f7(),}
+\DoxyCodeLine{00945\ \ \ \ \ \ \ KeyboardButton::f8(),}
+\DoxyCodeLine{00946\ \ \ \ \ \ \ KeyboardButton::f9(),}
+\DoxyCodeLine{00947\ \ \ \ \ \ \ KeyboardButton::f10(),}
+\DoxyCodeLine{00948\ \ \ \ \ \ \ KeyboardButton::num\_lock(),}
+\DoxyCodeLine{00949\ \ \ \ \ \ \ KeyboardButton::scroll\_lock(),}
+\DoxyCodeLine{00950\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'7'}),}
+\DoxyCodeLine{00951\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'8'}),}
+\DoxyCodeLine{00952\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'9'}),}
+\DoxyCodeLine{00953\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'-\/'}),}
+\DoxyCodeLine{00954\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'4'}),}
+\DoxyCodeLine{00955\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'5'}),}
+\DoxyCodeLine{00956\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'6'}),}
+\DoxyCodeLine{00957\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'+'}),}
+\DoxyCodeLine{00958\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'1'}),}
+\DoxyCodeLine{00959\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'2'}),}
+\DoxyCodeLine{00960\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'3'}),}
+\DoxyCodeLine{00961\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'0'}),}
+\DoxyCodeLine{00962\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'.'}),}
+\DoxyCodeLine{00963\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00964\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00965\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'<'}),}
+\DoxyCodeLine{00966\ \ \ \ \ \ \ KeyboardButton::f11(),}
+\DoxyCodeLine{00967\ \ \ \ \ \ \ KeyboardButton::f12(),}
+\DoxyCodeLine{00968\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00969\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00970\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00971\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00972\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00973\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00974\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00975\ \ \ \ \ \ \ KeyboardButton::enter(),}
+\DoxyCodeLine{00976\ \ \ \ \ \ \ KeyboardButton::rcontrol(),}
+\DoxyCodeLine{00977\ \ \ \ \ \ \ KeyboardButton::ascii\_key(\textcolor{charliteral}{'/'}),}
+\DoxyCodeLine{00978\ \ \ \ \ \ \ KeyboardButton::print\_screen(),}
+\DoxyCodeLine{00979\ \ \ \ \ \ \ KeyboardButton::ralt(),}
+\DoxyCodeLine{00980\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00981\ \ \ \ \ \ \ KeyboardButton::home(),}
+\DoxyCodeLine{00982\ \ \ \ \ \ \ KeyboardButton::up(),}
+\DoxyCodeLine{00983\ \ \ \ \ \ \ KeyboardButton::page\_up(),}
+\DoxyCodeLine{00984\ \ \ \ \ \ \ KeyboardButton::left(),}
+\DoxyCodeLine{00985\ \ \ \ \ \ \ KeyboardButton::right(),}
+\DoxyCodeLine{00986\ \ \ \ \ \ \ KeyboardButton::end(),}
+\DoxyCodeLine{00987\ \ \ \ \ \ \ KeyboardButton::down(),}
+\DoxyCodeLine{00988\ \ \ \ \ \ \ KeyboardButton::page\_down(),}
+\DoxyCodeLine{00989\ \ \ \ \ \ \ KeyboardButton::insert(),}
+\DoxyCodeLine{00990\ \ \ \ \ \ \ KeyboardButton::del(),}
+\DoxyCodeLine{00991\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00992\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00993\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00994\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00995\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00996\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00997\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{00998\ \ \ \ \ \ \ KeyboardButton::pause(),}
+\DoxyCodeLine{00999\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{01000\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{01001\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{01002\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{01003\ \ \ \ \ \ \ ButtonHandle::none(),}
+\DoxyCodeLine{01004\ \ \ \ \ \ \ KeyboardButton::lmeta(),}
+\DoxyCodeLine{01005\ \ \ \ \ \ \ KeyboardButton::rmeta(),}
+\DoxyCodeLine{01006\ \ \ \ \ \ \ KeyboardButton::menu(),}
+\DoxyCodeLine{01007\ \ \ \ \ \};}
+\DoxyCodeLine{01008\ \ \ \ \ \textcolor{keywordflow}{return}\ keyboard\_map[code];}
+\DoxyCodeLine{01009\ }
+\DoxyCodeLine{01010\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (code\ ==\ KEY\_BACK)\ \{}
+\DoxyCodeLine{01011\ \ \ \ \ \textcolor{comment}{//\ Used\ by\ NVIDIA\ Shield\ Controller}}
+\DoxyCodeLine{01012\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::back();}
+\DoxyCodeLine{01013\ }
+\DoxyCodeLine{01014\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (code\ ==\ KEY\_SEARCH)\ \{}
+\DoxyCodeLine{01015\ \ \ \ \ \textcolor{comment}{//\ Used\ by\ NVIDIA\ Shield\ Controller}}
+\DoxyCodeLine{01016\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::guide();}
+\DoxyCodeLine{01017\ }
+\DoxyCodeLine{01018\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (code\ <\ 0x100)\ \{}
+\DoxyCodeLine{01019\ \ \ \ \ \textcolor{keywordflow}{return}\ ButtonHandle::none();}
+\DoxyCodeLine{01020\ }
+\DoxyCodeLine{01021\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((code\ \&\ 0xfff0)\ ==\ BTN\_MOUSE)\ \{}
+\DoxyCodeLine{01022\ \ \ \ \ \textcolor{comment}{//\ The\ number\ for\ these\ is\ reversed\ in\ Panda.}}
+\DoxyCodeLine{01023\ \ \ \ \ \textcolor{keywordflow}{if}\ (code\ ==\ BTN\_RIGHT)\ \{}
+\DoxyCodeLine{01024\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ MouseButton::three();}
+\DoxyCodeLine{01025\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (code\ ==\ BTN\_MIDDLE)\ \{}
+\DoxyCodeLine{01026\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ MouseButton::two();}
+\DoxyCodeLine{01027\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01028\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ MouseButton::button(code\ -\/\ BTN\_MOUSE);}
+\DoxyCodeLine{01029\ \ \ \ \ \}}
+\DoxyCodeLine{01030\ }
+\DoxyCodeLine{01031\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((code\ \&\ 0xfff0)\ ==\ BTN\_JOYSTICK)\ \{}
+\DoxyCodeLine{01032\ \ \ \ \ \textcolor{keywordflow}{if}\ (quirks\ \&\ QB\_steam\_controller)\ \{}
+\DoxyCodeLine{01033\ \ \ \ \ \ \ \textcolor{comment}{//\ BTN\_THUMB\ and\ BTN\_THUMB2\ detect\ touching\ the\ touchpads.}}
+\DoxyCodeLine{01034\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ ButtonHandle::none();}
+\DoxyCodeLine{01035\ }
+\DoxyCodeLine{01036\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (device\_class\ ==\ DeviceClass::GAMEPAD\ \&\&}
+\DoxyCodeLine{01037\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (quirks\ \&\ QB\_alt\_button\_mapping)\ !=\ 0)\ \{}
+\DoxyCodeLine{01038\ \ \ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classButtonHandle}{ButtonHandle}}\ mapping[]\ =\ \{}
+\DoxyCodeLine{01039\ \ \ \ \ \ \ \ \ GamepadButton::face\_y(),}
+\DoxyCodeLine{01040\ \ \ \ \ \ \ \ \ GamepadButton::face\_b(),}
+\DoxyCodeLine{01041\ \ \ \ \ \ \ \ \ GamepadButton::face\_a(),}
+\DoxyCodeLine{01042\ \ \ \ \ \ \ \ \ GamepadButton::face\_x(),}
+\DoxyCodeLine{01043\ \ \ \ \ \ \ \ \ GamepadButton::lshoulder(),}
+\DoxyCodeLine{01044\ \ \ \ \ \ \ \ \ GamepadButton::rshoulder(),}
+\DoxyCodeLine{01045\ \ \ \ \ \ \ \ \ GamepadButton::ltrigger(),}
+\DoxyCodeLine{01046\ \ \ \ \ \ \ \ \ GamepadButton::rtrigger(),}
+\DoxyCodeLine{01047\ \ \ \ \ \ \ \ \ GamepadButton::back(),}
+\DoxyCodeLine{01048\ \ \ \ \ \ \ \ \ GamepadButton::start(),}
+\DoxyCodeLine{01049\ \ \ \ \ \ \ \ \ GamepadButton::lstick(),}
+\DoxyCodeLine{01050\ \ \ \ \ \ \ \ \ GamepadButton::rstick(),}
+\DoxyCodeLine{01051\ \ \ \ \ \ \ \};}
+\DoxyCodeLine{01052\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((code\ \&\ 0xf)\ <\ 12)\ \{}
+\DoxyCodeLine{01053\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ mapping[code\ \&\ 0xf];}
+\DoxyCodeLine{01054\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01055\ }
+\DoxyCodeLine{01056\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (device\_class\ ==\ DeviceClass::GAMEPAD)\ \{}
+\DoxyCodeLine{01057\ \ \ \ \ \ \ \textcolor{comment}{//\ Based\ on\ "{}Jess\ Tech\ Colour\ Rumble\ Pad"{}}}
+\DoxyCodeLine{01058\ \ \ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classButtonHandle}{ButtonHandle}}\ mapping[]\ =\ \{}
+\DoxyCodeLine{01059\ \ \ \ \ \ \ \ \ GamepadButton::face\_x(),}
+\DoxyCodeLine{01060\ \ \ \ \ \ \ \ \ GamepadButton::face\_y(),}
+\DoxyCodeLine{01061\ \ \ \ \ \ \ \ \ GamepadButton::face\_a(),}
+\DoxyCodeLine{01062\ \ \ \ \ \ \ \ \ GamepadButton::face\_b(),}
+\DoxyCodeLine{01063\ \ \ \ \ \ \ \ \ GamepadButton::lshoulder(),}
+\DoxyCodeLine{01064\ \ \ \ \ \ \ \ \ GamepadButton::ltrigger(),}
+\DoxyCodeLine{01065\ \ \ \ \ \ \ \ \ GamepadButton::rshoulder(),}
+\DoxyCodeLine{01066\ \ \ \ \ \ \ \ \ GamepadButton::rtrigger(),}
+\DoxyCodeLine{01067\ \ \ \ \ \ \ \ \ GamepadButton::back(),}
+\DoxyCodeLine{01068\ \ \ \ \ \ \ \ \ GamepadButton::start(),}
+\DoxyCodeLine{01069\ \ \ \ \ \ \ \ \ GamepadButton::lstick(),}
+\DoxyCodeLine{01070\ \ \ \ \ \ \ \ \ GamepadButton::rstick(),}
+\DoxyCodeLine{01071\ \ \ \ \ \ \ \};}
+\DoxyCodeLine{01072\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((code\ \&\ 0xf)\ <\ 12)\ \{}
+\DoxyCodeLine{01073\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ mapping[code\ \&\ 0xf];}
+\DoxyCodeLine{01074\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01075\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01076\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::joystick(code\ \&\ 0xf);}
+\DoxyCodeLine{01077\ \ \ \ \ \}}
+\DoxyCodeLine{01078\ \ \ \}}
+\DoxyCodeLine{01079\ }
+\DoxyCodeLine{01080\ \ \ \textcolor{keywordflow}{switch}\ (code)\ \{}
+\DoxyCodeLine{01081\ \ \ \textcolor{keywordflow}{case}\ BTN\_A:}
+\DoxyCodeLine{01082\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::face\_a();}
+\DoxyCodeLine{01083\ }
+\DoxyCodeLine{01084\ \ \ \textcolor{keywordflow}{case}\ BTN\_B:}
+\DoxyCodeLine{01085\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::face\_b();}
+\DoxyCodeLine{01086\ }
+\DoxyCodeLine{01087\ \ \ \textcolor{keywordflow}{case}\ BTN\_C:}
+\DoxyCodeLine{01088\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::face\_c();}
+\DoxyCodeLine{01089\ }
+\DoxyCodeLine{01090\ \ \ \textcolor{keywordflow}{case}\ BTN\_X:}
+\DoxyCodeLine{01091\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::face\_x();}
+\DoxyCodeLine{01092\ }
+\DoxyCodeLine{01093\ \ \ \textcolor{keywordflow}{case}\ BTN\_Y:}
+\DoxyCodeLine{01094\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::face\_y();}
+\DoxyCodeLine{01095\ }
+\DoxyCodeLine{01096\ \ \ \textcolor{keywordflow}{case}\ BTN\_Z:}
+\DoxyCodeLine{01097\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::face\_z();}
+\DoxyCodeLine{01098\ }
+\DoxyCodeLine{01099\ \ \ \textcolor{keywordflow}{case}\ BTN\_TL:}
+\DoxyCodeLine{01100\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::lshoulder();}
+\DoxyCodeLine{01101\ }
+\DoxyCodeLine{01102\ \ \ \textcolor{keywordflow}{case}\ BTN\_TR:}
+\DoxyCodeLine{01103\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::rshoulder();}
+\DoxyCodeLine{01104\ }
+\DoxyCodeLine{01105\ \ \ \textcolor{keywordflow}{case}\ BTN\_TL2:}
+\DoxyCodeLine{01106\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::ltrigger();}
+\DoxyCodeLine{01107\ }
+\DoxyCodeLine{01108\ \ \ \textcolor{keywordflow}{case}\ BTN\_TR2:}
+\DoxyCodeLine{01109\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::rtrigger();}
+\DoxyCodeLine{01110\ }
+\DoxyCodeLine{01111\ \ \ \textcolor{keywordflow}{case}\ BTN\_1:}
+\DoxyCodeLine{01112\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::face\_1();}
+\DoxyCodeLine{01113\ }
+\DoxyCodeLine{01114\ \ \ \textcolor{keywordflow}{case}\ BTN\_2:}
+\DoxyCodeLine{01115\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::face\_2();}
+\DoxyCodeLine{01116\ }
+\DoxyCodeLine{01117\ \ \ \textcolor{keywordflow}{case}\ BTN\_SELECT:}
+\DoxyCodeLine{01118\ \ \ \textcolor{keywordflow}{case}\ KEY\_PREVIOUS:}
+\DoxyCodeLine{01119\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::back();}
+\DoxyCodeLine{01120\ }
+\DoxyCodeLine{01121\ \ \ \textcolor{keywordflow}{case}\ BTN\_START:}
+\DoxyCodeLine{01122\ \ \ \textcolor{keywordflow}{case}\ KEY\_NEXT:}
+\DoxyCodeLine{01123\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::start();}
+\DoxyCodeLine{01124\ }
+\DoxyCodeLine{01125\ \ \ \textcolor{keywordflow}{case}\ BTN\_MODE:}
+\DoxyCodeLine{01126\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::guide();}
+\DoxyCodeLine{01127\ }
+\DoxyCodeLine{01128\ \ \ \textcolor{keywordflow}{case}\ BTN\_THUMBL:}
+\DoxyCodeLine{01129\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::lstick();}
+\DoxyCodeLine{01130\ }
+\DoxyCodeLine{01131\ \ \ \textcolor{keywordflow}{case}\ BTN\_THUMBR:}
+\DoxyCodeLine{01132\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::rstick();}
+\DoxyCodeLine{01133\ }
+\DoxyCodeLine{01134\ \ \ \textcolor{keywordflow}{case}\ BTN\_DPAD\_LEFT:}
+\DoxyCodeLine{01135\ \ \ \textcolor{keywordflow}{case}\ BTN\_TRIGGER\_HAPPY1:}
+\DoxyCodeLine{01136\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::dpad\_left();}
+\DoxyCodeLine{01137\ }
+\DoxyCodeLine{01138\ \ \ \textcolor{keywordflow}{case}\ BTN\_DPAD\_RIGHT:}
+\DoxyCodeLine{01139\ \ \ \textcolor{keywordflow}{case}\ BTN\_TRIGGER\_HAPPY2:}
+\DoxyCodeLine{01140\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::dpad\_right();}
+\DoxyCodeLine{01141\ }
+\DoxyCodeLine{01142\ \ \ \textcolor{keywordflow}{case}\ BTN\_DPAD\_UP:}
+\DoxyCodeLine{01143\ \ \ \textcolor{keywordflow}{case}\ BTN\_TRIGGER\_HAPPY3:}
+\DoxyCodeLine{01144\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::dpad\_up();}
+\DoxyCodeLine{01145\ }
+\DoxyCodeLine{01146\ \ \ \textcolor{keywordflow}{case}\ BTN\_DPAD\_DOWN:}
+\DoxyCodeLine{01147\ \ \ \textcolor{keywordflow}{case}\ BTN\_TRIGGER\_HAPPY4:}
+\DoxyCodeLine{01148\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::dpad\_down();}
+\DoxyCodeLine{01149\ }
+\DoxyCodeLine{01150\ \ \ \textcolor{comment}{//\ The\ next\ two\ are\ for\ the\ Steam\ Controller's\ grip\ buttons.}}
+\DoxyCodeLine{01151\ \ \ \textcolor{keywordflow}{case}\ BTN\_GEAR\_DOWN:}
+\DoxyCodeLine{01152\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::lgrip();}
+\DoxyCodeLine{01153\ }
+\DoxyCodeLine{01154\ \ \ \textcolor{keywordflow}{case}\ BTN\_GEAR\_UP:}
+\DoxyCodeLine{01155\ \ \ \ \ \textcolor{keywordflow}{return}\ GamepadButton::rgrip();}
+\DoxyCodeLine{01156\ }
+\DoxyCodeLine{01157\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{01158\ \ \ \ \ \textcolor{keywordflow}{return}\ ButtonHandle::none();}
+\DoxyCodeLine{01159\ \ \ \}}
+\DoxyCodeLine{01160\ \}}
+\DoxyCodeLine{01161\ }
+\DoxyCodeLine{01162\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

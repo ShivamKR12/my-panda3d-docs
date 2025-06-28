@@ -1,0 +1,411 @@
+\doxysection{graphics\+Pipe\+Selection.\+cxx}
+\hypertarget{graphicsPipeSelection_8cxx_source}{}\label{graphicsPipeSelection_8cxx_source}\index{panda/src/display/graphicsPipeSelection.cxx@{panda/src/display/graphicsPipeSelection.cxx}}
+\mbox{\hyperlink{graphicsPipeSelection_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{graphicsPipeSelection_8h}{graphicsPipeSelection.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightMutexHolder_8h}{lightMutexHolder.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{string__utils_8h}{string\_utils.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{filename_8h}{filename.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{load__dso_8h}{load\_dso.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__display_8h}{config\_display.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{typeRegistry_8h}{typeRegistry.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__putil_8h}{config\_putil.h}}"{}}}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \mbox{\hyperlink{classGraphicsPipeSelection}{GraphicsPipeSelection}}\ *GraphicsPipeSelection::\_global\_ptr\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00032\ GraphicsPipeSelection::}
+\DoxyCodeLine{00033\ GraphicsPipeSelection()\ :\ \_lock(\textcolor{stringliteral}{"{}GraphicsPipeSelection"{}})\ \{}
+\DoxyCodeLine{00034\ \ \ \textcolor{comment}{//\ We\ declare\ these\ variables\ here\ instead\ of\ in\ config\_display,\ in\ case}}
+\DoxyCodeLine{00035\ \ \ \textcolor{comment}{//\ this\ constructor\ is\ running\ at\ static\ init\ time.}}
+\DoxyCodeLine{00036\ \ \ \mbox{\hyperlink{classConfigVariableString}{ConfigVariableString}}\ load\_display}
+\DoxyCodeLine{00037\ \ \ \ \ (\textcolor{stringliteral}{"{}load-\/display"{}},\ \textcolor{stringliteral}{"{}*"{}},}
+\DoxyCodeLine{00038\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}Specify\ the\ name\ of\ the\ default\ graphics\ display\ library\ or\ "{}}}
+\DoxyCodeLine{00039\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}GraphicsPipe\ to\ load.\ \ It\ is\ the\ name\ of\ a\ shared\ library\ (or\ *\ for\ "{}}}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}all\ libraries\ named\ in\ aux-\/display),\ optionally\ followed\ by\ the\ "{}}}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}name\ of\ the\ particular\ GraphicsPipe\ class\ to\ create."{}}));}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \ \ \mbox{\hyperlink{classConfigVariableList}{ConfigVariableList}}\ aux\_display}
+\DoxyCodeLine{00044\ \ \ \ \ (\textcolor{stringliteral}{"{}aux-\/display"{}},}
+\DoxyCodeLine{00045\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}Names\ each\ of\ the\ graphics\ display\ libraries\ that\ are\ available\ on\ "{}}}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}a\ particular\ platform.\ \ This\ variable\ may\ be\ repeated\ several\ "{}}}
+\DoxyCodeLine{00047\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}times.\ \ These\ libraries\ will\ be\ tried\ one\ at\ a\ time\ if\ the\ library\ "{}}}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}specified\ by\ load\_display\ cannot\ be\ loaded."{}}));}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \ \ \_default\_display\_module\ =\ load\_display.get\_word(0);}
+\DoxyCodeLine{00051\ \ \ \_default\_pipe\_name\ =\ load\_display.get\_word(1);}
+\DoxyCodeLine{00052\ \ \ \_default\_pipe\_type\ =\ TypeHandle::none();}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \ \ \textcolor{keywordflow}{if}\ (\_default\_display\_module\ ==\ \textcolor{stringliteral}{"{}*"{}})\ \{}
+\DoxyCodeLine{00055\ \ \ \ \ \textcolor{comment}{//\ '*'\ or\ empty\ string\ is\ the\ key\ for\ all\ display\ modules.}}
+\DoxyCodeLine{00056\ \ \ \ \ \_default\_display\_module\ =\ string();}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00058\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!\_default\_display\_module.empty())\ \{}
+\DoxyCodeLine{00059\ \ \ \ \ \_display\_modules.push\_back(\_default\_display\_module);}
+\DoxyCodeLine{00060\ \ \ \}}
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00062\ \ \ \textcolor{comment}{//\ Also\ get\ the\ set\ of\ modules\ named\ in\ the\ various\ aux-\/display\ Config}}
+\DoxyCodeLine{00063\ \ \ \textcolor{comment}{//\ variables.\ \ We'll\ want\ to\ know\ this\ when\ we\ call\ load\_modules()\ later.}}
+\DoxyCodeLine{00064\ \ \ \textcolor{keywordtype}{size\_t}\ num\_aux\ =\ aux\_display.get\_num\_unique\_values();}
+\DoxyCodeLine{00065\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ num\_aux;\ ++i)\ \{}
+\DoxyCodeLine{00066\ \ \ \ \ \textcolor{keywordtype}{string}\ name\ =\ aux\_display.get\_unique\_value(i);}
+\DoxyCodeLine{00067\ \ \ \ \ \textcolor{keywordflow}{if}\ (name\ !=\ \_default\_display\_module)\ \{}
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \_display\_modules.push\_back(name);}
+\DoxyCodeLine{00069\ \ \ \ \ \}}
+\DoxyCodeLine{00070\ \ \ \}}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00072\ \ \ \_default\_module\_loaded\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00073\ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00078\ GraphicsPipeSelection::}
+\DoxyCodeLine{00079\ \string~GraphicsPipeSelection()\ \{}
+\DoxyCodeLine{00080\ \}}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00086\ \textcolor{keywordtype}{int}\ GraphicsPipeSelection::}
+\DoxyCodeLine{00087\ get\_num\_pipe\_types()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00088\ \ \ load\_default\_module();}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00090\ \ \ \textcolor{keywordtype}{int}\ result;}
+\DoxyCodeLine{00091\ \ \ \{}
+\DoxyCodeLine{00092\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00093\ \ \ \ \ result\ =\ \_pipe\_types.size();}
+\DoxyCodeLine{00094\ \ \ \}}
+\DoxyCodeLine{00095\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00096\ \}}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00101\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ \mbox{\hyperlink{classGraphicsPipeSelection_a7436ee25909081011bf014a02d69542d}{GraphicsPipeSelection::}}}
+\DoxyCodeLine{00102\ \mbox{\hyperlink{classGraphicsPipeSelection_a7436ee25909081011bf014a02d69542d}{get\_pipe\_type}}(\textcolor{keywordtype}{int}\ n)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00103\ \ \ load\_default\_module();}
+\DoxyCodeLine{00104\ }
+\DoxyCodeLine{00105\ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ result;}
+\DoxyCodeLine{00106\ \ \ \{}
+\DoxyCodeLine{00107\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00108\ \ \ \ \ \textcolor{keywordflow}{if}\ (n\ >=\ 0\ \&\&\ n\ <\ (\textcolor{keywordtype}{int})\_pipe\_types.size())\ \{}
+\DoxyCodeLine{00109\ \ \ \ \ \ \ result\ =\ \_pipe\_types[n].\_type;}
+\DoxyCodeLine{00110\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ result\ =\ TypeHandle::none();}
+\DoxyCodeLine{00112\ \ \ \ \ \}}
+\DoxyCodeLine{00113\ \ \ \}}
+\DoxyCodeLine{00114\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00115\ \}}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00121\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGraphicsPipeSelection_ab2d1dc325df30b21e1c3342123f688cb}{GraphicsPipeSelection::}}}
+\DoxyCodeLine{00122\ \mbox{\hyperlink{classGraphicsPipeSelection_ab2d1dc325df30b21e1c3342123f688cb}{print\_pipe\_types}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00123\ \ \ load\_default\_module();}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00126\ \ \ nout\ <<\ \textcolor{stringliteral}{"{}Known\ pipe\ types:"{}}\ <<\ std::endl;}
+\DoxyCodeLine{00127\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ PipeType\ \&pipe\_type\ :\ \_pipe\_types)\ \{}
+\DoxyCodeLine{00128\ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}\ \ "{}}\ <<\ pipe\_type.\_type;}
+\DoxyCodeLine{00129\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_pipe\_types.size()\ >\ 1\ \&\&\ pipe\_type.\_type\ ==\ \_default\_pipe\_type)\ \{}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}\ (default)"{}};}
+\DoxyCodeLine{00131\ \ \ \ \ \}}
+\DoxyCodeLine{00132\ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00133\ \ \ \}}
+\DoxyCodeLine{00134\ \ \ \textcolor{keywordflow}{if}\ (\_display\_modules.empty())\ \{}
+\DoxyCodeLine{00135\ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}(all\ display\ modules\ loaded.)\(\backslash\)n"{}};}
+\DoxyCodeLine{00136\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00137\ \ \ \ \ nout\ <<\ \textcolor{stringliteral}{"{}("{}}\ <<\ \_display\_modules.size()}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ aux\ display\ modules\ not\ yet\ loaded.)\(\backslash\)n"{}};}
+\DoxyCodeLine{00139\ \ \ \}}
+\DoxyCodeLine{00140\ \}}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00150\ PT(\mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}})\ GraphicsPipeSelection::}
+\DoxyCodeLine{00151\ make\_pipe(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&type\_name,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&module\_name)\ \{}
+\DoxyCodeLine{00152\ \ \ \mbox{\hyperlink{classTypeRegistry}{TypeRegistry}}\ *type\_reg\ =\ TypeRegistry::ptr();}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00154\ \ \ \textcolor{comment}{//\ First,\ see\ if\ the\ type\ is\ already\ available.}}
+\DoxyCodeLine{00155\ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type\ =\ type\_reg-\/>\mbox{\hyperlink{classTypeRegistry_ace84a2c2729c7c85c6456ba84b6f46d3}{find\_type}}(type\_name);}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00157\ \ \ \textcolor{comment}{//\ If\ it\ isn't,\ try\ the\ named\ module.}}
+\DoxyCodeLine{00158\ \ \ \textcolor{keywordflow}{if}\ (type\ ==\ TypeHandle::none())\ \{}
+\DoxyCodeLine{00159\ \ \ \ \ \textcolor{keywordflow}{if}\ (!module\_name.empty())\ \{}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ load\_named\_module(module\_name);}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ type\ =\ type\_reg-\/>\mbox{\hyperlink{classTypeRegistry_ace84a2c2729c7c85c6456ba84b6f46d3}{find\_type}}(type\_name);}
+\DoxyCodeLine{00162\ \ \ \ \ \}}
+\DoxyCodeLine{00163\ \ \ \}}
+\DoxyCodeLine{00164\ }
+\DoxyCodeLine{00165\ \ \ \textcolor{comment}{//\ If\ that\ didn't\ help,\ try\ the\ default\ module.}}
+\DoxyCodeLine{00166\ \ \ \textcolor{keywordflow}{if}\ (type\ ==\ TypeHandle::none())\ \{}
+\DoxyCodeLine{00167\ \ \ \ \ load\_default\_module();}
+\DoxyCodeLine{00168\ \ \ \ \ type\ =\ type\_reg-\/>\mbox{\hyperlink{classTypeRegistry_ace84a2c2729c7c85c6456ba84b6f46d3}{find\_type}}(type\_name);}
+\DoxyCodeLine{00169\ \ \ \}}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00171\ \ \ \textcolor{comment}{//\ Still\ not\ enough,\ try\ all\ modules.}}
+\DoxyCodeLine{00172\ \ \ \textcolor{keywordflow}{if}\ (type\ ==\ TypeHandle::none())\ \{}
+\DoxyCodeLine{00173\ \ \ \ \ \mbox{\hyperlink{classGraphicsPipeSelection_ab6da370bc5b53d8ced220af958c0bad8}{load\_aux\_modules}}();}
+\DoxyCodeLine{00174\ \ \ \ \ type\ =\ type\_reg-\/>\mbox{\hyperlink{classTypeRegistry_ace84a2c2729c7c85c6456ba84b6f46d3}{find\_type}}(type\_name);}
+\DoxyCodeLine{00175\ \ \ \}}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00177\ \ \ \textcolor{keywordflow}{if}\ (type\ ==\ TypeHandle::none())\ \{}
+\DoxyCodeLine{00178\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00179\ \ \ \}}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00181\ \ \ \textcolor{keywordflow}{return}\ make\_pipe(type);}
+\DoxyCodeLine{00182\ \}}
+\DoxyCodeLine{00183\ }
+\DoxyCodeLine{00189\ PT(\mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}})\ GraphicsPipeSelection::}
+\DoxyCodeLine{00190\ make\_pipe(\mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type)\ \{}
+\DoxyCodeLine{00191\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00193\ \ \ \textcolor{comment}{//\ First,\ look\ for\ an\ exact\ match\ of\ the\ requested\ type.}}
+\DoxyCodeLine{00194\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ PipeType\ \&ptype\ :\ \_pipe\_types)\ \{}
+\DoxyCodeLine{00195\ \ \ \ \ \textcolor{keywordflow}{if}\ (ptype.\_type\ ==\ type)\ \{}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \textcolor{comment}{//\ Here's\ an\ exact\ match.}}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}})\ pipe\ =\ (*ptype.\_constructor)();}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pipe\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ pipe;}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00201\ \ \ \ \ \}}
+\DoxyCodeLine{00202\ \ \ \}}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00204\ \ \ \textcolor{comment}{//\ Now\ look\ for\ a\ more-\/specific\ type.}}
+\DoxyCodeLine{00205\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ PipeType\ \&ptype\ :\ \_pipe\_types)\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \textcolor{keywordflow}{if}\ (ptype.\_type.is\_derived\_from(type))\ \{}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \textcolor{comment}{//\ Here's\ an\ approximate\ match.}}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}})\ pipe\ =\ (*ptype.\_constructor)();}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pipe\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ pipe;}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00212\ \ \ \ \ \}}
+\DoxyCodeLine{00213\ \ \ \}}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \textcolor{comment}{//\ Couldn't\ find\ any\ match;\ load\ the\ default\ module\ and\ try\ again.}}
+\DoxyCodeLine{00216\ \ \ load\_default\_module();}
+\DoxyCodeLine{00217\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ PipeType\ \&ptype\ :\ \_pipe\_types)\ \{}
+\DoxyCodeLine{00218\ \ \ \ \ \textcolor{keywordflow}{if}\ (ptype.\_type.is\_derived\_from(type))\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \textcolor{comment}{//\ Here's\ an\ approximate\ match.}}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}})\ pipe\ =\ (*ptype.\_constructor)();}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pipe\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ pipe;}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00224\ \ \ \ \ \}}
+\DoxyCodeLine{00225\ \ \ \}}
+\DoxyCodeLine{00226\ }
+\DoxyCodeLine{00227\ \ \ \textcolor{comment}{//\ Couldn't\ find\ a\ matching\ pipe\ type.}}
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00229\ \}}
+\DoxyCodeLine{00230\ }
+\DoxyCodeLine{00236\ PT(\mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}})\ GraphicsPipeSelection::}
+\DoxyCodeLine{00237\ make\_module\_pipe(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&module\_name)\ \{}
+\DoxyCodeLine{00238\ \ \ \textcolor{keywordflow}{if}\ (display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00239\ \ \ \ \ display\_cat.debug()}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}make\_module\_pipe("{}}\ <<\ module\_name\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00241\ \ \ \}}
+\DoxyCodeLine{00242\ }
+\DoxyCodeLine{00243\ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ pipe\_type\ =\ load\_named\_module(module\_name);}
+\DoxyCodeLine{00244\ \ \ \textcolor{keywordflow}{if}\ (pipe\_type\ ==\ TypeHandle::none())\ \{}
+\DoxyCodeLine{00245\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00246\ \ \ \}}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \ \ \textcolor{keywordflow}{return}\ make\_pipe(pipe\_type);}
+\DoxyCodeLine{00249\ \}}
+\DoxyCodeLine{00250\ }
+\DoxyCodeLine{00256\ PT(\mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}})\ GraphicsPipeSelection::}
+\DoxyCodeLine{00257\ make\_default\_pipe()\ \{}
+\DoxyCodeLine{00258\ \ \ load\_default\_module();}
+\DoxyCodeLine{00259\ }
+\DoxyCodeLine{00260\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \ \ \textcolor{keywordflow}{if}\ (!\_default\_pipe\_name.empty())\ \{}
+\DoxyCodeLine{00263\ \ \ \ \ \textcolor{comment}{//\ First,\ look\ for\ an\ exact\ match\ of\ the\ default\ type\ name\ from\ the}}
+\DoxyCodeLine{00264\ \ \ \ \ \textcolor{comment}{//\ Config.prc\ file\ (excepting\ case\ and\ hyphen\ /\ underscore).}}
+\DoxyCodeLine{00265\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ PipeType\ \&ptype\ :\ \_pipe\_types)\ \{}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cmp\_nocase\_uh(ptype.\_type.get\_name(),\ \_default\_pipe\_name)\ ==\ 0)\ \{}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Here's\ an\ exact\ match.}}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}})\ pipe\ =\ (*ptype.\_constructor)();}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pipe\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ pipe;}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00273\ \ \ \ \ \}}
+\DoxyCodeLine{00274\ }
+\DoxyCodeLine{00275\ \ \ \ \ \textcolor{comment}{//\ No\ match;\ look\ for\ a\ substring\ match.}}
+\DoxyCodeLine{00276\ \ \ \ \ \textcolor{keywordtype}{string}\ preferred\_name\ =\ \mbox{\hyperlink{string__utils_8cxx_a8436b3aed06d4a4e245ab303cdf9637e}{downcase}}(\_default\_pipe\_name);}
+\DoxyCodeLine{00277\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ PipeType\ \&ptype\ :\ \_pipe\_types)\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ ptype\_name\ =\ \mbox{\hyperlink{string__utils_8cxx_a8436b3aed06d4a4e245ab303cdf9637e}{downcase}}(ptype.\_type.get\_name());}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ptype\_name.find(preferred\_name)\ !=\ string::npos)\ \{}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Here's\ a\ substring\ match.}}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}})\ pipe\ =\ (*ptype.\_constructor)();}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pipe\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ pipe;}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00286\ \ \ \ \ \}}
+\DoxyCodeLine{00287\ \ \ \}}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ \textcolor{comment}{//\ Look\ for\ the\ preferred\ type\ of\ the\ default\ display\ module.}}
+\DoxyCodeLine{00290\ \ \ \textcolor{keywordflow}{if}\ (\_default\_pipe\_type\ !=\ TypeHandle::none())\ \{}
+\DoxyCodeLine{00291\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ PipeType\ \&ptype\ :\ \_pipe\_types)\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ptype.\_type\ ==\ \_default\_pipe\_type)\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}})\ pipe\ =\ (*ptype.\_constructor)();}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pipe\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ pipe;}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00298\ \ \ \ \ \}}
+\DoxyCodeLine{00299\ \ \ \}}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00301\ \ \ \textcolor{comment}{//\ Couldn't\ find\ a\ matching\ pipe\ type;\ choose\ the\ first\ one\ on\ the\ list.}}
+\DoxyCodeLine{00302\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ PipeType\ \&ptype\ :\ \_pipe\_types)\ \{}
+\DoxyCodeLine{00303\ \ \ \ \ PT(\mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}})\ pipe\ =\ (*ptype.\_constructor)();}
+\DoxyCodeLine{00304\ \ \ \ \ \textcolor{keywordflow}{if}\ (pipe\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ pipe;}
+\DoxyCodeLine{00306\ \ \ \ \ \}}
+\DoxyCodeLine{00307\ \ \ \}}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00309\ \ \ \textcolor{comment}{//\ Nothing.\ \ Probably\ the\ list\ was\ empty.}}
+\DoxyCodeLine{00310\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00311\ \}}
+\DoxyCodeLine{00312\ }
+\DoxyCodeLine{00317\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classGraphicsPipeSelection_ab6da370bc5b53d8ced220af958c0bad8}{GraphicsPipeSelection::}}}
+\DoxyCodeLine{00318\ \mbox{\hyperlink{classGraphicsPipeSelection_ab6da370bc5b53d8ced220af958c0bad8}{load\_aux\_modules}}()\ \{}
+\DoxyCodeLine{00319\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&module\ :\ \_display\_modules)\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ load\_named\_module(module);}
+\DoxyCodeLine{00321\ \ \ \}}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00323\ \ \ \_display\_modules.clear();}
+\DoxyCodeLine{00324\ \ \ \_default\_module\_loaded\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00325\ \}}
+\DoxyCodeLine{00326\ }
+\DoxyCodeLine{00333\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classGraphicsPipeSelection_adbcc9163ed47c1bb26f1e739b980d51e}{GraphicsPipeSelection::}}}
+\DoxyCodeLine{00334\ \mbox{\hyperlink{classGraphicsPipeSelection_adbcc9163ed47c1bb26f1e739b980d51e}{add\_pipe\_type}}(\mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type,\ PipeConstructorFunc\ *func)\ \{}
+\DoxyCodeLine{00335\ \ \ nassertr(func\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00336\ }
+\DoxyCodeLine{00337\ \ \ \textcolor{keywordflow}{if}\ (!type.is\_derived\_from(GraphicsPipe::get\_class\_type()))\ \{}
+\DoxyCodeLine{00338\ \ \ \ \ display\_cat-\/>warning()}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Attempt\ to\ register\ "{}}\ <<\ type\ <<\ \textcolor{stringliteral}{"{}\ as\ a\ GraphicsPipe\ type.\(\backslash\)n"{}};}
+\DoxyCodeLine{00340\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00341\ \ \ \}}
+\DoxyCodeLine{00342\ }
+\DoxyCodeLine{00343\ \ \ \textcolor{comment}{//\ First,\ make\ sure\ we\ don't\ already\ have\ a\ GraphicsPipe\ of\ this\ type.}}
+\DoxyCodeLine{00344\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00345\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ PipeType\ \&ptype\ :\ \_pipe\_types)\ \{}
+\DoxyCodeLine{00346\ \ \ \ \ \textcolor{keywordflow}{if}\ (ptype.\_type\ ==\ type)\ \{}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ display\_cat-\/>warning()}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Attempt\ to\ register\ GraphicsPipe\ type\ "{}}\ <<\ type}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ more\ than\ once.\(\backslash\)n"{}};}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00351\ \ \ \ \ \}}
+\DoxyCodeLine{00352\ \ \ \}}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ \textcolor{keywordflow}{if}\ (display\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ display\_cat-\/>debug()}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Registering\ "{}}\ <<\ type\ <<\ \textcolor{stringliteral}{"{}\ as\ a\ GraphicsPipe\ type.\(\backslash\)n"{}};}
+\DoxyCodeLine{00357\ \ \ \}}
+\DoxyCodeLine{00358\ }
+\DoxyCodeLine{00359\ \ \ \textcolor{comment}{//\ Ok,\ now\ add\ a\ new\ entry.}}
+\DoxyCodeLine{00360\ \ \ \_pipe\_types.push\_back(PipeType(type,\ func));}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00363\ \}}
+\DoxyCodeLine{00364\ }
+\DoxyCodeLine{00365\ }
+\DoxyCodeLine{00371\ \textcolor{keywordtype}{void}\ GraphicsPipeSelection::}
+\DoxyCodeLine{00372\ do\_load\_default\_module()\ \{}
+\DoxyCodeLine{00373\ \ \ \textcolor{keywordflow}{if}\ (\_default\_display\_module.empty())\ \{}
+\DoxyCodeLine{00374\ \ \ \ \ \mbox{\hyperlink{classGraphicsPipeSelection_ab6da370bc5b53d8ced220af958c0bad8}{load\_aux\_modules}}();}
+\DoxyCodeLine{00375\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00376\ \ \ \}}
+\DoxyCodeLine{00377\ }
+\DoxyCodeLine{00378\ \ \ \_default\_pipe\_type\ =\ load\_named\_module(\_default\_display\_module);}
+\DoxyCodeLine{00379\ }
+\DoxyCodeLine{00380\ \ \ DisplayModules::iterator\ di\ =}
+\DoxyCodeLine{00381\ \ \ \ \ std::find(\_display\_modules.begin(),\ \_display\_modules.end(),}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_default\_display\_module);}
+\DoxyCodeLine{00383\ \ \ \textcolor{keywordflow}{if}\ (di\ !=\ \_display\_modules.end())\ \{}
+\DoxyCodeLine{00384\ \ \ \ \ \_display\_modules.erase(di);}
+\DoxyCodeLine{00385\ \ \ \}}
+\DoxyCodeLine{00386\ }
+\DoxyCodeLine{00387\ \ \ \_default\_module\_loaded\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00388\ }
+\DoxyCodeLine{00389\ \ \ \textcolor{keywordflow}{if}\ (\_pipe\_types.empty())\ \{}
+\DoxyCodeLine{00390\ \ \ \ \ \textcolor{comment}{//\ If\ we\ still\ don't\ have\ any\ pipes\ after\ loading\ the\ default\ module,}}
+\DoxyCodeLine{00391\ \ \ \ \ \textcolor{comment}{//\ automatically\ load\ the\ aux\ modules.}}
+\DoxyCodeLine{00392\ \ \ \ \ \mbox{\hyperlink{classGraphicsPipeSelection_ab6da370bc5b53d8ced220af958c0bad8}{load\_aux\_modules}}();}
+\DoxyCodeLine{00393\ \ \ \}}
+\DoxyCodeLine{00394\ \}}
+\DoxyCodeLine{00395\ }
+\DoxyCodeLine{00401\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ GraphicsPipeSelection::}
+\DoxyCodeLine{00402\ load\_named\_module(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name)\ \{}
+\DoxyCodeLine{00403\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_loaded\_modules\_lock);}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00405\ \ \ LoadedModules::iterator\ mi\ =\ \_loaded\_modules.find(name);}
+\DoxyCodeLine{00406\ \ \ \textcolor{keywordflow}{if}\ (mi\ !=\ \_loaded\_modules.end())\ \{}
+\DoxyCodeLine{00407\ \ \ \ \ \textcolor{comment}{//\ We\ have\ previously\ loaded\ this\ module.\ \ Don't\ attempt\ to\ re-\/load\ it.}}
+\DoxyCodeLine{00408\ \ \ \ \ \textcolor{keywordflow}{return}\ (*mi).second.\_default\_pipe\_type;}
+\DoxyCodeLine{00409\ \ \ \}}
+\DoxyCodeLine{00410\ }
+\DoxyCodeLine{00411\ \ \ \textcolor{comment}{//\ We\ have\ not\ yet\ loaded\ this\ module.\ \ Load\ it\ now.}}
+\DoxyCodeLine{00412\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ dlname\ =\ Filename::dso\_filename(\textcolor{stringliteral}{"{}lib"{}}\ +\ name\ +\ \textcolor{stringliteral}{"{}.so"{}});}
+\DoxyCodeLine{00413\ \ \ display\_cat.info()}
+\DoxyCodeLine{00414\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}loading\ display\ module:\ "{}}\ <<\ dlname.\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}()\ <<\ std::endl;}
+\DoxyCodeLine{00415\ \ \ \textcolor{keywordtype}{void}\ *handle\ =\ load\_dso(get\_plugin\_path().get\_value(),\ dlname);}
+\DoxyCodeLine{00416\ \ \ \textcolor{keywordflow}{if}\ (handle\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00417\ \ \ \ \ std::string\ error\ =\ load\_dso\_error();}
+\DoxyCodeLine{00418\ \ \ \ \ display\_cat.warning()}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ load\ "{}}\ <<\ dlname.\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}()\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ error\ <<\ std::endl;}
+\DoxyCodeLine{00420\ \ \ \ \ \textcolor{keywordflow}{return}\ TypeHandle::none();}
+\DoxyCodeLine{00421\ \ \ \}}
+\DoxyCodeLine{00422\ }
+\DoxyCodeLine{00423\ \ \ \textcolor{comment}{//\ Now\ get\ the\ module's\ recommended\ pipe\ type.\ \ This\ requires\ calling\ a}}
+\DoxyCodeLine{00424\ \ \ \textcolor{comment}{//\ specially-\/named\ function\ that\ should\ have\ been\ exported\ from\ the\ module.}}
+\DoxyCodeLine{00425\ \ \ \textcolor{keywordtype}{string}\ symbol\_name\ =\ \textcolor{stringliteral}{"{}get\_pipe\_type\_"{}}\ +\ name;}
+\DoxyCodeLine{00426\ \ \ \textcolor{keywordtype}{void}\ *dso\_symbol\ =\ get\_dso\_symbol(handle,\ symbol\_name);}
+\DoxyCodeLine{00427\ \ \ \textcolor{keywordflow}{if}\ (display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00428\ \ \ \ \ display\_cat.debug()}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}symbol\ of\ "{}}\ <<\ symbol\_name\ <<\ \textcolor{stringliteral}{"{}\ =\ "{}}\ <<\ dso\_symbol\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00430\ \ \ \}}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00432\ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ pipe\_type\ =\ TypeHandle::none();}
+\DoxyCodeLine{00433\ }
+\DoxyCodeLine{00434\ \ \ \textcolor{keywordflow}{if}\ (dso\_symbol\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00435\ \ \ \ \ \textcolor{comment}{//\ Couldn't\ find\ the\ module\ function.}}
+\DoxyCodeLine{00436\ \ \ \ \ display\_cat.warning()}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ find\ "{}}\ <<\ symbol\_name\ <<\ \textcolor{stringliteral}{"{}\ in\ "{}}\ <<\ dlname.\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}()}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00439\ }
+\DoxyCodeLine{00440\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00441\ \ \ \ \ \textcolor{comment}{//\ We\ successfully\ loaded\ the\ module,\ and\ we\ found\ the\ get\_pipe\_type\_*}}
+\DoxyCodeLine{00442\ \ \ \ \ \textcolor{comment}{//\ recommendation\ function.\ \ Call\ it\ to\ figure\ out\ what\ pipe\ type\ we}}
+\DoxyCodeLine{00443\ \ \ \ \ \textcolor{comment}{//\ should\ expect.}}
+\DoxyCodeLine{00444\ \ \ \ \ \textcolor{keyword}{typedef}\ \textcolor{keywordtype}{int}\ FuncType();}
+\DoxyCodeLine{00445\ \ \ \ \ \textcolor{keywordtype}{int}\ pipe\_type\_index\ =\ (*(FuncType\ *)dso\_symbol)();}
+\DoxyCodeLine{00446\ \ \ \ \ \textcolor{keywordflow}{if}\ (display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ display\_cat.debug()}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}pipe\_type\_index\ =\ "{}}\ <<\ pipe\_type\_index\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00449\ \ \ \ \ \}}
+\DoxyCodeLine{00450\ }
+\DoxyCodeLine{00451\ \ \ \ \ \textcolor{keywordflow}{if}\ (pipe\_type\_index\ !=\ 0)\ \{}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \mbox{\hyperlink{classTypeRegistry}{TypeRegistry}}\ *type\_reg\ =\ TypeRegistry::ptr();}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ pipe\_type\ =\ type\_reg-\/>\mbox{\hyperlink{classTypeRegistry_a5bbed45cb5c8aec781d7e3387c211a04}{find\_type\_by\_id}}(pipe\_type\_index);}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \ \ display\_cat.debug()}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}pipe\_type\ =\ "{}}\ <<\ pipe\_type\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00458\ \ \ \ \ \}}
+\DoxyCodeLine{00459\ \ \ \}}
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00461\ \ \ \textcolor{keywordflow}{if}\ (pipe\_type\ ==\ TypeHandle::none())\ \{}
+\DoxyCodeLine{00462\ \ \ \ \ \textcolor{comment}{//\ The\ recommendation\ function\ returned\ a\ bogus\ type\ index,\ or\ the}}
+\DoxyCodeLine{00463\ \ \ \ \ \textcolor{comment}{//\ function\ didn't\ work\ at\ all.\ \ We\ can't\ safely\ unload\ the\ module,}}
+\DoxyCodeLine{00464\ \ \ \ \ \textcolor{comment}{//\ though,\ because\ it\ may\ have\ assigned\ itself\ into\ the}}
+\DoxyCodeLine{00465\ \ \ \ \ \textcolor{comment}{//\ GraphicsPipeSelection\ table.\ \ So\ we\ carry\ on.}}
+\DoxyCodeLine{00466\ \ \ \ \ display\_cat.warning()}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ default\ pipe\ type\ available\ for\ "{}}\ <<\ dlname.\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}()}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00469\ \ \ \}}
+\DoxyCodeLine{00470\ }
+\DoxyCodeLine{00471\ \ \ LoadedModule\ \&\textcolor{keyword}{module}\ =\ \_loaded\_modules[name];}
+\DoxyCodeLine{00472\ \ \ \textcolor{keyword}{module}.\_module\_name\ =\ name;}
+\DoxyCodeLine{00473\ \ \ \textcolor{keyword}{module}.\_module\_handle\ =\ handle;}
+\DoxyCodeLine{00474\ \ \ \textcolor{keyword}{module}.\_default\_pipe\_type\ =\ pipe\_type;}
+\DoxyCodeLine{00475\ }
+\DoxyCodeLine{00476\ \ \ \textcolor{keywordflow}{return}\ pipe\_type;}
+\DoxyCodeLine{00477\ \}}
+
+\end{DoxyCode}

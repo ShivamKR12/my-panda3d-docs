@@ -1,0 +1,1243 @@
+\doxysection{p\+Stat\+Client.\+cxx}
+\hypertarget{pStatClient_8cxx_source}{}\label{pStatClient_8cxx_source}\index{panda/src/pstatclient/pStatClient.cxx@{panda/src/pstatclient/pStatClient.cxx}}
+\mbox{\hyperlink{pStatClient_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatClient_8h}{pStatClient.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatCollector_8h}{pStatCollector.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatThread_8h}{pStatThread.h}}"{}}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00019\ \textcolor{comment}{//\ This\ file\ only\ defines\ anything\ interesting\ if\ DO\_PSTATS\ is\ defined.}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatClientImpl_8h}{pStatClientImpl.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatClientControlMessage_8h}{pStatClientControlMessage.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatServerControlMessage_8h}{pStatServerControlMessage.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pstatclient_8h}{config\_pstatclient.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatProperties_8h}{pStatProperties.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{clockObject_8h}{clockObject.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{neverFreeMemory_8h}{neverFreeMemory.h}}"{}}}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_heap\_total\_size\_pcollector(\textcolor{stringliteral}{"{}System\ memory:Heap"{}});}
+\DoxyCodeLine{00035\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_heap\_overhead\_size\_pcollector(\textcolor{stringliteral}{"{}System\ memory:Heap:Overhead"{}});}
+\DoxyCodeLine{00036\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_heap\_single\_size\_pcollector(\textcolor{stringliteral}{"{}System\ memory:Heap:Single"{}});}
+\DoxyCodeLine{00037\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_heap\_single\_other\_size\_pcollector(\textcolor{stringliteral}{"{}System\ memory:Heap:Single:Other"{}});}
+\DoxyCodeLine{00038\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_heap\_array\_size\_pcollector(\textcolor{stringliteral}{"{}System\ memory:Heap:Array"{}});}
+\DoxyCodeLine{00039\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_heap\_array\_other\_size\_pcollector(\textcolor{stringliteral}{"{}System\ memory:Heap:Array:Other"{}});}
+\DoxyCodeLine{00040\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_heap\_external\_size\_pcollector(\textcolor{stringliteral}{"{}System\ memory:Heap:External"{}});}
+\DoxyCodeLine{00041\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_mmap\_size\_pcollector(\textcolor{stringliteral}{"{}System\ memory:MMap"{}});}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_mmap\_nf\_unused\_size\_pcollector(\textcolor{stringliteral}{"{}System\ memory:MMap:NeverFree:Unused"{}});}
+\DoxyCodeLine{00044\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_mmap\_dc\_active\_other\_size\_pcollector(\textcolor{stringliteral}{"{}System\ memory:MMap:NeverFree:Active:Other"{}});}
+\DoxyCodeLine{00045\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_mmap\_dc\_inactive\_other\_size\_pcollector(\textcolor{stringliteral}{"{}System\ memory:MMap:NeverFree:Inactive:Other"{}});}
+\DoxyCodeLine{00046\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_pstats\_pcollector(\textcolor{stringliteral}{"{}*:PStats"{}});}
+\DoxyCodeLine{00047\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_clock\_wait\_pcollector(\textcolor{stringliteral}{"{}Wait:Clock\ Wait:Sleep"{}});}
+\DoxyCodeLine{00048\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_clock\_busy\_wait\_pcollector(\textcolor{stringliteral}{"{}Wait:Clock\ Wait:Spin"{}});}
+\DoxyCodeLine{00049\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::\_thread\_block\_pcollector(\textcolor{stringliteral}{"{}Wait:Thread\ block"{}});}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \mbox{\hyperlink{classPStatClient}{PStatClient}}\ *PStatClient::\_global\_pstats\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \textcolor{comment}{//\ This\ class\ is\ used\ to\ report\ memory\ usage\ per\ TypeHandle.\ \ We\ create\ one\ of}}
+\DoxyCodeLine{00055\ \textcolor{comment}{//\ these\ for\ each\ TypeHandle\ in\ the\ system.}}
+\DoxyCodeLine{00056\ \textcolor{keyword}{class\ }TypeHandleCollector\ \{}
+\DoxyCodeLine{00057\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00058\ \ \ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \_mem\_class[TypeHandle::MC\_limit];}
+\DoxyCodeLine{00059\ \};}
+\DoxyCodeLine{00060\ \textcolor{keyword}{typedef}\ \mbox{\hyperlink{classpvector}{pvector<TypeHandleCollector>}}\ TypeHandleCols;}
+\DoxyCodeLine{00061\ \textcolor{keyword}{static}\ TypeHandleCols\ type\_handle\_cols;}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00067\ PStatClient::PerThreadData::}
+\DoxyCodeLine{00068\ PerThreadData()\ \{}
+\DoxyCodeLine{00069\ \ \ \_has\_level\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00070\ \ \ \_level\ =\ 0.0;}
+\DoxyCodeLine{00071\ \ \ \_nested\_count\ =\ 0;}
+\DoxyCodeLine{00072\ \}}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00077\ PStatClient::}
+\DoxyCodeLine{00078\ PStatClient()\ :}
+\DoxyCodeLine{00079\ \ \ \_lock(\textcolor{stringliteral}{"{}PStatClient::\_lock"{}}),}
+\DoxyCodeLine{00080\ \ \ \_impl(nullptr)}
+\DoxyCodeLine{00081\ \{}
+\DoxyCodeLine{00082\ \ \ \textcolor{comment}{//\ We\ always\ have\ a\ collector\ at\ index\ 0\ named\ "{}Frame"{}.\ \ This\ tracks\ the}}
+\DoxyCodeLine{00083\ \ \ \textcolor{comment}{//\ total\ frame\ time\ and\ is\ the\ root\ of\ all\ other\ collectors.\ \ We\ have\ to}}
+\DoxyCodeLine{00084\ \ \ \textcolor{comment}{//\ make\ this\ one\ by\ hand\ since\ it's\ the\ root.}}
+\DoxyCodeLine{00085\ \ \ Collector\ *collector\ =\ \textcolor{keyword}{new}\ Collector(0,\ \textcolor{stringliteral}{"{}Frame"{}});}
+\DoxyCodeLine{00086\ \ \ \textcolor{comment}{//\ collector-\/>\_def\ =\ new\ PStatCollectorDef(0,\ "{}Frame"{});}}
+\DoxyCodeLine{00087\ \ \ \textcolor{comment}{//\ collector-\/>\_def-\/>\_parent\_index\ =\ 0;}}
+\DoxyCodeLine{00088\ \ \ \textcolor{comment}{//\ collector-\/>\_def-\/>\_suggested\_color.set(0.5,\ 0.5,\ 0.5);}}
+\DoxyCodeLine{00089\ \ \ add\_collector(collector);}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \ \ \textcolor{comment}{//\ The\ main\ thread\ is\ always\ at\ index\ 0.}}
+\DoxyCodeLine{00092\ \ \ make\_thread(Thread::get\_main\_thread());}
+\DoxyCodeLine{00093\ \}}
+\DoxyCodeLine{00094\ }
+\DoxyCodeLine{00098\ PStatClient::}
+\DoxyCodeLine{00099\ \string~PStatClient()\ \{}
+\DoxyCodeLine{00100\ \ \ disconnect();}
+\DoxyCodeLine{00101\ \}}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00107\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00108\ set\_client\_name(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name)\ \{}
+\DoxyCodeLine{00109\ \ \ get\_impl()-\/>set\_client\_name(name);}
+\DoxyCodeLine{00110\ \}}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00115\ \textcolor{keywordtype}{string}\ PStatClient::}
+\DoxyCodeLine{00116\ get\_client\_name()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00117\ \ \ \textcolor{keywordflow}{return}\ get\_impl()-\/>get\_client\_name();}
+\DoxyCodeLine{00118\ \}}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00130\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00131\ set\_max\_rate(\textcolor{keywordtype}{double}\ rate)\ \{}
+\DoxyCodeLine{00132\ \ \ get\_impl()-\/>set\_max\_rate(rate);}
+\DoxyCodeLine{00133\ \}}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00139\ \textcolor{keywordtype}{double}\ PStatClient::}
+\DoxyCodeLine{00140\ get\_max\_rate()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00141\ \ \ \textcolor{keywordflow}{return}\ get\_impl()-\/>get\_max\_rate();}
+\DoxyCodeLine{00142\ \}}
+\DoxyCodeLine{00143\ }
+\DoxyCodeLine{00147\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::}
+\DoxyCodeLine{00148\ get\_collector(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00149\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ get\_num\_collectors(),\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}());}
+\DoxyCodeLine{00150\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}((\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *)\textcolor{keyword}{this},\ index);}
+\DoxyCodeLine{00151\ \}}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00156\ \textcolor{keywordtype}{string}\ PStatClient::}
+\DoxyCodeLine{00157\ get\_collector\_name(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00158\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ get\_num\_collectors(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \textcolor{keywordflow}{return}\ get\_collector\_ptr(index)-\/>get\_name();}
+\DoxyCodeLine{00161\ \}}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00168\ \textcolor{keywordtype}{string}\ PStatClient::}
+\DoxyCodeLine{00169\ get\_collector\_fullname(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00170\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ get\_num\_collectors(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00171\ }
+\DoxyCodeLine{00172\ \ \ Collector\ *collector\ =\ get\_collector\_ptr(index);}
+\DoxyCodeLine{00173\ \ \ \textcolor{keywordtype}{int}\ parent\_index\ =\ collector-\/>get\_parent\_index();}
+\DoxyCodeLine{00174\ \ \ \textcolor{keywordflow}{if}\ (parent\_index\ ==\ 0)\ \{}
+\DoxyCodeLine{00175\ \ \ \ \ \textcolor{keywordflow}{return}\ collector-\/>get\_name();}
+\DoxyCodeLine{00176\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00177\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_collector\_fullname(parent\_index)\ +\ \textcolor{stringliteral}{"{}:"{}}\ +}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ collector-\/>get\_name();}
+\DoxyCodeLine{00179\ \ \ \}}
+\DoxyCodeLine{00180\ \}}
+\DoxyCodeLine{00181\ }
+\DoxyCodeLine{00185\ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ PStatClient::}
+\DoxyCodeLine{00186\ get\_thread(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00187\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00188\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ get\_num\_threads(),\ \mbox{\hyperlink{classPStatThread}{PStatThread}}());}
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatThread}{PStatThread}}((\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *)\textcolor{keyword}{this},\ index);}
+\DoxyCodeLine{00190\ \}}
+\DoxyCodeLine{00191\ }
+\DoxyCodeLine{00196\ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ PStatClient::}
+\DoxyCodeLine{00197\ get\_main\_thread()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00198\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatThread}{PStatThread}}((\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *)\textcolor{keyword}{this},\ 0);}
+\DoxyCodeLine{00199\ \}}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00205\ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ PStatClient::}
+\DoxyCodeLine{00206\ get\_current\_thread()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00207\ \ \ \textcolor{keywordflow}{if}\ (!client\_is\_connected())\ \{}
+\DoxyCodeLine{00208\ \ \ \ \ \textcolor{comment}{//\ No\ need\ to\ make\ the\ relatively\ expensive\ call\ to}}
+\DoxyCodeLine{00209\ \ \ \ \ \textcolor{comment}{//\ Thread::get\_current\_thread()\ if\ we're\ not\ even\ connected.}}
+\DoxyCodeLine{00210\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_main\_thread();}
+\DoxyCodeLine{00211\ \ \ \}}
+\DoxyCodeLine{00212\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatThread}{PStatThread}}(Thread::get\_current\_thread(),\ (\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{00213\ \}}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00221\ \textcolor{keywordtype}{double}\ PStatClient::}
+\DoxyCodeLine{00222\ get\_real\_time()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00223\ \ \ \textcolor{keywordflow}{if}\ (has\_impl())\ \{}
+\DoxyCodeLine{00224\ \ \ \ \ \textcolor{keywordflow}{return}\ \_impl-\/>get\_real\_time();}
+\DoxyCodeLine{00225\ \ \ \}}
+\DoxyCodeLine{00226\ \ \ \textcolor{keywordflow}{return}\ 0.0f;}
+\DoxyCodeLine{00227\ \}}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00233\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00234\ main\_tick()\ \{}
+\DoxyCodeLine{00235\ \ \ \textcolor{comment}{//\ We\ have\ code\ here\ to\ report\ the\ memory\ usage.\ \ We\ can't\ put\ this\ code}}
+\DoxyCodeLine{00236\ \ \ \textcolor{comment}{//\ inside\ the\ MemoryUsage\ class,\ where\ it\ fits\ a\ little\ better,\ simply}}
+\DoxyCodeLine{00237\ \ \ \textcolor{comment}{//\ because\ MemoryUsage\ is\ a\ very\ low-\/level\ class\ that\ doesn't\ know\ about}}
+\DoxyCodeLine{00238\ \ \ \textcolor{comment}{//\ PStatClient.}}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00240\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00241\ \ \ \textcolor{keywordflow}{if}\ (is\_connected())\ \{}
+\DoxyCodeLine{00242\ \ \ \ \ \_heap\_total\_size\_pcollector.set\_level(MemoryUsage::get\_total\_size());}
+\DoxyCodeLine{00243\ \ \ \ \ \_heap\_overhead\_size\_pcollector.set\_level(MemoryUsage::get\_panda\_heap\_overhead());}
+\DoxyCodeLine{00244\ \ \ \ \ \_heap\_single\_size\_pcollector.set\_level(MemoryUsage::get\_panda\_heap\_single\_size());}
+\DoxyCodeLine{00245\ \ \ \ \ \_heap\_array\_size\_pcollector.set\_level(MemoryUsage::get\_panda\_heap\_array\_size());}
+\DoxyCodeLine{00246\ \ \ \ \ \_heap\_external\_size\_pcollector.set\_level(MemoryUsage::get\_external\_size());}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ }
+\DoxyCodeLine{00249\ \ \ \ \ \_mmap\_size\_pcollector.set\_level(MemoryUsage::get\_panda\_mmap\_size());}
+\DoxyCodeLine{00250\ }
+\DoxyCodeLine{00251\ \ \ \ \ \mbox{\hyperlink{classTypeRegistry}{TypeRegistry}}\ *type\_reg\ =\ TypeRegistry::ptr();}
+\DoxyCodeLine{00252\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_typehandles\ =\ type\_reg-\/>\mbox{\hyperlink{classTypeRegistry_a96abdb41203f2cf778f61a8d786d1502}{get\_num\_typehandles}}();}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \ \ \ \ \textcolor{keywordflow}{while}\ ((\textcolor{keywordtype}{int})type\_handle\_cols.size()\ <\ num\_typehandles)\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ type\_handle\_cols.push\_back(TypeHandleCollector());}
+\DoxyCodeLine{00256\ \ \ \ \ \}}
+\DoxyCodeLine{00257\ }
+\DoxyCodeLine{00258\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ single\_total\_usage\ =\ 0;}
+\DoxyCodeLine{00259\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ array\_total\_usage\ =\ 0;}
+\DoxyCodeLine{00260\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ dc\_active\_total\_usage\ =\ 0;}
+\DoxyCodeLine{00261\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ dc\_inactive\_total\_usage\ =\ 0;}
+\DoxyCodeLine{00262\ \ \ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00263\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_typehandles;\ ++i)\ \{}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type\ =\ type\_reg-\/>\mbox{\hyperlink{classTypeRegistry_aa626b0a8d0700438506204c1dcf476df}{get\_typehandle}}(i);}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ mi\ =\ 0;\ mi\ <\ (int)TypeHandle::MC\_limit;\ ++mi)\ \{}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ TypeHandle::MemoryClass\ mc\ =\ (TypeHandle::MemoryClass)mi;}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ usage\ =\ type.get\_memory\_usage(mc);}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (mc)\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_singleton:}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ \ \ single\_total\_usage\ +=\ usage;}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_array:}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \ \ \ \ array\_total\_usage\ +=\ usage;}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_deleted\_chain\_active:}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \ \ \ \ dc\_active\_total\_usage\ +=\ usage;}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_deleted\_chain\_inactive:}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \ \ dc\_inactive\_total\_usage\ +=\ usage;}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_limit:}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Not\ used.}}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00291\ \ \ \ \ \}}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ min\_usage\ =\ (single\_total\_usage\ +\ array\_total\_usage\ +\ dc\_active\_total\_usage\ +\ dc\_inactive\_total\_usage)\ /\ 1024;}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{keywordflow}{if}\ (!pstats\_mem\_other)\ \{}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ min\_usage\ =\ 0;}
+\DoxyCodeLine{00295\ \ \ \ \ \}}
+\DoxyCodeLine{00296\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ single\_other\_usage\ =\ single\_total\_usage;}
+\DoxyCodeLine{00297\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ array\_other\_usage\ =\ array\_total\_usage;}
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ dc\_active\_other\_usage\ =\ dc\_active\_total\_usage;}
+\DoxyCodeLine{00299\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ dc\_inactive\_other\_usage\ =\ dc\_inactive\_total\_usage;}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00301\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_typehandles;\ ++i)\ \{}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ type\ =\ type\_reg-\/>\mbox{\hyperlink{classTypeRegistry_aa626b0a8d0700438506204c1dcf476df}{get\_typehandle}}(i);}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ mi\ =\ 0;\ mi\ <\ (int)TypeHandle::MC\_limit;\ ++mi)\ \{}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \ \ TypeHandle::MemoryClass\ mc\ =\ (TypeHandle::MemoryClass)mi;}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \&col\ =\ type\_handle\_cols[i].\_mem\_class[mi];}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ usage\ =\ type.get\_memory\_usage(mc);}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (usage\ >\ min\_usage\ ||\ col.is\_valid())\ \{}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ have\ some\ memory\ usage\ on\ this\ TypeHandle.\ \ See\ if\ we\ have\ a}}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ collector\ for\ it.}}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!col.is\_valid())\ \{}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *category\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (mc)\ \{}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_singleton:}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ category\ =\ \textcolor{stringliteral}{"{}Heap:Single"{}};}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00316\ }
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_array:}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ category\ =\ \textcolor{stringliteral}{"{}Heap:Array"{}};}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00320\ }
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_deleted\_chain\_active:}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ category\ =\ \textcolor{stringliteral}{"{}MMap:NeverFree:Active"{}};}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00324\ }
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_deleted\_chain\_inactive:}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ category\ =\ \textcolor{stringliteral}{"{}MMap:NeverFree:Inactive"{}};}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_limit:}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Not\ used.}}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ strm;}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ \ \ \ \ strm\ <<\ \textcolor{stringliteral}{"{}System\ memory:"{}}\ <<\ category\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ type;}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \ \ \ \ \ \ col\ =\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}(strm.str());}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ \ \ col.set\_level(usage);}
+\DoxyCodeLine{00338\ }
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (mc)\ \{}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_singleton:}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ \ \ \ \ single\_other\_usage\ -\/=\ usage;}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00343\ }
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_array:}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ \ \ \ \ array\_other\_usage\ -\/=\ usage;}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00347\ }
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_deleted\_chain\_active:}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ \ \ \ \ dc\_active\_other\_usage\ -\/=\ usage;}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_deleted\_chain\_inactive:}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \ \ \ \ \ \ dc\_inactive\_other\_usage\ -\/=\ usage;}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00355\ }
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TypeHandle::MC\_limit:}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Not\ used.}}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00362\ \ \ \ \ \}}
+\DoxyCodeLine{00363\ }
+\DoxyCodeLine{00364\ \ \ \ \ \_mmap\_nf\_unused\_size\_pcollector.set\_level(NeverFreeMemory::get\_total\_unused());}
+\DoxyCodeLine{00365\ }
+\DoxyCodeLine{00366\ \ \ \ \ \textcolor{comment}{//\ The\ remaining\ amount-\/-\/all\ collectors\ smaller\ than\ 0.1\%\ of\ the\ total-\/-\/go}}
+\DoxyCodeLine{00367\ \ \ \ \ \textcolor{comment}{//\ into\ "{}other"{}.}}
+\DoxyCodeLine{00368\ \ \ \ \ \_heap\_single\_other\_size\_pcollector.set\_level(single\_other\_usage);}
+\DoxyCodeLine{00369\ \ \ \ \ \_heap\_array\_other\_size\_pcollector.set\_level(array\_other\_usage);}
+\DoxyCodeLine{00370\ \ \ \ \ \_mmap\_dc\_active\_other\_size\_pcollector.set\_level(dc\_active\_other\_usage);}
+\DoxyCodeLine{00371\ \ \ \ \ \_mmap\_dc\_inactive\_other\_size\_pcollector.set\_level(dc\_inactive\_other\_usage);}
+\DoxyCodeLine{00372\ \ \ \}}
+\DoxyCodeLine{00373\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00374\ }
+\DoxyCodeLine{00375\ \ \ get\_global\_pstats()-\/>client\_main\_tick();}
+\DoxyCodeLine{00376\ \}}
+\DoxyCodeLine{00377\ }
+\DoxyCodeLine{00381\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00382\ thread\_tick()\ \{}
+\DoxyCodeLine{00383\ \ \ get\_global\_pstats()-\/>client\_thread\_tick();}
+\DoxyCodeLine{00384\ \}}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00390\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00391\ thread\_tick(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&sync\_name)\ \{}
+\DoxyCodeLine{00392\ \ \ get\_global\_pstats()-\/>client\_thread\_tick(sync\_name);}
+\DoxyCodeLine{00393\ \}}
+\DoxyCodeLine{00394\ }
+\DoxyCodeLine{00399\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00400\ client\_main\_tick()\ \{}
+\DoxyCodeLine{00401\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00402\ \ \ \textcolor{keywordflow}{if}\ (has\_impl())\ \{}
+\DoxyCodeLine{00403\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_impl-\/>client\_is\_connected())\ \{}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ client\_disconnect();}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00406\ \ \ \ \ \}}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00408\ \ \ \ \ \mbox{\hyperlink{classClockObject}{ClockObject}}\ *clock\ =\ ClockObject::get\_global\_clock();}
+\DoxyCodeLine{00409\ }
+\DoxyCodeLine{00410\ \ \ \ \ \_impl-\/>client\_main\_tick();}
+\DoxyCodeLine{00411\ }
+\DoxyCodeLine{00412\ \ \ \ \ MultiThingsByName::const\_iterator\ ni\ =}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \_threads\_by\_sync\_name.find(\textcolor{stringliteral}{"{}Main"{}});}
+\DoxyCodeLine{00414\ \ \ \ \ \textcolor{keywordflow}{if}\ (ni\ !=\ \_threads\_by\_sync\_name.end())\ \{}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \textcolor{keyword}{const}\ vector\_int\ \&indices\ =\ (*ni).second;}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (vector\_int::const\_iterator\ vi\ =\ indices.begin();}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ \ \ \ vi\ !=\ indices.end();}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \ \ \ ++vi)\ \{}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ InternalThread\ *thread\ =\ get\_thread\_ptr(*vi);}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \ \ nassertd(thread\ !=\ \textcolor{keyword}{nullptr})\ continue;}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \ \ \_impl-\/>new\_frame(*vi,\ thread-\/>\_frame\_number);}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \ \ thread-\/>\_frame\_number\ =\ clock-\/>get\_frame\_count(get\_thread\_object(*vi));}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00424\ \ \ \ \ \}}
+\DoxyCodeLine{00425\ \ \ \}}
+\DoxyCodeLine{00426\ \}}
+\DoxyCodeLine{00427\ }
+\DoxyCodeLine{00431\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPStatClient}{PStatClient}}::}
+\DoxyCodeLine{00432\ client\_thread\_tick()\ \{}
+\DoxyCodeLine{00433\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00434\ }
+\DoxyCodeLine{00435\ \ \ \textcolor{keywordflow}{if}\ (has\_impl())\ \{}
+\DoxyCodeLine{00436\ \ \ \ \ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ thread\ =\ do\_get\_current\_thread();}
+\DoxyCodeLine{00437\ \ \ \ \ \_impl-\/>new\_frame(thread.get\_index());}
+\DoxyCodeLine{00438\ \ \ \}}
+\DoxyCodeLine{00439\ \}}
+\DoxyCodeLine{00440\ }
+\DoxyCodeLine{00445\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00446\ client\_thread\_tick(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&sync\_name)\ \{}
+\DoxyCodeLine{00447\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00449\ \ \ \textcolor{keywordflow}{if}\ (has\_impl())\ \{}
+\DoxyCodeLine{00450\ \ \ \ \ MultiThingsByName::const\_iterator\ ni\ =}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \_threads\_by\_sync\_name.find(sync\_name);}
+\DoxyCodeLine{00452\ \ \ \ \ \textcolor{keywordflow}{if}\ (ni\ !=\ \_threads\_by\_sync\_name.end())\ \{}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ \textcolor{keyword}{const}\ vector\_int\ \&indices\ =\ (*ni).second;}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (vector\_int::const\_iterator\ vi\ =\ indices.begin();}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \ \ \ \ \ vi\ !=\ indices.end();}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ \ \ \ ++vi)\ \{}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \ \ \_impl-\/>new\_frame(*vi);}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00459\ \ \ \ \ \}}
+\DoxyCodeLine{00460\ \ \ \}}
+\DoxyCodeLine{00461\ \}}
+\DoxyCodeLine{00462\ }
+\DoxyCodeLine{00466\ \textcolor{keywordtype}{bool}\ PStatClient::}
+\DoxyCodeLine{00467\ client\_connect(\textcolor{keywordtype}{string}\ hostname,\ \textcolor{keywordtype}{int}\ port)\ \{}
+\DoxyCodeLine{00468\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00469\ \ \ client\_disconnect();}
+\DoxyCodeLine{00470\ \ \ \textcolor{keywordflow}{return}\ get\_impl()-\/>client\_connect(hostname,\ port);}
+\DoxyCodeLine{00471\ \}}
+\DoxyCodeLine{00472\ }
+\DoxyCodeLine{00476\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00477\ client\_disconnect()\ \{}
+\DoxyCodeLine{00478\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00479\ \ \ \textcolor{keywordflow}{if}\ (has\_impl())\ \{}
+\DoxyCodeLine{00480\ \ \ \ \ \_impl-\/>client\_disconnect();}
+\DoxyCodeLine{00481\ \ \ \ \ \textcolor{keyword}{delete}\ \_impl;}
+\DoxyCodeLine{00482\ \ \ \ \ \_impl\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00483\ \ \ \}}
+\DoxyCodeLine{00484\ }
+\DoxyCodeLine{00485\ \ \ \textcolor{comment}{//\ These\ can\ be\ relaxed\ loads\ because\ we\ hold\ the\ lock.}}
+\DoxyCodeLine{00486\ \ \ ThreadPointer\ *threads\ =\ \_threads.load(std::memory\_order\_relaxed);}
+\DoxyCodeLine{00487\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ti\ =\ 0;\ ti\ <\ get\_num\_threads();\ ++ti)\ \{}
+\DoxyCodeLine{00488\ \ \ \ \ InternalThread\ *thread\ =\ threads[ti];}
+\DoxyCodeLine{00489\ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00490\ \ \ \ \ \ \ thread-\/>\_frame\_number\ =\ 0;}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ thread-\/>\_is\_active\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ thread-\/>\_next\_packet\ =\ 0.0;}
+\DoxyCodeLine{00493\ \ \ \ \ \ \ thread-\/>\_frame\_data.clear();}
+\DoxyCodeLine{00494\ \ \ \ \ \}}
+\DoxyCodeLine{00495\ \ \ \}}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00497\ \ \ CollectorPointer\ *collectors\ =\ \_collectors.load(std::memory\_order\_relaxed);}
+\DoxyCodeLine{00498\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ci\ =\ 0;\ ci\ <\ get\_num\_collectors();\ ++ci)\ \{}
+\DoxyCodeLine{00499\ \ \ \ \ Collector\ *collector\ =\ collectors[ci];}
+\DoxyCodeLine{00500\ \ \ \ \ \textcolor{keywordflow}{for}\ (PerThreadData\ \&per\_thread\ :\ collector-\/>\_per\_thread)\ \{}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ per\_thread.\_nested\_count\ =\ 0;}
+\DoxyCodeLine{00502\ \ \ \ \ \}}
+\DoxyCodeLine{00503\ \ \ \}}
+\DoxyCodeLine{00504\ \}}
+\DoxyCodeLine{00505\ }
+\DoxyCodeLine{00509\ \textcolor{keywordtype}{bool}\ PStatClient::}
+\DoxyCodeLine{00510\ client\_is\_connected()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00511\ \ \ \textcolor{keywordflow}{return}\ has\_impl()\ \&\&\ \_impl-\/>client\_is\_connected();}
+\DoxyCodeLine{00512\ \}}
+\DoxyCodeLine{00513\ }
+\DoxyCodeLine{00519\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00520\ client\_resume\_after\_pause()\ \{}
+\DoxyCodeLine{00521\ \ \ \textcolor{keywordflow}{if}\ (has\_impl())\ \{}
+\DoxyCodeLine{00522\ \ \ \ \ \_impl-\/>client\_resume\_after\_pause();}
+\DoxyCodeLine{00523\ \ \ \}}
+\DoxyCodeLine{00524\ \}}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00531\ \mbox{\hyperlink{classPStatClient}{PStatClient}}\ *PStatClient::}
+\DoxyCodeLine{00532\ get\_global\_pstats()\ \{}
+\DoxyCodeLine{00533\ \ \ \textcolor{keywordflow}{if}\ (\_global\_pstats\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00534\ \ \ \ \ \_global\_pstats\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classPStatClient}{PStatClient}};}
+\DoxyCodeLine{00535\ }
+\DoxyCodeLine{00536\ \ \ \ \ ClockObject::\_start\_clock\_wait\ =\ start\_clock\_wait;}
+\DoxyCodeLine{00537\ \ \ \ \ ClockObject::\_start\_clock\_busy\_wait\ =\ start\_clock\_busy\_wait;}
+\DoxyCodeLine{00538\ \ \ \ \ ClockObject::\_stop\_clock\_wait\ =\ stop\_clock\_wait;}
+\DoxyCodeLine{00539\ \ \ \}}
+\DoxyCodeLine{00540\ \ \ \textcolor{keywordflow}{return}\ \_global\_pstats;}
+\DoxyCodeLine{00541\ \}}
+\DoxyCodeLine{00542\ }
+\DoxyCodeLine{00546\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00547\ make\_impl()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00548\ \ \ \_impl\ =\ \textcolor{keyword}{new}\ PStatClientImpl((\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{00549\ \}}
+\DoxyCodeLine{00550\ }
+\DoxyCodeLine{00558\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::}
+\DoxyCodeLine{00559\ make\_collector\_with\_relname(\textcolor{keywordtype}{int}\ parent\_index,\ \textcolor{keywordtype}{string}\ relname)\ \{}
+\DoxyCodeLine{00560\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00561\ }
+\DoxyCodeLine{00562\ \ \ \textcolor{keywordflow}{if}\ (relname.empty())\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ relname\ =\ \textcolor{stringliteral}{"{}Unnamed"{}};}
+\DoxyCodeLine{00564\ \ \ \}}
+\DoxyCodeLine{00565\ }
+\DoxyCodeLine{00566\ \ \ \textcolor{comment}{//\ Skip\ any\ colons\ at\ the\ beginning\ of\ the\ name.}}
+\DoxyCodeLine{00567\ \ \ \textcolor{keywordtype}{size\_t}\ start\ =\ 0;}
+\DoxyCodeLine{00568\ \ \ \textcolor{keywordflow}{while}\ (start\ <\ relname.size()\ \&\&\ relname[start]\ ==\ \textcolor{charliteral}{':'})\ \{}
+\DoxyCodeLine{00569\ \ \ \ \ start++;}
+\DoxyCodeLine{00570\ \ \ \}}
+\DoxyCodeLine{00571\ }
+\DoxyCodeLine{00572\ \ \ \textcolor{comment}{//\ If\ the\ name\ contains\ a\ colon\ (after\ the\ initial\ colon),\ it\ means\ we\ are}}
+\DoxyCodeLine{00573\ \ \ \textcolor{comment}{//\ making\ a\ nested\ collector.}}
+\DoxyCodeLine{00574\ \ \ \textcolor{keywordtype}{size\_t}\ colon\ =\ relname.find(\textcolor{charliteral}{':'},\ start);}
+\DoxyCodeLine{00575\ \ \ \textcolor{keywordflow}{while}\ (colon\ !=\ string::npos)\ \{}
+\DoxyCodeLine{00576\ \ \ \ \ \textcolor{keywordtype}{string}\ parent\_name\ =\ relname.substr(start,\ colon\ -\/\ start);}
+\DoxyCodeLine{00577\ \ \ \ \ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ parent\_collector\ =}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ make\_collector\_with\_name(parent\_index,\ parent\_name);}
+\DoxyCodeLine{00579\ \ \ \ \ parent\_index\ =\ parent\_collector.\_index;}
+\DoxyCodeLine{00580\ \ \ \ \ relname\ =\ relname.substr(colon\ +\ 1);}
+\DoxyCodeLine{00581\ \ \ \ \ start\ =\ 0;}
+\DoxyCodeLine{00582\ \ \ \ \ colon\ =\ relname.find(\textcolor{charliteral}{':'});}
+\DoxyCodeLine{00583\ \ \ \}}
+\DoxyCodeLine{00584\ }
+\DoxyCodeLine{00585\ \ \ \textcolor{keywordtype}{string}\ name\ =\ relname.substr(start);}
+\DoxyCodeLine{00586\ \ \ \textcolor{keywordflow}{return}\ make\_collector\_with\_name(parent\_index,\ name);}
+\DoxyCodeLine{00587\ \}}
+\DoxyCodeLine{00588\ }
+\DoxyCodeLine{00595\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::}
+\DoxyCodeLine{00596\ make\_collector\_with\_name(\textcolor{keywordtype}{int}\ parent\_index,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name)\ \{}
+\DoxyCodeLine{00597\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00598\ }
+\DoxyCodeLine{00599\ \ \ \textcolor{keywordtype}{int}\ num\_collectors\ =\ get\_num\_collectors();}
+\DoxyCodeLine{00600\ \ \ nassertr(parent\_index\ >=\ 0\ \&\&\ parent\_index\ <\ num\_collectors,}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}());}
+\DoxyCodeLine{00602\ }
+\DoxyCodeLine{00603\ \ \ Collector\ *parent\ =\ get\_collector\_ptr(parent\_index);}
+\DoxyCodeLine{00604\ }
+\DoxyCodeLine{00605\ \ \ \textcolor{comment}{//\ A\ special\ case:\ if\ we\ asked\ for\ a\ child\ the\ same\ name\ as\ its\ parent,\ we}}
+\DoxyCodeLine{00606\ \ \ \textcolor{comment}{//\ really\ meant\ the\ parent.\ \ That\ is,\ "{}Frame:Frame"{}\ is\ really\ the\ same}}
+\DoxyCodeLine{00607\ \ \ \textcolor{comment}{//\ collector\ as\ "{}Frame"{}.}}
+\DoxyCodeLine{00608\ \ \ \textcolor{keywordflow}{if}\ (parent-\/>get\_name()\ ==\ name)\ \{}
+\DoxyCodeLine{00609\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}(\textcolor{keyword}{this},\ parent\_index);}
+\DoxyCodeLine{00610\ \ \ \}}
+\DoxyCodeLine{00611\ }
+\DoxyCodeLine{00612\ \ \ ThingsByName::const\_iterator\ ni\ =\ parent-\/>\_children.find(name);}
+\DoxyCodeLine{00613\ }
+\DoxyCodeLine{00614\ \ \ \textcolor{keywordflow}{if}\ (ni\ !=\ parent-\/>\_children.end())\ \{}
+\DoxyCodeLine{00615\ \ \ \ \ \textcolor{comment}{//\ We\ already\ had\ a\ collector\ by\ this\ name;\ return\ it.}}
+\DoxyCodeLine{00616\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ (*ni).second;}
+\DoxyCodeLine{00617\ \ \ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ num\_collectors,\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}());}
+\DoxyCodeLine{00618\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}(\textcolor{keyword}{this},\ (*ni).second);}
+\DoxyCodeLine{00619\ \ \ \}}
+\DoxyCodeLine{00620\ }
+\DoxyCodeLine{00621\ \ \ \textcolor{comment}{//\ Create\ a\ new\ collector\ for\ this\ name.}}
+\DoxyCodeLine{00622\ \ \ parent-\/>\_children.insert(ThingsByName::value\_type(name,\ num\_collectors));}
+\DoxyCodeLine{00623\ }
+\DoxyCodeLine{00624\ \ \ Collector\ *collector\ =\ \textcolor{keyword}{new}\ Collector(parent\_index,\ name);}
+\DoxyCodeLine{00625\ \ \ \textcolor{comment}{//\ collector-\/>\_def\ =\ new\ PStatCollectorDef(num\_collectors,\ name);}}
+\DoxyCodeLine{00626\ \ \ \textcolor{comment}{//\ collector-\/>\_def-\/>set\_parent(*\_collectors[parent\_index].\_def);}}
+\DoxyCodeLine{00627\ \ \ \textcolor{comment}{//\ initialize\_collector\_def(this,\ collector-\/>\_def);}}
+\DoxyCodeLine{00628\ }
+\DoxyCodeLine{00629\ \ \ \textcolor{comment}{//\ We\ need\ one\ PerThreadData\ for\ each\ thread.}}
+\DoxyCodeLine{00630\ \ \ \textcolor{keywordflow}{while}\ ((\textcolor{keywordtype}{int})collector-\/>\_per\_thread.size()\ <\ get\_num\_threads())\ \{}
+\DoxyCodeLine{00631\ \ \ \ \ collector-\/>\_per\_thread.push\_back(PerThreadData());}
+\DoxyCodeLine{00632\ \ \ \}}
+\DoxyCodeLine{00633\ \ \ add\_collector(collector);}
+\DoxyCodeLine{00634\ }
+\DoxyCodeLine{00635\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}(\textcolor{keyword}{this},\ num\_collectors);}
+\DoxyCodeLine{00636\ \}}
+\DoxyCodeLine{00637\ }
+\DoxyCodeLine{00641\ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ PStatClient::}
+\DoxyCodeLine{00642\ do\_get\_current\_thread()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00643\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00644\ \ \ \textcolor{keywordtype}{int}\ thread\_index\ =\ thread-\/>get\_pstats\_index();}
+\DoxyCodeLine{00645\ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00646\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatThread}{PStatThread}}((\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *)\textcolor{keyword}{this},\ thread\_index);}
+\DoxyCodeLine{00647\ \ \ \}}
+\DoxyCodeLine{00648\ }
+\DoxyCodeLine{00649\ \ \ \textcolor{comment}{//\ This\ is\ the\ first\ time\ we\ have\ encountered\ this\ current\ Thread.\ \ Make\ a}}
+\DoxyCodeLine{00650\ \ \ \textcolor{comment}{//\ new\ PStatThread\ object\ for\ it.}}
+\DoxyCodeLine{00651\ \ \ \textcolor{keywordflow}{return}\ ((\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *)\textcolor{keyword}{this})-\/>do\_make\_thread(thread);}
+\DoxyCodeLine{00652\ \}}
+\DoxyCodeLine{00653\ }
+\DoxyCodeLine{00658\ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ PStatClient::}
+\DoxyCodeLine{00659\ make\_thread(\mbox{\hyperlink{classThread}{Thread}}\ *thread)\ \{}
+\DoxyCodeLine{00660\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00661\ \ \ \textcolor{keywordflow}{return}\ do\_make\_thread(thread);}
+\DoxyCodeLine{00662\ \}}
+\DoxyCodeLine{00663\ }
+\DoxyCodeLine{00667\ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ PStatClient::}
+\DoxyCodeLine{00668\ do\_make\_thread(\mbox{\hyperlink{classThread}{Thread}}\ *thread)\ \{}
+\DoxyCodeLine{00669\ \ \ \textcolor{keywordtype}{int}\ thread\_index\ =\ thread-\/>get\_pstats\_index();}
+\DoxyCodeLine{00670\ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00671\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatThread}{PStatThread}}((\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *)\textcolor{keyword}{this},\ thread\_index);}
+\DoxyCodeLine{00672\ \ \ \}}
+\DoxyCodeLine{00673\ }
+\DoxyCodeLine{00674\ \ \ MultiThingsByName::const\_iterator\ ni\ =}
+\DoxyCodeLine{00675\ \ \ \ \ \_threads\_by\_name.find(thread-\/>get\_name());}
+\DoxyCodeLine{00676\ }
+\DoxyCodeLine{00677\ \ \ \textcolor{keywordflow}{if}\ (ni\ !=\ \_threads\_by\_name.end())\ \{}
+\DoxyCodeLine{00678\ \ \ \ \ \textcolor{comment}{//\ We\ have\ seen\ a\ thread\ with\ this\ name\ before.\ \ Can\ we\ re-\/use\ any\ of}}
+\DoxyCodeLine{00679\ \ \ \ \ \textcolor{comment}{//\ them?}}
+\DoxyCodeLine{00680\ \ \ \ \ \textcolor{keyword}{const}\ vector\_int\ \&indices\ =\ (*ni).second;}
+\DoxyCodeLine{00681\ \ \ \ \ \textcolor{keywordflow}{for}\ (vector\_int::const\_iterator\ vi\ =\ indices.begin();}
+\DoxyCodeLine{00682\ \ \ \ \ \ \ \ \ \ vi\ !=\ indices.end();}
+\DoxyCodeLine{00683\ \ \ \ \ \ \ \ \ \ ++vi)\ \{}
+\DoxyCodeLine{00684\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ (*vi);}
+\DoxyCodeLine{00685\ \ \ \ \ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ get\_num\_threads(),\ \mbox{\hyperlink{classPStatThread}{PStatThread}}());}
+\DoxyCodeLine{00686\ \ \ \ \ \ \ ThreadPointer\ *threads\ =\ \_threads.load(std::memory\_order\_relaxed);}
+\DoxyCodeLine{00687\ \ \ \ \ \ \ InternalThread\ *pthread\ =\ threads[index];}
+\DoxyCodeLine{00688\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pthread-\/>\_thread.was\_deleted()\ \&\&}
+\DoxyCodeLine{00689\ \ \ \ \ \ \ \ \ \ \ pthread-\/>\_sync\_name\ ==\ thread-\/>get\_sync\_name())\ \{}
+\DoxyCodeLine{00690\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Yes,\ re-\/use\ this\ one.}}
+\DoxyCodeLine{00691\ \ \ \ \ \ \ \ \ pthread-\/>\_thread\ =\ thread;}
+\DoxyCodeLine{00692\ \ \ \ \ \ \ \ \ thread-\/>set\_pstats\_index(index);}
+\DoxyCodeLine{00693\ \ \ \ \ \ \ \ \ thread-\/>set\_pstats\_callback(\textcolor{keyword}{this});}
+\DoxyCodeLine{00694\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pthread-\/>\_sync\_name\ ==\ \textcolor{stringliteral}{"{}Main"{}})\ \{}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classClockObject}{ClockObject}}\ *clock\ =\ ClockObject::get\_global\_clock();}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ \ \ \ \ pthread-\/>\_frame\_number\ =\ clock-\/>get\_frame\_count(thread);}
+\DoxyCodeLine{00697\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00698\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatThread}{PStatThread}}(\textcolor{keyword}{this},\ index);}
+\DoxyCodeLine{00699\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00700\ \ \ \ \ \}}
+\DoxyCodeLine{00701\ \ \ \}}
+\DoxyCodeLine{00702\ }
+\DoxyCodeLine{00703\ \ \ \textcolor{comment}{//\ Create\ a\ new\ PStatsThread\ for\ this\ thread\ pointer.}}
+\DoxyCodeLine{00704\ \ \ \textcolor{keywordtype}{int}\ new\_index\ =\ get\_num\_threads();}
+\DoxyCodeLine{00705\ \ \ thread-\/>set\_pstats\_index(new\_index);}
+\DoxyCodeLine{00706\ \ \ thread-\/>set\_pstats\_callback(\textcolor{keyword}{this});}
+\DoxyCodeLine{00707\ }
+\DoxyCodeLine{00708\ \ \ InternalThread\ *pthread\ =\ \textcolor{keyword}{new}\ InternalThread(thread);}
+\DoxyCodeLine{00709\ \ \ \textcolor{keywordflow}{if}\ (pthread-\/>\_sync\_name\ ==\ \textcolor{stringliteral}{"{}Main"{}})\ \{}
+\DoxyCodeLine{00710\ \ \ \ \ \mbox{\hyperlink{classClockObject}{ClockObject}}\ *clock\ =\ ClockObject::get\_global\_clock();}
+\DoxyCodeLine{00711\ \ \ \ \ pthread-\/>\_frame\_number\ =\ clock-\/>get\_frame\_count(thread);}
+\DoxyCodeLine{00712\ \ \ \}}
+\DoxyCodeLine{00713\ \ \ add\_thread(pthread);}
+\DoxyCodeLine{00714\ }
+\DoxyCodeLine{00715\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatThread}{PStatThread}}(\textcolor{keyword}{this},\ new\_index);}
+\DoxyCodeLine{00716\ \}}
+\DoxyCodeLine{00717\ }
+\DoxyCodeLine{00722\ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ PStatClient::}
+\DoxyCodeLine{00723\ make\_gpu\_thread(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name)\ \{}
+\DoxyCodeLine{00724\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00725\ \ \ \textcolor{keywordtype}{int}\ new\_index\ =\ get\_num\_threads();}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00727\ \ \ InternalThread\ *pthread\ =\ \textcolor{keyword}{new}\ InternalThread(name,\ \textcolor{stringliteral}{"{}GPU"{}});}
+\DoxyCodeLine{00728\ \ \ add\_thread(pthread);}
+\DoxyCodeLine{00729\ }
+\DoxyCodeLine{00730\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatThread}{PStatThread}}(\textcolor{keyword}{this},\ new\_index);}
+\DoxyCodeLine{00731\ \}}
+\DoxyCodeLine{00732\ }
+\DoxyCodeLine{00740\ \textcolor{keywordtype}{bool}\ PStatClient::}
+\DoxyCodeLine{00741\ is\_active(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00742\ \ \ nassertr(collector\_index\ >=\ 0\ \&\&\ collector\_index\ <\ get\_num\_collectors(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00743\ \ \ nassertr(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ get\_num\_threads(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00744\ }
+\DoxyCodeLine{00745\ \ \ \textcolor{keywordflow}{return}\ (client\_is\_connected()\ \&\&}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ \ \ \ \ get\_collector\_ptr(collector\_index)-\/>is\_active()\ \&\&}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \ \ \ \ get\_thread\_ptr(thread\_index)-\/>\_is\_active);}
+\DoxyCodeLine{00748\ \}}
+\DoxyCodeLine{00749\ }
+\DoxyCodeLine{00757\ \textcolor{keywordtype}{bool}\ PStatClient::}
+\DoxyCodeLine{00758\ is\_started(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00759\ \ \ nassertr(collector\_index\ >=\ 0\ \&\&\ collector\_index\ <\ get\_num\_collectors(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00760\ \ \ nassertr(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ get\_num\_threads(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00761\ }
+\DoxyCodeLine{00762\ \ \ Collector\ *collector\ =\ get\_collector\_ptr(collector\_index);}
+\DoxyCodeLine{00763\ \ \ InternalThread\ *thread\ =\ get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{00764\ }
+\DoxyCodeLine{00765\ \ \ \textcolor{keywordflow}{if}\ (client\_is\_connected()\ \&\&\ collector-\/>is\_active()\ \&\&\ thread-\/>\_is\_active)\ \{}
+\DoxyCodeLine{00766\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(thread-\/>\_thread\_lock);}
+\DoxyCodeLine{00767\ \ \ \ \ \textcolor{keywordflow}{if}\ (collector-\/>\_per\_thread[thread\_index].\_nested\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ \textcolor{comment}{//\ Not\ started.}}
+\DoxyCodeLine{00769\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00770\ \ \ \ \ \}}
+\DoxyCodeLine{00771\ \ \ \ \ \textcolor{comment}{//\ Started.}}
+\DoxyCodeLine{00772\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00773\ \ \ \}}
+\DoxyCodeLine{00774\ }
+\DoxyCodeLine{00775\ \ \ \textcolor{comment}{//\ Not\ even\ connected.}}
+\DoxyCodeLine{00776\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00777\ \}}
+\DoxyCodeLine{00778\ }
+\DoxyCodeLine{00783\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00784\ start(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\ \{}
+\DoxyCodeLine{00785\ \ \ \textcolor{keywordflow}{if}\ (!client\_is\_connected())\ \{}
+\DoxyCodeLine{00786\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00787\ \ \ \}}
+\DoxyCodeLine{00788\ }
+\DoxyCodeLine{00789\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00790\ \ \ nassertv(collector\_index\ >=\ 0\ \&\&\ collector\_index\ <\ get\_num\_collectors());}
+\DoxyCodeLine{00791\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ get\_num\_threads());}
+\DoxyCodeLine{00792\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00794\ \ \ Collector\ *collector\ =\ get\_collector\_ptr(collector\_index);}
+\DoxyCodeLine{00795\ \ \ InternalThread\ *thread\ =\ get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{00796\ }
+\DoxyCodeLine{00797\ \ \ \textcolor{keywordflow}{if}\ (collector-\/>is\_active()\ \&\&\ thread-\/>\_is\_active)\ \{}
+\DoxyCodeLine{00798\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(thread-\/>\_thread\_lock);}
+\DoxyCodeLine{00799\ \ \ \ \ \textcolor{keywordflow}{if}\ (collector-\/>\_per\_thread[thread\_index].\_nested\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00800\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ collector\ wasn't\ already\ started\ in\ this\ thread;\ record\ a\ new}}
+\DoxyCodeLine{00801\ \ \ \ \ \ \ \textcolor{comment}{//\ data\ point.}}
+\DoxyCodeLine{00802\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread-\/>\_thread\_active)\ \{}
+\DoxyCodeLine{00803\ \ \ \ \ \ \ \ \ thread-\/>\_frame\_data.add\_start(collector\_index,\ get\_real\_time());}
+\DoxyCodeLine{00804\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00805\ \ \ \ \ \}}
+\DoxyCodeLine{00806\ \ \ \ \ collector-\/>\_per\_thread[thread\_index].\_nested\_count++;}
+\DoxyCodeLine{00807\ \ \ \}}
+\DoxyCodeLine{00808\ \}}
+\DoxyCodeLine{00809\ }
+\DoxyCodeLine{00814\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00815\ start(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{double}\ as\_of)\ \{}
+\DoxyCodeLine{00816\ \ \ \textcolor{keywordflow}{if}\ (!client\_is\_connected())\ \{}
+\DoxyCodeLine{00817\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00818\ \ \ \}}
+\DoxyCodeLine{00819\ }
+\DoxyCodeLine{00820\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00821\ \ \ nassertv(collector\_index\ >=\ 0\ \&\&\ collector\_index\ <\ get\_num\_collectors());}
+\DoxyCodeLine{00822\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ get\_num\_threads());}
+\DoxyCodeLine{00823\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00824\ }
+\DoxyCodeLine{00825\ \ \ Collector\ *collector\ =\ get\_collector\_ptr(collector\_index);}
+\DoxyCodeLine{00826\ \ \ InternalThread\ *thread\ =\ get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{00827\ }
+\DoxyCodeLine{00828\ \ \ \textcolor{keywordflow}{if}\ (collector-\/>is\_active()\ \&\&\ thread-\/>\_is\_active)\ \{}
+\DoxyCodeLine{00829\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(thread-\/>\_thread\_lock);}
+\DoxyCodeLine{00830\ \ \ \ \ \textcolor{keywordflow}{if}\ (collector-\/>\_per\_thread[thread\_index].\_nested\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00831\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ collector\ wasn't\ already\ started\ in\ this\ thread;\ record\ a\ new}}
+\DoxyCodeLine{00832\ \ \ \ \ \ \ \textcolor{comment}{//\ data\ point.}}
+\DoxyCodeLine{00833\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread-\/>\_thread\_active)\ \{}
+\DoxyCodeLine{00834\ \ \ \ \ \ \ \ \ thread-\/>\_frame\_data.add\_start(collector\_index,\ as\_of);}
+\DoxyCodeLine{00835\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00836\ \ \ \ \ \}}
+\DoxyCodeLine{00837\ \ \ \ \ collector-\/>\_per\_thread[thread\_index].\_nested\_count++;}
+\DoxyCodeLine{00838\ \ \ \}}
+\DoxyCodeLine{00839\ \}}
+\DoxyCodeLine{00840\ }
+\DoxyCodeLine{00845\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00846\ stop(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\ \{}
+\DoxyCodeLine{00847\ \ \ \textcolor{keywordflow}{if}\ (!client\_is\_connected())\ \{}
+\DoxyCodeLine{00848\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00849\ \ \ \}}
+\DoxyCodeLine{00850\ }
+\DoxyCodeLine{00851\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00852\ \ \ nassertv(collector\_index\ >=\ 0\ \&\&\ collector\_index\ <\ get\_num\_collectors());}
+\DoxyCodeLine{00853\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ get\_num\_threads());}
+\DoxyCodeLine{00854\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00855\ }
+\DoxyCodeLine{00856\ \ \ Collector\ *collector\ =\ get\_collector\_ptr(collector\_index);}
+\DoxyCodeLine{00857\ \ \ InternalThread\ *thread\ =\ get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{00858\ }
+\DoxyCodeLine{00859\ \ \ \textcolor{keywordflow}{if}\ (collector-\/>is\_active()\ \&\&\ thread-\/>\_is\_active)\ \{}
+\DoxyCodeLine{00860\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(thread-\/>\_thread\_lock);}
+\DoxyCodeLine{00861\ \ \ \ \ \textcolor{keywordflow}{if}\ (collector-\/>\_per\_thread[thread\_index].\_nested\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00862\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pstats\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00863\ \ \ \ \ \ \ \ \ pstats\_cat.debug()}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Collector\ "{}}\ <<\ get\_collector\_fullname(collector\_index)}
+\DoxyCodeLine{00865\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ was\ already\ stopped\ in\ thread\ "{}}\ <<\ get\_thread\_name(thread\_index)}
+\DoxyCodeLine{00866\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}!\(\backslash\)n"{}};}
+\DoxyCodeLine{00867\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00868\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00869\ \ \ \ \ \}}
+\DoxyCodeLine{00870\ }
+\DoxyCodeLine{00871\ \ \ \ \ collector-\/>\_per\_thread[thread\_index].\_nested\_count-\/-\/;}
+\DoxyCodeLine{00872\ }
+\DoxyCodeLine{00873\ \ \ \ \ \textcolor{keywordflow}{if}\ (collector-\/>\_per\_thread[thread\_index].\_nested\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00874\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ collector\ has\ now\ been\ completely\ stopped;\ record\ a\ new\ data}}
+\DoxyCodeLine{00875\ \ \ \ \ \ \ \textcolor{comment}{//\ point.}}
+\DoxyCodeLine{00876\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread-\/>\_thread\_active)\ \{}
+\DoxyCodeLine{00877\ \ \ \ \ \ \ \ \ thread-\/>\_frame\_data.add\_stop(collector\_index,\ get\_real\_time());}
+\DoxyCodeLine{00878\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00879\ \ \ \ \ \}}
+\DoxyCodeLine{00880\ \ \ \}}
+\DoxyCodeLine{00881\ \}}
+\DoxyCodeLine{00882\ }
+\DoxyCodeLine{00887\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00888\ stop(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{double}\ as\_of)\ \{}
+\DoxyCodeLine{00889\ \ \ \textcolor{keywordflow}{if}\ (!client\_is\_connected())\ \{}
+\DoxyCodeLine{00890\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00891\ \ \ \}}
+\DoxyCodeLine{00892\ }
+\DoxyCodeLine{00893\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00894\ \ \ nassertv(collector\_index\ >=\ 0\ \&\&\ collector\_index\ <\ get\_num\_collectors());}
+\DoxyCodeLine{00895\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ get\_num\_threads());}
+\DoxyCodeLine{00896\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00897\ }
+\DoxyCodeLine{00898\ \ \ Collector\ *collector\ =\ get\_collector\_ptr(collector\_index);}
+\DoxyCodeLine{00899\ \ \ InternalThread\ *thread\ =\ get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{00900\ }
+\DoxyCodeLine{00901\ \ \ \textcolor{keywordflow}{if}\ (collector-\/>is\_active()\ \&\&\ thread-\/>\_is\_active)\ \{}
+\DoxyCodeLine{00902\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(thread-\/>\_thread\_lock);}
+\DoxyCodeLine{00903\ \ \ \ \ \textcolor{keywordflow}{if}\ (collector-\/>\_per\_thread[thread\_index].\_nested\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00904\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pstats\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00905\ \ \ \ \ \ \ \ \ pstats\_cat.debug()}
+\DoxyCodeLine{00906\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Collector\ "{}}\ <<\ get\_collector\_fullname(collector\_index)}
+\DoxyCodeLine{00907\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ was\ already\ stopped\ in\ thread\ "{}}\ <<\ get\_thread\_name(thread\_index)}
+\DoxyCodeLine{00908\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}!\(\backslash\)n"{}};}
+\DoxyCodeLine{00909\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00910\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00911\ \ \ \ \ \}}
+\DoxyCodeLine{00912\ }
+\DoxyCodeLine{00913\ \ \ \ \ collector-\/>\_per\_thread[thread\_index].\_nested\_count-\/-\/;}
+\DoxyCodeLine{00914\ }
+\DoxyCodeLine{00915\ \ \ \ \ \textcolor{keywordflow}{if}\ (collector-\/>\_per\_thread[thread\_index].\_nested\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00916\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ collector\ has\ now\ been\ completely\ stopped;\ record\ a\ new\ data}}
+\DoxyCodeLine{00917\ \ \ \ \ \ \ \textcolor{comment}{//\ point.}}
+\DoxyCodeLine{00918\ \ \ \ \ \ \ thread-\/>\_frame\_data.add\_stop(collector\_index,\ as\_of);}
+\DoxyCodeLine{00919\ \ \ \ \ \}}
+\DoxyCodeLine{00920\ \ \ \}}
+\DoxyCodeLine{00921\ \}}
+\DoxyCodeLine{00922\ }
+\DoxyCodeLine{00928\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00929\ start\_stop(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{double}\ start,\ \textcolor{keywordtype}{double}\ stop)\ \{}
+\DoxyCodeLine{00930\ \ \ \textcolor{keywordflow}{if}\ (!client\_is\_connected())\ \{}
+\DoxyCodeLine{00931\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00932\ \ \ \}}
+\DoxyCodeLine{00933\ }
+\DoxyCodeLine{00934\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00935\ \ \ nassertv(collector\_index\ >=\ 0\ \&\&\ collector\_index\ <\ get\_num\_collectors());}
+\DoxyCodeLine{00936\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ get\_num\_threads());}
+\DoxyCodeLine{00937\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00938\ }
+\DoxyCodeLine{00939\ \ \ Collector\ *collector\ =\ get\_collector\_ptr(collector\_index);}
+\DoxyCodeLine{00940\ \ \ InternalThread\ *thread\ =\ get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{00941\ }
+\DoxyCodeLine{00942\ \ \ \textcolor{keywordflow}{if}\ (collector-\/>is\_active()\ \&\&\ thread-\/>\_is\_active)\ \{}
+\DoxyCodeLine{00943\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(thread-\/>\_thread\_lock);}
+\DoxyCodeLine{00944\ \ \ \ \ \textcolor{keywordflow}{if}\ (collector-\/>\_per\_thread[thread\_index].\_nested\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00945\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ collector\ wasn't\ already\ started\ in\ this\ thread;\ record\ a\ new}}
+\DoxyCodeLine{00946\ \ \ \ \ \ \ \textcolor{comment}{//\ data\ point.}}
+\DoxyCodeLine{00947\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread-\/>\_thread\_active)\ \{}
+\DoxyCodeLine{00948\ \ \ \ \ \ \ \ \ thread-\/>\_frame\_data.add\_start(collector\_index,\ start);}
+\DoxyCodeLine{00949\ \ \ \ \ \ \ \ \ thread-\/>\_frame\_data.add\_stop(collector\_index,\ stop);}
+\DoxyCodeLine{00950\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00951\ \ \ \ \ \}}
+\DoxyCodeLine{00952\ \ \ \}}
+\DoxyCodeLine{00953\ \}}
+\DoxyCodeLine{00954\ }
+\DoxyCodeLine{00962\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00963\ clear\_level(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\ \{}
+\DoxyCodeLine{00964\ \ \ \textcolor{keywordflow}{if}\ (!client\_is\_connected())\ \{}
+\DoxyCodeLine{00965\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00966\ \ \ \}}
+\DoxyCodeLine{00967\ }
+\DoxyCodeLine{00968\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00969\ \ \ nassertv(collector\_index\ >=\ 0\ \&\&\ collector\_index\ <\ get\_num\_collectors());}
+\DoxyCodeLine{00970\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ get\_num\_threads());}
+\DoxyCodeLine{00971\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00972\ }
+\DoxyCodeLine{00973\ \ \ Collector\ *collector\ =\ get\_collector\_ptr(collector\_index);}
+\DoxyCodeLine{00974\ \ \ InternalThread\ *thread\ =\ get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{00975\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(thread-\/>\_thread\_lock);}
+\DoxyCodeLine{00976\ }
+\DoxyCodeLine{00977\ \ \ collector-\/>\_per\_thread[thread\_index].\_has\_level\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00978\ \ \ collector-\/>\_per\_thread[thread\_index].\_level\ =\ 0.0;}
+\DoxyCodeLine{00979\ \}}
+\DoxyCodeLine{00980\ }
+\DoxyCodeLine{00987\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{00988\ set\_level(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{double}\ level)\ \{}
+\DoxyCodeLine{00989\ \ \ \textcolor{keywordflow}{if}\ (!client\_is\_connected())\ \{}
+\DoxyCodeLine{00990\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00991\ \ \ \}}
+\DoxyCodeLine{00992\ }
+\DoxyCodeLine{00993\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00994\ \ \ nassertv(collector\_index\ >=\ 0\ \&\&\ collector\_index\ <\ get\_num\_collectors());}
+\DoxyCodeLine{00995\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ get\_num\_threads());}
+\DoxyCodeLine{00996\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00997\ }
+\DoxyCodeLine{00998\ \ \ Collector\ *collector\ =\ get\_collector\_ptr(collector\_index);}
+\DoxyCodeLine{00999\ \ \ InternalThread\ *thread\ =\ get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{01000\ }
+\DoxyCodeLine{01001\ \ \ \textcolor{comment}{//\ We\ don't\ want\ to\ condition\ this\ on\ whether\ the\ client\ is\ already}}
+\DoxyCodeLine{01002\ \ \ \textcolor{comment}{//\ connected\ or\ the\ collector\ is\ already\ active,\ since\ we\ might\ connect\ the}}
+\DoxyCodeLine{01003\ \ \ \textcolor{comment}{//\ client\ later,\ and\ we\ will\ want\ to\ have\ an\ accurate\ value\ at\ that\ time.}}
+\DoxyCodeLine{01004\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(thread-\/>\_thread\_lock);}
+\DoxyCodeLine{01005\ }
+\DoxyCodeLine{01006\ \ \ level\ *=\ collector-\/>get\_def(\textcolor{keyword}{this},\ collector\_index)-\/>\_factor;}
+\DoxyCodeLine{01007\ }
+\DoxyCodeLine{01008\ \ \ collector-\/>\_per\_thread[thread\_index].\_has\_level\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01009\ \ \ collector-\/>\_per\_thread[thread\_index].\_level\ =\ level;}
+\DoxyCodeLine{01010\ \}}
+\DoxyCodeLine{01011\ }
+\DoxyCodeLine{01020\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01021\ add\_level(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{double}\ increment)\ \{}
+\DoxyCodeLine{01022\ \ \ \textcolor{keywordflow}{if}\ (!client\_is\_connected())\ \{}
+\DoxyCodeLine{01023\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01024\ \ \ \}}
+\DoxyCodeLine{01025\ }
+\DoxyCodeLine{01026\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{01027\ \ \ nassertv(collector\_index\ >=\ 0\ \&\&\ collector\_index\ <\ get\_num\_collectors());}
+\DoxyCodeLine{01028\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ get\_num\_threads());}
+\DoxyCodeLine{01029\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01030\ }
+\DoxyCodeLine{01031\ \ \ Collector\ *collector\ =\ get\_collector\_ptr(collector\_index);}
+\DoxyCodeLine{01032\ \ \ InternalThread\ *thread\ =\ get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{01033\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(thread-\/>\_thread\_lock);}
+\DoxyCodeLine{01034\ }
+\DoxyCodeLine{01035\ \ \ increment\ *=\ collector-\/>get\_def(\textcolor{keyword}{this},\ collector\_index)-\/>\_factor;}
+\DoxyCodeLine{01036\ }
+\DoxyCodeLine{01037\ \ \ collector-\/>\_per\_thread[thread\_index].\_has\_level\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01038\ \ \ collector-\/>\_per\_thread[thread\_index].\_level\ +=\ increment;}
+\DoxyCodeLine{01039\ \}}
+\DoxyCodeLine{01040\ }
+\DoxyCodeLine{01048\ \textcolor{keywordtype}{double}\ PStatClient::}
+\DoxyCodeLine{01049\ get\_level(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01050\ \ \ \textcolor{keywordflow}{if}\ (!client\_is\_connected())\ \{}
+\DoxyCodeLine{01051\ \ \ \ \ \textcolor{keywordflow}{return}\ 0.0;}
+\DoxyCodeLine{01052\ \ \ \}}
+\DoxyCodeLine{01053\ }
+\DoxyCodeLine{01054\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{01055\ \ \ nassertr(collector\_index\ >=\ 0\ \&\&\ collector\_index\ <\ get\_num\_collectors(),\ 0.0f);}
+\DoxyCodeLine{01056\ \ \ nassertr(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ get\_num\_threads(),\ 0.0f);}
+\DoxyCodeLine{01057\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01058\ }
+\DoxyCodeLine{01059\ \ \ Collector\ *collector\ =\ get\_collector\_ptr(collector\_index);}
+\DoxyCodeLine{01060\ \ \ InternalThread\ *thread\ =\ get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{01061\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(thread-\/>\_thread\_lock);}
+\DoxyCodeLine{01062\ }
+\DoxyCodeLine{01063\ \ \ \textcolor{keywordtype}{double}\ factor\ =\ collector-\/>get\_def(\textcolor{keyword}{this},\ collector\_index)-\/>\_factor;}
+\DoxyCodeLine{01064\ }
+\DoxyCodeLine{01065\ \ \ \textcolor{keywordflow}{return}\ collector-\/>\_per\_thread[thread\_index].\_level\ /\ factor;}
+\DoxyCodeLine{01066\ \}}
+\DoxyCodeLine{01067\ }
+\DoxyCodeLine{01076\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01077\ start\_clock\_wait()\ \{}
+\DoxyCodeLine{01078\ \ \ \_clock\_wait\_pcollector.start();}
+\DoxyCodeLine{01079\ \}}
+\DoxyCodeLine{01080\ }
+\DoxyCodeLine{01089\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01090\ start\_clock\_busy\_wait()\ \{}
+\DoxyCodeLine{01091\ \ \ \_clock\_wait\_pcollector.stop();}
+\DoxyCodeLine{01092\ \ \ \_clock\_busy\_wait\_pcollector.start();}
+\DoxyCodeLine{01093\ \}}
+\DoxyCodeLine{01094\ }
+\DoxyCodeLine{01103\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01104\ stop\_clock\_wait()\ \{}
+\DoxyCodeLine{01105\ \ \ \_clock\_busy\_wait\_pcollector.stop();}
+\DoxyCodeLine{01106\ \}}
+\DoxyCodeLine{01107\ }
+\DoxyCodeLine{01112\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01113\ add\_collector(PStatClient::Collector\ *collector)\ \{}
+\DoxyCodeLine{01114\ \ \ \textcolor{keywordtype}{int}\ num\_collectors\ =\ get\_num\_collectors();}
+\DoxyCodeLine{01115\ \ \ \textcolor{keywordflow}{if}\ (num\_collectors\ >=\ (\textcolor{keywordtype}{int})\_collectors\_size)\ \{}
+\DoxyCodeLine{01116\ \ \ \ \ \textcolor{comment}{//\ We\ need\ to\ grow\ the\ array.\ \ We\ have\ to\ be\ careful\ here,\ because\ there}}
+\DoxyCodeLine{01117\ \ \ \ \ \textcolor{comment}{//\ might\ be\ clients\ accessing\ the\ array\ right\ now\ who\ are\ not\ protected\ by}}
+\DoxyCodeLine{01118\ \ \ \ \ \textcolor{comment}{//\ the\ lock.}}
+\DoxyCodeLine{01119\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ new\_collectors\_size\ =\ (\_collectors\_size\ ==\ 0)\ ?\ 128\ :\ \_collectors\_size\ *\ 2;}
+\DoxyCodeLine{01120\ \ \ \ \ CollectorPointer\ *old\_collectors\ =\ \_collectors.load(std::memory\_order\_relaxed);}
+\DoxyCodeLine{01121\ \ \ \ \ CollectorPointer\ *new\_collectors\ =\ \textcolor{keyword}{new}\ CollectorPointer[new\_collectors\_size];}
+\DoxyCodeLine{01122\ \ \ \ \ \textcolor{keywordflow}{if}\ (old\_collectors\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01123\ \ \ \ \ \ \ memcpy(new\_collectors,\ old\_collectors,\ num\_collectors\ *\ \textcolor{keyword}{sizeof}(CollectorPointer));}
+\DoxyCodeLine{01124\ \ \ \ \ \}}
+\DoxyCodeLine{01125\ \ \ \ \ \_collectors\_size\ =\ new\_collectors\_size;}
+\DoxyCodeLine{01126\ \ \ \ \ \_collectors.store(new\_collectors,\ std::memory\_order\_release);}
+\DoxyCodeLine{01127\ }
+\DoxyCodeLine{01128\ \ \ \ \ \textcolor{comment}{//\ Now,\ we\ still\ have\ the\ old\ array,\ which\ we\ allow\ to\ leak.\ \ We\ should}}
+\DoxyCodeLine{01129\ \ \ \ \ \textcolor{comment}{//\ delete\ it,\ but\ there\ might\ be\ a\ thread\ out\ there\ that's\ still\ trying\ to}}
+\DoxyCodeLine{01130\ \ \ \ \ \textcolor{comment}{//\ access\ it,\ so\ we\ can't\ safely\ delete\ it;\ and\ it\ doesn't\ really\ matter}}
+\DoxyCodeLine{01131\ \ \ \ \ \textcolor{comment}{//\ much,\ since\ it's\ not\ a\ big\ leak.\ \ (We\ will\ only\ reallocate\ the\ array\ so}}
+\DoxyCodeLine{01132\ \ \ \ \ \textcolor{comment}{//\ many\ times\ in\ an\ application,\ and\ then\ no\ more.)}}
+\DoxyCodeLine{01133\ }
+\DoxyCodeLine{01134\ \ \ \ \ new\_collectors[num\_collectors]\ =\ collector;}
+\DoxyCodeLine{01135\ \ \ \}}
+\DoxyCodeLine{01136\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01137\ \ \ \ \ CollectorPointer\ *collectors\ =\ \_collectors.load(std::memory\_order\_relaxed);}
+\DoxyCodeLine{01138\ \ \ \ \ collectors[num\_collectors]\ =\ collector;}
+\DoxyCodeLine{01139\ \ \ \}}
+\DoxyCodeLine{01140\ }
+\DoxyCodeLine{01141\ \ \ \_num\_collectors.fetch\_add(1,\ std::memory\_order\_release);}
+\DoxyCodeLine{01142\ \}}
+\DoxyCodeLine{01143\ }
+\DoxyCodeLine{01148\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01149\ add\_thread(PStatClient::InternalThread\ *thread)\ \{}
+\DoxyCodeLine{01150\ \ \ \textcolor{keywordtype}{int}\ num\_threads\ =\ get\_num\_threads();}
+\DoxyCodeLine{01151\ \ \ \_threads\_by\_name[thread-\/>\_name].push\_back(num\_threads);}
+\DoxyCodeLine{01152\ \ \ \_threads\_by\_sync\_name[thread-\/>\_sync\_name].push\_back(num\_threads);}
+\DoxyCodeLine{01153\ }
+\DoxyCodeLine{01154\ \ \ \textcolor{keywordflow}{if}\ (num\_threads\ >=\ (\textcolor{keywordtype}{int})\_threads\_size)\ \{}
+\DoxyCodeLine{01155\ \ \ \ \ \textcolor{comment}{//\ We\ need\ to\ grow\ the\ array.\ \ We\ have\ to\ be\ careful\ here,\ because\ there}}
+\DoxyCodeLine{01156\ \ \ \ \ \textcolor{comment}{//\ might\ be\ clients\ accessing\ the\ array\ right\ now\ who\ are\ not\ protected\ by}}
+\DoxyCodeLine{01157\ \ \ \ \ \textcolor{comment}{//\ the\ lock.}}
+\DoxyCodeLine{01158\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ new\_threads\_size\ =\ (\_threads\_size\ ==\ 0)\ ?\ 128\ :\ \_threads\_size\ *\ 2;}
+\DoxyCodeLine{01159\ \ \ \ \ ThreadPointer\ *old\_threads\ =\ \_threads.load(std::memory\_order\_relaxed);}
+\DoxyCodeLine{01160\ \ \ \ \ ThreadPointer\ *new\_threads\ =\ \textcolor{keyword}{new}\ ThreadPointer[new\_threads\_size];}
+\DoxyCodeLine{01161\ \ \ \ \ \textcolor{keywordflow}{if}\ (old\_threads\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01162\ \ \ \ \ \ \ memcpy(new\_threads,\ old\_threads,\ num\_threads\ *\ \textcolor{keyword}{sizeof}(ThreadPointer));}
+\DoxyCodeLine{01163\ \ \ \ \ \}}
+\DoxyCodeLine{01164\ \ \ \ \ \_threads\_size\ =\ new\_threads\_size;}
+\DoxyCodeLine{01165\ \ \ \ \ \_threads.store(new\_threads,\ std::memory\_order\_release);}
+\DoxyCodeLine{01166\ }
+\DoxyCodeLine{01167\ \ \ \ \ \textcolor{comment}{//\ Now,\ we\ still\ have\ the\ old\ array,\ which\ we\ allow\ to\ leak.\ \ We\ should}}
+\DoxyCodeLine{01168\ \ \ \ \ \textcolor{comment}{//\ delete\ it,\ but\ there\ might\ be\ a\ thread\ out\ there\ that's\ still\ trying\ to}}
+\DoxyCodeLine{01169\ \ \ \ \ \textcolor{comment}{//\ access\ it,\ so\ we\ can't\ safely\ delete\ it;\ and\ it\ doesn't\ really\ matter}}
+\DoxyCodeLine{01170\ \ \ \ \ \textcolor{comment}{//\ much,\ since\ it's\ not\ a\ big\ leak.\ \ (We\ will\ only\ reallocate\ the\ array\ so}}
+\DoxyCodeLine{01171\ \ \ \ \ \textcolor{comment}{//\ many\ times\ in\ an\ application,\ and\ then\ no\ more.)}}
+\DoxyCodeLine{01172\ }
+\DoxyCodeLine{01173\ \ \ \ \ new\_threads[num\_threads]\ =\ thread;}
+\DoxyCodeLine{01174\ \ \ \}}
+\DoxyCodeLine{01175\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01176\ \ \ \ \ ThreadPointer\ *threads\ =\ \_threads.load(std::memory\_order\_relaxed);}
+\DoxyCodeLine{01177\ \ \ \ \ threads[num\_threads]\ =\ thread;}
+\DoxyCodeLine{01178\ \ \ \}}
+\DoxyCodeLine{01179\ }
+\DoxyCodeLine{01180\ \ \ \_num\_threads.fetch\_add(1,\ std::memory\_order\_release);}
+\DoxyCodeLine{01181\ \ \ ++num\_threads;}
+\DoxyCodeLine{01182\ }
+\DoxyCodeLine{01183\ \ \ \textcolor{comment}{//\ We\ need\ an\ additional\ PerThreadData\ for\ this\ thread\ in\ all\ of\ the}}
+\DoxyCodeLine{01184\ \ \ \textcolor{comment}{//\ collectors.}}
+\DoxyCodeLine{01185\ \ \ CollectorPointer\ *collectors\ =\ \_collectors.load(std::memory\_order\_relaxed);}
+\DoxyCodeLine{01186\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ci\ =\ 0;\ ci\ <\ get\_num\_collectors();\ ++ci)\ \{}
+\DoxyCodeLine{01187\ \ \ \ \ Collector\ *collector\ =\ collectors[ci];}
+\DoxyCodeLine{01188\ \ \ \ \ collector-\/>\_per\_thread.push\_back(PerThreadData());}
+\DoxyCodeLine{01189\ \ \ \ \ nassertv((\textcolor{keywordtype}{int})collector-\/>\_per\_thread.size()\ ==\ num\_threads);}
+\DoxyCodeLine{01190\ \ \ \}}
+\DoxyCodeLine{01191\ \}}
+\DoxyCodeLine{01192\ }
+\DoxyCodeLine{01198\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01199\ deactivate\_hook(\mbox{\hyperlink{classThread}{Thread}}\ *thread)\ \{}
+\DoxyCodeLine{01200\ \ \ \textcolor{comment}{//\ We\ shouldn't\ use\ a\ mutex\ here,\ because\ this\ code\ is\ only\ called\ during}}
+\DoxyCodeLine{01201\ \ \ \textcolor{comment}{//\ the\ SIMPLE\_THREADS\ case,\ so\ a\ mutex\ isn't\ necessary;\ and\ because\ we\ are}}
+\DoxyCodeLine{01202\ \ \ \textcolor{comment}{//\ called\ during\ a\ context\ switch,\ so\ a\ mutex\ might\ be\ dangerous.}}
+\DoxyCodeLine{01203\ \ \ \textcolor{keywordflow}{if}\ (\_impl\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01204\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01205\ \ \ \}}
+\DoxyCodeLine{01206\ \ \ \textcolor{keywordtype}{int}\ thread\_index\ =\ thread-\/>get\_pstats\_index();}
+\DoxyCodeLine{01207\ \ \ InternalThread\ *ithread\ =\ get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{01208\ }
+\DoxyCodeLine{01209\ \ \ \textcolor{keywordflow}{if}\ (ithread-\/>\_thread\_active)\ \{}
+\DoxyCodeLine{01210\ \ \ \ \ \textcolor{comment}{//\ Start\ \_thread\_block\_pcollector,\ by\ hand,\ being\ careful\ not\ to\ grab\ any}}
+\DoxyCodeLine{01211\ \ \ \ \ \textcolor{comment}{//\ mutexes\ while\ we\ do\ it.}}
+\DoxyCodeLine{01212\ \ \ \ \ \textcolor{keywordtype}{double}\ now\ =\ \_impl-\/>get\_real\_time();}
+\DoxyCodeLine{01213\ \ \ \ \ ithread-\/>\_frame\_data.add\_start(\_thread\_block\_pcollector.get\_index(),\ now);}
+\DoxyCodeLine{01214\ \ \ \ \ ithread-\/>\_thread\_active\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01215\ \ \ \}}
+\DoxyCodeLine{01216\ \}}
+\DoxyCodeLine{01217\ }
+\DoxyCodeLine{01223\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01224\ activate\_hook(\mbox{\hyperlink{classThread}{Thread}}\ *thread)\ \{}
+\DoxyCodeLine{01225\ \ \ \textcolor{comment}{//\ We\ shouldn't\ use\ a\ mutex\ here,\ because\ this\ code\ is\ only\ called\ during}}
+\DoxyCodeLine{01226\ \ \ \textcolor{comment}{//\ the\ SIMPLE\_THREADS\ case,\ so\ a\ mutex\ isn't\ necessary;\ and\ because\ we\ are}}
+\DoxyCodeLine{01227\ \ \ \textcolor{comment}{//\ called\ during\ a\ context\ switch,\ so\ a\ mutex\ might\ be\ dangerous.}}
+\DoxyCodeLine{01228\ \ \ \textcolor{keywordflow}{if}\ (\_impl\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01229\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01230\ \ \ \}}
+\DoxyCodeLine{01231\ }
+\DoxyCodeLine{01232\ \ \ InternalThread\ *ithread\ =\ get\_thread\_ptr(thread-\/>get\_pstats\_index());}
+\DoxyCodeLine{01233\ }
+\DoxyCodeLine{01234\ \ \ \textcolor{keywordflow}{if}\ (!ithread-\/>\_thread\_active)\ \{}
+\DoxyCodeLine{01235\ \ \ \ \ \textcolor{keywordtype}{double}\ now\ =\ \_impl-\/>get\_real\_time();}
+\DoxyCodeLine{01236\ \ \ \ \ ithread-\/>\_frame\_data.add\_stop(\_thread\_block\_pcollector.get\_index(),\ now);}
+\DoxyCodeLine{01237\ \ \ \ \ ithread-\/>\_thread\_active\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01238\ \ \ \}}
+\DoxyCodeLine{01239\ \}}
+\DoxyCodeLine{01240\ }
+\DoxyCodeLine{01245\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01246\ delete\_hook(\mbox{\hyperlink{classThread}{Thread}}\ *thread)\ \{}
+\DoxyCodeLine{01247\ \ \ \textcolor{keywordtype}{int}\ thread\_index\ =\ thread-\/>get\_pstats\_index();}
+\DoxyCodeLine{01248\ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ <\ 0)\ \{}
+\DoxyCodeLine{01249\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01250\ \ \ \}}
+\DoxyCodeLine{01251\ }
+\DoxyCodeLine{01252\ \ \ PStatClientImpl\ *impl;}
+\DoxyCodeLine{01253\ \ \ InternalThread\ *ithread;}
+\DoxyCodeLine{01254\ \ \ \{}
+\DoxyCodeLine{01255\ \ \ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01256\ \ \ \ \ impl\ =\ \_impl;}
+\DoxyCodeLine{01257\ \ \ \ \ \textcolor{keywordflow}{if}\ (impl\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01258\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01259\ \ \ \ \ \}}
+\DoxyCodeLine{01260\ }
+\DoxyCodeLine{01261\ \ \ \ \ \textcolor{keywordflow}{if}\ (!impl-\/>client\_is\_connected())\ \{}
+\DoxyCodeLine{01262\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01263\ \ \ \ \ \}}
+\DoxyCodeLine{01264\ }
+\DoxyCodeLine{01265\ \ \ \ \ MultiThingsByName::iterator\ ni;}
+\DoxyCodeLine{01266\ }
+\DoxyCodeLine{01267\ \ \ \ \ ni\ =\ \_threads\_by\_name.find(thread-\/>get\_name());}
+\DoxyCodeLine{01268\ \ \ \ \ \textcolor{keywordflow}{if}\ (ni\ !=\ \_threads\_by\_name.end())\ \{}
+\DoxyCodeLine{01269\ \ \ \ \ \ \ ni-\/>second.erase(std::remove(ni-\/>second.begin(),\ ni-\/>second.end(),\ thread\_index));}
+\DoxyCodeLine{01270\ \ \ \ \ \}}
+\DoxyCodeLine{01271\ }
+\DoxyCodeLine{01272\ \ \ \ \ ni\ =\ \_threads\_by\_sync\_name.find(thread-\/>get\_sync\_name());}
+\DoxyCodeLine{01273\ \ \ \ \ \textcolor{keywordflow}{if}\ (ni\ !=\ \_threads\_by\_sync\_name.end())\ \{}
+\DoxyCodeLine{01274\ \ \ \ \ \ \ ni-\/>second.erase(std::remove(ni-\/>second.begin(),\ ni-\/>second.end(),\ thread\_index));}
+\DoxyCodeLine{01275\ \ \ \ \ \}}
+\DoxyCodeLine{01276\ }
+\DoxyCodeLine{01277\ \ \ \ \ \textcolor{comment}{//\ This\ load\ can\ be\ relaxed\ because\ we\ hold\ the\ lock.}}
+\DoxyCodeLine{01278\ \ \ \ \ ThreadPointer\ *threads\ =\ \_threads.load(std::memory\_order\_relaxed);}
+\DoxyCodeLine{01279\ \ \ \ \ ithread\ =\ threads[thread\_index];}
+\DoxyCodeLine{01280\ \ \ \ \ ithread-\/>\_is\_active\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01281\ \ \ \ \ ithread-\/>\_thread\_active\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01282\ \ \ \ \ threads[thread\_index]\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01283\ \ \ \}}
+\DoxyCodeLine{01284\ }
+\DoxyCodeLine{01285\ \ \ impl-\/>remove\_thread(thread\_index);}
+\DoxyCodeLine{01286\ \ \ \textcolor{keyword}{delete}\ ithread;}
+\DoxyCodeLine{01287\ \}}
+\DoxyCodeLine{01288\ }
+\DoxyCodeLine{01292\ \textcolor{keywordtype}{void}\ PStatClient::Collector::}
+\DoxyCodeLine{01293\ make\_def(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatClient}{PStatClient}}\ *client,\ \textcolor{keywordtype}{int}\ this\_index)\ \{}
+\DoxyCodeLine{01294\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(client-\/>\_lock);}
+\DoxyCodeLine{01295\ \ \ \textcolor{keywordflow}{if}\ (\_def\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01296\ \ \ \ \ \_def\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classPStatCollectorDef}{PStatCollectorDef}}(this\_index,\ \_name);}
+\DoxyCodeLine{01297\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_parent\_index\ !=\ this\_index)\ \{}
+\DoxyCodeLine{01298\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatCollectorDef}{PStatCollectorDef}}\ *parent\_def\ =}
+\DoxyCodeLine{01299\ \ \ \ \ \ \ \ \ client-\/>get\_collector\_def(\_parent\_index);}
+\DoxyCodeLine{01300\ \ \ \ \ \ \ \_def-\/>set\_parent(*parent\_def);}
+\DoxyCodeLine{01301\ \ \ \ \ \}}
+\DoxyCodeLine{01302\ \ \ \ \ initialize\_collector\_def(client,\ \_def);}
+\DoxyCodeLine{01303\ \ \ \}}
+\DoxyCodeLine{01304\ \}}
+\DoxyCodeLine{01305\ }
+\DoxyCodeLine{01309\ PStatClient::InternalThread::}
+\DoxyCodeLine{01310\ InternalThread(\mbox{\hyperlink{classThread}{Thread}}\ *thread)\ :}
+\DoxyCodeLine{01311\ \ \ \_thread(thread),}
+\DoxyCodeLine{01312\ \ \ \_name(thread-\/>get\_name()),}
+\DoxyCodeLine{01313\ \ \ \_sync\_name(thread-\/>get\_sync\_name()),}
+\DoxyCodeLine{01314\ \ \ \_is\_active(false),}
+\DoxyCodeLine{01315\ \ \ \_frame\_number(0),}
+\DoxyCodeLine{01316\ \ \ \_next\_packet(0.0),}
+\DoxyCodeLine{01317\ \ \ \_thread\_active(true),}
+\DoxyCodeLine{01318\ \ \ \_thread\_lock(string(\textcolor{stringliteral}{"{}PStatClient::InternalThread\ "{}})\ +\ thread-\/>get\_name())}
+\DoxyCodeLine{01319\ \{}
+\DoxyCodeLine{01320\ \}}
+\DoxyCodeLine{01321\ }
+\DoxyCodeLine{01325\ PStatClient::InternalThread::}
+\DoxyCodeLine{01326\ InternalThread(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&sync\_name)\ :}
+\DoxyCodeLine{01327\ \ \ \_thread(nullptr),}
+\DoxyCodeLine{01328\ \ \ \_name(name),}
+\DoxyCodeLine{01329\ \ \ \_sync\_name(sync\_name),}
+\DoxyCodeLine{01330\ \ \ \_is\_active(false),}
+\DoxyCodeLine{01331\ \ \ \_frame\_number(0),}
+\DoxyCodeLine{01332\ \ \ \_next\_packet(0.0),}
+\DoxyCodeLine{01333\ \ \ \_thread\_active(true),}
+\DoxyCodeLine{01334\ \ \ \_thread\_lock(string(\textcolor{stringliteral}{"{}PStatClient::InternalThread\ "{}})\ +\ name)}
+\DoxyCodeLine{01335\ \{}
+\DoxyCodeLine{01336\ \}}
+\DoxyCodeLine{01337\ }
+\DoxyCodeLine{01338\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{01339\ }
+\DoxyCodeLine{01340\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01341\ set\_client\_name(\textcolor{keyword}{const}\ std::string\ \&name)\ \{}
+\DoxyCodeLine{01342\ \}}
+\DoxyCodeLine{01343\ }
+\DoxyCodeLine{01344\ std::string\ PStatClient::}
+\DoxyCodeLine{01345\ get\_client\_name()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01346\ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{01347\ \}}
+\DoxyCodeLine{01348\ }
+\DoxyCodeLine{01349\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01350\ set\_max\_rate(\textcolor{keywordtype}{double}\ rate)\ \{}
+\DoxyCodeLine{01351\ \}}
+\DoxyCodeLine{01352\ }
+\DoxyCodeLine{01353\ \textcolor{keywordtype}{double}\ PStatClient::}
+\DoxyCodeLine{01354\ get\_max\_rate()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01355\ \ \ \textcolor{keywordflow}{return}\ 0.0;}
+\DoxyCodeLine{01356\ \}}
+\DoxyCodeLine{01357\ }
+\DoxyCodeLine{01358\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::}
+\DoxyCodeLine{01359\ get\_collector(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01360\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}();}
+\DoxyCodeLine{01361\ \}}
+\DoxyCodeLine{01362\ }
+\DoxyCodeLine{01363\ std::string\ PStatClient::}
+\DoxyCodeLine{01364\ get\_collector\_name(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01365\ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{01366\ \}}
+\DoxyCodeLine{01367\ }
+\DoxyCodeLine{01368\ std::string\ PStatClient::}
+\DoxyCodeLine{01369\ get\_collector\_fullname(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01370\ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{01371\ \}}
+\DoxyCodeLine{01372\ }
+\DoxyCodeLine{01373\ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ PStatClient::}
+\DoxyCodeLine{01374\ get\_thread(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01375\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatThread}{PStatThread}}((\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *)\textcolor{keyword}{this},\ 0);}
+\DoxyCodeLine{01376\ \}}
+\DoxyCodeLine{01377\ }
+\DoxyCodeLine{01378\ \textcolor{keywordtype}{double}\ PStatClient::}
+\DoxyCodeLine{01379\ get\_real\_time()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01380\ \ \ \textcolor{keywordflow}{return}\ 0.0;}
+\DoxyCodeLine{01381\ \}}
+\DoxyCodeLine{01382\ }
+\DoxyCodeLine{01383\ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ PStatClient::}
+\DoxyCodeLine{01384\ get\_main\_thread()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01385\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatThread}{PStatThread}}((\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *)\textcolor{keyword}{this},\ 0);}
+\DoxyCodeLine{01386\ \}}
+\DoxyCodeLine{01387\ }
+\DoxyCodeLine{01388\ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ PStatClient::}
+\DoxyCodeLine{01389\ get\_current\_thread()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01390\ \ \ \textcolor{keywordflow}{return}\ get\_main\_thread();}
+\DoxyCodeLine{01391\ \}}
+\DoxyCodeLine{01392\ }
+\DoxyCodeLine{01393\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ PStatClient::}
+\DoxyCodeLine{01394\ make\_collector\_with\_relname(\textcolor{keywordtype}{int}\ parent\_index,\ std::string\ relname)\ \{}
+\DoxyCodeLine{01395\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}();}
+\DoxyCodeLine{01396\ \}}
+\DoxyCodeLine{01397\ }
+\DoxyCodeLine{01398\ \mbox{\hyperlink{classPStatThread}{PStatThread}}\ PStatClient::}
+\DoxyCodeLine{01399\ make\_thread(\mbox{\hyperlink{classThread}{Thread}}\ *thread)\ \{}
+\DoxyCodeLine{01400\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPStatThread}{PStatThread}}((\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *)\textcolor{keyword}{this},\ 0);}
+\DoxyCodeLine{01401\ \}}
+\DoxyCodeLine{01402\ }
+\DoxyCodeLine{01403\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01404\ main\_tick()\ \{}
+\DoxyCodeLine{01405\ \}}
+\DoxyCodeLine{01406\ }
+\DoxyCodeLine{01407\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01408\ thread\_tick()\ \{}
+\DoxyCodeLine{01409\ \}}
+\DoxyCodeLine{01410\ }
+\DoxyCodeLine{01411\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01412\ thread\_tick(\textcolor{keyword}{const}\ std::string\ \&)\ \{}
+\DoxyCodeLine{01413\ \}}
+\DoxyCodeLine{01414\ }
+\DoxyCodeLine{01415\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01416\ client\_main\_tick()\ \{}
+\DoxyCodeLine{01417\ \}}
+\DoxyCodeLine{01418\ }
+\DoxyCodeLine{01419\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01420\ client\_thread\_tick()\ \{}
+\DoxyCodeLine{01421\ \}}
+\DoxyCodeLine{01422\ }
+\DoxyCodeLine{01423\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01424\ client\_thread\_tick(\textcolor{keyword}{const}\ std::string\ \&sync\_name)\ \{}
+\DoxyCodeLine{01425\ \}}
+\DoxyCodeLine{01426\ }
+\DoxyCodeLine{01427\ \textcolor{keywordtype}{bool}\ PStatClient::}
+\DoxyCodeLine{01428\ client\_connect(std::string\ hostname,\ \textcolor{keywordtype}{int}\ port)\ \{}
+\DoxyCodeLine{01429\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01430\ \}}
+\DoxyCodeLine{01431\ }
+\DoxyCodeLine{01432\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01433\ client\_disconnect()\ \{}
+\DoxyCodeLine{01434\ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01435\ \}}
+\DoxyCodeLine{01436\ }
+\DoxyCodeLine{01437\ \textcolor{keywordtype}{bool}\ PStatClient::}
+\DoxyCodeLine{01438\ client\_is\_connected()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01439\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01440\ \}}
+\DoxyCodeLine{01441\ }
+\DoxyCodeLine{01442\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01443\ client\_resume\_after\_pause()\ \{}
+\DoxyCodeLine{01444\ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01445\ \}}
+\DoxyCodeLine{01446\ }
+\DoxyCodeLine{01447\ \mbox{\hyperlink{classPStatClient}{PStatClient}}\ *PStatClient::}
+\DoxyCodeLine{01448\ get\_global\_pstats()\ \{}
+\DoxyCodeLine{01449\ \ \ \textcolor{keyword}{static}\ \mbox{\hyperlink{classPStatClient}{PStatClient}}\ global\_pstats;}
+\DoxyCodeLine{01450\ \ \ \textcolor{keywordflow}{return}\ \&global\_pstats;}
+\DoxyCodeLine{01451\ \}}
+\DoxyCodeLine{01452\ }
+\DoxyCodeLine{01453\ \textcolor{keywordtype}{bool}\ PStatClient::}
+\DoxyCodeLine{01454\ is\_active(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01455\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01456\ \}}
+\DoxyCodeLine{01457\ }
+\DoxyCodeLine{01458\ \textcolor{keywordtype}{bool}\ PStatClient::}
+\DoxyCodeLine{01459\ is\_started(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01460\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01461\ \}}
+\DoxyCodeLine{01462\ }
+\DoxyCodeLine{01463\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01464\ start(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\ \{}
+\DoxyCodeLine{01465\ \}}
+\DoxyCodeLine{01466\ }
+\DoxyCodeLine{01467\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01468\ start(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{double}\ as\_of)\ \{}
+\DoxyCodeLine{01469\ \}}
+\DoxyCodeLine{01470\ }
+\DoxyCodeLine{01471\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01472\ stop(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\ \{}
+\DoxyCodeLine{01473\ \}}
+\DoxyCodeLine{01474\ }
+\DoxyCodeLine{01475\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01476\ stop(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{double}\ as\_of)\ \{}
+\DoxyCodeLine{01477\ \}}
+\DoxyCodeLine{01478\ }
+\DoxyCodeLine{01479\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01480\ clear\_level(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\ \{}
+\DoxyCodeLine{01481\ \}}
+\DoxyCodeLine{01482\ }
+\DoxyCodeLine{01483\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01484\ set\_level(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{double}\ level)\ \{}
+\DoxyCodeLine{01485\ \}}
+\DoxyCodeLine{01486\ }
+\DoxyCodeLine{01487\ \textcolor{keywordtype}{void}\ PStatClient::}
+\DoxyCodeLine{01488\ add\_level(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{double}\ increment)\ \{}
+\DoxyCodeLine{01489\ \}}
+\DoxyCodeLine{01490\ }
+\DoxyCodeLine{01491\ \textcolor{keywordtype}{double}\ PStatClient::}
+\DoxyCodeLine{01492\ get\_level(\textcolor{keywordtype}{int}\ collector\_index,\ \textcolor{keywordtype}{int}\ thread\_index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01493\ \ \ \textcolor{keywordflow}{return}\ 0.0;}
+\DoxyCodeLine{01494\ \}}
+\DoxyCodeLine{01495\ }
+\DoxyCodeLine{01496\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ DO\_PSTATS}}
+
+\end{DoxyCode}

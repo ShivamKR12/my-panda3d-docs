@@ -1,0 +1,778 @@
+\doxysection{connection\+Reader.\+cxx}
+\hypertarget{connectionReader_8cxx_source}{}\label{connectionReader_8cxx_source}\index{panda/src/net/connectionReader.cxx@{panda/src/net/connectionReader.cxx}}
+\mbox{\hyperlink{connectionReader_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{connectionReader_8h}{connectionReader.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{dcast_8h}{dcast.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{connectionManager_8h}{connectionManager.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{netDatagram_8h}{netDatagram.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagramTCPHeader_8h}{datagramTCPHeader.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagramUDPHeader_8h}{datagramUDPHeader.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__net_8h}{config\_net.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{trueClock_8h}{trueClock.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{socket__udp_8h}{socket\_udp.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}socket\_tcp.h"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{mutexHolder_8h}{mutexHolder.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightMutexHolder_8h}{lightMutexHolder.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnotify_8h}{pnotify.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{atomicAdjust_8h}{atomicAdjust.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__downloader_8h}{config\_downloader.h}}"{}}}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ read\_buffer\_size\ =\ maximum\_udp\_datagram\ +\ datagram\_udp\_header\_size;}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00037\ ConnectionReader::SocketInfo::}
+\DoxyCodeLine{00038\ SocketInfo(\textcolor{keyword}{const}\ PT(\mbox{\hyperlink{classConnection}{Connection}})\ \&connection)\ :}
+\DoxyCodeLine{00039\ \ \ \_connection(connection)}
+\DoxyCodeLine{00040\ \{}
+\DoxyCodeLine{00041\ \ \ \_busy\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00042\ \ \ \_error\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00043\ \}}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00048\ \textcolor{keywordtype}{bool}\ ConnectionReader::SocketInfo::}
+\DoxyCodeLine{00049\ is\_udp()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00050\ \ \ \textcolor{keywordflow}{return}\ (\_connection-\/>get\_socket()-\/>is\_exact\_type(Socket\_UDP::get\_class\_type()));}
+\DoxyCodeLine{00051\ \}}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00056\ \mbox{\hyperlink{classSocket__IP}{Socket\_IP}}\ *ConnectionReader::SocketInfo::}
+\DoxyCodeLine{00057\ get\_socket()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00058\ \ \ \textcolor{keywordflow}{return}\ \_connection-\/>get\_socket();}
+\DoxyCodeLine{00059\ \}}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00064\ ConnectionReader::ReaderThread::}
+\DoxyCodeLine{00065\ ReaderThread(\mbox{\hyperlink{classConnectionReader}{ConnectionReader}}\ *reader,\ \textcolor{keyword}{const}\ std::string\ \&thread\_name,}
+\DoxyCodeLine{00066\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ thread\_index)\ :}
+\DoxyCodeLine{00067\ \ \ \mbox{\hyperlink{classThread}{Thread}}(make\_thread\_name(thread\_name,\ thread\_index),}
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \ \ \ make\_thread\_name(thread\_name,\ thread\_index)),}
+\DoxyCodeLine{00069\ \ \ \_reader(reader),}
+\DoxyCodeLine{00070\ \ \ \_thread\_index(thread\_index)}
+\DoxyCodeLine{00071\ \{}
+\DoxyCodeLine{00072\ \}}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00077\ \textcolor{keywordtype}{void}\ ConnectionReader::ReaderThread::}
+\DoxyCodeLine{00078\ thread\_main()\ \{}
+\DoxyCodeLine{00079\ \ \ \_reader-\/>thread\_run(\_thread\_index);}
+\DoxyCodeLine{00080\ \}}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00088\ ConnectionReader::}
+\DoxyCodeLine{00089\ ConnectionReader(\mbox{\hyperlink{classConnectionManager}{ConnectionManager}}\ *manager,\ \textcolor{keywordtype}{int}\ num\_threads,}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ std::string\ \&thread\_name)\ :}
+\DoxyCodeLine{00091\ \ \ \_manager(manager)}
+\DoxyCodeLine{00092\ \{}
+\DoxyCodeLine{00093\ \ \ \textcolor{keywordflow}{if}\ (!Thread::is\_threading\_supported())\ \{}
+\DoxyCodeLine{00094\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00095\ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_threads\ !=\ 0)\ \{}
+\DoxyCodeLine{00096\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (net\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00097\ \ \ \ \ \ \ \ \ net\_cat.debug()}
+\DoxyCodeLine{00098\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Threading\ support\ is\ not\ available.\(\backslash\)n"{}};}
+\DoxyCodeLine{00099\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00100\ \ \ \ \ \}}
+\DoxyCodeLine{00101\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{00102\ \ \ \ \ num\_threads\ =\ 0;}
+\DoxyCodeLine{00103\ \ \ \}}
+\DoxyCodeLine{00104\ }
+\DoxyCodeLine{00105\ \ \ \_raw\_mode\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00106\ \ \ \_tcp\_header\_size\ =\ tcp\_header\_size;}
+\DoxyCodeLine{00107\ \ \ \_polling\ =\ (num\_threads\ <=\ 0);}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \ \ \_shutdown\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ \_next\_index\ =\ 0;}
+\DoxyCodeLine{00112\ \ \ \_num\_results\ =\ 0;}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00114\ \ \ \_currently\_polling\_thread\ =\ -\/1;}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ std::string\ reader\_thread\_name\ =\ thread\_name;}
+\DoxyCodeLine{00117\ \ \ \textcolor{keywordflow}{if}\ (thread\_name.empty())\ \{}
+\DoxyCodeLine{00118\ \ \ \ \ reader\_thread\_name\ =\ \textcolor{stringliteral}{"{}ReaderThread"{}};}
+\DoxyCodeLine{00119\ \ \ \}}
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00121\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_threads;\ i++)\ \{}
+\DoxyCodeLine{00122\ \ \ \ \ PT(ReaderThread)\ thread\ =\ \textcolor{keyword}{new}\ ReaderThread(\textcolor{keyword}{this},\ reader\_thread\_name,\ i);}
+\DoxyCodeLine{00123\ \ \ \ \ \_threads.push\_back(thread);}
+\DoxyCodeLine{00124\ \ \ \}}
+\DoxyCodeLine{00125\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_threads;\ i++)\ \{}
+\DoxyCodeLine{00126\ \ \ \ \ \_threads[i]-\/>start(net\_thread\_priority,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00127\ \ \ \}}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00129\ \ \ \_manager-\/>add\_reader(\textcolor{keyword}{this});}
+\DoxyCodeLine{00130\ \}}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00135\ ConnectionReader::}
+\DoxyCodeLine{00136\ \string~ConnectionReader()\ \{}
+\DoxyCodeLine{00137\ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00138\ \ \ \ \ \_manager-\/>\mbox{\hyperlink{classConnectionManager_a80ab5a687543b9c977e1c6c3d3ebfbd5}{remove\_reader}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00139\ \ \ \}}
+\DoxyCodeLine{00140\ }
+\DoxyCodeLine{00141\ \ \ shutdown();}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00143\ \ \ \textcolor{comment}{//\ Delete\ all\ of\ our\ old\ sockets.}}
+\DoxyCodeLine{00144\ \ \ Sockets::iterator\ si;}
+\DoxyCodeLine{00145\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_sockets.begin();\ si\ !=\ \_sockets.end();\ ++si)\ \{}
+\DoxyCodeLine{00146\ \ \ \ \ \textcolor{keyword}{delete}\ (*si);}
+\DoxyCodeLine{00147\ \ \ \}}
+\DoxyCodeLine{00148\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_removed\_sockets.begin();\ si\ !=\ \_removed\_sockets.end();\ ++si)\ \{}
+\DoxyCodeLine{00149\ \ \ \ \ SocketInfo\ *sinfo\ =\ (*si);}
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{keywordflow}{if}\ (!sinfo-\/>\_busy)\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ sinfo;}
+\DoxyCodeLine{00152\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ net\_cat.error()}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reentrant\ deletion\ of\ ConnectionReader-\/-\/don't\ delete\ these\(\backslash\)n"{}}}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}in\ response\ to\ connection\_reset().\(\backslash\)n"{}};}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \textcolor{comment}{//\ We'll\ have\ to\ do\ the\ best\ we\ can\ to\ recover.}}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ sinfo-\/>\_connection.clear();}
+\DoxyCodeLine{00159\ \ \ \ \ \}}
+\DoxyCodeLine{00160\ \ \ \}}
+\DoxyCodeLine{00161\ \}}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00175\ \textcolor{keywordtype}{bool}\ ConnectionReader::}
+\DoxyCodeLine{00176\ add\_connection(\mbox{\hyperlink{classConnection}{Connection}}\ *connection)\ \{}
+\DoxyCodeLine{00177\ \ \ nassertr(connection\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00178\ }
+\DoxyCodeLine{00179\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_sockets\_mutex);}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00181\ \ \ \textcolor{comment}{//\ Make\ sure\ it's\ not\ already\ on\ the\ \_sockets\ list.}}
+\DoxyCodeLine{00182\ \ \ Sockets::const\_iterator\ si;}
+\DoxyCodeLine{00183\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_sockets.begin();\ si\ !=\ \_sockets.end();\ ++si)\ \{}
+\DoxyCodeLine{00184\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*si)-\/>\_connection\ ==\ connection)\ \{}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \textcolor{comment}{//\ Whoops,\ already\ there.}}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00187\ \ \ \ \ \}}
+\DoxyCodeLine{00188\ \ \ \}}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00190\ \ \ \_sockets.push\_back(\textcolor{keyword}{new}\ SocketInfo(connection));}
+\DoxyCodeLine{00191\ }
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00193\ \}}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00203\ \textcolor{keywordtype}{bool}\ ConnectionReader::}
+\DoxyCodeLine{00204\ remove\_connection(\mbox{\hyperlink{classConnection}{Connection}}\ *connection)\ \{}
+\DoxyCodeLine{00205\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_sockets\_mutex);}
+\DoxyCodeLine{00206\ }
+\DoxyCodeLine{00207\ \ \ \textcolor{comment}{//\ Walk\ through\ the\ list\ of\ sockets\ to\ find\ the\ one\ we're\ removing.}}
+\DoxyCodeLine{00208\ \ \ Sockets::iterator\ si;}
+\DoxyCodeLine{00209\ \ \ si\ =\ \_sockets.begin();}
+\DoxyCodeLine{00210\ \ \ \textcolor{keywordflow}{while}\ (si\ !=\ \_sockets.end()\ \&\&\ (*si)-\/>\_connection\ !=\ connection)\ \{}
+\DoxyCodeLine{00211\ \ \ \ \ ++si;}
+\DoxyCodeLine{00212\ \ \ \}}
+\DoxyCodeLine{00213\ \ \ \textcolor{keywordflow}{if}\ (si\ ==\ \_sockets.end())\ \{}
+\DoxyCodeLine{00214\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00215\ \ \ \}}
+\DoxyCodeLine{00216\ }
+\DoxyCodeLine{00217\ \ \ \_removed\_sockets.push\_back(*si);}
+\DoxyCodeLine{00218\ \ \ \_sockets.erase(si);}
+\DoxyCodeLine{00219\ }
+\DoxyCodeLine{00220\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00221\ \}}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00230\ \textcolor{keywordtype}{bool}\ ConnectionReader::}
+\DoxyCodeLine{00231\ is\_connection\_ok(\mbox{\hyperlink{classConnection}{Connection}}\ *connection)\ \{}
+\DoxyCodeLine{00232\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_sockets\_mutex);}
+\DoxyCodeLine{00233\ }
+\DoxyCodeLine{00234\ \ \ \textcolor{comment}{//\ Walk\ through\ the\ list\ of\ sockets\ to\ find\ the\ one\ we're\ asking\ about.}}
+\DoxyCodeLine{00235\ \ \ Sockets::iterator\ si;}
+\DoxyCodeLine{00236\ \ \ si\ =\ \_sockets.begin();}
+\DoxyCodeLine{00237\ \ \ \textcolor{keywordflow}{while}\ (si\ !=\ \_sockets.end()\ \&\&\ (*si)-\/>\_connection\ !=\ connection)\ \{}
+\DoxyCodeLine{00238\ \ \ \ \ ++si;}
+\DoxyCodeLine{00239\ \ \ \}}
+\DoxyCodeLine{00240\ \ \ \textcolor{keywordflow}{if}\ (si\ ==\ \_sockets.end())\ \{}
+\DoxyCodeLine{00241\ \ \ \ \ \textcolor{comment}{//\ Don't\ know\ that\ connection.}}
+\DoxyCodeLine{00242\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00243\ \ \ \}}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00245\ \ \ SocketInfo\ *sinfo\ =\ (*si);}
+\DoxyCodeLine{00246\ \ \ \textcolor{keywordtype}{bool}\ is\_ok\ =\ !sinfo-\/>\_error;}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \ \ \textcolor{keywordflow}{return}\ is\_ok;}
+\DoxyCodeLine{00249\ \}}
+\DoxyCodeLine{00250\ }
+\DoxyCodeLine{00259\ \textcolor{keywordtype}{void}\ ConnectionReader::}
+\DoxyCodeLine{00260\ poll()\ \{}
+\DoxyCodeLine{00261\ \ \ \textcolor{keywordflow}{if}\ (!\_polling)\ \{}
+\DoxyCodeLine{00262\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00263\ \ \ \}}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00265\ \ \ SocketInfo\ *sinfo\ =\ get\_next\_available\_socket(\textcolor{keyword}{false},\ -\/2);}
+\DoxyCodeLine{00266\ \ \ \textcolor{keywordflow}{if}\ (sinfo\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00267\ \ \ \ \ \textcolor{keywordtype}{double}\ max\_poll\_cycle\ =\ get\_net\_max\_poll\_cycle();}
+\DoxyCodeLine{00268\ \ \ \ \ \textcolor{keywordflow}{if}\ (max\_poll\_cycle\ <\ 0.0)\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \textcolor{comment}{//\ Continue\ to\ read\ all\ data.}}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (sinfo\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classConnectionReader_abaef05800c70cd849c97aa1a62807e73}{process\_incoming\_data}}(sinfo);}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ sinfo\ =\ get\_next\_available\_socket(\textcolor{keyword}{false},\ -\/2);}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00274\ }
+\DoxyCodeLine{00275\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \textcolor{comment}{//\ Read\ only\ until\ a\ certain\ amount\ of\ time\ has\ elapsed.}}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ \mbox{\hyperlink{classTrueClock}{TrueClock}}\ *global\_clock\ =\ TrueClock::get\_global\_ptr();}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ stop\ =\ global\_clock-\/>get\_short\_time()\ +\ max\_poll\_cycle;}
+\DoxyCodeLine{00279\ }
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (sinfo\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classConnectionReader_abaef05800c70cd849c97aa1a62807e73}{process\_incoming\_data}}(sinfo);}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (global\_clock-\/>get\_short\_time()\ >=\ stop)\ \{}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \ \ sinfo\ =\ get\_next\_available\_socket(\textcolor{keyword}{false},\ -\/2);}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00287\ \ \ \ \ \}}
+\DoxyCodeLine{00288\ \ \ \}}
+\DoxyCodeLine{00289\ \}}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00295\ \mbox{\hyperlink{classConnectionManager}{ConnectionManager}}\ *ConnectionReader::}
+\DoxyCodeLine{00296\ get\_manager()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00297\ \ \ \textcolor{keywordflow}{return}\ \_manager;}
+\DoxyCodeLine{00298\ \}}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00303\ \textcolor{keywordtype}{int}\ ConnectionReader::}
+\DoxyCodeLine{00304\ get\_num\_threads()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordflow}{return}\ \_threads.size();}
+\DoxyCodeLine{00306\ \}}
+\DoxyCodeLine{00307\ }
+\DoxyCodeLine{00316\ \textcolor{keywordtype}{void}\ ConnectionReader::}
+\DoxyCodeLine{00317\ set\_raw\_mode(\textcolor{keywordtype}{bool}\ mode)\ \{}
+\DoxyCodeLine{00318\ \ \ \_raw\_mode\ =\ mode;}
+\DoxyCodeLine{00319\ \}}
+\DoxyCodeLine{00320\ }
+\DoxyCodeLine{00324\ \textcolor{keywordtype}{bool}\ ConnectionReader::}
+\DoxyCodeLine{00325\ get\_raw\_mode()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00326\ \ \ \textcolor{keywordflow}{return}\ \_raw\_mode;}
+\DoxyCodeLine{00327\ \}}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00335\ \textcolor{keywordtype}{void}\ ConnectionReader::}
+\DoxyCodeLine{00336\ set\_tcp\_header\_size(\textcolor{keywordtype}{int}\ tcp\_header\_size)\ \{}
+\DoxyCodeLine{00337\ \ \ \_tcp\_header\_size\ =\ tcp\_header\_size;}
+\DoxyCodeLine{00338\ \}}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00343\ \textcolor{keywordtype}{int}\ ConnectionReader::}
+\DoxyCodeLine{00344\ get\_tcp\_header\_size()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00345\ \ \ \textcolor{keywordflow}{return}\ \_tcp\_header\_size;}
+\DoxyCodeLine{00346\ \}}
+\DoxyCodeLine{00347\ }
+\DoxyCodeLine{00352\ \textcolor{keywordtype}{void}\ ConnectionReader::}
+\DoxyCodeLine{00353\ shutdown()\ \{}
+\DoxyCodeLine{00354\ \ \ \textcolor{keywordflow}{if}\ (\_shutdown)\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00356\ \ \ \}}
+\DoxyCodeLine{00357\ }
+\DoxyCodeLine{00358\ \ \ \textcolor{comment}{//\ First,\ begin\ the\ shutdown.\ \ This\ will\ tell\ our\ threads\ we\ want\ them\ to}}
+\DoxyCodeLine{00359\ \ \ \textcolor{comment}{//\ quit.}}
+\DoxyCodeLine{00360\ \ \ \_shutdown\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ \textcolor{comment}{//\ Now\ wait\ for\ all\ of\ our\ threads\ to\ terminate.}}
+\DoxyCodeLine{00363\ \ \ Threads::iterator\ ti;}
+\DoxyCodeLine{00364\ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ \_threads.begin();\ ti\ !=\ \_threads.end();\ ++ti)\ \{}
+\DoxyCodeLine{00365\ \ \ \ \ (*ti)-\/>join();}
+\DoxyCodeLine{00366\ \ \ \}}
+\DoxyCodeLine{00367\ \}}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00374\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classConnectionReader_a7f4b96b7c0c99e244eb82be24ddca7b1}{ConnectionReader::}}}
+\DoxyCodeLine{00375\ \mbox{\hyperlink{classConnectionReader_a7f4b96b7c0c99e244eb82be24ddca7b1}{flush\_read\_connection}}(\mbox{\hyperlink{classConnection}{Connection}}\ *connection)\ \{}
+\DoxyCodeLine{00376\ \ \ \textcolor{comment}{//\ Ensure\ it\ doesn't\ get\ deleted.}}
+\DoxyCodeLine{00377\ \ \ \mbox{\hyperlink{classConnectionReader_1_1SocketInfo}{SocketInfo}}\ sinfo(connection);}
+\DoxyCodeLine{00378\ }
+\DoxyCodeLine{00379\ \ \ \textcolor{keywordflow}{if}\ (!remove\_connection(connection))\ \{}
+\DoxyCodeLine{00380\ \ \ \ \ \textcolor{comment}{//\ Not\ already\ in\ the\ reader.}}
+\DoxyCodeLine{00381\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00382\ \ \ \}}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00384\ \ \ \textcolor{comment}{//\ The\ connection\ was\ previously\ in\ the\ reader,\ but\ has\ now\ been\ removed.}}
+\DoxyCodeLine{00385\ \ \ \textcolor{comment}{//\ Now\ we\ can\ flush\ it\ completely.\ \ We\ check\ if\ there\ is\ any\ read\ data}}
+\DoxyCodeLine{00386\ \ \ \textcolor{comment}{//\ available\ on\ just\ this\ one\ socket;\ we\ can\ do\ this\ right\ here\ in\ this}}
+\DoxyCodeLine{00387\ \ \ \textcolor{comment}{//\ thread,\ since\ we've\ already\ removed\ this\ connection\ from\ the\ reader.}}
+\DoxyCodeLine{00388\ }
+\DoxyCodeLine{00389\ \ \ \mbox{\hyperlink{classSocket__fdset}{Socket\_fdset}}\ fdset;}
+\DoxyCodeLine{00390\ \ \ fdset.clear();}
+\DoxyCodeLine{00391\ \ \ fdset.setForSocket(*(sinfo.get\_socket()));}
+\DoxyCodeLine{00392\ \ \ \textcolor{keywordtype}{int}\ num\_results\ =\ fdset.WaitForRead(\textcolor{keyword}{true},\ 0);}
+\DoxyCodeLine{00393\ \ \ \textcolor{keywordflow}{while}\ (num\_results\ !=\ 0)\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ sinfo.\_busy\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00395\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\mbox{\hyperlink{classConnectionReader_abaef05800c70cd849c97aa1a62807e73}{process\_incoming\_data}}(\&sinfo))\ \{}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00397\ \ \ \ \ \}}
+\DoxyCodeLine{00398\ \ \ \ \ fdset.setForSocket(*(sinfo.get\_socket()));}
+\DoxyCodeLine{00399\ \ \ \ \ num\_results\ =\ fdset.WaitForRead(\textcolor{keyword}{true},\ 0);}
+\DoxyCodeLine{00400\ \ \ \}}
+\DoxyCodeLine{00401\ \}}
+\DoxyCodeLine{00402\ }
+\DoxyCodeLine{00409\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classConnectionReader_a15d92c47111b53e5f98510b0993719aa}{ConnectionReader::}}}
+\DoxyCodeLine{00410\ \mbox{\hyperlink{classConnectionReader_a15d92c47111b53e5f98510b0993719aa}{clear\_manager}}()\ \{}
+\DoxyCodeLine{00411\ \ \ \_manager\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00412\ \}}
+\DoxyCodeLine{00413\ }
+\DoxyCodeLine{00418\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{ConnectionReader::}}}
+\DoxyCodeLine{00419\ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(\mbox{\hyperlink{classConnectionReader_1_1SocketInfo}{SocketInfo}}\ *sinfo)\ \{}
+\DoxyCodeLine{00420\ \ \ nassertv(sinfo-\/>\_busy);}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00422\ \ \ \textcolor{comment}{//\ By\ marking\ the\ SocketInfo\ nonbusy,\ we\ make\ it\ available\ for\ future\ polls.}}
+\DoxyCodeLine{00423\ \ \ sinfo-\/>\_busy\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00424\ \}}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00431\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classConnectionReader_abaef05800c70cd849c97aa1a62807e73}{ConnectionReader::}}}
+\DoxyCodeLine{00432\ \mbox{\hyperlink{classConnectionReader_abaef05800c70cd849c97aa1a62807e73}{process\_incoming\_data}}(\mbox{\hyperlink{classConnectionReader_1_1SocketInfo}{SocketInfo}}\ *sinfo)\ \{}
+\DoxyCodeLine{00433\ \ \ \textcolor{keywordflow}{if}\ (\_raw\_mode)\ \{}
+\DoxyCodeLine{00434\ \ \ \ \ \textcolor{keywordflow}{if}\ (sinfo-\/>is\_udp())\ \{}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ process\_raw\_incoming\_udp\_data(sinfo);}
+\DoxyCodeLine{00436\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ process\_raw\_incoming\_tcp\_data(sinfo);}
+\DoxyCodeLine{00438\ \ \ \ \ \}}
+\DoxyCodeLine{00439\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00440\ \ \ \ \ \textcolor{keywordflow}{if}\ (sinfo-\/>is\_udp())\ \{}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ process\_incoming\_udp\_data(sinfo);}
+\DoxyCodeLine{00442\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ process\_incoming\_tcp\_data(sinfo);}
+\DoxyCodeLine{00444\ \ \ \ \ \}}
+\DoxyCodeLine{00445\ \ \ \}}
+\DoxyCodeLine{00446\ \}}
+\DoxyCodeLine{00447\ }
+\DoxyCodeLine{00451\ \textcolor{keywordtype}{bool}\ ConnectionReader::}
+\DoxyCodeLine{00452\ process\_incoming\_udp\_data(SocketInfo\ *sinfo)\ \{}
+\DoxyCodeLine{00453\ \ \ \mbox{\hyperlink{classSocket__UDP}{Socket\_UDP}}\ *socket;}
+\DoxyCodeLine{00454\ \ \ DCAST\_INTO\_R(socket,\ sinfo-\/>get\_socket(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00455\ \ \ \mbox{\hyperlink{classSocket__Address}{Socket\_Address}}\ addr;}
+\DoxyCodeLine{00456\ }
+\DoxyCodeLine{00457\ \ \ \textcolor{comment}{//\ Read\ as\ many\ bytes\ as\ we\ can.}}
+\DoxyCodeLine{00458\ \ \ \textcolor{keywordtype}{char}\ buffer[read\_buffer\_size];}
+\DoxyCodeLine{00459\ \ \ \textcolor{keywordtype}{int}\ bytes\_read\ =\ read\_buffer\_size;}
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00461\ \ \ \textcolor{keywordtype}{bool}\ okflag\ =\ socket-\/>GetPacket(buffer,\ \&bytes\_read,\ addr);}
+\DoxyCodeLine{00462\ }
+\DoxyCodeLine{00463\ \ \ \textcolor{keywordflow}{if}\ (!okflag)\ \{}
+\DoxyCodeLine{00464\ \ \ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00465\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00466\ }
+\DoxyCodeLine{00467\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (bytes\_read\ ==\ 0)\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \textcolor{comment}{//\ The\ socket\ was\ closed\ (!).\ \ This\ shouldn't\ happen\ with\ a\ UDP}}
+\DoxyCodeLine{00469\ \ \ \ \ \textcolor{comment}{//\ connection.\ \ Oh\ well.\ \ Report\ that\ and\ return.}}
+\DoxyCodeLine{00470\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00471\ \ \ \ \ \ \ \_manager-\/>\mbox{\hyperlink{classConnectionManager_a6bfb647b241e65673a73067c4589834f}{connection\_reset}}(sinfo-\/>\_connection,\ 0);}
+\DoxyCodeLine{00472\ \ \ \ \ \}}
+\DoxyCodeLine{00473\ \ \ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00474\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00475\ \ \ \}}
+\DoxyCodeLine{00476\ }
+\DoxyCodeLine{00477\ \ \ \textcolor{comment}{//\ Since\ we\ are\ not\ running\ in\ raw\ mode,\ we\ decode\ the\ header\ to\ determine}}
+\DoxyCodeLine{00478\ \ \ \textcolor{comment}{//\ how\ big\ the\ datagram\ is.\ \ This\ means\ we\ must\ have\ read\ at\ least\ a\ full}}
+\DoxyCodeLine{00479\ \ \ \textcolor{comment}{//\ header.}}
+\DoxyCodeLine{00480\ \ \ \textcolor{keywordflow}{if}\ (bytes\_read\ <\ datagram\_udp\_header\_size)\ \{}
+\DoxyCodeLine{00481\ \ \ \ \ net\_cat.error()}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Did\ not\ read\ entire\ header,\ discarding\ UDP\ datagram.\(\backslash\)n"{}};}
+\DoxyCodeLine{00483\ \ \ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00484\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00485\ \ \ \}}
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00487\ \ \ \mbox{\hyperlink{classDatagramUDPHeader}{DatagramUDPHeader}}\ header(buffer);}
+\DoxyCodeLine{00488\ }
+\DoxyCodeLine{00489\ \ \ \textcolor{keywordtype}{char}\ *dp\ =\ buffer\ +\ datagram\_udp\_header\_size;}
+\DoxyCodeLine{00490\ \ \ bytes\_read\ -\/=\ datagram\_udp\_header\_size;}
+\DoxyCodeLine{00491\ }
+\DoxyCodeLine{00492\ \ \ \mbox{\hyperlink{classNetDatagram}{NetDatagram}}\ datagram(dp,\ bytes\_read);}
+\DoxyCodeLine{00493\ }
+\DoxyCodeLine{00494\ \ \ \textcolor{comment}{//\ Now\ that\ we've\ read\ all\ the\ data,\ it's\ time\ to\ finish\ the\ socket\ so}}
+\DoxyCodeLine{00495\ \ \ \textcolor{comment}{//\ another\ thread\ can\ read\ the\ next\ datagram.}}
+\DoxyCodeLine{00496\ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00497\ }
+\DoxyCodeLine{00498\ \ \ \textcolor{keywordflow}{if}\ (\_shutdown)\ \{}
+\DoxyCodeLine{00499\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00500\ \ \ \}}
+\DoxyCodeLine{00501\ }
+\DoxyCodeLine{00502\ \ \ \textcolor{comment}{//\ And\ now\ do\ whatever\ we\ need\ to\ do\ to\ process\ the\ datagram.}}
+\DoxyCodeLine{00503\ \ \ \textcolor{keywordflow}{if}\ (!header.verify\_datagram(datagram))\ \{}
+\DoxyCodeLine{00504\ \ \ \ \ net\_cat.error()}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Ignoring\ invalid\ UDP\ datagram.\(\backslash\)n"{}};}
+\DoxyCodeLine{00506\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00507\ \ \ \ \ datagram.set\_connection(sinfo-\/>\_connection);}
+\DoxyCodeLine{00508\ \ \ \ \ datagram.set\_address(\mbox{\hyperlink{classNetAddress}{NetAddress}}(addr));}
+\DoxyCodeLine{00509\ }
+\DoxyCodeLine{00510\ \ \ \ \ \textcolor{keywordflow}{if}\ (net\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ net\_cat.spam()}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Received\ UDP\ datagram\ with\ "{}}}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \ \ <<\ datagram\_udp\_header\_size\ +\ datagram.get\_length()}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes\ on\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)datagram.get\_connection()}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ from\ "{}}\ <<\ datagram.get\_address()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00516\ \ \ \ \ \}}
+\DoxyCodeLine{00517\ }
+\DoxyCodeLine{00518\ \ \ \ \ receive\_datagram(datagram);}
+\DoxyCodeLine{00519\ \ \ \}}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00522\ \}}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00527\ \textcolor{keywordtype}{bool}\ ConnectionReader::}
+\DoxyCodeLine{00528\ process\_incoming\_tcp\_data(SocketInfo\ *sinfo)\ \{}
+\DoxyCodeLine{00529\ \ \ \mbox{\hyperlink{classSocket__TCP}{Socket\_TCP}}\ *socket;}
+\DoxyCodeLine{00530\ \ \ DCAST\_INTO\_R(socket,\ sinfo-\/>get\_socket(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00531\ }
+\DoxyCodeLine{00532\ \ \ \textcolor{comment}{//\ Read\ only\ the\ header\ bytes\ to\ start\ with.}}
+\DoxyCodeLine{00533\ \ \ \textcolor{keywordtype}{char}\ buffer[read\_buffer\_size];}
+\DoxyCodeLine{00534\ \ \ \textcolor{keywordtype}{int}\ header\_bytes\_read\ =\ 0;}
+\DoxyCodeLine{00535\ }
+\DoxyCodeLine{00536\ \ \ \textcolor{comment}{//\ First,\ we\ have\ to\ read\ the\ first\ \_tcp\_header\_size\ bytes.}}
+\DoxyCodeLine{00537\ \ \ \textcolor{keywordflow}{while}\ (header\_bytes\_read\ <\ \_tcp\_header\_size)\ \{}
+\DoxyCodeLine{00538\ \ \ \ \ \textcolor{keywordtype}{int}\ bytes\_read\ =}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ socket-\/>RecvData(buffer\ +\ header\_bytes\_read,}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_tcp\_header\_size\ -\/\ header\_bytes\_read);}
+\DoxyCodeLine{00541\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00542\ \ \ \ \ \textcolor{keywordflow}{while}\ (bytes\_read\ <\ 0\ \&\&\ socket-\/>GetLastError()\ ==\ LOCAL\_BLOCKING\_ERROR\ \&\&}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \ \ \ \ \ socket-\/>\mbox{\hyperlink{classSocket__IP_aa6957d69fd438dda328fee8d57887d18}{Active}}())\ \{}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ bytes\_read\ =\ socket-\/>RecvData(buffer\ +\ header\_bytes\_read,}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_tcp\_header\_size\ -\/\ header\_bytes\_read);}
+\DoxyCodeLine{00547\ \ \ \ \ \}}
+\DoxyCodeLine{00548\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SIMPLE\_THREADS}}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00550\ \ \ \ \ \textcolor{keywordflow}{if}\ (bytes\_read\ <=\ 0)\ \{}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ socket\ was\ closed.\ \ Report\ that\ and\ return.}}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00553\ \ \ \ \ \ \ \ \ \_manager-\/>\mbox{\hyperlink{classConnectionManager_a6bfb647b241e65673a73067c4589834f}{connection\_reset}}(sinfo-\/>\_connection,\ 0);}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00555\ \ \ \ \ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00557\ \ \ \ \ \}}
+\DoxyCodeLine{00558\ }
+\DoxyCodeLine{00559\ \ \ \ \ header\_bytes\_read\ +=\ bytes\_read;}
+\DoxyCodeLine{00560\ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00561\ \ \ \}}
+\DoxyCodeLine{00562\ }
+\DoxyCodeLine{00563\ \ \ \textcolor{comment}{//\ Now\ we\ must\ decode\ the\ header\ to\ determine\ how\ big\ the\ datagram\ is.\ \ This}}
+\DoxyCodeLine{00564\ \ \ \textcolor{comment}{//\ means\ we\ must\ have\ read\ at\ least\ a\ full\ header.}}
+\DoxyCodeLine{00565\ \ \ \textcolor{keywordflow}{if}\ (header\_bytes\_read\ !=\ \_tcp\_header\_size)\ \{}
+\DoxyCodeLine{00566\ \ \ \ \ \textcolor{comment}{//\ This\ should\ actually\ be\ impossible,\ by\ the\ read-\/loop\ logic\ above.}}
+\DoxyCodeLine{00567\ \ \ \ \ net\_cat.error()}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Did\ not\ read\ entire\ header,\ discarding\ TCP\ datagram.\(\backslash\)n"{}};}
+\DoxyCodeLine{00569\ \ \ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00570\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00571\ \ \ \}}
+\DoxyCodeLine{00572\ }
+\DoxyCodeLine{00573\ \ \ \mbox{\hyperlink{classDatagramTCPHeader}{DatagramTCPHeader}}\ header(buffer,\ \_tcp\_header\_size);}
+\DoxyCodeLine{00574\ \ \ \textcolor{keywordtype}{int}\ size\ =\ header.get\_datagram\_size(\_tcp\_header\_size);}
+\DoxyCodeLine{00575\ }
+\DoxyCodeLine{00576\ \ \ \textcolor{comment}{//\ We\ have\ to\ loop\ until\ the\ entire\ datagram\ is\ read.}}
+\DoxyCodeLine{00577\ \ \ \mbox{\hyperlink{classNetDatagram}{NetDatagram}}\ datagram;}
+\DoxyCodeLine{00578\ }
+\DoxyCodeLine{00579\ \ \ \textcolor{keywordflow}{while}\ (!\_shutdown\ \&\&\ (\textcolor{keywordtype}{int})datagram.get\_length()\ <\ size)\ \{}
+\DoxyCodeLine{00580\ \ \ \ \ \textcolor{keywordtype}{int}\ bytes\_read;}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ \ \ \textcolor{keywordtype}{int}\ read\_bytes\ =\ read\_buffer\_size;}
+\DoxyCodeLine{00583\ \textcolor{preprocessor}{\#ifdef\ SIMPLE\_THREADS}}
+\DoxyCodeLine{00584\ \ \ \ \ \textcolor{comment}{//\ In\ the\ SIMPLE\_THREADS\ case,\ we\ want\ to\ limit\ the\ number\ of\ bytes\ we}}
+\DoxyCodeLine{00585\ \ \ \ \ \textcolor{comment}{//\ read\ in\ a\ single\ epoch,\ to\ minimize\ the\ impact\ on\ the\ other\ threads.}}
+\DoxyCodeLine{00586\ \ \ \ \ read\_bytes\ =\ min(read\_buffer\_size,\ (\textcolor{keywordtype}{int})net\_max\_read\_per\_epoch);}
+\DoxyCodeLine{00587\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00588\ }
+\DoxyCodeLine{00589\ \ \ \ \ bytes\_read\ =}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ socket-\/>RecvData(buffer,\ min(read\_bytes,}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{int})(size\ -\/\ datagram.get\_length())));}
+\DoxyCodeLine{00592\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00593\ \ \ \ \ \textcolor{keywordflow}{while}\ (bytes\_read\ <\ 0\ \&\&\ socket-\/>GetLastError()\ ==\ LOCAL\_BLOCKING\_ERROR\ \&\&}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \ \ \ \ \ socket-\/>\mbox{\hyperlink{classSocket__IP_aa6957d69fd438dda328fee8d57887d18}{Active}}())\ \{}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ bytes\_read\ =}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ socket-\/>RecvData(buffer,\ min(read\_bytes,}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{int})(size\ -\/\ datagram.get\_length())));}
+\DoxyCodeLine{00599\ \ \ \ \ \}}
+\DoxyCodeLine{00600\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SIMPLE\_THREADS}}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00602\ \ \ \ \ \textcolor{keywordtype}{char}\ *dp\ =\ buffer;}
+\DoxyCodeLine{00603\ }
+\DoxyCodeLine{00604\ \ \ \ \ \textcolor{keywordflow}{if}\ (bytes\_read\ <=\ 0)\ \{}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ socket\ was\ closed.\ \ Report\ that\ and\ return.}}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ \_manager-\/>\mbox{\hyperlink{classConnectionManager_a6bfb647b241e65673a73067c4589834f}{connection\_reset}}(sinfo-\/>\_connection,\ 0);}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00611\ \ \ \ \ \}}
+\DoxyCodeLine{00612\ }
+\DoxyCodeLine{00613\ \ \ \ \ \textcolor{keywordtype}{int}\ datagram\_bytes\ =}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ min(bytes\_read,\ (\textcolor{keywordtype}{int})(size\ -\/\ datagram.get\_length()));}
+\DoxyCodeLine{00615\ \ \ \ \ datagram.append\_data(dp,\ datagram\_bytes);}
+\DoxyCodeLine{00616\ }
+\DoxyCodeLine{00617\ \ \ \ \ \textcolor{keywordflow}{if}\ (bytes\_read\ >\ datagram\_bytes)\ \{}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \textcolor{comment}{//\ There\ were\ some\ extra\ bytes\ at\ the\ end\ of\ the\ datagram.\ \ Maybe\ the}}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \textcolor{comment}{//\ beginning\ of\ the\ next\ datagram?\ \ Huh.}}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ net\_cat.error()}
+\DoxyCodeLine{00621\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Discarding\ "{}}\ <<\ bytes\_read\ -\/\ datagram\_bytes}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes\ following\ TCP\ datagram.\(\backslash\)n"{}};}
+\DoxyCodeLine{00623\ \ \ \ \ \}}
+\DoxyCodeLine{00624\ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00625\ \ \ \}}
+\DoxyCodeLine{00626\ }
+\DoxyCodeLine{00627\ \ \ \textcolor{comment}{//\ Now\ that\ we've\ read\ all\ the\ data,\ it's\ time\ to\ finish\ the\ socket\ so}}
+\DoxyCodeLine{00628\ \ \ \textcolor{comment}{//\ another\ thread\ can\ read\ the\ next\ datagram.}}
+\DoxyCodeLine{00629\ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00630\ }
+\DoxyCodeLine{00631\ \ \ \textcolor{keywordflow}{if}\ (\_shutdown)\ \{}
+\DoxyCodeLine{00632\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00633\ \ \ \}}
+\DoxyCodeLine{00634\ }
+\DoxyCodeLine{00635\ \ \ \textcolor{comment}{//\ And\ now\ do\ whatever\ we\ need\ to\ do\ to\ process\ the\ datagram.}}
+\DoxyCodeLine{00636\ \ \ \textcolor{keywordflow}{if}\ (!header.verify\_datagram(datagram,\ \_tcp\_header\_size))\ \{}
+\DoxyCodeLine{00637\ \ \ \ \ net\_cat.error()}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Ignoring\ invalid\ TCP\ datagram.\(\backslash\)n"{}};}
+\DoxyCodeLine{00639\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00640\ \ \ \ \ datagram.set\_connection(sinfo-\/>\_connection);}
+\DoxyCodeLine{00641\ \ \ \ \ datagram.set\_address(\mbox{\hyperlink{classNetAddress}{NetAddress}}(socket-\/>\mbox{\hyperlink{classSocket__IP_acdb93c3c6f82e426044071387dfb5fbf}{GetPeerName}}()));}
+\DoxyCodeLine{00642\ }
+\DoxyCodeLine{00643\ \ \ \ \ \textcolor{keywordflow}{if}\ (net\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ net\_cat.spam()}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Received\ TCP\ datagram\ with\ "{}}}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ \ \ <<\ \_tcp\_header\_size\ +\ datagram.get\_length()}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes\ on\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)datagram.get\_connection()}
+\DoxyCodeLine{00648\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ from\ "{}}\ <<\ datagram.get\_address()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00649\ \ \ \ \ \}}
+\DoxyCodeLine{00650\ }
+\DoxyCodeLine{00651\ \ \ \ \ receive\_datagram(datagram);}
+\DoxyCodeLine{00652\ \ \ \}}
+\DoxyCodeLine{00653\ }
+\DoxyCodeLine{00654\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00655\ \}}
+\DoxyCodeLine{00656\ }
+\DoxyCodeLine{00660\ \textcolor{keywordtype}{bool}\ ConnectionReader::}
+\DoxyCodeLine{00661\ process\_raw\_incoming\_udp\_data(SocketInfo\ *sinfo)\ \{}
+\DoxyCodeLine{00662\ \ \ \mbox{\hyperlink{classSocket__UDP}{Socket\_UDP}}\ *socket;}
+\DoxyCodeLine{00663\ \ \ DCAST\_INTO\_R(socket,\ sinfo-\/>get\_socket(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00664\ \ \ \mbox{\hyperlink{classSocket__Address}{Socket\_Address}}\ addr;}
+\DoxyCodeLine{00665\ }
+\DoxyCodeLine{00666\ \ \ \textcolor{comment}{//\ Read\ as\ many\ bytes\ as\ we\ can.}}
+\DoxyCodeLine{00667\ \ \ \textcolor{keywordtype}{char}\ buffer[read\_buffer\_size];}
+\DoxyCodeLine{00668\ \ \ \textcolor{keywordtype}{int}\ bytes\_read\ =\ read\_buffer\_size;}
+\DoxyCodeLine{00669\ }
+\DoxyCodeLine{00670\ \ \ \textcolor{keywordtype}{bool}\ okflag\ =\ socket-\/>GetPacket(buffer,\ \&bytes\_read,\ addr);}
+\DoxyCodeLine{00671\ }
+\DoxyCodeLine{00672\ \ \ \textcolor{keywordflow}{if}\ (!okflag)\ \{}
+\DoxyCodeLine{00673\ \ \ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00674\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00675\ }
+\DoxyCodeLine{00676\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (bytes\_read\ ==\ 0)\ \{}
+\DoxyCodeLine{00677\ \ \ \ \ \textcolor{comment}{//\ The\ socket\ was\ closed\ (!).\ \ This\ shouldn't\ happen\ with\ a\ UDP}}
+\DoxyCodeLine{00678\ \ \ \ \ \textcolor{comment}{//\ connection.\ \ Oh\ well.\ \ Report\ that\ and\ return.}}
+\DoxyCodeLine{00679\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00680\ \ \ \ \ \ \ \_manager-\/>\mbox{\hyperlink{classConnectionManager_a6bfb647b241e65673a73067c4589834f}{connection\_reset}}(sinfo-\/>\_connection,\ 0);}
+\DoxyCodeLine{00681\ \ \ \ \ \}}
+\DoxyCodeLine{00682\ \ \ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00683\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00684\ \ \ \}}
+\DoxyCodeLine{00685\ }
+\DoxyCodeLine{00686\ \ \ \textcolor{comment}{//\ In\ raw\ mode,\ we\ simply\ extract\ all\ the\ bytes\ and\ make\ that\ a\ datagram.}}
+\DoxyCodeLine{00687\ \ \ \mbox{\hyperlink{classNetDatagram}{NetDatagram}}\ datagram(buffer,\ bytes\_read);}
+\DoxyCodeLine{00688\ }
+\DoxyCodeLine{00689\ \ \ \textcolor{comment}{//\ Now\ that\ we've\ read\ all\ the\ data,\ it's\ time\ to\ finish\ the\ socket\ so}}
+\DoxyCodeLine{00690\ \ \ \textcolor{comment}{//\ another\ thread\ can\ read\ the\ next\ datagram.}}
+\DoxyCodeLine{00691\ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00692\ }
+\DoxyCodeLine{00693\ \ \ \textcolor{keywordflow}{if}\ (\_shutdown)\ \{}
+\DoxyCodeLine{00694\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00695\ \ \ \}}
+\DoxyCodeLine{00696\ }
+\DoxyCodeLine{00697\ \ \ datagram.set\_connection(sinfo-\/>\_connection);}
+\DoxyCodeLine{00698\ \ \ datagram.set\_address(\mbox{\hyperlink{classNetAddress}{NetAddress}}(addr));}
+\DoxyCodeLine{00699\ }
+\DoxyCodeLine{00700\ \ \ \textcolor{keywordflow}{if}\ (net\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00701\ \ \ \ \ net\_cat.spam()}
+\DoxyCodeLine{00702\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Received\ raw\ UDP\ datagram\ with\ "{}}\ <<\ datagram.get\_length()}
+\DoxyCodeLine{00703\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes\ on\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)datagram.get\_connection()}
+\DoxyCodeLine{00704\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ from\ "{}}\ <<\ datagram.get\_address()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00705\ \ \ \}}
+\DoxyCodeLine{00706\ }
+\DoxyCodeLine{00707\ \ \ receive\_datagram(datagram);}
+\DoxyCodeLine{00708\ }
+\DoxyCodeLine{00709\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00710\ \}}
+\DoxyCodeLine{00711\ }
+\DoxyCodeLine{00715\ \textcolor{keywordtype}{bool}\ ConnectionReader::}
+\DoxyCodeLine{00716\ process\_raw\_incoming\_tcp\_data(SocketInfo\ *sinfo)\ \{}
+\DoxyCodeLine{00717\ \ \ \mbox{\hyperlink{classSocket__TCP}{Socket\_TCP}}\ *socket;}
+\DoxyCodeLine{00718\ \ \ DCAST\_INTO\_R(socket,\ sinfo-\/>get\_socket(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00719\ }
+\DoxyCodeLine{00720\ \ \ \textcolor{comment}{//\ Read\ as\ many\ bytes\ as\ we\ can.}}
+\DoxyCodeLine{00721\ \ \ \textcolor{keywordtype}{char}\ buffer[read\_buffer\_size];}
+\DoxyCodeLine{00722\ \ \ \textcolor{keywordtype}{int}\ bytes\_read\ =\ socket-\/>RecvData(buffer,\ read\_buffer\_size);}
+\DoxyCodeLine{00723\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00724\ \ \ \textcolor{keywordflow}{while}\ (bytes\_read\ <\ 0\ \&\&\ socket-\/>GetLastError()\ ==\ LOCAL\_BLOCKING\_ERROR\ \&\&}
+\DoxyCodeLine{00725\ \ \ \ \ \ \ \ \ \ socket-\/>\mbox{\hyperlink{classSocket__IP_aa6957d69fd438dda328fee8d57887d18}{Active}}())\ \{}
+\DoxyCodeLine{00726\ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00727\ \ \ \ \ bytes\_read\ =\ socket-\/>RecvData(buffer,\ read\_buffer\_size);}
+\DoxyCodeLine{00728\ \ \ \}}
+\DoxyCodeLine{00729\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SIMPLE\_THREADS}}
+\DoxyCodeLine{00730\ }
+\DoxyCodeLine{00731\ \ \ \textcolor{keywordflow}{if}\ (bytes\_read\ <=\ 0)\ \{}
+\DoxyCodeLine{00732\ \ \ \ \ \textcolor{comment}{//\ The\ socket\ was\ closed.\ \ Report\ that\ and\ return.}}
+\DoxyCodeLine{00733\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00734\ \ \ \ \ \ \ \_manager-\/>\mbox{\hyperlink{classConnectionManager_a6bfb647b241e65673a73067c4589834f}{connection\_reset}}(sinfo-\/>\_connection,\ 0);}
+\DoxyCodeLine{00735\ \ \ \ \ \}}
+\DoxyCodeLine{00736\ \ \ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00737\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00738\ \ \ \}}
+\DoxyCodeLine{00739\ }
+\DoxyCodeLine{00740\ \ \ \textcolor{comment}{//\ In\ raw\ mode,\ we\ simply\ extract\ all\ the\ bytes\ and\ make\ that\ a\ datagram.}}
+\DoxyCodeLine{00741\ \ \ \mbox{\hyperlink{classNetDatagram}{NetDatagram}}\ datagram(buffer,\ bytes\_read);}
+\DoxyCodeLine{00742\ }
+\DoxyCodeLine{00743\ \ \ \textcolor{comment}{//\ Now\ that\ we've\ read\ all\ the\ data,\ it's\ time\ to\ finish\ the\ socket\ so}}
+\DoxyCodeLine{00744\ \ \ \textcolor{comment}{//\ another\ thread\ can\ read\ the\ next\ datagram.}}
+\DoxyCodeLine{00745\ \ \ \mbox{\hyperlink{classConnectionReader_a2e540c3a197e57487cfc632e8dc1f032}{finish\_socket}}(sinfo);}
+\DoxyCodeLine{00746\ }
+\DoxyCodeLine{00747\ \ \ \textcolor{keywordflow}{if}\ (\_shutdown)\ \{}
+\DoxyCodeLine{00748\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00749\ \ \ \}}
+\DoxyCodeLine{00750\ }
+\DoxyCodeLine{00751\ \ \ datagram.set\_connection(sinfo-\/>\_connection);}
+\DoxyCodeLine{00752\ \ \ datagram.set\_address(\mbox{\hyperlink{classNetAddress}{NetAddress}}(socket-\/>\mbox{\hyperlink{classSocket__IP_acdb93c3c6f82e426044071387dfb5fbf}{GetPeerName}}()));}
+\DoxyCodeLine{00753\ }
+\DoxyCodeLine{00754\ \ \ \textcolor{keywordflow}{if}\ (net\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00755\ \ \ \ \ net\_cat.spam()}
+\DoxyCodeLine{00756\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Received\ raw\ TCP\ datagram\ with\ "{}}\ <<\ datagram.get\_length()}
+\DoxyCodeLine{00757\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes\ on\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)datagram.get\_connection()}
+\DoxyCodeLine{00758\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ from\ "{}}\ <<\ datagram.get\_address()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00759\ \ \ \}}
+\DoxyCodeLine{00760\ }
+\DoxyCodeLine{00761\ \ \ receive\_datagram(datagram);}
+\DoxyCodeLine{00762\ }
+\DoxyCodeLine{00763\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00764\ \}}
+\DoxyCodeLine{00765\ }
+\DoxyCodeLine{00769\ \textcolor{keywordtype}{void}\ ConnectionReader::}
+\DoxyCodeLine{00770\ thread\_run(\textcolor{keywordtype}{int}\ thread\_index)\ \{}
+\DoxyCodeLine{00771\ \ \ nassertv(!\_polling);}
+\DoxyCodeLine{00772\ \ \ nassertv(\_threads[thread\_index]\ ==\ Thread::get\_current\_thread());}
+\DoxyCodeLine{00773\ }
+\DoxyCodeLine{00774\ \ \ \textcolor{keywordflow}{while}\ (!\_shutdown)\ \{}
+\DoxyCodeLine{00775\ \ \ \ \ SocketInfo\ *sinfo\ =}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ get\_next\_available\_socket(\textcolor{keyword}{true},\ thread\_index);}
+\DoxyCodeLine{00777\ \ \ \ \ \textcolor{keywordflow}{if}\ (sinfo\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00778\ \ \ \ \ \ \ \mbox{\hyperlink{classConnectionReader_abaef05800c70cd849c97aa1a62807e73}{process\_incoming\_data}}(sinfo);}
+\DoxyCodeLine{00779\ \ \ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00780\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00781\ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00782\ \ \ \ \ \}}
+\DoxyCodeLine{00783\ \ \ \}}
+\DoxyCodeLine{00784\ \}}
+\DoxyCodeLine{00785\ }
+\DoxyCodeLine{00786\ }
+\DoxyCodeLine{00796\ \mbox{\hyperlink{classConnectionReader_1_1SocketInfo}{ConnectionReader::SocketInfo}}\ *ConnectionReader::}
+\DoxyCodeLine{00797\ get\_next\_available\_socket(\textcolor{keywordtype}{bool}\ allow\_block,\ \textcolor{keywordtype}{int}\ current\_thread\_index)\ \{}
+\DoxyCodeLine{00798\ \ \ \textcolor{comment}{//\ Go\ to\ sleep\ on\ the\ select()\ mutex.\ \ This\ guarantees\ that\ only\ one\ thread}}
+\DoxyCodeLine{00799\ \ \ \textcolor{comment}{//\ is\ in\ this\ function\ at\ a\ time.}}
+\DoxyCodeLine{00800\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_select\_mutex);}
+\DoxyCodeLine{00801\ }
+\DoxyCodeLine{00802\ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00803\ \ \ \ \ \textcolor{comment}{//\ First,\ check\ the\ result\ from\ the\ previous\ select\ call.\ \ If\ there\ are}}
+\DoxyCodeLine{00804\ \ \ \ \ \textcolor{comment}{//\ any\ sockets\ remaining\ there,\ process\ them\ first.}}
+\DoxyCodeLine{00805\ \ \ \ \ \textcolor{keywordflow}{while}\ (!\_shutdown\ \&\&\ \_num\_results\ >\ 0)\ \{}
+\DoxyCodeLine{00806\ \ \ \ \ \ \ nassertr(\_next\_index\ <\ (\textcolor{keywordtype}{int})\_selecting\_sockets.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00807\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ i\ =\ \_next\_index;}
+\DoxyCodeLine{00808\ \ \ \ \ \ \ \_next\_index++;}
+\DoxyCodeLine{00809\ }
+\DoxyCodeLine{00810\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_fdset.IsSetFor(*\_selecting\_sockets[i]-\/>get\_socket()))\ \{}
+\DoxyCodeLine{00811\ \ \ \ \ \ \ \ \ \_num\_results-\/-\/;}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ \ \ SocketInfo\ *sinfo\ =\ \_selecting\_sockets[i];}
+\DoxyCodeLine{00813\ }
+\DoxyCodeLine{00814\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Some\ noise\ on\ this\ socket.}}
+\DoxyCodeLine{00815\ \ \ \ \ \ \ \ \ sinfo-\/>\_busy\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00816\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ sinfo;}
+\DoxyCodeLine{00817\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00818\ \ \ \ \ \}}
+\DoxyCodeLine{00819\ }
+\DoxyCodeLine{00820\ \ \ \ \ \textcolor{keywordtype}{bool}\ interrupted;}
+\DoxyCodeLine{00821\ \ \ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00822\ \ \ \ \ \ \ interrupted\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00823\ }
+\DoxyCodeLine{00824\ \ \ \ \ \ \ \textcolor{comment}{//\ Ok,\ no\ results\ from\ previous\ select\ calls.\ \ Prepare\ to\ set\ up\ for\ a}}
+\DoxyCodeLine{00825\ \ \ \ \ \ \ \textcolor{comment}{//\ new\ select.}}
+\DoxyCodeLine{00826\ }
+\DoxyCodeLine{00827\ \ \ \ \ \ \ \textcolor{comment}{//\ First,\ report\ to\ anyone\ else\ who\ cares\ that\ we're\ the\ thread\ about\ to}}
+\DoxyCodeLine{00828\ \ \ \ \ \ \ \textcolor{comment}{//\ do\ the\ poll.\ \ That\ way,\ if\ any\ new\ sockets\ come\ available\ while\ we're}}
+\DoxyCodeLine{00829\ \ \ \ \ \ \ \textcolor{comment}{//\ polling,\ we\ can\ service\ them.}}
+\DoxyCodeLine{00830\ \ \ \ \ \ \ AtomicAdjust::set(\_currently\_polling\_thread,\ current\_thread\_index);}
+\DoxyCodeLine{00831\ }
+\DoxyCodeLine{00832\ \ \ \ \ \ \ rebuild\_select\_list();}
+\DoxyCodeLine{00833\ }
+\DoxyCodeLine{00834\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ we\ can\ execute\ the\ select.}}
+\DoxyCodeLine{00835\ \ \ \ \ \ \ \_num\_results\ =\ 0;}
+\DoxyCodeLine{00836\ \ \ \ \ \ \ \_next\_index\ =\ 0;}
+\DoxyCodeLine{00837\ }
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_shutdown)\ \{}
+\DoxyCodeLine{00839\ \ \ \ \ \ \ \ \ uint32\_t\ timeout\ =\ (uint32\_t)(get\_net\_max\_block()\ *\ 1000.0);}
+\DoxyCodeLine{00840\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!allow\_block)\ \{}
+\DoxyCodeLine{00841\ \ \ \ \ \ \ \ \ \ \ timeout\ =\ 0;}
+\DoxyCodeLine{00842\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00843\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00844\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ In\ the\ presence\ of\ SIMPLE\_THREADS,\ we\ never\ wait\ at\ all,\ but\ rather}}
+\DoxyCodeLine{00845\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ we\ yield\ the\ thread\ if\ we\ come\ up\ empty\ (so\ that\ we\ won't\ block\ the}}
+\DoxyCodeLine{00846\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ entire\ process).}}
+\DoxyCodeLine{00847\ \ \ \ \ \ \ \ \ timeout\ =\ 0;}
+\DoxyCodeLine{00848\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00849\ }
+\DoxyCodeLine{00850\ \ \ \ \ \ \ \ \ \_num\_results\ =\ \_fdset.WaitForRead(\textcolor{keyword}{false},\ timeout);}
+\DoxyCodeLine{00851\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00852\ }
+\DoxyCodeLine{00853\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_num\_results\ ==\ 0\ \&\&\ allow\_block)\ \{}
+\DoxyCodeLine{00854\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ reached\ net\_max\_block,\ go\ back\ and\ reconsider.\ \ (We\ never}}
+\DoxyCodeLine{00855\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ timeout\ indefinitely,\ so\ we\ can\ check\ the\ shutdown\ flag\ every\ once}}
+\DoxyCodeLine{00856\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ in\ a\ while.)}}
+\DoxyCodeLine{00857\ \ \ \ \ \ \ \ \ interrupted\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00858\ \ \ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00859\ }
+\DoxyCodeLine{00860\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_num\_results\ <\ 0)\ \{}
+\DoxyCodeLine{00861\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ had\ an\ error,\ just\ return.\ \ But\ yield\ the\ timeslice\ first.}}
+\DoxyCodeLine{00862\ \ \ \ \ \ \ \ \ Thread::force\_yield();}
+\DoxyCodeLine{00863\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00865\ \ \ \ \ \}\ \textcolor{keywordflow}{while}\ (!\_shutdown\ \&\&\ interrupted);}
+\DoxyCodeLine{00866\ }
+\DoxyCodeLine{00867\ \ \ \ \ AtomicAdjust::set(\_currently\_polling\_thread,\ current\_thread\_index);}
+\DoxyCodeLine{00868\ }
+\DoxyCodeLine{00869\ \ \ \ \ \textcolor{comment}{//\ Repeat\ the\ above\ until\ we\ (a)\ find\ a\ socket\ with\ actual\ noise\ on\ it,\ or}}
+\DoxyCodeLine{00870\ \ \ \ \ \textcolor{comment}{//\ (b)\ return\ from\ PR\_Poll()\ with\ no\ sockets\ available.}}
+\DoxyCodeLine{00871\ \ \ \}\ \textcolor{keywordflow}{while}\ (!\_shutdown\ \&\&\ \_num\_results\ >\ 0);}
+\DoxyCodeLine{00872\ }
+\DoxyCodeLine{00873\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00874\ \}}
+\DoxyCodeLine{00875\ }
+\DoxyCodeLine{00876\ }
+\DoxyCodeLine{00881\ \textcolor{keywordtype}{void}\ ConnectionReader::}
+\DoxyCodeLine{00882\ rebuild\_select\_list()\ \{}
+\DoxyCodeLine{00883\ \ \ \_fdset.clear();}
+\DoxyCodeLine{00884\ \ \ \_selecting\_sockets.clear();}
+\DoxyCodeLine{00885\ }
+\DoxyCodeLine{00886\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_sockets\_mutex);}
+\DoxyCodeLine{00887\ \ \ Sockets::const\_iterator\ si;}
+\DoxyCodeLine{00888\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_sockets.begin();\ si\ !=\ \_sockets.end();\ ++si)\ \{}
+\DoxyCodeLine{00889\ \ \ \ \ SocketInfo\ *sinfo\ =\ (*si);}
+\DoxyCodeLine{00890\ \ \ \ \ \textcolor{keywordflow}{if}\ (!sinfo-\/>\_busy\ \&\&\ !sinfo-\/>\_error)\ \{}
+\DoxyCodeLine{00891\ \ \ \ \ \ \ \_fdset.setForSocket(*sinfo-\/>get\_socket());}
+\DoxyCodeLine{00892\ \ \ \ \ \ \ \_selecting\_sockets.push\_back(sinfo);}
+\DoxyCodeLine{00893\ \ \ \ \ \}}
+\DoxyCodeLine{00894\ \ \ \}}
+\DoxyCodeLine{00895\ }
+\DoxyCodeLine{00896\ \ \ \textcolor{comment}{//\ This\ is\ also\ a\ fine\ time\ to\ delete\ the\ contents\ of\ the\ \_removed\_sockets}}
+\DoxyCodeLine{00897\ \ \ \textcolor{comment}{//\ list.}}
+\DoxyCodeLine{00898\ \ \ \textcolor{keywordflow}{if}\ (!\_removed\_sockets.empty())\ \{}
+\DoxyCodeLine{00899\ \ \ \ \ Sockets\ still\_busy\_sockets;}
+\DoxyCodeLine{00900\ \ \ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_removed\_sockets.begin();\ si\ !=\ \_removed\_sockets.end();\ ++si)\ \{}
+\DoxyCodeLine{00901\ \ \ \ \ \ \ SocketInfo\ *sinfo\ =\ (*si);}
+\DoxyCodeLine{00902\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sinfo-\/>\_busy)\ \{}
+\DoxyCodeLine{00903\ \ \ \ \ \ \ \ \ still\_busy\_sockets.push\_back(sinfo);}
+\DoxyCodeLine{00904\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00905\ \ \ \ \ \ \ \ \ \textcolor{keyword}{delete}\ sinfo;}
+\DoxyCodeLine{00906\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00907\ \ \ \ \ \}}
+\DoxyCodeLine{00908\ \ \ \ \ \_removed\_sockets.swap(still\_busy\_sockets);}
+\DoxyCodeLine{00909\ \ \ \}}
+\DoxyCodeLine{00910\ \}}
+\DoxyCodeLine{00911\ }
+\DoxyCodeLine{00917\ \textcolor{keywordtype}{void}\ ConnectionReader::}
+\DoxyCodeLine{00918\ accumulate\_fdset(\mbox{\hyperlink{classSocket__fdset}{Socket\_fdset}}\ \&fdset)\ \{}
+\DoxyCodeLine{00919\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_sockets\_mutex);}
+\DoxyCodeLine{00920\ \ \ Sockets::const\_iterator\ si;}
+\DoxyCodeLine{00921\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_sockets.begin();\ si\ !=\ \_sockets.end();\ ++si)\ \{}
+\DoxyCodeLine{00922\ \ \ \ \ SocketInfo\ *sinfo\ =\ (*si);}
+\DoxyCodeLine{00923\ \ \ \ \ \textcolor{keywordflow}{if}\ (!sinfo-\/>\_busy\ \&\&\ !sinfo-\/>\_error)\ \{}
+\DoxyCodeLine{00924\ \ \ \ \ \ \ fdset.setForSocket(*sinfo-\/>get\_socket());}
+\DoxyCodeLine{00925\ \ \ \ \ \}}
+\DoxyCodeLine{00926\ \ \ \}}
+\DoxyCodeLine{00927\ \}}
+
+\end{DoxyCode}

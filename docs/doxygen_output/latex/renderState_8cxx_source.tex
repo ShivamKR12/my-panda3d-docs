@@ -1,0 +1,1691 @@
+\doxysection{render\+State.\+cxx}
+\hypertarget{renderState_8cxx_source}{}\label{renderState_8cxx_source}\index{panda/src/pgraph/renderState.cxx@{panda/src/pgraph/renderState.cxx}}
+\mbox{\hyperlink{renderState_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{renderState_8h}{renderState.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{transparencyAttrib_8h}{transparencyAttrib.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullBinAttrib_8h}{cullBinAttrib.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullBinManager_8h}{cullBinManager.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{fogAttrib_8h}{fogAttrib.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{clipPlaneAttrib_8h}{clipPlaneAttrib.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{scissorAttrib_8h}{scissorAttrib.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{transparencyAttrib_8h}{transparencyAttrib.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{colorAttrib_8h}{colorAttrib.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{colorScaleAttrib_8h}{colorScaleAttrib.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{textureAttrib_8h}{textureAttrib.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{texGenAttrib_8h}{texGenAttrib.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{shaderAttrib_8h}{shaderAttrib.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimer_8h}{pStatTimer.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pgraph_8h}{config\_pgraph.h}}"{}}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamReader_8h}{bamReader.h}}"{}}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamWriter_8h}{bamWriter.h}}"{}}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagramIterator_8h}{datagramIterator.h}}"{}}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{indent_8h}{indent.h}}"{}}}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{compareTo_8h}{compareTo.h}}"{}}}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightReMutexHolder_8h}{lightReMutexHolder.h}}"{}}}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightMutexHolder_8h}{lightMutexHolder.h}}"{}}}
+\DoxyCodeLine{00036\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{renderAttribRegistry_8h}{renderAttribRegistry.h}}"{}}}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00041\ \mbox{\hyperlink{classLightReMutex}{LightReMutex}}\ *RenderState::\_states\_lock\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00042\ \mbox{\hyperlink{classSimpleHashMap}{RenderState::States}}\ RenderState::\_states;}
+\DoxyCodeLine{00043\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *RenderState::\_empty\_state\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00044\ \mbox{\hyperlink{classUpdateSeq}{UpdateSeq}}\ RenderState::\_last\_cycle\_detect;}
+\DoxyCodeLine{00045\ \textcolor{keywordtype}{size\_t}\ RenderState::\_garbage\_index\ =\ 0;}
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00047\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ RenderState::\_cache\_update\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Update"{}});}
+\DoxyCodeLine{00048\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ RenderState::\_garbage\_collect\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Garbage\ Collect"{}});}
+\DoxyCodeLine{00049\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ RenderState::\_state\_compose\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Compose\ State"{}});}
+\DoxyCodeLine{00050\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ RenderState::\_state\_invert\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Invert\ State"{}});}
+\DoxyCodeLine{00051\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ RenderState::\_node\_counter(\textcolor{stringliteral}{"{}RenderStates:On\ nodes"{}});}
+\DoxyCodeLine{00052\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ RenderState::\_cache\_counter(\textcolor{stringliteral}{"{}RenderStates:Cached"{}});}
+\DoxyCodeLine{00053\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ RenderState::\_state\_break\_cycles\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Break\ Cycles"{}});}
+\DoxyCodeLine{00054\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ RenderState::\_state\_validate\_pcollector(\textcolor{stringliteral}{"{}*:State\ Cache:Validate"{}});}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \mbox{\hyperlink{classCacheStats}{CacheStats}}\ RenderState::\_cache\_stats;}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00058\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ RenderState::\_type\_handle;}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00066\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState::}}}
+\DoxyCodeLine{00067\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}}()\ :}
+\DoxyCodeLine{00068\ \ \ \_flags(0),}
+\DoxyCodeLine{00069\ \ \ \_lock(\textcolor{stringliteral}{"{}RenderState"{}})}
+\DoxyCodeLine{00070\ \{}
+\DoxyCodeLine{00071\ \ \ \textcolor{keywordflow}{if}\ (\_states\_lock\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00072\ \ \ \ \ \mbox{\hyperlink{classRenderState_a79c1a906186c8eb3050212003ac98eea}{init\_states}}();}
+\DoxyCodeLine{00073\ \ \ \}}
+\DoxyCodeLine{00074\ \ \ \_saved\_entry\ =\ -\/1;}
+\DoxyCodeLine{00075\ \ \ \_last\_mi\ =\ -\/1;}
+\DoxyCodeLine{00076\ \ \ \_cache\_stats.add\_num\_states(1);}
+\DoxyCodeLine{00077\ \ \ \_read\_overrides\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00078\ \ \ \_generated\_shader\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00081\ \ \ MemoryUsage::update\_type(\textcolor{keyword}{this},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00082\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00083\ \}}
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00088\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState::}}}
+\DoxyCodeLine{00089\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ \&copy)\ :}
+\DoxyCodeLine{00090\ \ \ \_filled\_slots(copy.\_filled\_slots),}
+\DoxyCodeLine{00091\ \ \ \_flags(0),}
+\DoxyCodeLine{00092\ \ \ \_lock(\textcolor{stringliteral}{"{}RenderState"{}})}
+\DoxyCodeLine{00093\ \{}
+\DoxyCodeLine{00094\ \ \ \textcolor{comment}{//\ Copy\ over\ the\ attributes.}}
+\DoxyCodeLine{00095\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ RenderAttribRegistry::\_max\_slots;\ ++i)\ \{}
+\DoxyCodeLine{00096\ \ \ \ \ \_attributes[i]\ =\ copy.\_attributes[i];}
+\DoxyCodeLine{00097\ \ \ \}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \_saved\_entry\ =\ -\/1;}
+\DoxyCodeLine{00100\ \ \ \_last\_mi\ =\ -\/1;}
+\DoxyCodeLine{00101\ \ \ \_cache\_stats.add\_num\_states(1);}
+\DoxyCodeLine{00102\ \ \ \_read\_overrides\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00103\ \ \ \_generated\_shader\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00104\ }
+\DoxyCodeLine{00105\ \textcolor{preprocessor}{\#ifdef\ DO\_MEMORY\_USAGE}}
+\DoxyCodeLine{00106\ \ \ MemoryUsage::update\_type(\textcolor{keyword}{this},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00107\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00108\ \}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00114\ \mbox{\hyperlink{classRenderState_ad6b1f19c42de824752214fc4cd06c54d}{RenderState::}}}
+\DoxyCodeLine{00115\ \mbox{\hyperlink{classRenderState_ad6b1f19c42de824752214fc4cd06c54d}{\string~RenderState}}()\ \{}
+\DoxyCodeLine{00116\ \ \ \textcolor{comment}{//\ We'd\ better\ not\ call\ the\ destructor\ twice\ on\ a\ particular\ object.}}
+\DoxyCodeLine{00117\ \ \ nassertv(!is\_destructing());}
+\DoxyCodeLine{00118\ \ \ set\_destructing();}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ \ \ \textcolor{comment}{//\ unref()\ should\ have\ cleared\ these.}}
+\DoxyCodeLine{00121\ \ \ nassertv(\_saved\_entry\ ==\ -\/1);}
+\DoxyCodeLine{00122\ \ \ nassertv(\_composition\_cache.is\_empty()\ \&\&\ \_invert\_composition\_cache.is\_empty());}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \ \ \textcolor{comment}{//\ If\ this\ was\ true\ at\ the\ beginning\ of\ the\ destructor,\ but\ is\ no\ longer}}
+\DoxyCodeLine{00125\ \ \ \textcolor{comment}{//\ true\ now,\ probably\ we've\ been\ double-\/deleted.}}
+\DoxyCodeLine{00126\ \ \ nassertv(get\_ref\_count()\ ==\ 0);}
+\DoxyCodeLine{00127\ \ \ \_cache\_stats.add\_num\_states(-\/1);}
+\DoxyCodeLine{00128\ \}}
+\DoxyCodeLine{00129\ }
+\DoxyCodeLine{00138\ \textcolor{keywordtype}{int}\ RenderState::}
+\DoxyCodeLine{00139\ compare\_to(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ \&other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00140\ \ \ SlotMask\ mask\ =\ \_filled\_slots\ |\ other.\_filled\_slots;}
+\DoxyCodeLine{00141\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00142\ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{00143\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ \_attributes[slot].compare\_to(other.\_attributes[slot]);}
+\DoxyCodeLine{00144\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00146\ \ \ \ \ \}}
+\DoxyCodeLine{00147\ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{00148\ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00149\ \ \ \}}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00151\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00152\ \}}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00161\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classRenderState_a6c0a929b3e490cd9dcc1f5839f770d8a}{RenderState::}}}
+\DoxyCodeLine{00162\ \mbox{\hyperlink{classRenderState_a6c0a929b3e490cd9dcc1f5839f770d8a}{compare\_sort}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ \&other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00163\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{this}\ ==\ \&other)\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ \textcolor{comment}{//\ Trivial\ case.}}
+\DoxyCodeLine{00165\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00166\ \ \ \}}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \ \ \mbox{\hyperlink{classRenderAttribRegistry}{RenderAttribRegistry}}\ *reg\ =\ RenderAttribRegistry::quick\_get\_global\_ptr();}
+\DoxyCodeLine{00169\ \ \ \textcolor{keywordtype}{int}\ num\_sorted\_slots\ =\ reg-\/>get\_num\_sorted\_slots();}
+\DoxyCodeLine{00170\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ n\ =\ 0;\ n\ <\ num\_sorted\_slots;\ ++n)\ \{}
+\DoxyCodeLine{00171\ \ \ \ \ \textcolor{keywordtype}{int}\ slot\ =\ reg-\/>get\_sorted\_slot(n);}
+\DoxyCodeLine{00172\ \ \ \ \ nassertr((\_attributes[slot].\_attrib\ !=\ \textcolor{keyword}{nullptr})\ ==\ \_filled\_slots.get\_bit(slot),\ 0);}
+\DoxyCodeLine{00173\ }
+\DoxyCodeLine{00174\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *a\ =\ \_attributes[slot].\_attrib;}
+\DoxyCodeLine{00175\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *b\ =\ other.\_attributes[slot].\_attrib;}
+\DoxyCodeLine{00176\ \ \ \ \ \textcolor{keywordflow}{if}\ (a\ !=\ b)\ \{}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ a\ <\ b\ ?\ -\/1\ :\ 1;}
+\DoxyCodeLine{00178\ \ \ \ \ \}}
+\DoxyCodeLine{00179\ \ \ \}}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00181\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00182\ \}}
+\DoxyCodeLine{00183\ }
+\DoxyCodeLine{00189\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classRenderState_a193c9b11b214f77f513ea42aa81a98bc}{RenderState::}}}
+\DoxyCodeLine{00190\ \mbox{\hyperlink{classRenderState_a193c9b11b214f77f513ea42aa81a98bc}{compare\_mask}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ \&other,\ \mbox{\hyperlink{classBitMask}{SlotMask}}\ compare\_mask)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00191\ \ \ \mbox{\hyperlink{classBitMask}{SlotMask}}\ mask\ =\ (\_filled\_slots\ |\ other.\_filled\_slots)\ \&\ \mbox{\hyperlink{classRenderState_a193c9b11b214f77f513ea42aa81a98bc}{compare\_mask}};}
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00193\ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *a\ =\ \_attributes[slot].\_attrib;}
+\DoxyCodeLine{00195\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *b\ =\ other.\_attributes[slot].\_attrib;}
+\DoxyCodeLine{00196\ \ \ \ \ \textcolor{keywordflow}{if}\ (a\ !=\ b)\ \{}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ a\ <\ b\ ?\ -\/1\ :\ 1;}
+\DoxyCodeLine{00198\ \ \ \ \ \}}
+\DoxyCodeLine{00199\ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{00200\ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00201\ \ \ \}}
+\DoxyCodeLine{00202\ }
+\DoxyCodeLine{00203\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00204\ \}}
+\DoxyCodeLine{00205\ }
+\DoxyCodeLine{00211\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classRenderState_a617d04e681e6c22a75a3d0f438f51845}{RenderState::}}}
+\DoxyCodeLine{00212\ \mbox{\hyperlink{classRenderState_a617d04e681e6c22a75a3d0f438f51845}{cull\_callback}}(\mbox{\hyperlink{classCullTraverser}{CullTraverser}}\ *trav,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCullTraverserData}{CullTraverserData}}\ \&data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00213\ \ \ \mbox{\hyperlink{classBitMask}{SlotMask}}\ mask\ =\ \_filled\_slots;}
+\DoxyCodeLine{00214\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{keyword}{const}\ Attribute\ \&attrib\ =\ \_attributes[slot];}
+\DoxyCodeLine{00217\ \ \ \ \ nassertr(attrib.\_attrib\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00218\ \ \ \ \ \textcolor{keywordflow}{if}\ (!attrib.\_attrib-\/>cull\_callback(trav,\ data))\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00220\ \ \ \ \ \}}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{00223\ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00224\ \ \ \}}
+\DoxyCodeLine{00225\ }
+\DoxyCodeLine{00226\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00227\ \}}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00232\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00233\ make(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib,\ \textcolor{keywordtype}{int}\ \textcolor{keyword}{override})\ \{}
+\DoxyCodeLine{00234\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}};}
+\DoxyCodeLine{00235\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ attrib-\/>get\_slot();}
+\DoxyCodeLine{00236\ \ \ state-\/>\_attributes[slot].set(attrib,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00237\ \ \ state-\/>\_filled\_slots.set\_bit(slot);}
+\DoxyCodeLine{00238\ \ \ \textcolor{keywordflow}{return}\ return\_new(state);}
+\DoxyCodeLine{00239\ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00244\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00245\ make(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib1,}
+\DoxyCodeLine{00246\ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib2,\ \textcolor{keywordtype}{int}\ \textcolor{keyword}{override})\ \{}
+\DoxyCodeLine{00247\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}};}
+\DoxyCodeLine{00248\ \ \ state-\/>\_attributes[attrib1-\/>get\_slot()].set(attrib1,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00249\ \ \ state-\/>\_attributes[attrib2-\/>get\_slot()].set(attrib2,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00250\ \ \ state-\/>\_filled\_slots.set\_bit(attrib1-\/>get\_slot());}
+\DoxyCodeLine{00251\ \ \ state-\/>\_filled\_slots.set\_bit(attrib2-\/>get\_slot());}
+\DoxyCodeLine{00252\ \ \ \textcolor{keywordflow}{return}\ return\_new(state);}
+\DoxyCodeLine{00253\ \}}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00258\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00259\ make(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib1,}
+\DoxyCodeLine{00260\ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib2,}
+\DoxyCodeLine{00261\ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib3,\ \textcolor{keywordtype}{int}\ \textcolor{keyword}{override})\ \{}
+\DoxyCodeLine{00262\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}};}
+\DoxyCodeLine{00263\ \ \ state-\/>\_attributes[attrib1-\/>get\_slot()].set(attrib1,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00264\ \ \ state-\/>\_attributes[attrib2-\/>get\_slot()].set(attrib2,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00265\ \ \ state-\/>\_attributes[attrib3-\/>get\_slot()].set(attrib3,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00266\ \ \ state-\/>\_filled\_slots.set\_bit(attrib1-\/>get\_slot());}
+\DoxyCodeLine{00267\ \ \ state-\/>\_filled\_slots.set\_bit(attrib2-\/>get\_slot());}
+\DoxyCodeLine{00268\ \ \ state-\/>\_filled\_slots.set\_bit(attrib3-\/>get\_slot());}
+\DoxyCodeLine{00269\ \ \ \textcolor{keywordflow}{return}\ return\_new(state);}
+\DoxyCodeLine{00270\ \}}
+\DoxyCodeLine{00271\ }
+\DoxyCodeLine{00275\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00276\ make(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib1,}
+\DoxyCodeLine{00277\ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib2,}
+\DoxyCodeLine{00278\ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib3,}
+\DoxyCodeLine{00279\ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib4,\ \textcolor{keywordtype}{int}\ \textcolor{keyword}{override})\ \{}
+\DoxyCodeLine{00280\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}};}
+\DoxyCodeLine{00281\ \ \ state-\/>\_attributes[attrib1-\/>get\_slot()].set(attrib1,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00282\ \ \ state-\/>\_attributes[attrib2-\/>get\_slot()].set(attrib2,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00283\ \ \ state-\/>\_attributes[attrib3-\/>get\_slot()].set(attrib3,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00284\ \ \ state-\/>\_attributes[attrib4-\/>get\_slot()].set(attrib4,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00285\ \ \ state-\/>\_filled\_slots.set\_bit(attrib1-\/>get\_slot());}
+\DoxyCodeLine{00286\ \ \ state-\/>\_filled\_slots.set\_bit(attrib2-\/>get\_slot());}
+\DoxyCodeLine{00287\ \ \ state-\/>\_filled\_slots.set\_bit(attrib3-\/>get\_slot());}
+\DoxyCodeLine{00288\ \ \ state-\/>\_filled\_slots.set\_bit(attrib4-\/>get\_slot());}
+\DoxyCodeLine{00289\ \ \ \textcolor{keywordflow}{return}\ return\_new(state);}
+\DoxyCodeLine{00290\ \}}
+\DoxyCodeLine{00291\ }
+\DoxyCodeLine{00295\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00296\ make(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib1,}
+\DoxyCodeLine{00297\ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib2,}
+\DoxyCodeLine{00298\ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib3,}
+\DoxyCodeLine{00299\ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib4,}
+\DoxyCodeLine{00300\ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib5,\ \textcolor{keywordtype}{int}\ \textcolor{keyword}{override})\ \{}
+\DoxyCodeLine{00301\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}};}
+\DoxyCodeLine{00302\ \ \ state-\/>\_attributes[attrib1-\/>get\_slot()].set(attrib1,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00303\ \ \ state-\/>\_attributes[attrib2-\/>get\_slot()].set(attrib2,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00304\ \ \ state-\/>\_attributes[attrib3-\/>get\_slot()].set(attrib3,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00305\ \ \ state-\/>\_attributes[attrib4-\/>get\_slot()].set(attrib4,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00306\ \ \ state-\/>\_attributes[attrib5-\/>get\_slot()].set(attrib5,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00307\ \ \ state-\/>\_filled\_slots.set\_bit(attrib1-\/>get\_slot());}
+\DoxyCodeLine{00308\ \ \ state-\/>\_filled\_slots.set\_bit(attrib2-\/>get\_slot());}
+\DoxyCodeLine{00309\ \ \ state-\/>\_filled\_slots.set\_bit(attrib3-\/>get\_slot());}
+\DoxyCodeLine{00310\ \ \ state-\/>\_filled\_slots.set\_bit(attrib4-\/>get\_slot());}
+\DoxyCodeLine{00311\ \ \ state-\/>\_filled\_slots.set\_bit(attrib5-\/>get\_slot());}
+\DoxyCodeLine{00312\ \ \ \textcolor{keywordflow}{return}\ return\_new(state);}
+\DoxyCodeLine{00313\ \}}
+\DoxyCodeLine{00314\ }
+\DoxyCodeLine{00318\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00319\ make(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *\ \textcolor{keyword}{const}\ *attrib,\ \textcolor{keywordtype}{int}\ num\_attribs,\ \textcolor{keywordtype}{int}\ \textcolor{keyword}{override})\ \{}
+\DoxyCodeLine{00320\ \ \ \textcolor{keywordflow}{if}\ (num\_attribs\ ==\ 0)\ \{}
+\DoxyCodeLine{00321\ \ \ \ \ \textcolor{keywordflow}{return}\ \_empty\_state;}
+\DoxyCodeLine{00322\ \ \ \}}
+\DoxyCodeLine{00323\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}};}
+\DoxyCodeLine{00324\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_attribs;\ i++)\ \{}
+\DoxyCodeLine{00325\ \ \ \ \ \textcolor{keywordtype}{int}\ slot\ =\ attrib[i]-\/>get\_slot();}
+\DoxyCodeLine{00326\ \ \ \ \ state-\/>\_attributes[slot].set(attrib[i],\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00327\ \ \ \ \ state-\/>\_filled\_slots.set\_bit(slot);}
+\DoxyCodeLine{00328\ \ \ \}}
+\DoxyCodeLine{00329\ \ \ \textcolor{keywordflow}{return}\ return\_new(state);}
+\DoxyCodeLine{00330\ \}}
+\DoxyCodeLine{00331\ }
+\DoxyCodeLine{00341\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00342\ compose(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00343\ \ \ \textcolor{comment}{//\ This\ method\ isn't\ strictly\ const,\ because\ it\ updates\ the\ cache,\ but\ we}}
+\DoxyCodeLine{00344\ \ \ \textcolor{comment}{//\ pretend\ that\ it\ is\ because\ it's\ only\ a\ cache\ which\ is\ transparent\ to\ the}}
+\DoxyCodeLine{00345\ \ \ \textcolor{comment}{//\ rest\ of\ the\ interface.}}
+\DoxyCodeLine{00346\ }
+\DoxyCodeLine{00347\ \ \ \textcolor{comment}{//\ We\ handle\ empty\ state\ (identity)\ as\ a\ trivial\ special\ case.}}
+\DoxyCodeLine{00348\ \ \ \textcolor{keywordflow}{if}\ (is\_empty())\ \{}
+\DoxyCodeLine{00349\ \ \ \ \ \textcolor{keywordflow}{return}\ other;}
+\DoxyCodeLine{00350\ \ \ \}}
+\DoxyCodeLine{00351\ \ \ \textcolor{keywordflow}{if}\ (other-\/>is\_empty())\ \{}
+\DoxyCodeLine{00352\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00353\ \ \ \}}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00355\ \ \ \textcolor{keywordflow}{if}\ (!state\_cache)\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \textcolor{keywordflow}{return}\ do\_compose(other);}
+\DoxyCodeLine{00357\ \ \ \}}
+\DoxyCodeLine{00358\ }
+\DoxyCodeLine{00359\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00360\ }
+\DoxyCodeLine{00361\ \ \ \textcolor{comment}{//\ Is\ this\ composition\ already\ cached?}}
+\DoxyCodeLine{00362\ \ \ \textcolor{keywordtype}{int}\ index\ =\ \_composition\_cache.find(other);}
+\DoxyCodeLine{00363\ \ \ \textcolor{keywordflow}{if}\ (index\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00364\ \ \ \ \ Composition\ \&comp\ =\ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})-\/>\_composition\_cache.modify\_data(index);}
+\DoxyCodeLine{00365\ \ \ \ \ \textcolor{keywordflow}{if}\ (comp.\_result\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \textcolor{comment}{//\ Well,\ it\ wasn't\ cached\ already,\ but\ we\ already\ had\ an\ entry\ (probably}}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \textcolor{comment}{//\ created\ for\ the\ reverse\ direction),\ so\ use\ the\ same\ entry\ to\ store}}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ new\ result.}}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ result\ =\ do\_compose(other);}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ comp.\_result\ =\ result;}
+\DoxyCodeLine{00371\ }
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ See\ the\ comments\ below\ about\ the\ need\ to\ up\ the\ reference\ count}}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ only\ when\ the\ result\ is\ not\ the\ same\ as\ this.}}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ result-\/>cache\_ref();}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00377\ \ \ \ \ \}}
+\DoxyCodeLine{00378\ \ \ \ \ \textcolor{comment}{//\ Here's\ the\ cache!}}
+\DoxyCodeLine{00379\ \ \ \ \ \_cache\_stats.inc\_hits();}
+\DoxyCodeLine{00380\ \ \ \ \ \textcolor{keywordflow}{return}\ comp.\_result;}
+\DoxyCodeLine{00381\ \ \ \}}
+\DoxyCodeLine{00382\ \ \ \_cache\_stats.inc\_misses();}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00384\ \ \ \textcolor{comment}{//\ We\ need\ to\ make\ a\ new\ cache\ entry,\ both\ in\ this\ object\ and\ in\ the\ other}}
+\DoxyCodeLine{00385\ \ \ \textcolor{comment}{//\ object.\ \ We\ make\ both\ records\ so\ the\ other\ RenderState\ object\ will\ know}}
+\DoxyCodeLine{00386\ \ \ \textcolor{comment}{//\ to\ delete\ the\ entry\ from\ this\ object\ when\ it\ destructs,\ and\ vice-\/versa.}}
+\DoxyCodeLine{00387\ }
+\DoxyCodeLine{00388\ \ \ \textcolor{comment}{//\ The\ cache\ entry\ in\ this\ object\ is\ the\ only\ one\ that\ indicates\ the\ result;}}
+\DoxyCodeLine{00389\ \ \ \textcolor{comment}{//\ the\ other\ will\ be\ NULL\ for\ now.}}
+\DoxyCodeLine{00390\ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ result\ =\ do\_compose(other);}
+\DoxyCodeLine{00391\ }
+\DoxyCodeLine{00392\ \ \ \_cache\_stats.add\_total\_size(1);}
+\DoxyCodeLine{00393\ \ \ \_cache\_stats.inc\_adds(\_composition\_cache.is\_empty());}
+\DoxyCodeLine{00394\ }
+\DoxyCodeLine{00395\ \ \ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})-\/>\_composition\_cache[other].\_result\ =\ result;}
+\DoxyCodeLine{00396\ }
+\DoxyCodeLine{00397\ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00398\ \ \ \ \ \_cache\_stats.add\_total\_size(1);}
+\DoxyCodeLine{00399\ \ \ \ \ \_cache\_stats.inc\_adds(other-\/>\_composition\_cache.is\_empty());}
+\DoxyCodeLine{00400\ \ \ \ \ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)other)-\/>\_composition\_cache[\textcolor{keyword}{this}].\_result\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00401\ \ \ \}}
+\DoxyCodeLine{00402\ }
+\DoxyCodeLine{00403\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00404\ \ \ \ \ \textcolor{comment}{//\ If\ the\ result\ of\ compose()\ is\ something\ other\ than\ this,\ explicitly}}
+\DoxyCodeLine{00405\ \ \ \ \ \textcolor{comment}{//\ increment\ the\ reference\ count.\ \ We\ have\ to\ be\ sure\ to\ decrement\ it}}
+\DoxyCodeLine{00406\ \ \ \ \ \textcolor{comment}{//\ again\ later,\ when\ the\ composition\ entry\ is\ removed\ from\ the\ cache.}}
+\DoxyCodeLine{00407\ \ \ \ \ result-\/>cache\_ref();}
+\DoxyCodeLine{00408\ }
+\DoxyCodeLine{00409\ \ \ \ \ \textcolor{comment}{//\ (If\ the\ result\ was\ just\ this\ again,\ we\ still\ store\ the\ result,\ but\ we}}
+\DoxyCodeLine{00410\ \ \ \ \ \textcolor{comment}{//\ don't\ increment\ the\ reference\ count,\ since\ that\ would\ be\ a\ self-\/}}
+\DoxyCodeLine{00411\ \ \ \ \ \textcolor{comment}{//\ referential\ leak.)}}
+\DoxyCodeLine{00412\ \ \ \}}
+\DoxyCodeLine{00413\ }
+\DoxyCodeLine{00414\ \ \ \_cache\_stats.maybe\_report(\textcolor{stringliteral}{"{}RenderState"{}});}
+\DoxyCodeLine{00415\ }
+\DoxyCodeLine{00416\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00417\ \}}
+\DoxyCodeLine{00418\ }
+\DoxyCodeLine{00426\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00427\ invert\_compose(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00428\ \ \ \textcolor{comment}{//\ This\ method\ isn't\ strictly\ const,\ because\ it\ updates\ the\ cache,\ but\ we}}
+\DoxyCodeLine{00429\ \ \ \textcolor{comment}{//\ pretend\ that\ it\ is\ because\ it's\ only\ a\ cache\ which\ is\ transparent\ to\ the}}
+\DoxyCodeLine{00430\ \ \ \textcolor{comment}{//\ rest\ of\ the\ interface.}}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00432\ \ \ \textcolor{comment}{//\ We\ handle\ empty\ state\ (identity)\ as\ a\ trivial\ special\ case.}}
+\DoxyCodeLine{00433\ \ \ \textcolor{keywordflow}{if}\ (is\_empty())\ \{}
+\DoxyCodeLine{00434\ \ \ \ \ \textcolor{keywordflow}{return}\ other;}
+\DoxyCodeLine{00435\ \ \ \}}
+\DoxyCodeLine{00436\ \ \ \textcolor{comment}{//\ Unlike\ compose(),\ the\ case\ of\ other-\/>is\_empty()\ is\ not\ quite\ as\ trivial}}
+\DoxyCodeLine{00437\ \ \ \textcolor{comment}{//\ for\ invert\_compose().}}
+\DoxyCodeLine{00438\ }
+\DoxyCodeLine{00439\ \ \ \textcolor{keywordflow}{if}\ (other\ ==\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00440\ \ \ \ \ \textcolor{comment}{//\ a-\/>invert\_compose(a)\ always\ produces\ identity.}}
+\DoxyCodeLine{00441\ \ \ \ \ \textcolor{keywordflow}{return}\ \_empty\_state;}
+\DoxyCodeLine{00442\ \ \ \}}
+\DoxyCodeLine{00443\ }
+\DoxyCodeLine{00444\ \ \ \textcolor{keywordflow}{if}\ (!state\_cache)\ \{}
+\DoxyCodeLine{00445\ \ \ \ \ \textcolor{keywordflow}{return}\ do\_invert\_compose(other);}
+\DoxyCodeLine{00446\ \ \ \}}
+\DoxyCodeLine{00447\ }
+\DoxyCodeLine{00448\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00450\ \ \ \textcolor{comment}{//\ Is\ this\ composition\ already\ cached?}}
+\DoxyCodeLine{00451\ \ \ \textcolor{keywordtype}{int}\ index\ =\ \_invert\_composition\_cache.find(other);}
+\DoxyCodeLine{00452\ \ \ \textcolor{keywordflow}{if}\ (index\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00453\ \ \ \ \ Composition\ \&comp\ =\ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})-\/>\_invert\_composition\_cache.modify\_data(index);}
+\DoxyCodeLine{00454\ \ \ \ \ \textcolor{keywordflow}{if}\ (comp.\_result\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \textcolor{comment}{//\ Well,\ it\ wasn't\ cached\ already,\ but\ we\ already\ had\ an\ entry\ (probably}}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \textcolor{comment}{//\ created\ for\ the\ reverse\ direction),\ so\ use\ the\ same\ entry\ to\ store}}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ new\ result.}}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ result\ =\ do\_invert\_compose(other);}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ comp.\_result\ =\ result;}
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ See\ the\ comments\ below\ about\ the\ need\ to\ up\ the\ reference\ count}}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ only\ when\ the\ result\ is\ not\ the\ same\ as\ this.}}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \ \ result-\/>cache\_ref();}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00466\ \ \ \ \ \}}
+\DoxyCodeLine{00467\ \ \ \ \ \textcolor{comment}{//\ Here's\ the\ cache!}}
+\DoxyCodeLine{00468\ \ \ \ \ \_cache\_stats.inc\_hits();}
+\DoxyCodeLine{00469\ \ \ \ \ \textcolor{keywordflow}{return}\ comp.\_result;}
+\DoxyCodeLine{00470\ \ \ \}}
+\DoxyCodeLine{00471\ \ \ \_cache\_stats.inc\_misses();}
+\DoxyCodeLine{00472\ }
+\DoxyCodeLine{00473\ \ \ \textcolor{comment}{//\ We\ need\ to\ make\ a\ new\ cache\ entry,\ both\ in\ this\ object\ and\ in\ the\ other}}
+\DoxyCodeLine{00474\ \ \ \textcolor{comment}{//\ object.\ \ We\ make\ both\ records\ so\ the\ other\ RenderState\ object\ will\ know}}
+\DoxyCodeLine{00475\ \ \ \textcolor{comment}{//\ to\ delete\ the\ entry\ from\ this\ object\ when\ it\ destructs,\ and\ vice-\/versa.}}
+\DoxyCodeLine{00476\ }
+\DoxyCodeLine{00477\ \ \ \textcolor{comment}{//\ The\ cache\ entry\ in\ this\ object\ is\ the\ only\ one\ that\ indicates\ the\ result;}}
+\DoxyCodeLine{00478\ \ \ \textcolor{comment}{//\ the\ other\ will\ be\ NULL\ for\ now.}}
+\DoxyCodeLine{00479\ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ result\ =\ do\_invert\_compose(other);}
+\DoxyCodeLine{00480\ }
+\DoxyCodeLine{00481\ \ \ \_cache\_stats.add\_total\_size(1);}
+\DoxyCodeLine{00482\ \ \ \_cache\_stats.inc\_adds(\_invert\_composition\_cache.is\_empty());}
+\DoxyCodeLine{00483\ \ \ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})-\/>\_invert\_composition\_cache[other].\_result\ =\ result;}
+\DoxyCodeLine{00484\ }
+\DoxyCodeLine{00485\ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00486\ \ \ \ \ \_cache\_stats.add\_total\_size(1);}
+\DoxyCodeLine{00487\ \ \ \ \ \_cache\_stats.inc\_adds(other-\/>\_invert\_composition\_cache.is\_empty());}
+\DoxyCodeLine{00488\ \ \ \ \ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)other)-\/>\_invert\_composition\_cache[\textcolor{keyword}{this}].\_result\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00489\ \ \ \}}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00491\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00492\ \ \ \ \ \textcolor{comment}{//\ If\ the\ result\ of\ compose()\ is\ something\ other\ than\ this,\ explicitly}}
+\DoxyCodeLine{00493\ \ \ \ \ \textcolor{comment}{//\ increment\ the\ reference\ count.\ \ We\ have\ to\ be\ sure\ to\ decrement\ it}}
+\DoxyCodeLine{00494\ \ \ \ \ \textcolor{comment}{//\ again\ later,\ when\ the\ composition\ entry\ is\ removed\ from\ the\ cache.}}
+\DoxyCodeLine{00495\ \ \ \ \ result-\/>cache\_ref();}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00497\ \ \ \ \ \textcolor{comment}{//\ (If\ the\ result\ was\ just\ this\ again,\ we\ still\ store\ the\ result,\ but\ we}}
+\DoxyCodeLine{00498\ \ \ \ \ \textcolor{comment}{//\ don't\ increment\ the\ reference\ count,\ since\ that\ would\ be\ a\ self-\/}}
+\DoxyCodeLine{00499\ \ \ \ \ \textcolor{comment}{//\ referential\ leak.)}}
+\DoxyCodeLine{00500\ \ \ \}}
+\DoxyCodeLine{00501\ }
+\DoxyCodeLine{00502\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00503\ \}}
+\DoxyCodeLine{00504\ }
+\DoxyCodeLine{00510\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00511\ add\_attrib(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib,\ \textcolor{keywordtype}{int}\ \textcolor{keyword}{override})\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00512\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ attrib-\/>get\_slot();}
+\DoxyCodeLine{00513\ \ \ \textcolor{keywordflow}{if}\ (\_filled\_slots.get\_bit(slot)\ \&\&}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ \_attributes[slot].\_override\ >\ \textcolor{keyword}{override})\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \textcolor{comment}{//\ The\ existing\ attribute\ overrides.}}
+\DoxyCodeLine{00516\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00517\ \ \ \}}
+\DoxyCodeLine{00518\ }
+\DoxyCodeLine{00519\ \ \ \textcolor{comment}{//\ The\ new\ attribute\ replaces.}}
+\DoxyCodeLine{00520\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *new\_state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00521\ \ \ new\_state-\/>\_attributes[slot].set(attrib,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00522\ \ \ new\_state-\/>\_filled\_slots.set\_bit(slot);}
+\DoxyCodeLine{00523\ \ \ \textcolor{keywordflow}{return}\ return\_new(new\_state);}
+\DoxyCodeLine{00524\ \}}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00532\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00533\ set\_attrib(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00534\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *new\_state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00535\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ attrib-\/>get\_slot();}
+\DoxyCodeLine{00536\ \ \ new\_state-\/>\_attributes[slot].\_attrib\ =\ attrib;}
+\DoxyCodeLine{00537\ \ \ new\_state-\/>\_filled\_slots.set\_bit(slot);}
+\DoxyCodeLine{00538\ \ \ \textcolor{keywordflow}{return}\ return\_new(new\_state);}
+\DoxyCodeLine{00539\ \}}
+\DoxyCodeLine{00540\ }
+\DoxyCodeLine{00547\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00548\ set\_attrib(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib,\ \textcolor{keywordtype}{int}\ \textcolor{keyword}{override})\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00549\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *new\_state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00550\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ attrib-\/>get\_slot();}
+\DoxyCodeLine{00551\ \ \ new\_state-\/>\_attributes[slot].set(attrib,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{00552\ \ \ new\_state-\/>\_filled\_slots.set\_bit(slot);}
+\DoxyCodeLine{00553\ \ \ \textcolor{keywordflow}{return}\ return\_new(new\_state);}
+\DoxyCodeLine{00554\ \}}
+\DoxyCodeLine{00555\ }
+\DoxyCodeLine{00560\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00561\ remove\_attrib(\textcolor{keywordtype}{int}\ slot)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00562\ \ \ \textcolor{keywordflow}{if}\ (\_attributes[slot].\_attrib\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ \textcolor{comment}{//\ Already\ removed.}}
+\DoxyCodeLine{00564\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00565\ \ \ \}}
+\DoxyCodeLine{00566\ }
+\DoxyCodeLine{00567\ \ \ \textcolor{comment}{//\ Will\ this\ bring\ us\ down\ to\ the\ empty\ state?}}
+\DoxyCodeLine{00568\ \ \ \textcolor{keywordflow}{if}\ (\_filled\_slots.get\_num\_on\_bits()\ ==\ 1)\ \{}
+\DoxyCodeLine{00569\ \ \ \ \ \textcolor{keywordflow}{return}\ \_empty\_state;}
+\DoxyCodeLine{00570\ \ \ \}}
+\DoxyCodeLine{00571\ }
+\DoxyCodeLine{00572\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *new\_state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00573\ \ \ new\_state-\/>\_attributes[slot].set(\textcolor{keyword}{nullptr},\ 0);}
+\DoxyCodeLine{00574\ \ \ new\_state-\/>\_filled\_slots.clear\_bit(slot);}
+\DoxyCodeLine{00575\ \ \ \textcolor{keywordflow}{return}\ return\_new(new\_state);}
+\DoxyCodeLine{00576\ \}}
+\DoxyCodeLine{00577\ }
+\DoxyCodeLine{00584\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{00585\ adjust\_all\_priorities(\textcolor{keywordtype}{int}\ adjustment)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00586\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *new\_state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00587\ }
+\DoxyCodeLine{00588\ \ \ SlotMask\ mask\ =\ \_filled\_slots;}
+\DoxyCodeLine{00589\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00590\ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{00591\ \ \ \ \ Attribute\ \&attrib\ =\ new\_state-\/>\_attributes[slot];}
+\DoxyCodeLine{00592\ \ \ \ \ nassertr(attrib.\_attrib\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00593\ \ \ \ \ attrib.\_override\ =\ std::max(attrib.\_override\ +\ adjustment,\ 0);}
+\DoxyCodeLine{00594\ }
+\DoxyCodeLine{00595\ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{00596\ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00597\ \ \ \}}
+\DoxyCodeLine{00598\ }
+\DoxyCodeLine{00599\ \ \ \textcolor{keywordflow}{return}\ return\_new(new\_state);}
+\DoxyCodeLine{00600\ \}}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00608\ \textcolor{keywordtype}{bool}\ RenderState::}
+\DoxyCodeLine{00609\ unref()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00610\ \ \ \textcolor{keywordflow}{if}\ (garbage\_collect\_states\ ||\ !state\_cache)\ \{}
+\DoxyCodeLine{00611\ \ \ \ \ \textcolor{comment}{//\ If\ we're\ not\ using\ the\ cache\ at\ all,\ or\ if\ we're\ relying\ on\ garbage}}
+\DoxyCodeLine{00612\ \ \ \ \ \textcolor{comment}{//\ collection,\ just\ allow\ the\ pointer\ to\ unref\ normally.}}
+\DoxyCodeLine{00613\ \ \ \ \ \textcolor{keywordflow}{return}\ ReferenceCount::unref();}
+\DoxyCodeLine{00614\ \ \ \}}
+\DoxyCodeLine{00615\ }
+\DoxyCodeLine{00616\ \ \ \textcolor{comment}{//\ Here\ is\ the\ normal\ refcounting\ case,\ with\ a\ normal\ cache,\ and\ without}}
+\DoxyCodeLine{00617\ \ \ \textcolor{comment}{//\ garbage\ collection\ in\ effect.\ \ In\ this\ case\ we\ will\ pull\ the\ object\ out}}
+\DoxyCodeLine{00618\ \ \ \textcolor{comment}{//\ of\ the\ cache\ when\ its\ reference\ count\ goes\ to\ 0.}}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00620\ \ \ \textcolor{comment}{//\ We\ always\ have\ to\ grab\ the\ lock,\ since\ we\ will\ definitely\ need\ to\ be}}
+\DoxyCodeLine{00621\ \ \ \textcolor{comment}{//\ holding\ it\ if\ we\ happen\ to\ drop\ the\ reference\ count\ to\ 0.\ Having\ to\ grab}}
+\DoxyCodeLine{00622\ \ \ \textcolor{comment}{//\ the\ lock\ at\ every\ call\ to\ unref()\ is\ a\ big\ limiting\ factor\ on}}
+\DoxyCodeLine{00623\ \ \ \textcolor{comment}{//\ parallelization.}}
+\DoxyCodeLine{00624\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00625\ }
+\DoxyCodeLine{00626\ \ \ \textcolor{keywordflow}{if}\ (auto\_break\_cycles\ \&\&\ uniquify\_states)\ \{}
+\DoxyCodeLine{00627\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_cache\_ref\_count()\ >\ 0\ \&\&}
+\DoxyCodeLine{00628\ \ \ \ \ \ \ \ \ get\_ref\_count()\ ==\ get\_cache\_ref\_count()\ +\ 1)\ \{}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ are\ about\ to\ remove\ the\ one\ reference\ that\ is\ not\ in\ the\ cache,}}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \textcolor{comment}{//\ leaving\ only\ references\ in\ the\ cache,\ then\ we\ need\ to\ check\ for\ a}}
+\DoxyCodeLine{00631\ \ \ \ \ \ \ \textcolor{comment}{//\ cycle\ involving\ this\ RenderState\ and\ break\ it\ if\ it\ exists.}}
+\DoxyCodeLine{00632\ \ \ \ \ \ \ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})-\/>detect\_and\_break\_cycles();}
+\DoxyCodeLine{00633\ \ \ \ \ \}}
+\DoxyCodeLine{00634\ \ \ \}}
+\DoxyCodeLine{00635\ }
+\DoxyCodeLine{00636\ \ \ \textcolor{keywordflow}{if}\ (ReferenceCount::unref())\ \{}
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{comment}{//\ The\ reference\ count\ is\ still\ nonzero.}}
+\DoxyCodeLine{00638\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00639\ \ \ \}}
+\DoxyCodeLine{00640\ }
+\DoxyCodeLine{00641\ \ \ \textcolor{comment}{//\ The\ reference\ count\ has\ just\ reached\ zero.\ \ Make\ sure\ the\ object\ is}}
+\DoxyCodeLine{00642\ \ \ \textcolor{comment}{//\ removed\ from\ the\ global\ object\ pool,\ before\ anyone\ else\ finds\ it\ and}}
+\DoxyCodeLine{00643\ \ \ \textcolor{comment}{//\ tries\ to\ ref\ it.}}
+\DoxyCodeLine{00644\ \ \ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})-\/>release\_new();}
+\DoxyCodeLine{00645\ \ \ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})-\/>remove\_cache\_pointers();}
+\DoxyCodeLine{00646\ }
+\DoxyCodeLine{00647\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00648\ \}}
+\DoxyCodeLine{00649\ }
+\DoxyCodeLine{00653\ \textcolor{keywordtype}{void}\ RenderState::}
+\DoxyCodeLine{00654\ output(ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00655\ \ \ out\ <<\ \textcolor{stringliteral}{"{}S:"{}};}
+\DoxyCodeLine{00656\ \ \ \textcolor{keywordflow}{if}\ (is\_empty())\ \{}
+\DoxyCodeLine{00657\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}(empty)"{}};}
+\DoxyCodeLine{00658\ }
+\DoxyCodeLine{00659\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00660\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}("{}};}
+\DoxyCodeLine{00661\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *sep\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00662\ }
+\DoxyCodeLine{00663\ \ \ \ \ SlotMask\ mask\ =\ \_filled\_slots;}
+\DoxyCodeLine{00664\ \ \ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00665\ \ \ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{00666\ \ \ \ \ \ \ \textcolor{keyword}{const}\ Attribute\ \&attrib\ =\ \_attributes[slot];}
+\DoxyCodeLine{00667\ \ \ \ \ \ \ nassertv(attrib.\_attrib\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00668\ \ \ \ \ \ \ out\ <<\ sep\ <<\ attrib.\_attrib-\/>get\_type();}
+\DoxyCodeLine{00669\ \ \ \ \ \ \ sep\ =\ \textcolor{stringliteral}{"{}\ "{}};}
+\DoxyCodeLine{00670\ }
+\DoxyCodeLine{00671\ \ \ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{00672\ \ \ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00673\ \ \ \ \ \}}
+\DoxyCodeLine{00674\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{})"{}};}
+\DoxyCodeLine{00675\ \ \ \}}
+\DoxyCodeLine{00676\ \}}
+\DoxyCodeLine{00677\ }
+\DoxyCodeLine{00681\ \textcolor{keywordtype}{void}\ RenderState::}
+\DoxyCodeLine{00682\ write(ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00683\ \ \ \textcolor{keywordflow}{if}\ (is\_empty())\ \{}
+\DoxyCodeLine{00684\ \ \ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level)}
+\DoxyCodeLine{00685\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}(empty)\(\backslash\)n"{}};}
+\DoxyCodeLine{00686\ \ \ \}}
+\DoxyCodeLine{00687\ }
+\DoxyCodeLine{00688\ \ \ SlotMask\ mask\ =\ \_filled\_slots;}
+\DoxyCodeLine{00689\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00690\ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{00691\ \ \ \ \ \textcolor{keyword}{const}\ Attribute\ \&attrib\ =\ \_attributes[slot];}
+\DoxyCodeLine{00692\ \ \ \ \ nassertv(attrib.\_attrib\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00693\ \ \ \ \ attrib.\_attrib-\/>write(out,\ indent\_level);}
+\DoxyCodeLine{00694\ }
+\DoxyCodeLine{00695\ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{00696\ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{00697\ \ \ \}}
+\DoxyCodeLine{00698\ \}}
+\DoxyCodeLine{00699\ }
+\DoxyCodeLine{00706\ \textcolor{keywordtype}{int}\ RenderState::}
+\DoxyCodeLine{00707\ get\_max\_priority()\ \{}
+\DoxyCodeLine{00708\ \ \ \textcolor{keywordflow}{return}\ 1000000000;}
+\DoxyCodeLine{00709\ \}}
+\DoxyCodeLine{00710\ }
+\DoxyCodeLine{00715\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classRenderState_a3c8813da0ccebbb7d0c125321060fc1c}{RenderState::}}}
+\DoxyCodeLine{00716\ \mbox{\hyperlink{classRenderState_a3c8813da0ccebbb7d0c125321060fc1c}{get\_num\_states}}()\ \{}
+\DoxyCodeLine{00717\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00718\ \ \ \textcolor{keywordflow}{return}\ \_states.get\_num\_entries();}
+\DoxyCodeLine{00719\ \}}
+\DoxyCodeLine{00720\ }
+\DoxyCodeLine{00734\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classRenderState_af8a17d991b13e65ae667adeb1a08b2da}{RenderState::}}}
+\DoxyCodeLine{00735\ \mbox{\hyperlink{classRenderState_af8a17d991b13e65ae667adeb1a08b2da}{get\_num\_unused\_states}}()\ \{}
+\DoxyCodeLine{00736\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00737\ }
+\DoxyCodeLine{00738\ \ \ \textcolor{comment}{//\ First,\ we\ need\ to\ count\ the\ number\ of\ times\ each\ RenderState\ object\ is}}
+\DoxyCodeLine{00739\ \ \ \textcolor{comment}{//\ recorded\ in\ the\ cache.}}
+\DoxyCodeLine{00740\ \ \ \textcolor{keyword}{typedef}\ \mbox{\hyperlink{classpmap}{pmap<const\ RenderState\ *,\ int>}}\ StateCount;}
+\DoxyCodeLine{00741\ \ \ StateCount\ state\_count;}
+\DoxyCodeLine{00742\ }
+\DoxyCodeLine{00743\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{00744\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ si\ =\ 0;\ si\ <\ size;\ ++si)\ \{}
+\DoxyCodeLine{00745\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \_states.get\_key(si);}
+\DoxyCodeLine{00746\ }
+\DoxyCodeLine{00747\ \ \ \ \ std::pair<StateCount::iterator,\ bool>\ ir\ =}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ state\_count.insert(StateCount::value\_type(state,\ 1));}
+\DoxyCodeLine{00749\ \ \ \ \ \textcolor{keywordflow}{if}\ (!ir.second)\ \{}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ above\ insert\ operation\ fails,\ then\ it's\ already\ in\ the}}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \textcolor{comment}{//\ cache;\ increment\ its\ value.}}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ (*(ir.first)).second++;}
+\DoxyCodeLine{00753\ \ \ \ \ \}}
+\DoxyCodeLine{00754\ }
+\DoxyCodeLine{00755\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{00756\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ cache\_size\ =\ state-\/>\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{00757\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{00758\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *result\ =\ state-\/>\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{00759\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ result\ !=\ state)\ \{}
+\DoxyCodeLine{00760\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Here's\ a\ RenderState\ that's\ recorded\ in\ the\ cache.\ \ Count\ it.}}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ \ \ std::pair<StateCount::iterator,\ bool>\ ir\ =}
+\DoxyCodeLine{00762\ \ \ \ \ \ \ \ \ \ \ state\_count.insert(StateCount::value\_type(result,\ 1));}
+\DoxyCodeLine{00763\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!ir.second)\ \{}
+\DoxyCodeLine{00764\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ above\ insert\ operation\ fails,\ then\ it's\ already\ in\ the}}
+\DoxyCodeLine{00765\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ cache;\ increment\ its\ value.}}
+\DoxyCodeLine{00766\ \ \ \ \ \ \ \ \ \ \ (*(ir.first)).second++;}
+\DoxyCodeLine{00767\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00769\ \ \ \ \ \}}
+\DoxyCodeLine{00770\ \ \ \ \ cache\_size\ =\ state-\/>\_invert\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{00771\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *result\ =\ state-\/>\_invert\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{00773\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ result\ !=\ state)\ \{}
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \ \ std::pair<StateCount::iterator,\ bool>\ ir\ =}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ \ \ \ \ state\_count.insert(StateCount::value\_type(result,\ 1));}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!ir.second)\ \{}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \ \ \ \ (*(ir.first)).second++;}
+\DoxyCodeLine{00778\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00779\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00780\ \ \ \ \ \}}
+\DoxyCodeLine{00781\ \ \ \}}
+\DoxyCodeLine{00782\ }
+\DoxyCodeLine{00783\ \ \ \textcolor{comment}{//\ Now\ that\ we\ have\ the\ appearance\ count\ of\ each\ RenderState\ object,\ we\ can}}
+\DoxyCodeLine{00784\ \ \ \textcolor{comment}{//\ tell\ which\ ones\ are\ unreferenced\ outside\ of\ the\ RenderState\ cache,\ by}}
+\DoxyCodeLine{00785\ \ \ \textcolor{comment}{//\ comparing\ these\ to\ the\ reference\ counts.}}
+\DoxyCodeLine{00786\ \ \ \textcolor{keywordtype}{int}\ num\_unused\ =\ 0;}
+\DoxyCodeLine{00787\ }
+\DoxyCodeLine{00788\ \ \ StateCount::iterator\ sci;}
+\DoxyCodeLine{00789\ \ \ \textcolor{keywordflow}{for}\ (sci\ =\ state\_count.begin();\ sci\ !=\ state\_count.end();\ ++sci)\ \{}
+\DoxyCodeLine{00790\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ (*sci).first;}
+\DoxyCodeLine{00791\ \ \ \ \ \textcolor{keywordtype}{int}\ count\ =\ (*sci).second;}
+\DoxyCodeLine{00792\ \ \ \ \ nassertr(count\ ==\ state-\/>get\_cache\_ref\_count(),\ num\_unused);}
+\DoxyCodeLine{00793\ \ \ \ \ nassertr(count\ <=\ state-\/>get\_ref\_count(),\ num\_unused);}
+\DoxyCodeLine{00794\ \ \ \ \ \textcolor{keywordflow}{if}\ (count\ ==\ state-\/>get\_ref\_count())\ \{}
+\DoxyCodeLine{00795\ \ \ \ \ \ \ num\_unused++;}
+\DoxyCodeLine{00796\ }
+\DoxyCodeLine{00797\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00798\ \ \ \ \ \ \ \ \ pgraph\_cat.debug()}
+\DoxyCodeLine{00799\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unused\ state:\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)state\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{00800\ \ \ \ \ \ \ \ \ \ \ <<\ state-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{00801\ \ \ \ \ \ \ \ \ state-\/>write(pgraph\_cat.debug(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{00802\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00803\ \ \ \ \ \}}
+\DoxyCodeLine{00804\ \ \ \}}
+\DoxyCodeLine{00805\ }
+\DoxyCodeLine{00806\ \ \ \textcolor{keywordflow}{return}\ num\_unused;}
+\DoxyCodeLine{00807\ \}}
+\DoxyCodeLine{00808\ }
+\DoxyCodeLine{00822\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classRenderState_acf79a48a733b5368f6c2789b5a175d63}{RenderState::}}}
+\DoxyCodeLine{00823\ \mbox{\hyperlink{classRenderState_acf79a48a733b5368f6c2789b5a175d63}{clear\_cache}}()\ \{}
+\DoxyCodeLine{00824\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00825\ }
+\DoxyCodeLine{00826\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_cache\_update\_pcollector);}
+\DoxyCodeLine{00827\ \ \ \textcolor{keywordtype}{int}\ orig\_size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{00828\ }
+\DoxyCodeLine{00829\ \ \ \textcolor{comment}{//\ First,\ we\ need\ to\ copy\ the\ entire\ set\ of\ states\ to\ a\ temporary\ vector,}}
+\DoxyCodeLine{00830\ \ \ \textcolor{comment}{//\ reference-\/counting\ each\ object.\ \ That\ way\ we\ can\ walk\ through\ the\ copy,}}
+\DoxyCodeLine{00831\ \ \ \textcolor{comment}{//\ without\ fear\ of\ dereferencing\ (and\ deleting)\ the\ objects\ in\ the\ map\ as\ we}}
+\DoxyCodeLine{00832\ \ \ \textcolor{comment}{//\ go.}}
+\DoxyCodeLine{00833\ \ \ \{}
+\DoxyCodeLine{00834\ \ \ \ \ \textcolor{keyword}{typedef}\ \mbox{\hyperlink{classpvector}{pvector}}<\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ >\ TempStates;}
+\DoxyCodeLine{00835\ \ \ \ \ TempStates\ temp\_states;}
+\DoxyCodeLine{00836\ \ \ \ \ temp\_states.reserve(orig\_size);}
+\DoxyCodeLine{00837\ }
+\DoxyCodeLine{00838\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{00839\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ si\ =\ 0;\ si\ <\ size;\ ++si)\ \{}
+\DoxyCodeLine{00840\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \_states.get\_key(si);}
+\DoxyCodeLine{00841\ \ \ \ \ \ \ temp\_states.push\_back(state);}
+\DoxyCodeLine{00842\ \ \ \ \ \}}
+\DoxyCodeLine{00843\ }
+\DoxyCodeLine{00844\ \ \ \ \ \textcolor{comment}{//\ Now\ it's\ safe\ to\ walk\ through\ the\ list,\ destroying\ the\ cache\ within}}
+\DoxyCodeLine{00845\ \ \ \ \ \textcolor{comment}{//\ each\ object\ as\ we\ go.\ \ Nothing\ will\ be\ destructed\ till\ we're\ done.}}
+\DoxyCodeLine{00846\ \ \ \ \ TempStates::iterator\ ti;}
+\DoxyCodeLine{00847\ \ \ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ temp\_states.begin();\ ti\ !=\ temp\_states.end();\ ++ti)\ \{}
+\DoxyCodeLine{00848\ \ \ \ \ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ (\mbox{\hyperlink{classRenderState}{RenderState}}\ *)(*ti).p();}
+\DoxyCodeLine{00849\ }
+\DoxyCodeLine{00850\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{00851\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ cache\_size\ =\ (int)state-\/>\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{00852\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{00853\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *result\ =\ state-\/>\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{00854\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ result\ !=\ state)\ \{}
+\DoxyCodeLine{00855\ \ \ \ \ \ \ \ \ \ \ result-\/>cache\_unref();}
+\DoxyCodeLine{00856\ \ \ \ \ \ \ \ \ \ \ nassertr(result-\/>get\_ref\_count()\ >\ 0,\ 0);}
+\DoxyCodeLine{00857\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00858\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00859\ \ \ \ \ \ \ \_cache\_stats.add\_total\_size(-\/(\textcolor{keywordtype}{int})state-\/>\_composition\_cache.get\_num\_entries());}
+\DoxyCodeLine{00860\ \ \ \ \ \ \ state-\/>\_composition\_cache.clear();}
+\DoxyCodeLine{00861\ }
+\DoxyCodeLine{00862\ \ \ \ \ \ \ cache\_size\ =\ (int)state-\/>\_invert\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{00863\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *result\ =\ state-\/>\_invert\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{00865\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ result\ !=\ state)\ \{}
+\DoxyCodeLine{00866\ \ \ \ \ \ \ \ \ \ \ result-\/>cache\_unref();}
+\DoxyCodeLine{00867\ \ \ \ \ \ \ \ \ \ \ nassertr(result-\/>get\_ref\_count()\ >\ 0,\ 0);}
+\DoxyCodeLine{00868\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00869\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00870\ \ \ \ \ \ \ \_cache\_stats.add\_total\_size(-\/(\textcolor{keywordtype}{int})state-\/>\_invert\_composition\_cache.get\_num\_entries());}
+\DoxyCodeLine{00871\ \ \ \ \ \ \ state-\/>\_invert\_composition\_cache.clear();}
+\DoxyCodeLine{00872\ \ \ \ \ \}}
+\DoxyCodeLine{00873\ }
+\DoxyCodeLine{00874\ \ \ \ \ \textcolor{comment}{//\ Once\ this\ block\ closes\ and\ the\ temp\_states\ object\ goes\ away,\ all\ the}}
+\DoxyCodeLine{00875\ \ \ \ \ \textcolor{comment}{//\ destruction\ will\ begin.\ \ Anything\ whose\ reference\ was\ held\ only\ within}}
+\DoxyCodeLine{00876\ \ \ \ \ \textcolor{comment}{//\ the\ various\ objects'\ caches\ will\ go\ away.}}
+\DoxyCodeLine{00877\ \ \ \}}
+\DoxyCodeLine{00878\ }
+\DoxyCodeLine{00879\ \ \ \textcolor{keywordtype}{int}\ new\_size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{00880\ \ \ \textcolor{keywordflow}{return}\ orig\_size\ -\/\ new\_size;}
+\DoxyCodeLine{00881\ \}}
+\DoxyCodeLine{00882\ }
+\DoxyCodeLine{00891\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classRenderState_a5c33263966c24d2781f1844fac61ea19}{RenderState::}}}
+\DoxyCodeLine{00892\ \mbox{\hyperlink{classRenderState_a5c33263966c24d2781f1844fac61ea19}{garbage\_collect}}()\ \{}
+\DoxyCodeLine{00893\ \ \ \textcolor{keywordtype}{int}\ num\_attribs\ =\ \mbox{\hyperlink{classRenderAttrib_a8c9775afb67a5593bbc992b7c0728602}{RenderAttrib::garbage\_collect}}();}
+\DoxyCodeLine{00894\ }
+\DoxyCodeLine{00895\ \ \ \textcolor{keywordflow}{if}\ (!garbage\_collect\_states)\ \{}
+\DoxyCodeLine{00896\ \ \ \ \ \textcolor{keywordflow}{return}\ num\_attribs;}
+\DoxyCodeLine{00897\ \ \ \}}
+\DoxyCodeLine{00898\ }
+\DoxyCodeLine{00899\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00900\ }
+\DoxyCodeLine{00901\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_garbage\_collect\_pcollector);}
+\DoxyCodeLine{00902\ \ \ \textcolor{keywordtype}{size\_t}\ orig\_size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{00903\ }
+\DoxyCodeLine{00904\ \ \ \textcolor{comment}{//\ How\ many\ elements\ to\ process\ this\ pass?}}
+\DoxyCodeLine{00905\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ orig\_size;}
+\DoxyCodeLine{00906\ \ \ \textcolor{keywordtype}{size\_t}\ num\_this\_pass\ =\ std::max(0,\ \textcolor{keywordtype}{int}(size\ *\ garbage\_collect\_states\_rate));}
+\DoxyCodeLine{00907\ \ \ \textcolor{keywordflow}{if}\ (num\_this\_pass\ <=\ 0)\ \{}
+\DoxyCodeLine{00908\ \ \ \ \ \textcolor{keywordflow}{return}\ num\_attribs;}
+\DoxyCodeLine{00909\ \ \ \}}
+\DoxyCodeLine{00910\ }
+\DoxyCodeLine{00911\ \ \ \textcolor{keywordtype}{bool}\ break\_and\_uniquify\ =\ (auto\_break\_cycles\ \&\&\ uniquify\_transforms);}
+\DoxyCodeLine{00912\ }
+\DoxyCodeLine{00913\ \ \ \textcolor{keywordtype}{size\_t}\ si\ =\ \_garbage\_index;}
+\DoxyCodeLine{00914\ \ \ \textcolor{keywordflow}{if}\ (si\ >=\ size)\ \{}
+\DoxyCodeLine{00915\ \ \ \ \ si\ =\ 0;}
+\DoxyCodeLine{00916\ \ \ \}}
+\DoxyCodeLine{00917\ }
+\DoxyCodeLine{00918\ \ \ num\_this\_pass\ =\ std::min(num\_this\_pass,\ size);}
+\DoxyCodeLine{00919\ \ \ \textcolor{keywordtype}{size\_t}\ stop\_at\_element\ =\ (si\ +\ num\_this\_pass)\ \%\ size;}
+\DoxyCodeLine{00920\ }
+\DoxyCodeLine{00921\ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00922\ \ \ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ (\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\_states.get\_key(si);}
+\DoxyCodeLine{00923\ \ \ \ \ \textcolor{keywordflow}{if}\ (break\_and\_uniquify)\ \{}
+\DoxyCodeLine{00924\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (state-\/>get\_cache\_ref\_count()\ >\ 0\ \&\&}
+\DoxyCodeLine{00925\ \ \ \ \ \ \ \ \ \ \ state-\/>get\_ref\_count()\ ==\ state-\/>get\_cache\_ref\_count())\ \{}
+\DoxyCodeLine{00926\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ removed\ all\ the\ references\ to\ this\ state\ not\ in\ the}}
+\DoxyCodeLine{00927\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ cache,\ leaving\ only\ references\ in\ the\ cache,\ then\ we\ need\ to}}
+\DoxyCodeLine{00928\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ check\ for\ a\ cycle\ involving\ this\ RenderState\ and\ break\ it\ if\ it}}
+\DoxyCodeLine{00929\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ exists.}}
+\DoxyCodeLine{00930\ \ \ \ \ \ \ \ \ state-\/>detect\_and\_break\_cycles();}
+\DoxyCodeLine{00931\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00932\ \ \ \ \ \}}
+\DoxyCodeLine{00933\ }
+\DoxyCodeLine{00934\ \ \ \ \ \textcolor{keywordflow}{if}\ (!state-\/>unref\_if\_one())\ \{}
+\DoxyCodeLine{00935\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ state\ has\ recently\ been\ unreffed\ to\ 1\ (the\ one\ we\ added\ when}}
+\DoxyCodeLine{00936\ \ \ \ \ \ \ \textcolor{comment}{//\ we\ stored\ it\ in\ the\ cache).\ \ Now\ it's\ time\ to\ delete\ it.\ \ This\ is}}
+\DoxyCodeLine{00937\ \ \ \ \ \ \ \textcolor{comment}{//\ safe,\ because\ we're\ holding\ the\ \_states\_lock,\ so\ it's\ not\ possible}}
+\DoxyCodeLine{00938\ \ \ \ \ \ \ \textcolor{comment}{//\ for\ some\ other\ thread\ to\ find\ the\ state\ in\ the\ cache\ and\ ref\ it}}
+\DoxyCodeLine{00939\ \ \ \ \ \ \ \textcolor{comment}{//\ while\ we're\ doing\ this.\ \ Also,\ we've\ just\ made\ sure\ to\ unref\ it\ to\ 0,}}
+\DoxyCodeLine{00940\ \ \ \ \ \ \ \textcolor{comment}{//\ to\ ensure\ that\ another\ thread\ can't\ get\ it\ via\ a\ weak\ pointer.}}
+\DoxyCodeLine{00941\ }
+\DoxyCodeLine{00942\ \ \ \ \ \ \ state-\/>release\_new();}
+\DoxyCodeLine{00943\ \ \ \ \ \ \ state-\/>remove\_cache\_pointers();}
+\DoxyCodeLine{00944\ \ \ \ \ \ \ state-\/>cache\_unref\_only();}
+\DoxyCodeLine{00945\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ state;}
+\DoxyCodeLine{00946\ }
+\DoxyCodeLine{00947\ \ \ \ \ \ \ \textcolor{comment}{//\ When\ we\ removed\ it\ from\ the\ hash\ map,\ it\ swapped\ the\ last\ element}}
+\DoxyCodeLine{00948\ \ \ \ \ \ \ \textcolor{comment}{//\ with\ the\ one\ we\ just\ removed.\ \ So\ the\ current\ index\ contains\ one\ we}}
+\DoxyCodeLine{00949\ \ \ \ \ \ \ \textcolor{comment}{//\ still\ need\ to\ visit.}}
+\DoxyCodeLine{00950\ \ \ \ \ \ \ -\/-\/size;}
+\DoxyCodeLine{00951\ \ \ \ \ \ \ -\/-\/si;}
+\DoxyCodeLine{00952\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (stop\_at\_element\ >\ 0)\ \{}
+\DoxyCodeLine{00953\ \ \ \ \ \ \ \ \ -\/-\/stop\_at\_element;}
+\DoxyCodeLine{00954\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00955\ \ \ \ \ \}}
+\DoxyCodeLine{00956\ }
+\DoxyCodeLine{00957\ \ \ \ \ si\ =\ (si\ +\ 1)\ \%\ size;}
+\DoxyCodeLine{00958\ \ \ \}\ \textcolor{keywordflow}{while}\ (si\ !=\ stop\_at\_element);}
+\DoxyCodeLine{00959\ \ \ \_garbage\_index\ =\ si;}
+\DoxyCodeLine{00960\ }
+\DoxyCodeLine{00961\ \ \ nassertr(\_states.get\_num\_entries()\ ==\ size,\ 0);}
+\DoxyCodeLine{00962\ }
+\DoxyCodeLine{00963\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00964\ \ \ nassertr(\_states.validate(),\ 0);}
+\DoxyCodeLine{00965\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00966\ }
+\DoxyCodeLine{00967\ \ \ \textcolor{comment}{//\ If\ we\ just\ cleaned\ up\ a\ lot\ of\ states,\ see\ if\ we\ can\ reduce\ the\ table\ in}}
+\DoxyCodeLine{00968\ \ \ \textcolor{comment}{//\ size.\ \ This\ will\ help\ reduce\ iteration\ overhead\ in\ the\ future.}}
+\DoxyCodeLine{00969\ \ \ \_states.consider\_shrink\_table();}
+\DoxyCodeLine{00970\ }
+\DoxyCodeLine{00971\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{int})orig\_size\ -\/\ (int)size\ +\ num\_attribs;}
+\DoxyCodeLine{00972\ \}}
+\DoxyCodeLine{00973\ }
+\DoxyCodeLine{00978\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classRenderState_a8a314158650ca2855b51670c4e6ef318}{RenderState::}}}
+\DoxyCodeLine{00979\ \mbox{\hyperlink{classRenderState_a8a314158650ca2855b51670c4e6ef318}{clear\_munger\_cache}}()\ \{}
+\DoxyCodeLine{00980\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{00981\ }
+\DoxyCodeLine{00982\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{00983\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ si\ =\ 0;\ si\ <\ size;\ ++si)\ \{}
+\DoxyCodeLine{00984\ \ \ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ (\mbox{\hyperlink{classRenderState}{RenderState}}\ *)(\_states.get\_key(si));}
+\DoxyCodeLine{00985\ \ \ \ \ state-\/>\_mungers.clear();}
+\DoxyCodeLine{00986\ \ \ \ \ state-\/>\_munged\_states.clear();}
+\DoxyCodeLine{00987\ \ \ \ \ state-\/>\_last\_mi\ =\ -\/1;}
+\DoxyCodeLine{00988\ \ \ \}}
+\DoxyCodeLine{00989\ \}}
+\DoxyCodeLine{00990\ }
+\DoxyCodeLine{01004\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classRenderState_aaa3885a2acbb6b07c6ddf832f56f455c}{RenderState::}}}
+\DoxyCodeLine{01005\ \mbox{\hyperlink{classRenderState_aaa3885a2acbb6b07c6ddf832f56f455c}{list\_cycles}}(ostream\ \&out)\ \{}
+\DoxyCodeLine{01006\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{01007\ }
+\DoxyCodeLine{01008\ \ \ \textcolor{keyword}{typedef}\ \mbox{\hyperlink{classpset}{pset<const\ RenderState\ *>}}\ VisitedStates;}
+\DoxyCodeLine{01009\ \ \ VisitedStates\ visited;}
+\DoxyCodeLine{01010\ \ \ \mbox{\hyperlink{classpvector}{CompositionCycleDesc}}\ cycle\_desc;}
+\DoxyCodeLine{01011\ }
+\DoxyCodeLine{01012\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{01013\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ si\ =\ 0;\ si\ <\ size;\ ++si)\ \{}
+\DoxyCodeLine{01014\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \_states.get\_key(si);}
+\DoxyCodeLine{01015\ }
+\DoxyCodeLine{01016\ \ \ \ \ \textcolor{keywordtype}{bool}\ inserted\ =\ visited.insert(state).second;}
+\DoxyCodeLine{01017\ \ \ \ \ \textcolor{keywordflow}{if}\ (inserted)\ \{}
+\DoxyCodeLine{01018\ \ \ \ \ \ \ ++\_last\_cycle\_detect;}
+\DoxyCodeLine{01019\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_cycles(state,\ state,\ 1,\ \_last\_cycle\_detect,\ \&cycle\_desc))\ \{}
+\DoxyCodeLine{01020\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ state\ begins\ a\ cycle.}}
+\DoxyCodeLine{01021\ \ \ \ \ \ \ \ \ CompositionCycleDesc::reverse\_iterator\ csi;}
+\DoxyCodeLine{01022\ }
+\DoxyCodeLine{01023\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)nCycle\ detected\ of\ length\ "{}}\ <<\ cycle\_desc.size()\ +\ 1\ <<\ \textcolor{stringliteral}{"{}:\(\backslash\)n"{}}}
+\DoxyCodeLine{01024\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}state\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)state\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ state-\/>get\_ref\_count()}
+\DoxyCodeLine{01025\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{01026\ \ \ \ \ \ \ \ \ state-\/>write(out,\ 2);}
+\DoxyCodeLine{01027\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (csi\ =\ cycle\_desc.rbegin();\ csi\ !=\ cycle\_desc.rend();\ ++csi)\ \{}
+\DoxyCodeLine{01028\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ CompositionCycleDescEntry\ \&entry\ =\ (*csi);}
+\DoxyCodeLine{01029\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (entry.\_inverted)\ \{}
+\DoxyCodeLine{01030\ \ \ \ \ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}invert\ composed\ with\ "{}};}
+\DoxyCodeLine{01031\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01032\ \ \ \ \ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}composed\ with\ "{}};}
+\DoxyCodeLine{01033\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01034\ \ \ \ \ \ \ \ \ \ \ out\ <<\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{void}\ *)entry.\_obj\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ entry.\_obj-\/>get\_ref\_count()}
+\DoxyCodeLine{01035\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ *entry.\_obj\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}}}
+\DoxyCodeLine{01036\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}produces\ "{}}\ <<\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{void}\ *)entry.\_result\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{01037\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ entry.\_result-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{01038\ \ \ \ \ \ \ \ \ \ \ entry.\_result-\/>write(out,\ 2);}
+\DoxyCodeLine{01039\ \ \ \ \ \ \ \ \ \ \ visited.insert(entry.\_result);}
+\DoxyCodeLine{01040\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01041\ }
+\DoxyCodeLine{01042\ \ \ \ \ \ \ \ \ cycle\_desc.clear();}
+\DoxyCodeLine{01043\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01044\ \ \ \ \ \ \ \ \ ++\_last\_cycle\_detect;}
+\DoxyCodeLine{01045\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_reverse\_cycles(state,\ state,\ 1,\ \_last\_cycle\_detect,\ \&cycle\_desc))\ \{}
+\DoxyCodeLine{01046\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ state\ begins\ a\ cycle.}}
+\DoxyCodeLine{01047\ \ \ \ \ \ \ \ \ \ \ CompositionCycleDesc::iterator\ csi;}
+\DoxyCodeLine{01048\ }
+\DoxyCodeLine{01049\ \ \ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)nReverse\ cycle\ detected\ of\ length\ "{}}\ <<\ cycle\_desc.size()\ +\ 1\ <<\ \textcolor{stringliteral}{"{}:\(\backslash\)n"{}}}
+\DoxyCodeLine{01050\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}state\ "{}};}
+\DoxyCodeLine{01051\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (csi\ =\ cycle\_desc.begin();\ csi\ !=\ cycle\_desc.end();\ ++csi)\ \{}
+\DoxyCodeLine{01052\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ CompositionCycleDescEntry\ \&entry\ =\ (*csi);}
+\DoxyCodeLine{01053\ \ \ \ \ \ \ \ \ \ \ \ \ out\ <<\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{void}\ *)entry.\_result\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{01054\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ entry.\_result-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{01055\ \ \ \ \ \ \ \ \ \ \ \ \ entry.\_result-\/>write(out,\ 2);}
+\DoxyCodeLine{01056\ \ \ \ \ \ \ \ \ \ \ \ \ out\ <<\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{void}\ *)entry.\_obj\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{01057\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ entry.\_obj-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{01058\ \ \ \ \ \ \ \ \ \ \ \ \ entry.\_obj-\/>write(out,\ 2);}
+\DoxyCodeLine{01059\ \ \ \ \ \ \ \ \ \ \ \ \ visited.insert(entry.\_result);}
+\DoxyCodeLine{01060\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01061\ \ \ \ \ \ \ \ \ \ \ out\ <<\ (\textcolor{keywordtype}{void}\ *)state\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{01062\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ state-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\ =\(\backslash\)n"{}};}
+\DoxyCodeLine{01063\ \ \ \ \ \ \ \ \ \ \ state-\/>write(out,\ 2);}
+\DoxyCodeLine{01064\ }
+\DoxyCodeLine{01065\ \ \ \ \ \ \ \ \ \ \ cycle\_desc.clear();}
+\DoxyCodeLine{01066\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01067\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01068\ \ \ \ \ \}}
+\DoxyCodeLine{01069\ \ \ \}}
+\DoxyCodeLine{01070\ \}}
+\DoxyCodeLine{01071\ }
+\DoxyCodeLine{01072\ }
+\DoxyCodeLine{01078\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classRenderState_a3cd8d5df180ebd26585c19c1e6105f55}{RenderState::}}}
+\DoxyCodeLine{01079\ \mbox{\hyperlink{classRenderState_a3cd8d5df180ebd26585c19c1e6105f55}{list\_states}}(ostream\ \&out)\ \{}
+\DoxyCodeLine{01080\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{01081\ }
+\DoxyCodeLine{01082\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{01083\ \ \ out\ <<\ size\ <<\ \textcolor{stringliteral}{"{}\ states:\(\backslash\)n"{}};}
+\DoxyCodeLine{01084\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ si\ =\ 0;\ si\ <\ size;\ ++si)\ \{}
+\DoxyCodeLine{01085\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \_states.get\_key(si);}
+\DoxyCodeLine{01086\ \ \ \ \ state-\/>write(out,\ 2);}
+\DoxyCodeLine{01087\ \ \ \}}
+\DoxyCodeLine{01088\ \}}
+\DoxyCodeLine{01089\ }
+\DoxyCodeLine{01096\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classRenderState_a93a83c2ebb70c706e81f1c69fa7b86dd}{RenderState::}}}
+\DoxyCodeLine{01097\ \mbox{\hyperlink{classRenderState_a93a83c2ebb70c706e81f1c69fa7b86dd}{validate\_states}}()\ \{}
+\DoxyCodeLine{01098\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_state\_validate\_pcollector);}
+\DoxyCodeLine{01099\ }
+\DoxyCodeLine{01100\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{01101\ \ \ \textcolor{keywordflow}{if}\ (\_states.is\_empty())\ \{}
+\DoxyCodeLine{01102\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01103\ \ \ \}}
+\DoxyCodeLine{01104\ }
+\DoxyCodeLine{01105\ \ \ \textcolor{keywordflow}{if}\ (!\_states.validate())\ \{}
+\DoxyCodeLine{01106\ \ \ \ \ pgraph\_cat.error()}
+\DoxyCodeLine{01107\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}RenderState::\_states\ cache\ is\ invalid!\(\backslash\)n"{}};}
+\DoxyCodeLine{01108\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01109\ \ \ \}}
+\DoxyCodeLine{01110\ }
+\DoxyCodeLine{01111\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ \_states.get\_num\_entries();}
+\DoxyCodeLine{01112\ \ \ \textcolor{keywordtype}{size\_t}\ si\ =\ 0;}
+\DoxyCodeLine{01113\ \ \ nassertr(si\ <\ size,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01114\ \ \ nassertr(\_states.get\_key(si)-\/>get\_ref\_count()\ >=\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01115\ \ \ \textcolor{keywordtype}{size\_t}\ snext\ =\ si;}
+\DoxyCodeLine{01116\ \ \ ++snext;}
+\DoxyCodeLine{01117\ \ \ \textcolor{keywordflow}{while}\ (snext\ <\ size)\ \{}
+\DoxyCodeLine{01118\ \ \ \ \ nassertr(\_states.get\_key(snext)-\/>get\_ref\_count()\ >=\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01119\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *ssi\ =\ \_states.get\_key(si);}
+\DoxyCodeLine{01120\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *ssnext\ =\ \_states.get\_key(snext);}
+\DoxyCodeLine{01121\ \ \ \ \ \textcolor{keywordtype}{int}\ c\ =\ ssi-\/>compare\_to(*ssnext);}
+\DoxyCodeLine{01122\ \ \ \ \ \textcolor{keywordtype}{int}\ ci\ =\ ssnext-\/>compare\_to(*ssi);}
+\DoxyCodeLine{01123\ \ \ \ \ \textcolor{keywordflow}{if}\ ((ci\ <\ 0)\ !=\ (c\ >\ 0)\ ||}
+\DoxyCodeLine{01124\ \ \ \ \ \ \ \ \ (ci\ >\ 0)\ !=\ (c\ <\ 0)\ ||}
+\DoxyCodeLine{01125\ \ \ \ \ \ \ \ \ (ci\ ==\ 0)\ !=\ (c\ ==\ 0))\ \{}
+\DoxyCodeLine{01126\ \ \ \ \ \ \ pgraph\_cat.error()}
+\DoxyCodeLine{01127\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}RenderState::compare\_to()\ not\ defined\ properly!\(\backslash\)n"{}};}
+\DoxyCodeLine{01128\ \ \ \ \ \ \ pgraph\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{01129\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}(a,\ b):\ "{}}\ <<\ c\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01130\ \ \ \ \ \ \ pgraph\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{01131\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}(b,\ a):\ "{}}\ <<\ ci\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01132\ \ \ \ \ \ \ ssi-\/>write(pgraph\_cat.error(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{01133\ \ \ \ \ \ \ ssnext-\/>write(pgraph\_cat.error(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{01134\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01135\ \ \ \ \ \}}
+\DoxyCodeLine{01136\ \ \ \ \ si\ =\ snext;}
+\DoxyCodeLine{01137\ \ \ \ \ ++snext;}
+\DoxyCodeLine{01138\ \ \ \}}
+\DoxyCodeLine{01139\ }
+\DoxyCodeLine{01140\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01141\ \}}
+\DoxyCodeLine{01142\ }
+\DoxyCodeLine{01148\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classRenderState_aed8eebc103fd68d21ae3d7efc8733b7e}{RenderState::}}}
+\DoxyCodeLine{01149\ \mbox{\hyperlink{classRenderState_aed8eebc103fd68d21ae3d7efc8733b7e}{get\_geom\_rendering}}(\textcolor{keywordtype}{int}\ geom\_rendering)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01150\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderModeAttrib}{RenderModeAttrib}}\ *render\_mode;}
+\DoxyCodeLine{01151\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTexGenAttrib}{TexGenAttrib}}\ *tex\_gen;}
+\DoxyCodeLine{01152\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTexMatrixAttrib}{TexMatrixAttrib}}\ *tex\_matrix;}
+\DoxyCodeLine{01153\ }
+\DoxyCodeLine{01154\ \ \ \textcolor{keywordflow}{if}\ (get\_attrib(render\_mode))\ \{}
+\DoxyCodeLine{01155\ \ \ \ \ geom\_rendering\ =\ render\_mode-\/>get\_geom\_rendering(geom\_rendering);}
+\DoxyCodeLine{01156\ \ \ \}}
+\DoxyCodeLine{01157\ \ \ \textcolor{keywordflow}{if}\ (get\_attrib(tex\_gen))\ \{}
+\DoxyCodeLine{01158\ \ \ \ \ geom\_rendering\ =\ tex\_gen-\/>get\_geom\_rendering(geom\_rendering);}
+\DoxyCodeLine{01159\ \ \ \}}
+\DoxyCodeLine{01160\ \ \ \textcolor{keywordflow}{if}\ (get\_attrib(tex\_matrix))\ \{}
+\DoxyCodeLine{01161\ \ \ \ \ geom\_rendering\ =\ tex\_matrix-\/>get\_geom\_rendering(geom\_rendering);}
+\DoxyCodeLine{01162\ \ \ \}}
+\DoxyCodeLine{01163\ }
+\DoxyCodeLine{01164\ \ \ \textcolor{keywordflow}{return}\ geom\_rendering;}
+\DoxyCodeLine{01165\ \}}
+\DoxyCodeLine{01166\ }
+\DoxyCodeLine{01172\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classRenderState_a6aa8ecc89e37c42cd5ddd6ae4d611444}{RenderState::}}}
+\DoxyCodeLine{01173\ \mbox{\hyperlink{classRenderState_a6aa8ecc89e37c42cd5ddd6ae4d611444}{bin\_removed}}(\textcolor{keywordtype}{int}\ bin\_index)\ \{}
+\DoxyCodeLine{01174\ \ \ \textcolor{comment}{//\ Do\ something\ here.}}
+\DoxyCodeLine{01175\ \ \ nassertv(\textcolor{keyword}{false});}
+\DoxyCodeLine{01176\ \}}
+\DoxyCodeLine{01177\ }
+\DoxyCodeLine{01182\ \textcolor{keywordtype}{bool}\ RenderState::}
+\DoxyCodeLine{01183\ validate\_filled\_slots()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01184\ \ \ SlotMask\ mask;}
+\DoxyCodeLine{01185\ }
+\DoxyCodeLine{01186\ \ \ \mbox{\hyperlink{classRenderAttribRegistry}{RenderAttribRegistry}}\ *reg\ =\ RenderAttribRegistry::quick\_get\_global\_ptr();}
+\DoxyCodeLine{01187\ \ \ \textcolor{keywordtype}{int}\ max\_slots\ =\ reg-\/>get\_max\_slots();}
+\DoxyCodeLine{01188\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ slot\ =\ 1;\ slot\ <\ max\_slots;\ ++slot)\ \{}
+\DoxyCodeLine{01189\ \ \ \ \ \textcolor{keyword}{const}\ Attribute\ \&attribute\ =\ \_attributes[slot];}
+\DoxyCodeLine{01190\ \ \ \ \ \textcolor{keywordflow}{if}\ (attribute.\_attrib\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01191\ \ \ \ \ \ \ mask.set\_bit(slot);}
+\DoxyCodeLine{01192\ \ \ \ \ \}}
+\DoxyCodeLine{01193\ \ \ \}}
+\DoxyCodeLine{01194\ }
+\DoxyCodeLine{01195\ \ \ \textcolor{keywordflow}{return}\ (mask\ ==\ \_filled\_slots);}
+\DoxyCodeLine{01196\ \}}
+\DoxyCodeLine{01197\ }
+\DoxyCodeLine{01201\ \textcolor{keywordtype}{void}\ RenderState::}
+\DoxyCodeLine{01202\ do\_calc\_hash()\ \{}
+\DoxyCodeLine{01203\ \ \ \_hash\ =\ 0;}
+\DoxyCodeLine{01204\ }
+\DoxyCodeLine{01205\ \ \ SlotMask\ mask\ =\ \_filled\_slots;}
+\DoxyCodeLine{01206\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01207\ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{01208\ \ \ \ \ \textcolor{keyword}{const}\ Attribute\ \&attrib\ =\ \_attributes[slot];}
+\DoxyCodeLine{01209\ \ \ \ \ nassertv(attrib.\_attrib\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01210\ \ \ \ \ \_hash\ =\ pointer\_hash::add\_hash(\_hash,\ attrib.\_attrib);}
+\DoxyCodeLine{01211\ \ \ \ \ \_hash\ =\ int\_hash::add\_hash(\_hash,\ attrib.\_override);}
+\DoxyCodeLine{01212\ }
+\DoxyCodeLine{01213\ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{01214\ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01215\ \ \ \}}
+\DoxyCodeLine{01216\ }
+\DoxyCodeLine{01217\ \ \ \_flags\ |=\ F\_hash\_known;}
+\DoxyCodeLine{01218\ \}}
+\DoxyCodeLine{01219\ }
+\DoxyCodeLine{01227\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{01228\ return\_new(\mbox{\hyperlink{classRenderState}{RenderState}}\ *state)\ \{}
+\DoxyCodeLine{01229\ \ \ nassertr(state\ !=\ \textcolor{keyword}{nullptr},\ state);}
+\DoxyCodeLine{01230\ }
+\DoxyCodeLine{01231\ \ \ \textcolor{comment}{//\ Make\ sure\ we\ don't\ have\ anything\ in\ the\ 0\ slot.\ \ If\ we\ did,\ that\ would}}
+\DoxyCodeLine{01232\ \ \ \textcolor{comment}{//\ indicate\ an\ uninitialized\ slot\ number.}}
+\DoxyCodeLine{01233\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{01234\ \ \ \textcolor{keywordflow}{if}\ (state-\/>\_attributes[0].\_attrib\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01235\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib\ =\ state-\/>\_attributes[0].\_attrib;}
+\DoxyCodeLine{01236\ \ \ \ \ \textcolor{keywordflow}{if}\ (attrib-\/>get\_type()\ ==\ TypeHandle::none())\ \{}
+\DoxyCodeLine{01237\ \ \ \ \ \ \ ((\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *)attrib)-\/>force\_init\_type();}
+\DoxyCodeLine{01238\ \ \ \ \ \ \ pgraph\_cat-\/>error()}
+\DoxyCodeLine{01239\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Uninitialized\ RenderAttrib\ type:\ "{}}\ <<\ attrib-\/>get\_type()}
+\DoxyCodeLine{01240\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01241\ }
+\DoxyCodeLine{01242\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01243\ \ \ \ \ \ \ \textcolor{keyword}{static}\ \mbox{\hyperlink{classpset}{pset<TypeHandle>}}\ already\_reported;}
+\DoxyCodeLine{01244\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (already\_reported.insert(attrib-\/>get\_type()).second)\ \{}
+\DoxyCodeLine{01245\ \ \ \ \ \ \ \ \ pgraph\_cat-\/>error()}
+\DoxyCodeLine{01246\ \ \ \ \ \ \ \ \ \ \ <<\ attrib-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}\ did\ not\ initialize\ its\ slot\ number.\(\backslash\)n"{}};}
+\DoxyCodeLine{01247\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01248\ \ \ \ \ \}}
+\DoxyCodeLine{01249\ \ \ \}}
+\DoxyCodeLine{01250\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01251\ \ \ state-\/>\_attributes[0].\_attrib\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01252\ \ \ state-\/>\_filled\_slots.clear\_bit(0);}
+\DoxyCodeLine{01253\ }
+\DoxyCodeLine{01254\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{01255\ \ \ nassertr(state-\/>validate\_filled\_slots(),\ state);}
+\DoxyCodeLine{01256\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01257\ }
+\DoxyCodeLine{01258\ \ \ \textcolor{keywordflow}{if}\ (!uniquify\_states\ \&\&\ !state-\/>is\_empty())\ \{}
+\DoxyCodeLine{01259\ \ \ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{01260\ \ \ \}}
+\DoxyCodeLine{01261\ }
+\DoxyCodeLine{01262\ \ \ \textcolor{keywordflow}{return}\ return\_unique(state);}
+\DoxyCodeLine{01263\ \}}
+\DoxyCodeLine{01264\ }
+\DoxyCodeLine{01273\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{01274\ return\_unique(\mbox{\hyperlink{classRenderState}{RenderState}}\ *state)\ \{}
+\DoxyCodeLine{01275\ \ \ nassertr(state\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01276\ }
+\DoxyCodeLine{01277\ \ \ \textcolor{keywordflow}{if}\ (!state\_cache)\ \{}
+\DoxyCodeLine{01278\ \ \ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{01279\ \ \ \}}
+\DoxyCodeLine{01280\ }
+\DoxyCodeLine{01281\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{01282\ \ \ \textcolor{keywordflow}{if}\ (paranoid\_const)\ \{}
+\DoxyCodeLine{01283\ \ \ \ \ nassertr(\mbox{\hyperlink{classRenderState_a93a83c2ebb70c706e81f1c69fa7b86dd}{validate\_states}}(),\ state);}
+\DoxyCodeLine{01284\ \ \ \}}
+\DoxyCodeLine{01285\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01286\ }
+\DoxyCodeLine{01287\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(*\_states\_lock);}
+\DoxyCodeLine{01288\ }
+\DoxyCodeLine{01289\ \ \ \textcolor{keywordflow}{if}\ (state-\/>\_saved\_entry\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01290\ \ \ \ \ \textcolor{comment}{//\ This\ state\ is\ already\ in\ the\ cache.}}
+\DoxyCodeLine{01291\ \ \ \ \ \textcolor{comment}{//nassertr(\_states.find(state)\ ==\ state-\/>\_saved\_entry,\ pt\_state);}}
+\DoxyCodeLine{01292\ \ \ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{01293\ \ \ \}}
+\DoxyCodeLine{01294\ }
+\DoxyCodeLine{01295\ \ \ \textcolor{comment}{//\ Ensure\ each\ of\ the\ individual\ attrib\ pointers\ has\ been\ uniquified\ before}}
+\DoxyCodeLine{01296\ \ \ \textcolor{comment}{//\ we\ add\ the\ state\ to\ the\ cache.}}
+\DoxyCodeLine{01297\ \ \ \textcolor{keywordflow}{if}\ (!uniquify\_attribs\ \&\&\ !state-\/>is\_empty())\ \{}
+\DoxyCodeLine{01298\ \ \ \ \ SlotMask\ mask\ =\ state-\/>\_filled\_slots;}
+\DoxyCodeLine{01299\ \ \ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01300\ \ \ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{01301\ \ \ \ \ \ \ Attribute\ \&attrib\ =\ state-\/>\_attributes[slot];}
+\DoxyCodeLine{01302\ \ \ \ \ \ \ nassertd(attrib.\_attrib\ !=\ \textcolor{keyword}{nullptr})\ continue;}
+\DoxyCodeLine{01303\ \ \ \ \ \ \ attrib.\_attrib\ =\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}::do\_uniquify(attrib.\_attrib);}
+\DoxyCodeLine{01304\ \ \ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{01305\ \ \ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01306\ \ \ \ \ \}}
+\DoxyCodeLine{01307\ \ \ \}}
+\DoxyCodeLine{01308\ }
+\DoxyCodeLine{01309\ \ \ \textcolor{keywordtype}{int}\ si\ =\ \_states.find(state);}
+\DoxyCodeLine{01310\ \ \ if\ (si\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01311\ \ \ \ \ \textcolor{comment}{//\ There's\ an\ equivalent\ state\ already\ in\ the\ set.\ \ Return\ it.\ \ The\ state}}
+\DoxyCodeLine{01312\ \ \ \ \ \textcolor{comment}{//\ that\ was\ passed\ may\ be\ newly\ created\ and\ therefore\ may\ not\ be}}
+\DoxyCodeLine{01313\ \ \ \ \ \textcolor{comment}{//\ automatically\ deleted.\ \ Do\ that\ if\ necessary.}}
+\DoxyCodeLine{01314\ \ \ \ \ \textcolor{keywordflow}{if}\ (state-\/>get\_ref\_count()\ ==\ 0)\ \{}
+\DoxyCodeLine{01315\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ state;}
+\DoxyCodeLine{01316\ \ \ \ \ \}}
+\DoxyCodeLine{01317\ \ \ \ \ \textcolor{keywordflow}{return}\ \_states.get\_key(si);}
+\DoxyCodeLine{01318\ \ \ \}}
+\DoxyCodeLine{01319\ }
+\DoxyCodeLine{01320\ \ \ \textcolor{comment}{//\ Not\ already\ in\ the\ set;\ add\ it.}}
+\DoxyCodeLine{01321\ \ \ \textcolor{keywordflow}{if}\ (garbage\_collect\_states)\ \{}
+\DoxyCodeLine{01322\ \ \ \ \ \textcolor{comment}{//\ If\ we'll\ be\ garbage\ collecting\ states\ explicitly,\ we'll\ increment\ the}}
+\DoxyCodeLine{01323\ \ \ \ \ \textcolor{comment}{//\ reference\ count\ when\ we\ store\ it\ in\ the\ cache,\ so\ that\ it\ won't\ be}}
+\DoxyCodeLine{01324\ \ \ \ \ \textcolor{comment}{//\ deleted\ while\ it's\ in\ it.}}
+\DoxyCodeLine{01325\ \ \ \ \ state-\/>cache\_ref();}
+\DoxyCodeLine{01326\ \ \ \}}
+\DoxyCodeLine{01327\ \ \ si\ =\ \_states.store(state,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01328\ }
+\DoxyCodeLine{01329\ \ \ \textcolor{comment}{//\ Save\ the\ index\ and\ return\ the\ input\ state.}}
+\DoxyCodeLine{01330\ \ \ state-\/>\_saved\_entry\ =\ si;}
+\DoxyCodeLine{01331\ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{01332\ \}}
+\DoxyCodeLine{01333\ }
+\DoxyCodeLine{01338\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{01339\ do\_compose(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01340\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_state\_compose\_pcollector);}
+\DoxyCodeLine{01341\ }
+\DoxyCodeLine{01342\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *new\_state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}};}
+\DoxyCodeLine{01343\ }
+\DoxyCodeLine{01344\ \ \ SlotMask\ mask\ =\ \_filled\_slots\ |\ other-\/>\_filled\_slots;}
+\DoxyCodeLine{01345\ \ \ new\_state-\/>\_filled\_slots\ =\ mask;}
+\DoxyCodeLine{01346\ }
+\DoxyCodeLine{01347\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01348\ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{01349\ \ \ \ \ \textcolor{keyword}{const}\ Attribute\ \&a\ =\ \_attributes[slot];}
+\DoxyCodeLine{01350\ \ \ \ \ \textcolor{keyword}{const}\ Attribute\ \&b\ =\ other-\/>\_attributes[slot];}
+\DoxyCodeLine{01351\ \ \ \ \ Attribute\ \&result\ =\ new\_state-\/>\_attributes[slot];}
+\DoxyCodeLine{01352\ }
+\DoxyCodeLine{01353\ \ \ \ \ \textcolor{keywordflow}{if}\ (a.\_attrib\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01354\ \ \ \ \ \ \ nassertr(b.\_attrib\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01355\ \ \ \ \ \ \ \textcolor{comment}{//\ B\ wins.}}
+\DoxyCodeLine{01356\ \ \ \ \ \ \ result\ =\ b;}
+\DoxyCodeLine{01357\ }
+\DoxyCodeLine{01358\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (b.\_attrib\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01359\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ wins.}}
+\DoxyCodeLine{01360\ \ \ \ \ \ \ result\ =\ a;}
+\DoxyCodeLine{01361\ }
+\DoxyCodeLine{01362\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (b.\_override\ <\ a.\_override)\ \{}
+\DoxyCodeLine{01363\ \ \ \ \ \ \ \textcolor{comment}{//\ A,\ the\ higher\ RenderAttrib,\ overrides.}}
+\DoxyCodeLine{01364\ \ \ \ \ \ \ result\ =\ a;}
+\DoxyCodeLine{01365\ }
+\DoxyCodeLine{01366\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (a.\_override\ <\ b.\_override\ \&\&}
+\DoxyCodeLine{01367\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a.\_attrib-\/>lower\_attrib\_can\_override())\ \{}
+\DoxyCodeLine{01368\ \ \ \ \ \ \ \textcolor{comment}{//\ B,\ the\ higher\ RenderAttrib,\ overrides.\ \ This\ is\ a\ special\ case;}}
+\DoxyCodeLine{01369\ \ \ \ \ \ \ \textcolor{comment}{//\ normally,\ a\ lower\ RenderAttrib\ does\ not\ override\ a\ higher\ one,\ even}}
+\DoxyCodeLine{01370\ \ \ \ \ \ \ \textcolor{comment}{//\ if\ it\ has\ a\ higher\ override\ value.\ \ But\ certain\ kinds\ of}}
+\DoxyCodeLine{01371\ \ \ \ \ \ \ \textcolor{comment}{//\ RenderAttribs\ redefine\ lower\_attrib\_can\_override()\ to\ return\ true,}}
+\DoxyCodeLine{01372\ \ \ \ \ \ \ \textcolor{comment}{//\ allowing\ this\ override.}}
+\DoxyCodeLine{01373\ \ \ \ \ \ \ result\ =\ b;}
+\DoxyCodeLine{01374\ }
+\DoxyCodeLine{01375\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01376\ \ \ \ \ \ \ \textcolor{comment}{//\ Either\ they\ have\ the\ same\ override\ value,\ or\ B\ is\ higher.\ \ In\ either}}
+\DoxyCodeLine{01377\ \ \ \ \ \ \ \textcolor{comment}{//\ case,\ the\ result\ is\ the\ composition\ of\ the\ two,\ with\ B's\ override}}
+\DoxyCodeLine{01378\ \ \ \ \ \ \ \textcolor{comment}{//\ value.}}
+\DoxyCodeLine{01379\ \ \ \ \ \ \ result.set(a.\_attrib-\/>compose(b.\_attrib),\ b.\_override);}
+\DoxyCodeLine{01380\ \ \ \ \ \}}
+\DoxyCodeLine{01381\ }
+\DoxyCodeLine{01382\ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{01383\ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01384\ \ \ \}}
+\DoxyCodeLine{01385\ }
+\DoxyCodeLine{01386\ \ \ \textcolor{keywordflow}{return}\ return\_new(new\_state);}
+\DoxyCodeLine{01387\ \}}
+\DoxyCodeLine{01388\ }
+\DoxyCodeLine{01392\ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ RenderState::}
+\DoxyCodeLine{01393\ do\_invert\_compose(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01394\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_state\_invert\_pcollector);}
+\DoxyCodeLine{01395\ }
+\DoxyCodeLine{01396\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *new\_state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}};}
+\DoxyCodeLine{01397\ }
+\DoxyCodeLine{01398\ \ \ SlotMask\ mask\ =\ \_filled\_slots\ |\ other-\/>\_filled\_slots;}
+\DoxyCodeLine{01399\ \ \ new\_state-\/>\_filled\_slots\ =\ mask;}
+\DoxyCodeLine{01400\ }
+\DoxyCodeLine{01401\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01402\ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{01403\ \ \ \ \ \textcolor{keyword}{const}\ Attribute\ \&a\ =\ \_attributes[slot];}
+\DoxyCodeLine{01404\ \ \ \ \ \textcolor{keyword}{const}\ Attribute\ \&b\ =\ other-\/>\_attributes[slot];}
+\DoxyCodeLine{01405\ \ \ \ \ Attribute\ \&result\ =\ new\_state-\/>\_attributes[slot];}
+\DoxyCodeLine{01406\ }
+\DoxyCodeLine{01407\ \ \ \ \ \textcolor{keywordflow}{if}\ (a.\_attrib\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01408\ \ \ \ \ \ \ nassertr(b.\_attrib\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01409\ \ \ \ \ \ \ \textcolor{comment}{//\ B\ wins.}}
+\DoxyCodeLine{01410\ \ \ \ \ \ \ result\ =\ b;}
+\DoxyCodeLine{01411\ }
+\DoxyCodeLine{01412\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (b.\_attrib\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01413\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ wins.\ \ Invert\ it.}}
+\DoxyCodeLine{01414\ \ \ \ \ \ \ \mbox{\hyperlink{classRenderAttribRegistry}{RenderAttribRegistry}}\ *reg\ =\ RenderAttribRegistry::quick\_get\_global\_ptr();}
+\DoxyCodeLine{01415\ \ \ \ \ \ \ result.set(a.\_attrib-\/>invert\_compose(reg-\/>get\_slot\_default(slot)),\ 0);}
+\DoxyCodeLine{01416\ }
+\DoxyCodeLine{01417\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01418\ \ \ \ \ \ \ \textcolor{comment}{//\ Both\ are\ good.\ \ (Overrides\ are\ not\ used\ in\ invert\_compose.)\ Compose.}}
+\DoxyCodeLine{01419\ \ \ \ \ \ \ result.set(a.\_attrib-\/>invert\_compose(b.\_attrib),\ 0);}
+\DoxyCodeLine{01420\ \ \ \ \ \}}
+\DoxyCodeLine{01421\ }
+\DoxyCodeLine{01422\ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{01423\ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01424\ \ \ \}}
+\DoxyCodeLine{01425\ \ \ \textcolor{keywordflow}{return}\ return\_new(new\_state);}
+\DoxyCodeLine{01426\ \}}
+\DoxyCodeLine{01427\ }
+\DoxyCodeLine{01432\ \textcolor{keywordtype}{void}\ RenderState::}
+\DoxyCodeLine{01433\ detect\_and\_break\_cycles()\ \{}
+\DoxyCodeLine{01434\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_state\_break\_cycles\_pcollector);}
+\DoxyCodeLine{01435\ }
+\DoxyCodeLine{01436\ \ \ ++\_last\_cycle\_detect;}
+\DoxyCodeLine{01437\ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_cycles(\textcolor{keyword}{this},\ \textcolor{keyword}{this},\ 1,\ \_last\_cycle\_detect,\ \textcolor{keyword}{nullptr}))\ \{}
+\DoxyCodeLine{01438\ \ \ \ \ \textcolor{comment}{//\ Ok,\ we\ have\ a\ cycle.\ \ This\ will\ be\ a\ leak\ unless\ we\ break\ the\ cycle\ by}}
+\DoxyCodeLine{01439\ \ \ \ \ \textcolor{comment}{//\ freeing\ the\ cache\ on\ this\ object.}}
+\DoxyCodeLine{01440\ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01441\ \ \ \ \ \ \ pgraph\_cat.debug()}
+\DoxyCodeLine{01442\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Breaking\ cycle\ involving\ "{}}\ <<\ (*this)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01443\ \ \ \ \ \}}
+\DoxyCodeLine{01444\ }
+\DoxyCodeLine{01445\ \ \ \ \ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})-\/>remove\_cache\_pointers();}
+\DoxyCodeLine{01446\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01447\ \ \ \ \ ++\_last\_cycle\_detect;}
+\DoxyCodeLine{01448\ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_reverse\_cycles(\textcolor{keyword}{this},\ \textcolor{keyword}{this},\ 1,\ \_last\_cycle\_detect,\ \textcolor{keyword}{nullptr}))\ \{}
+\DoxyCodeLine{01449\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pgraph\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01450\ \ \ \ \ \ \ \ \ pgraph\_cat.debug()}
+\DoxyCodeLine{01451\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Breaking\ cycle\ involving\ "{}}\ <<\ (*this)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01452\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01453\ }
+\DoxyCodeLine{01454\ \ \ \ \ \ \ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\textcolor{keyword}{this})-\/>remove\_cache\_pointers();}
+\DoxyCodeLine{01455\ \ \ \ \ \}}
+\DoxyCodeLine{01456\ \ \ \}}
+\DoxyCodeLine{01457\ \}}
+\DoxyCodeLine{01458\ }
+\DoxyCodeLine{01466\ \textcolor{keywordtype}{bool}\ RenderState::}
+\DoxyCodeLine{01467\ r\_detect\_cycles(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *start\_state,}
+\DoxyCodeLine{01468\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *current\_state,}
+\DoxyCodeLine{01469\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ length,\ \mbox{\hyperlink{classUpdateSeq}{UpdateSeq}}\ this\_seq,}
+\DoxyCodeLine{01470\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpvector}{RenderState::CompositionCycleDesc}}\ *cycle\_desc)\ \{}
+\DoxyCodeLine{01471\ \ \ \textcolor{keywordflow}{if}\ (current\_state-\/>\_cycle\_detect\ ==\ this\_seq)\ \{}
+\DoxyCodeLine{01472\ \ \ \ \ \textcolor{comment}{//\ We've\ already\ seen\ this\ state;\ therefore,\ we've\ found\ a\ cycle.}}
+\DoxyCodeLine{01473\ }
+\DoxyCodeLine{01474\ \ \ \ \ \textcolor{comment}{//\ However,\ we\ only\ care\ about\ cycles\ that\ return\ to\ the\ starting\ state}}
+\DoxyCodeLine{01475\ \ \ \ \ \textcolor{comment}{//\ and\ involve\ more\ than\ two\ steps.\ \ If\ only\ one\ or\ two\ nodes\ are}}
+\DoxyCodeLine{01476\ \ \ \ \ \textcolor{comment}{//\ involved,\ it\ doesn't\ represent\ a\ memory\ leak,\ so\ no\ problem\ there.}}
+\DoxyCodeLine{01477\ \ \ \ \ \textcolor{keywordflow}{return}\ (current\_state\ ==\ start\_state\ \&\&\ length\ >\ 2);}
+\DoxyCodeLine{01478\ \ \ \}}
+\DoxyCodeLine{01479\ \ \ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)current\_state)-\/>\_cycle\_detect\ =\ this\_seq;}
+\DoxyCodeLine{01480\ }
+\DoxyCodeLine{01481\ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{01482\ \ \ \textcolor{keywordtype}{size\_t}\ cache\_size\ =\ current\_state-\/>\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{01483\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01484\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *result\ =\ current\_state-\/>\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{01485\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01486\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_cycles(start\_state,\ result,\ length\ +\ 1,}
+\DoxyCodeLine{01487\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ this\_seq,\ cycle\_desc))\ \{}
+\DoxyCodeLine{01488\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Cycle\ detected.}}
+\DoxyCodeLine{01489\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cycle\_desc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01490\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other\ =\ current\_state-\/>\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01491\ \ \ \ \ \ \ \ \ \ \ CompositionCycleDescEntry\ entry(other,\ result,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01492\ \ \ \ \ \ \ \ \ \ \ cycle\_desc-\/>push\_back(entry);}
+\DoxyCodeLine{01493\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01494\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01495\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01496\ \ \ \ \ \}}
+\DoxyCodeLine{01497\ \ \ \}}
+\DoxyCodeLine{01498\ }
+\DoxyCodeLine{01499\ \ \ cache\_size\ =\ current\_state-\/>\_invert\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{01500\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01501\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *result\ =\ current\_state-\/>\_invert\_composition\_cache.get\_data(i).\_result;}
+\DoxyCodeLine{01502\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01503\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_cycles(start\_state,\ result,\ length\ +\ 1,}
+\DoxyCodeLine{01504\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ this\_seq,\ cycle\_desc))\ \{}
+\DoxyCodeLine{01505\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Cycle\ detected.}}
+\DoxyCodeLine{01506\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cycle\_desc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01507\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other\ =\ current\_state-\/>\_invert\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01508\ \ \ \ \ \ \ \ \ \ \ CompositionCycleDescEntry\ entry(other,\ result,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{01509\ \ \ \ \ \ \ \ \ \ \ cycle\_desc-\/>push\_back(entry);}
+\DoxyCodeLine{01510\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01511\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01512\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01513\ \ \ \ \ \}}
+\DoxyCodeLine{01514\ \ \ \}}
+\DoxyCodeLine{01515\ }
+\DoxyCodeLine{01516\ \ \ \textcolor{comment}{//\ No\ cycle\ detected.}}
+\DoxyCodeLine{01517\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01518\ \}}
+\DoxyCodeLine{01519\ }
+\DoxyCodeLine{01525\ \textcolor{keywordtype}{bool}\ RenderState::}
+\DoxyCodeLine{01526\ r\_detect\_reverse\_cycles(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *start\_state,}
+\DoxyCodeLine{01527\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *current\_state,}
+\DoxyCodeLine{01528\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ length,\ \mbox{\hyperlink{classUpdateSeq}{UpdateSeq}}\ this\_seq,}
+\DoxyCodeLine{01529\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpvector}{RenderState::CompositionCycleDesc}}\ *cycle\_desc)\ \{}
+\DoxyCodeLine{01530\ \ \ \textcolor{keywordflow}{if}\ (current\_state-\/>\_cycle\_detect\ ==\ this\_seq)\ \{}
+\DoxyCodeLine{01531\ \ \ \ \ \textcolor{comment}{//\ We've\ already\ seen\ this\ state;\ therefore,\ we've\ found\ a\ cycle.}}
+\DoxyCodeLine{01532\ }
+\DoxyCodeLine{01533\ \ \ \ \ \textcolor{comment}{//\ However,\ we\ only\ care\ about\ cycles\ that\ return\ to\ the\ starting\ state}}
+\DoxyCodeLine{01534\ \ \ \ \ \textcolor{comment}{//\ and\ involve\ more\ than\ two\ steps.\ \ If\ only\ one\ or\ two\ nodes\ are}}
+\DoxyCodeLine{01535\ \ \ \ \ \textcolor{comment}{//\ involved,\ it\ doesn't\ represent\ a\ memory\ leak,\ so\ no\ problem\ there.}}
+\DoxyCodeLine{01536\ \ \ \ \ \textcolor{keywordflow}{return}\ (current\_state\ ==\ start\_state\ \&\&\ length\ >\ 2);}
+\DoxyCodeLine{01537\ \ \ \}}
+\DoxyCodeLine{01538\ \ \ ((\mbox{\hyperlink{classRenderState}{RenderState}}\ *)current\_state)-\/>\_cycle\_detect\ =\ this\_seq;}
+\DoxyCodeLine{01539\ }
+\DoxyCodeLine{01540\ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{01541\ \ \ \textcolor{keywordtype}{size\_t}\ cache\_size\ =\ current\_state-\/>\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{01542\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01543\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other\ =\ current\_state-\/>\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01544\ \ \ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ current\_state)\ \{}
+\DoxyCodeLine{01545\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ oi\ =\ other-\/>\_composition\_cache.find(current\_state);}
+\DoxyCodeLine{01546\ \ \ \ \ \ \ nassertr(oi\ !=\ -\/1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01547\ }
+\DoxyCodeLine{01548\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *result\ =\ other-\/>\_composition\_cache.get\_data(oi).\_result;}
+\DoxyCodeLine{01549\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01550\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_reverse\_cycles(start\_state,\ result,\ length\ +\ 1,}
+\DoxyCodeLine{01551\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ this\_seq,\ cycle\_desc))\ \{}
+\DoxyCodeLine{01552\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Cycle\ detected.}}
+\DoxyCodeLine{01553\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cycle\_desc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01554\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other\ =\ current\_state-\/>\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01555\ \ \ \ \ \ \ \ \ \ \ \ \ CompositionCycleDescEntry\ entry(other,\ result,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01556\ \ \ \ \ \ \ \ \ \ \ \ \ cycle\_desc-\/>push\_back(entry);}
+\DoxyCodeLine{01557\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01558\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01559\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01560\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01561\ \ \ \ \ \}}
+\DoxyCodeLine{01562\ \ \ \}}
+\DoxyCodeLine{01563\ }
+\DoxyCodeLine{01564\ \ \ cache\_size\ =\ current\_state-\/>\_invert\_composition\_cache.get\_num\_entries();}
+\DoxyCodeLine{01565\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cache\_size;\ ++i)\ \{}
+\DoxyCodeLine{01566\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other\ =\ current\_state-\/>\_invert\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01567\ \ \ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ current\_state)\ \{}
+\DoxyCodeLine{01568\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ oi\ =\ other-\/>\_invert\_composition\_cache.find(current\_state);}
+\DoxyCodeLine{01569\ \ \ \ \ \ \ nassertr(oi\ !=\ -\/1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01570\ }
+\DoxyCodeLine{01571\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *result\ =\ other-\/>\_invert\_composition\_cache.get\_data(oi).\_result;}
+\DoxyCodeLine{01572\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01573\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (r\_detect\_reverse\_cycles(start\_state,\ result,\ length\ +\ 1,}
+\DoxyCodeLine{01574\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ this\_seq,\ cycle\_desc))\ \{}
+\DoxyCodeLine{01575\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Cycle\ detected.}}
+\DoxyCodeLine{01576\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cycle\_desc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01577\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other\ =\ current\_state-\/>\_invert\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01578\ \ \ \ \ \ \ \ \ \ \ \ \ CompositionCycleDescEntry\ entry(other,\ result,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01579\ \ \ \ \ \ \ \ \ \ \ \ \ cycle\_desc-\/>push\_back(entry);}
+\DoxyCodeLine{01580\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01581\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01582\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01583\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01584\ \ \ \ \ \}}
+\DoxyCodeLine{01585\ \ \ \}}
+\DoxyCodeLine{01586\ }
+\DoxyCodeLine{01587\ \ \ \textcolor{comment}{//\ No\ cycle\ detected.}}
+\DoxyCodeLine{01588\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01589\ \}}
+\DoxyCodeLine{01590\ }
+\DoxyCodeLine{01597\ \textcolor{keywordtype}{void}\ RenderState::}
+\DoxyCodeLine{01598\ release\_new()\ \{}
+\DoxyCodeLine{01599\ \ \ nassertv(\_states\_lock-\/>debug\_is\_locked());}
+\DoxyCodeLine{01600\ }
+\DoxyCodeLine{01601\ \ \ \textcolor{keywordflow}{if}\ (\_saved\_entry\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01602\ \ \ \ \ \_saved\_entry\ =\ -\/1;}
+\DoxyCodeLine{01603\ \ \ \ \ nassertv\_always(\_states.remove(\textcolor{keyword}{this}));}
+\DoxyCodeLine{01604\ \ \ \}}
+\DoxyCodeLine{01605\ \}}
+\DoxyCodeLine{01606\ }
+\DoxyCodeLine{01614\ \textcolor{keywordtype}{void}\ RenderState::}
+\DoxyCodeLine{01615\ remove\_cache\_pointers()\ \{}
+\DoxyCodeLine{01616\ \ \ nassertv(\_states\_lock-\/>debug\_is\_locked());}
+\DoxyCodeLine{01617\ }
+\DoxyCodeLine{01618\ \ \ \textcolor{comment}{//\ Fortunately,\ since\ we\ added\ CompositionCache\ records\ in\ pairs,\ we\ know}}
+\DoxyCodeLine{01619\ \ \ \textcolor{comment}{//\ exactly\ the\ set\ of\ RenderState\ objects\ that\ have\ us\ in\ their\ cache:\ it's}}
+\DoxyCodeLine{01620\ \ \ \textcolor{comment}{//\ the\ same\ set\ of\ RenderState\ objects\ that\ we\ have\ in\ our\ own\ cache.}}
+\DoxyCodeLine{01621\ }
+\DoxyCodeLine{01622\ \textcolor{comment}{/*}}
+\DoxyCodeLine{01623\ \textcolor{comment}{\ *\ We\ do\ need\ to\ put\ considerable\ thought\ into\ this\ loop,\ because\ as\ we\ clear}}
+\DoxyCodeLine{01624\ \textcolor{comment}{\ *\ out\ cache\ entries\ we'll\ cause\ other\ RenderState\ objects\ to\ destruct,\ which}}
+\DoxyCodeLine{01625\ \textcolor{comment}{\ *\ could\ cause\ things\ to\ get\ pulled\ out\ of\ our\ own\ \_composition\_cache\ map.\ \ We}}
+\DoxyCodeLine{01626\ \textcolor{comment}{\ *\ want\ to\ allow\ this\ (so\ that\ we\ don't\ encounter\ any\ just-\/destructed\ pointers}}
+\DoxyCodeLine{01627\ \textcolor{comment}{\ *\ in\ our\ cache),\ but\ we\ don't\ want\ to\ get\ bitten\ by\ this\ cascading\ effect.}}
+\DoxyCodeLine{01628\ \textcolor{comment}{\ *\ Instead\ of\ walking\ through\ the\ map\ from\ beginning\ to\ end,\ therefore,\ we}}
+\DoxyCodeLine{01629\ \textcolor{comment}{\ *\ just\ pull\ out\ the\ first\ one\ each\ time,\ and\ erase\ it.}}
+\DoxyCodeLine{01630\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{01631\ }
+\DoxyCodeLine{01632\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{01633\ \ \ \textcolor{keywordflow}{if}\ (\_composition\_cache.is\_empty()\ \&\&\ \_invert\_composition\_cache.is\_empty())\ \{}
+\DoxyCodeLine{01634\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01635\ \ \ \}}
+\DoxyCodeLine{01636\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_cache\_update\_pcollector);}
+\DoxyCodeLine{01637\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{01638\ }
+\DoxyCodeLine{01639\ \ \ \textcolor{comment}{//\ There\ are\ lots\ of\ ways\ to\ do\ this\ loop\ wrong.\ \ Be\ very\ careful\ if\ you}}
+\DoxyCodeLine{01640\ \ \ \textcolor{comment}{//\ need\ to\ modify\ it\ for\ any\ reason.}}
+\DoxyCodeLine{01641\ \ \ \textcolor{keywordtype}{size\_t}\ i\ =\ 0;}
+\DoxyCodeLine{01642\ \ \ \textcolor{keywordflow}{while}\ (!\_composition\_cache.is\_empty())\ \{}
+\DoxyCodeLine{01643\ \ \ \ \ \textcolor{comment}{//\ It\ is\ possible\ that\ the\ "{}other"{}\ RenderState\ object\ is\ currently\ within}}
+\DoxyCodeLine{01644\ \ \ \ \ \textcolor{comment}{//\ its\ own\ destructor.\ \ We\ therefore\ can't\ use\ a\ PT()\ to\ hold\ its\ pointer;}}
+\DoxyCodeLine{01645\ \ \ \ \ \textcolor{comment}{//\ that\ could\ end\ up\ calling\ its\ destructor\ twice.\ \ Fortunately,\ we\ don't}}
+\DoxyCodeLine{01646\ \ \ \ \ \textcolor{comment}{//\ need\ to\ hold\ its\ reference\ count\ to\ ensure\ it\ doesn't\ destruct\ while\ we}}
+\DoxyCodeLine{01647\ \ \ \ \ \textcolor{comment}{//\ process\ this\ loop;\ as\ long\ as\ we\ ensure\ that\ no\ *other*\ RenderState}}
+\DoxyCodeLine{01648\ \ \ \ \ \textcolor{comment}{//\ objects\ destruct,\ there\ will\ be\ no\ reason\ for\ that\ one\ to.}}
+\DoxyCodeLine{01649\ \ \ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other\ =\ (\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01650\ }
+\DoxyCodeLine{01651\ \ \ \ \ \textcolor{comment}{//\ We\ hold\ a\ copy\ of\ the\ composition\ result\ so\ we\ can\ dereference\ it}}
+\DoxyCodeLine{01652\ \ \ \ \ \textcolor{comment}{//\ later.}}
+\DoxyCodeLine{01653\ \ \ \ \ Composition\ comp\ =\ \_composition\_cache.get\_data(i);}
+\DoxyCodeLine{01654\ }
+\DoxyCodeLine{01655\ \ \ \ \ \textcolor{comment}{//\ Now\ we\ can\ remove\ the\ element\ from\ our\ cache.\ \ We\ do\ this\ now,\ rather}}
+\DoxyCodeLine{01656\ \ \ \ \ \textcolor{comment}{//\ than\ later,\ before\ any\ other\ RenderState\ objects\ have\ had\ a\ chance\ to}}
+\DoxyCodeLine{01657\ \ \ \ \ \textcolor{comment}{//\ destruct,\ so\ we\ are\ confident\ that\ our\ iterator\ is\ still\ valid.}}
+\DoxyCodeLine{01658\ \ \ \ \ \_composition\_cache.remove\_element(i);}
+\DoxyCodeLine{01659\ \ \ \ \ \_cache\_stats.add\_total\_size(-\/1);}
+\DoxyCodeLine{01660\ \ \ \ \ \_cache\_stats.inc\_dels();}
+\DoxyCodeLine{01661\ }
+\DoxyCodeLine{01662\ \ \ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{01663\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ oi\ =\ other-\/>\_composition\_cache.find(\textcolor{keyword}{this});}
+\DoxyCodeLine{01664\ }
+\DoxyCodeLine{01665\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ may\ or\ may\ not\ still\ be\ listed\ in\ the\ other's\ cache\ (it\ might\ be}}
+\DoxyCodeLine{01666\ \ \ \ \ \ \ \textcolor{comment}{//\ halfway\ through\ pulling\ entries\ out,\ from\ within\ its\ own\ destructor).}}
+\DoxyCodeLine{01667\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (oi\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01668\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Hold\ a\ copy\ of\ the\ other\ composition\ result,\ too.}}
+\DoxyCodeLine{01669\ \ \ \ \ \ \ \ \ Composition\ ocomp\ =\ other-\/>\_composition\_cache.get\_data(oi);}
+\DoxyCodeLine{01670\ }
+\DoxyCodeLine{01671\ \ \ \ \ \ \ \ \ other-\/>\_composition\_cache.remove\_element(oi);}
+\DoxyCodeLine{01672\ \ \ \ \ \ \ \ \ \_cache\_stats.add\_total\_size(-\/1);}
+\DoxyCodeLine{01673\ \ \ \ \ \ \ \ \ \_cache\_stats.inc\_dels();}
+\DoxyCodeLine{01674\ }
+\DoxyCodeLine{01675\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ finally\ safe\ to\ let\ our\ held\ pointers\ go\ away.\ \ This\ may\ have}}
+\DoxyCodeLine{01676\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ cascading\ effects\ as\ other\ RenderState\ objects\ are\ destructed,\ but}}
+\DoxyCodeLine{01677\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ there\ will\ be\ no\ harm\ done\ if\ they\ destruct\ now.}}
+\DoxyCodeLine{01678\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ocomp.\_result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ ocomp.\_result\ !=\ other)\ \{}
+\DoxyCodeLine{01679\ \ \ \ \ \ \ \ \ \ \ cache\_unref\_delete(ocomp.\_result);}
+\DoxyCodeLine{01680\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01681\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01682\ \ \ \ \ \}}
+\DoxyCodeLine{01683\ }
+\DoxyCodeLine{01684\ \ \ \ \ \textcolor{comment}{//\ It's\ finally\ safe\ to\ let\ our\ held\ pointers\ go\ away.\ \ (See\ comment}}
+\DoxyCodeLine{01685\ \ \ \ \ \textcolor{comment}{//\ above.)}}
+\DoxyCodeLine{01686\ \ \ \ \ \textcolor{keywordflow}{if}\ (comp.\_result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ comp.\_result\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{01687\ \ \ \ \ \ \ cache\_unref\_delete(comp.\_result);}
+\DoxyCodeLine{01688\ \ \ \ \ \}}
+\DoxyCodeLine{01689\ \ \ \}}
+\DoxyCodeLine{01690\ }
+\DoxyCodeLine{01691\ \ \ \textcolor{comment}{//\ A\ similar\ bit\ of\ code\ for\ the\ invert\ cache.}}
+\DoxyCodeLine{01692\ \ \ i\ =\ 0;}
+\DoxyCodeLine{01693\ \ \ \textcolor{keywordflow}{while}\ (!\_invert\_composition\_cache.is\_empty())\ \{}
+\DoxyCodeLine{01694\ \ \ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *other\ =\ (\mbox{\hyperlink{classRenderState}{RenderState}}\ *)\_invert\_composition\_cache.get\_key(i);}
+\DoxyCodeLine{01695\ \ \ \ \ nassertv(other\ !=\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01696\ \ \ \ \ Composition\ comp\ =\ \_invert\_composition\_cache.get\_data(i);}
+\DoxyCodeLine{01697\ \ \ \ \ \_invert\_composition\_cache.remove\_element(i);}
+\DoxyCodeLine{01698\ \ \ \ \ \_cache\_stats.add\_total\_size(-\/1);}
+\DoxyCodeLine{01699\ \ \ \ \ \_cache\_stats.inc\_dels();}
+\DoxyCodeLine{01700\ \ \ \ \ \textcolor{keywordflow}{if}\ (other\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{01701\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ oi\ =\ other-\/>\_invert\_composition\_cache.find(\textcolor{keyword}{this});}
+\DoxyCodeLine{01702\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (oi\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01703\ \ \ \ \ \ \ \ \ Composition\ ocomp\ =\ other-\/>\_invert\_composition\_cache.get\_data(oi);}
+\DoxyCodeLine{01704\ \ \ \ \ \ \ \ \ other-\/>\_invert\_composition\_cache.remove\_element(oi);}
+\DoxyCodeLine{01705\ \ \ \ \ \ \ \ \ \_cache\_stats.add\_total\_size(-\/1);}
+\DoxyCodeLine{01706\ \ \ \ \ \ \ \ \ \_cache\_stats.inc\_dels();}
+\DoxyCodeLine{01707\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ocomp.\_result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ ocomp.\_result\ !=\ other)\ \{}
+\DoxyCodeLine{01708\ \ \ \ \ \ \ \ \ \ \ cache\_unref\_delete(ocomp.\_result);}
+\DoxyCodeLine{01709\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01710\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01711\ \ \ \ \ \}}
+\DoxyCodeLine{01712\ \ \ \ \ \textcolor{keywordflow}{if}\ (comp.\_result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ comp.\_result\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{01713\ \ \ \ \ \ \ cache\_unref\_delete(comp.\_result);}
+\DoxyCodeLine{01714\ \ \ \ \ \}}
+\DoxyCodeLine{01715\ \ \ \}}
+\DoxyCodeLine{01716\ \}}
+\DoxyCodeLine{01717\ }
+\DoxyCodeLine{01721\ \textcolor{keywordtype}{void}\ RenderState::}
+\DoxyCodeLine{01722\ determine\_bin\_index()\ \{}
+\DoxyCodeLine{01723\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01724\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_checked\_bin\_index)\ !=\ 0)\ \{}
+\DoxyCodeLine{01725\ \ \ \ \ \textcolor{comment}{//\ Someone\ else\ checked\ it\ first.}}
+\DoxyCodeLine{01726\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01727\ \ \ \}}
+\DoxyCodeLine{01728\ }
+\DoxyCodeLine{01729\ \ \ std::string\ bin\_name;}
+\DoxyCodeLine{01730\ \ \ \_draw\_order\ =\ 0;}
+\DoxyCodeLine{01731\ }
+\DoxyCodeLine{01732\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classCullBinAttrib}{CullBinAttrib}}\ *bin;}
+\DoxyCodeLine{01733\ \ \ \textcolor{keywordflow}{if}\ (get\_attrib(bin))\ \{}
+\DoxyCodeLine{01734\ \ \ \ \ bin\_name\ =\ bin-\/>get\_bin\_name();}
+\DoxyCodeLine{01735\ \ \ \ \ \_draw\_order\ =\ bin-\/>get\_draw\_order();}
+\DoxyCodeLine{01736\ \ \ \}}
+\DoxyCodeLine{01737\ }
+\DoxyCodeLine{01738\ \ \ \textcolor{keywordflow}{if}\ (bin\_name.empty())\ \{}
+\DoxyCodeLine{01739\ \ \ \ \ \textcolor{comment}{//\ No\ explicit\ bin\ is\ specified;\ put\ in\ the\ in\ the\ default\ bin,\ either}}
+\DoxyCodeLine{01740\ \ \ \ \ \textcolor{comment}{//\ opaque\ or\ transparent,\ based\ on\ the\ transparency\ setting.}}
+\DoxyCodeLine{01741\ \ \ \ \ bin\_name\ =\ \textcolor{stringliteral}{"{}opaque"{}};}
+\DoxyCodeLine{01742\ }
+\DoxyCodeLine{01743\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransparencyAttrib}{TransparencyAttrib}}\ *transparency;}
+\DoxyCodeLine{01744\ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_attrib(transparency))\ \{}
+\DoxyCodeLine{01745\ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (transparency-\/>get\_mode())\ \{}
+\DoxyCodeLine{01746\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TransparencyAttrib::M\_alpha:}
+\DoxyCodeLine{01747\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TransparencyAttrib::M\_premultiplied\_alpha:}
+\DoxyCodeLine{01748\ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ TransparencyAttrib::M\_dual:}
+\DoxyCodeLine{01749\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ These\ transparency\ modes\ require\ special\ back-\/to-\/front\ sorting.}}
+\DoxyCodeLine{01750\ \ \ \ \ \ \ \ \ bin\_name\ =\ \textcolor{stringliteral}{"{}transparent"{}};}
+\DoxyCodeLine{01751\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01752\ }
+\DoxyCodeLine{01753\ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{01754\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01755\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01756\ \ \ \ \ \}}
+\DoxyCodeLine{01757\ \ \ \}}
+\DoxyCodeLine{01758\ }
+\DoxyCodeLine{01759\ \ \ \mbox{\hyperlink{classCullBinManager}{CullBinManager}}\ *bin\_manager\ =\ CullBinManager::get\_global\_ptr();}
+\DoxyCodeLine{01760\ \ \ \_bin\_index\ =\ bin\_manager-\/>\mbox{\hyperlink{classCullBinManager_af7ac3f55f15e5bd4aac28825b4af388f}{find\_bin}}(bin\_name);}
+\DoxyCodeLine{01761\ \ \ \textcolor{keywordflow}{if}\ (\_bin\_index\ ==\ -\/1)\ \{}
+\DoxyCodeLine{01762\ \ \ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{01763\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ bin\ named\ "{}}\ <<\ bin\_name\ <<\ \textcolor{stringliteral}{"{};\ creating\ default\ bin.\(\backslash\)n"{}};}
+\DoxyCodeLine{01764\ \ \ \ \ \_bin\_index\ =\ bin\_manager-\/>\mbox{\hyperlink{classCullBinManager_ade7b57445c802d70db53cd6434d49bd2}{add\_bin}}(bin\_name,\ CullBinManager::BT\_unsorted,\ 0);}
+\DoxyCodeLine{01765\ \ \ \}}
+\DoxyCodeLine{01766\ \ \ \_flags\ |=\ F\_checked\_bin\_index;}
+\DoxyCodeLine{01767\ \}}
+\DoxyCodeLine{01768\ }
+\DoxyCodeLine{01772\ \textcolor{keywordtype}{void}\ RenderState::}
+\DoxyCodeLine{01773\ determine\_cull\_callback()\ \{}
+\DoxyCodeLine{01774\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01775\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ F\_checked\_cull\_callback)\ !=\ 0)\ \{}
+\DoxyCodeLine{01776\ \ \ \ \ \textcolor{comment}{//\ Someone\ else\ checked\ it\ first.}}
+\DoxyCodeLine{01777\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01778\ \ \ \}}
+\DoxyCodeLine{01779\ }
+\DoxyCodeLine{01780\ \ \ SlotMask\ mask\ =\ \_filled\_slots;}
+\DoxyCodeLine{01781\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01782\ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{01783\ \ \ \ \ \textcolor{keyword}{const}\ Attribute\ \&attrib\ =\ \_attributes[slot];}
+\DoxyCodeLine{01784\ \ \ \ \ nassertv(attrib.\_attrib\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01785\ \ \ \ \ \textcolor{keywordflow}{if}\ (attrib.\_attrib-\/>has\_cull\_callback())\ \{}
+\DoxyCodeLine{01786\ \ \ \ \ \ \ \_flags\ |=\ F\_has\_cull\_callback;}
+\DoxyCodeLine{01787\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01788\ \ \ \ \ \}}
+\DoxyCodeLine{01789\ }
+\DoxyCodeLine{01790\ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{01791\ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01792\ \ \ \}}
+\DoxyCodeLine{01793\ }
+\DoxyCodeLine{01794\ \ \ \_flags\ |=\ F\_checked\_cull\_callback;}
+\DoxyCodeLine{01795\ \}}
+\DoxyCodeLine{01796\ }
+\DoxyCodeLine{01800\ \textcolor{keywordtype}{void}\ RenderState::}
+\DoxyCodeLine{01801\ fill\_default()\ \{}
+\DoxyCodeLine{01802\ \ \ \mbox{\hyperlink{classRenderAttribRegistry}{RenderAttribRegistry}}\ *reg\ =\ RenderAttribRegistry::quick\_get\_global\_ptr();}
+\DoxyCodeLine{01803\ \ \ \textcolor{keywordtype}{int}\ num\_slots\ =\ reg-\/>get\_num\_slots();}
+\DoxyCodeLine{01804\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ slot\ =\ 1;\ slot\ <\ num\_slots;\ ++slot)\ \{}
+\DoxyCodeLine{01805\ \ \ \ \ \_attributes[slot].set(reg-\/>get\_slot\_default(slot),\ 0);}
+\DoxyCodeLine{01806\ \ \ \ \ \_filled\_slots.set\_bit(slot);}
+\DoxyCodeLine{01807\ \ \ \}}
+\DoxyCodeLine{01808\ \}}
+\DoxyCodeLine{01809\ }
+\DoxyCodeLine{01815\ \textcolor{keywordtype}{void}\ RenderState::}
+\DoxyCodeLine{01816\ update\_pstats(\textcolor{keywordtype}{int}\ old\_referenced\_bits,\ \textcolor{keywordtype}{int}\ new\_referenced\_bits)\ \{}
+\DoxyCodeLine{01817\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{01818\ \ \ \textcolor{keywordflow}{if}\ ((old\_referenced\_bits\ \&\ R\_node)\ !=\ 0)\ \{}
+\DoxyCodeLine{01819\ \ \ \ \ \_node\_counter.sub\_level(1);}
+\DoxyCodeLine{01820\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((old\_referenced\_bits\ \&\ R\_cache)\ !=\ 0)\ \{}
+\DoxyCodeLine{01821\ \ \ \ \ \_cache\_counter.sub\_level(1);}
+\DoxyCodeLine{01822\ \ \ \}}
+\DoxyCodeLine{01823\ \ \ \textcolor{keywordflow}{if}\ ((new\_referenced\_bits\ \&\ R\_node)\ !=\ 0)\ \{}
+\DoxyCodeLine{01824\ \ \ \ \ \_node\_counter.add\_level(1);}
+\DoxyCodeLine{01825\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((new\_referenced\_bits\ \&\ R\_cache)\ !=\ 0)\ \{}
+\DoxyCodeLine{01826\ \ \ \ \ \_cache\_counter.add\_level(1);}
+\DoxyCodeLine{01827\ \ \ \}}
+\DoxyCodeLine{01828\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{01829\ \}}
+\DoxyCodeLine{01830\ }
+\DoxyCodeLine{01838\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classRenderState_a79c1a906186c8eb3050212003ac98eea}{RenderState::}}}
+\DoxyCodeLine{01839\ \mbox{\hyperlink{classRenderState_a79c1a906186c8eb3050212003ac98eea}{init\_states}}()\ \{}
+\DoxyCodeLine{01840\ \ \ \textcolor{comment}{//\ TODO:\ we\ should\ have\ a\ global\ Panda\ mutex\ to\ allow\ us\ to\ safely\ create}}
+\DoxyCodeLine{01841\ \ \ \textcolor{comment}{//\ \_states\_lock\ without\ a\ startup\ race\ condition.\ \ For\ the\ meantime,\ this\ is}}
+\DoxyCodeLine{01842\ \ \ \textcolor{comment}{//\ OK\ because\ we\ guarantee\ that\ this\ method\ is\ called\ at\ static\ init\ time,}}
+\DoxyCodeLine{01843\ \ \ \textcolor{comment}{//\ presumably\ when\ there\ is\ still\ only\ one\ thread\ in\ the\ world.}}
+\DoxyCodeLine{01844\ \ \ \_states\_lock\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightReMutex}{LightReMutex}}(\textcolor{stringliteral}{"{}RenderState::\_states\_lock"{}});}
+\DoxyCodeLine{01845\ \ \ \_cache\_stats.\mbox{\hyperlink{classCacheStats_a567e98bb81a76df7dfb0f596c2587855}{init}}();}
+\DoxyCodeLine{01846\ \ \ nassertv(Thread::get\_current\_thread()\ ==\ Thread::get\_main\_thread());}
+\DoxyCodeLine{01847\ }
+\DoxyCodeLine{01848\ \ \ \textcolor{comment}{//\ Initialize\ the\ empty\ state\ object\ as\ well.\ \ It\ is\ used\ so\ often\ that\ it}}
+\DoxyCodeLine{01849\ \ \ \textcolor{comment}{//\ is\ declared\ globally,\ and\ lives\ forever.}}
+\DoxyCodeLine{01850\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}};}
+\DoxyCodeLine{01851\ \ \ state-\/>local\_object();}
+\DoxyCodeLine{01852\ \ \ state-\/>cache\_ref\_only();}
+\DoxyCodeLine{01853\ \ \ state-\/>\_saved\_entry\ =\ \_states.store(state,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01854\ \ \ \_empty\_state\ =\ state;}
+\DoxyCodeLine{01855\ \}}
+\DoxyCodeLine{01856\ }
+\DoxyCodeLine{01860\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classRenderState_a3c6762bcfd3f4f8c98c3359367647446}{RenderState::}}}
+\DoxyCodeLine{01861\ \mbox{\hyperlink{classRenderState_a3c6762bcfd3f4f8c98c3359367647446}{register\_with\_read\_factory}}()\ \{}
+\DoxyCodeLine{01862\ \ \ BamReader::get\_factory()-\/>register\_factory(get\_class\_type(),\ \mbox{\hyperlink{classRenderState_a1dc627b9a5da0a71189478b57e4d9af2}{make\_from\_bam}});}
+\DoxyCodeLine{01863\ \}}
+\DoxyCodeLine{01864\ }
+\DoxyCodeLine{01869\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classRenderState_a4837b39629fd2f8c5d1eb6bfdeae2112}{RenderState::}}}
+\DoxyCodeLine{01870\ \mbox{\hyperlink{classRenderState_a4837b39629fd2f8c5d1eb6bfdeae2112}{write\_datagram}}(\mbox{\hyperlink{classBamWriter}{BamWriter}}\ *manager,\ \mbox{\hyperlink{classDatagram}{Datagram}}\ \&dg)\ \{}
+\DoxyCodeLine{01871\ \ \ TypedWritable::write\_datagram(manager,\ dg);}
+\DoxyCodeLine{01872\ }
+\DoxyCodeLine{01873\ \ \ \textcolor{keywordtype}{int}\ num\_attribs\ =\ \_filled\_slots.get\_num\_on\_bits();}
+\DoxyCodeLine{01874\ \ \ nassertv(num\_attribs\ ==\ (\textcolor{keywordtype}{int})(uint16\_t)num\_attribs);}
+\DoxyCodeLine{01875\ \ \ dg.add\_uint16(num\_attribs);}
+\DoxyCodeLine{01876\ }
+\DoxyCodeLine{01877\ \ \ \textcolor{comment}{//\ ****\ We\ should\ smarten\ up\ the\ writing\ of\ the\ override\ number-\/-\/most\ of\ the}}
+\DoxyCodeLine{01878\ \ \ \textcolor{comment}{//\ time\ these\ will\ all\ be\ zero.}}
+\DoxyCodeLine{01879\ \ \ \mbox{\hyperlink{classBitMask}{SlotMask}}\ mask\ =\ \_filled\_slots;}
+\DoxyCodeLine{01880\ \ \ \textcolor{keywordtype}{int}\ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01881\ \ \ \textcolor{keywordflow}{while}\ (slot\ >=\ 0)\ \{}
+\DoxyCodeLine{01882\ \ \ \ \ \textcolor{keyword}{const}\ Attribute\ \&attrib\ =\ \_attributes[slot];}
+\DoxyCodeLine{01883\ \ \ \ \ nassertv(attrib.\_attrib\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01884\ \ \ \ \ manager-\/>\mbox{\hyperlink{classBamWriter_a634bd4eb8e9b33ffde91a27c02f80467}{write\_pointer}}(dg,\ attrib.\_attrib);}
+\DoxyCodeLine{01885\ \ \ \ \ dg.add\_int32(attrib.\_override);}
+\DoxyCodeLine{01886\ }
+\DoxyCodeLine{01887\ \ \ \ \ mask.clear\_bit(slot);}
+\DoxyCodeLine{01888\ \ \ \ \ slot\ =\ mask.get\_lowest\_on\_bit();}
+\DoxyCodeLine{01889\ \ \ \}}
+\DoxyCodeLine{01890\ \}}
+\DoxyCodeLine{01891\ }
+\DoxyCodeLine{01896\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classRenderState_a5a010f70d7b2852c78d2ff8e19bde1c6}{RenderState::}}}
+\DoxyCodeLine{01897\ \mbox{\hyperlink{classRenderState_a5a010f70d7b2852c78d2ff8e19bde1c6}{complete\_pointers}}(\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ **p\_list,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{01898\ \ \ \textcolor{keywordtype}{int}\ pi\ =\ \mbox{\hyperlink{classTypedWritable_addc29bb978851cacca2196f8a1f35014}{TypedWritable::complete\_pointers}}(p\_list,\ manager);}
+\DoxyCodeLine{01899\ }
+\DoxyCodeLine{01900\ \ \ \mbox{\hyperlink{classRenderAttribRegistry}{RenderAttribRegistry}}\ *reg\ =\ RenderAttribRegistry::quick\_get\_global\_ptr();}
+\DoxyCodeLine{01901\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ (*\_read\_overrides).size();\ ++i)\ \{}
+\DoxyCodeLine{01902\ \ \ \ \ \textcolor{keywordtype}{int}\ \textcolor{keyword}{override}\ =\ (*\_read\_overrides)[i];}
+\DoxyCodeLine{01903\ }
+\DoxyCodeLine{01904\ \ \ \ \ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *attrib\ =\ DCAST(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}},\ p\_list[pi++]);}
+\DoxyCodeLine{01905\ \ \ \ \ \textcolor{keywordflow}{if}\ (attrib\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01906\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ slot\ =\ attrib-\/>get\_slot();}
+\DoxyCodeLine{01907\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (slot\ >\ 0\ \&\&\ slot\ <\ reg-\/>get\_max\_slots())\ \{}
+\DoxyCodeLine{01908\ \ \ \ \ \ \ \ \ \_attributes[slot].set(attrib,\ \textcolor{keyword}{override});}
+\DoxyCodeLine{01909\ \ \ \ \ \ \ \ \ \_filled\_slots.set\_bit(slot);}
+\DoxyCodeLine{01910\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01911\ \ \ \ \ \}}
+\DoxyCodeLine{01912\ \ \ \}}
+\DoxyCodeLine{01913\ }
+\DoxyCodeLine{01914\ \ \ \textcolor{keyword}{delete}\ \_read\_overrides;}
+\DoxyCodeLine{01915\ \ \ \_read\_overrides\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01916\ }
+\DoxyCodeLine{01917\ \ \ \textcolor{keywordflow}{return}\ pi;}
+\DoxyCodeLine{01918\ \}}
+\DoxyCodeLine{01919\ }
+\DoxyCodeLine{01928\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\mbox{\hyperlink{classRenderState_aa27db06a42fb4997420aae652a2107ed}{RenderState::}}}
+\DoxyCodeLine{01929\ \mbox{\hyperlink{classRenderState_aa27db06a42fb4997420aae652a2107ed}{change\_this}}(\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *old\_ptr,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{01930\ \ \ \textcolor{comment}{//\ First,\ uniquify\ the\ pointer.}}
+\DoxyCodeLine{01931\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ DCAST(\mbox{\hyperlink{classRenderState}{RenderState}},\ old\_ptr);}
+\DoxyCodeLine{01932\ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ pointer\ =\ return\_unique(state);}
+\DoxyCodeLine{01933\ }
+\DoxyCodeLine{01934\ \ \ \textcolor{comment}{//\ But\ now\ we\ have\ a\ problem,\ since\ we\ have\ to\ hold\ the\ reference\ count\ and}}
+\DoxyCodeLine{01935\ \ \ \textcolor{comment}{//\ there's\ no\ way\ to\ return\ a\ TypedWritable\ while\ still\ holding\ the}}
+\DoxyCodeLine{01936\ \ \ \textcolor{comment}{//\ reference\ count!\ \ We\ work\ around\ this\ by\ explicitly\ upping\ the\ count,\ and}}
+\DoxyCodeLine{01937\ \ \ \textcolor{comment}{//\ also\ setting\ a\ finalize()\ callback\ to\ down\ it\ later.}}
+\DoxyCodeLine{01938\ \ \ \textcolor{keywordflow}{if}\ (pointer\ ==\ state)\ \{}
+\DoxyCodeLine{01939\ \ \ \ \ pointer-\/>ref();}
+\DoxyCodeLine{01940\ \ \ \ \ manager-\/>\mbox{\hyperlink{classBamReader_a0c2e8dc5a794a4263139116b5b8dcb2d}{register\_finalize}}(state);}
+\DoxyCodeLine{01941\ \ \ \}}
+\DoxyCodeLine{01942\ }
+\DoxyCodeLine{01943\ \ \ \textcolor{comment}{//\ We\ have\ to\ cast\ the\ pointer\ back\ to\ non-\/const,\ because\ the\ bam\ reader}}
+\DoxyCodeLine{01944\ \ \ \textcolor{comment}{//\ expects\ that.}}
+\DoxyCodeLine{01945\ \ \ \textcolor{keywordflow}{return}\ (\mbox{\hyperlink{classRenderState}{RenderState}}\ *)pointer.p();}
+\DoxyCodeLine{01946\ \}}
+\DoxyCodeLine{01947\ }
+\DoxyCodeLine{01953\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classRenderState_ad3a12d77598403f8baba41d3d24871b4}{RenderState::}}}
+\DoxyCodeLine{01954\ \mbox{\hyperlink{classRenderState_ad3a12d77598403f8baba41d3d24871b4}{finalize}}(\mbox{\hyperlink{classBamReader}{BamReader}}\ *)\ \{}
+\DoxyCodeLine{01955\ \ \ \textcolor{comment}{//\ Unref\ the\ pointer\ that\ we\ explicitly\ reffed\ in\ change\_this().}}
+\DoxyCodeLine{01956\ \ \ unref();}
+\DoxyCodeLine{01957\ }
+\DoxyCodeLine{01958\ \ \ \textcolor{comment}{//\ We\ should\ never\ get\ back\ to\ zero\ after\ unreffing\ our\ own\ count,\ because}}
+\DoxyCodeLine{01959\ \ \ \textcolor{comment}{//\ we\ expect\ to\ have\ been\ stored\ in\ a\ pointer\ somewhere.\ \ If\ we\ do\ get\ to}}
+\DoxyCodeLine{01960\ \ \ \textcolor{comment}{//\ zero,\ it's\ a\ memory\ leak;\ the\ way\ to\ avoid\ this\ is\ to\ call\ unref\_delete()}}
+\DoxyCodeLine{01961\ \ \ \textcolor{comment}{//\ above\ instead\ of\ unref(),\ but\ this\ is\ dangerous\ to\ do\ from\ within\ a}}
+\DoxyCodeLine{01962\ \ \ \textcolor{comment}{//\ virtual\ function.}}
+\DoxyCodeLine{01963\ \ \ nassertv(get\_ref\_count()\ !=\ 0);}
+\DoxyCodeLine{01964\ \}}
+\DoxyCodeLine{01965\ }
+\DoxyCodeLine{01971\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\mbox{\hyperlink{classRenderState_a1dc627b9a5da0a71189478b57e4d9af2}{RenderState::}}}
+\DoxyCodeLine{01972\ \mbox{\hyperlink{classRenderState_a1dc627b9a5da0a71189478b57e4d9af2}{make\_from\_bam}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFactoryParams}{FactoryParams}}\ \&params)\ \{}
+\DoxyCodeLine{01973\ \ \ \mbox{\hyperlink{classRenderState}{RenderState}}\ *state\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classRenderState_a0a130c0f2f45c4e0358cb62c09c595e9}{RenderState}};}
+\DoxyCodeLine{01974\ \ \ \mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ scan;}
+\DoxyCodeLine{01975\ \ \ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager;}
+\DoxyCodeLine{01976\ }
+\DoxyCodeLine{01977\ \ \ parse\_params(params,\ scan,\ manager);}
+\DoxyCodeLine{01978\ \ \ state-\/>\mbox{\hyperlink{classRenderState_aa1faf7ef71e543a1c4e804fe96736045}{fillin}}(scan,\ manager);}
+\DoxyCodeLine{01979\ \ \ manager-\/>\mbox{\hyperlink{classBamReader_aa694b5968c0fa549f26b8919451ac230}{register\_change\_this}}(\mbox{\hyperlink{classRenderState_aa27db06a42fb4997420aae652a2107ed}{change\_this}},\ state);}
+\DoxyCodeLine{01980\ }
+\DoxyCodeLine{01981\ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{01982\ \}}
+\DoxyCodeLine{01983\ }
+\DoxyCodeLine{01988\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classRenderState_aa1faf7ef71e543a1c4e804fe96736045}{RenderState::}}}
+\DoxyCodeLine{01989\ \mbox{\hyperlink{classRenderState_aa1faf7ef71e543a1c4e804fe96736045}{fillin}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{01990\ \ \ \mbox{\hyperlink{classTypedWritable_a3ad6cc1cd23bc3783d83edb3302bb43c}{TypedWritable::fillin}}(scan,\ manager);}
+\DoxyCodeLine{01991\ }
+\DoxyCodeLine{01992\ \ \ \textcolor{keywordtype}{int}\ num\_attribs\ =\ scan.get\_uint16();}
+\DoxyCodeLine{01993\ \ \ \_read\_overrides\ =\ \textcolor{keyword}{new}\ vector\_int;}
+\DoxyCodeLine{01994\ \ \ (*\_read\_overrides).reserve(num\_attribs);}
+\DoxyCodeLine{01995\ }
+\DoxyCodeLine{01996\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_attribs;\ ++i)\ \{}
+\DoxyCodeLine{01997\ \ \ \ \ manager-\/>\mbox{\hyperlink{classBamReader_ac0ecc0609d9c6de514145777b3336435}{read\_pointer}}(scan);}
+\DoxyCodeLine{01998\ \ \ \ \ \textcolor{keywordtype}{int}\ \textcolor{keyword}{override}\ =\ scan.get\_int32();}
+\DoxyCodeLine{01999\ \ \ \ \ (*\_read\_overrides).push\_back(\textcolor{keyword}{override});}
+\DoxyCodeLine{02000\ \ \ \}}
+\DoxyCodeLine{02001\ \}}
+
+\end{DoxyCode}

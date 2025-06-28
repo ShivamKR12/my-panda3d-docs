@@ -1,0 +1,671 @@
+\doxysection{fmod\+Audio\+Manager.\+cxx}
+\hypertarget{fmodAudioManager_8cxx_source}{}\label{fmodAudioManager_8cxx_source}\index{panda/src/audiotraits/fmodAudioManager.cxx@{panda/src/audiotraits/fmodAudioManager.cxx}}
+\mbox{\hyperlink{fmodAudioManager_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pandabase_8h}{pandabase.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__audio_8h}{config\_audio.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__fmodAudio_8h}{config\_fmodAudio.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{dcast_8h}{dcast.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{comment}{//\ Panda\ headers.}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__audio_8h}{config\_audio.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__putil_8h}{config\_putil.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{fmodAudioManager_8h}{fmodAudioManager.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{fmodAudioSound_8h}{fmodAudioSound.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{filename_8h}{filename.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFileSystem_8h}{virtualFileSystem.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{reMutexHolder_8h}{reMutexHolder.h}}"{}}}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ \textcolor{comment}{//\ FMOD\ Headers.}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ <fmod.hpp>}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ <fmod\_errors.h>}}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#define\ USER\_DSP\_MAGIC\ ((void*)0x7012AB35)}}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ FmodAudioManager::\_type\_handle;}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \mbox{\hyperlink{classReMutex}{ReMutex}}\ FmodAudioManager::\_lock;}
+\DoxyCodeLine{00039\ FMOD::System\ *FmodAudioManager::\_system;}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00041\ \mbox{\hyperlink{classpset}{pset<FmodAudioManager\ *>}}\ FmodAudioManager::\_all\_managers;}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \textcolor{keywordtype}{bool}\ FmodAudioManager::\_system\_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ PN\_stdfloat\ FmodAudioManager::\_doppler\_factor\ =\ 1;}
+\DoxyCodeLine{00046\ PN\_stdfloat\ FmodAudioManager::\_distance\_factor\ =\ 1;}
+\DoxyCodeLine{00047\ PN\_stdfloat\ FmodAudioManager::\_drop\_off\_factor\ =\ 1;}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \textcolor{comment}{//\ Central\ dispatcher\ for\ audio\ errors.}}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \textcolor{keywordtype}{void}\ fmod\_audio\_errcheck(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *context,\ FMOD\_RESULT\ result)\ \{}
+\DoxyCodeLine{00053\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00054\ \ \ \ \ audio\_error(context\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ FMOD\_ErrorString(result)\ );}
+\DoxyCodeLine{00055\ \ \ \}}
+\DoxyCodeLine{00056\ \}}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00061\ \mbox{\hyperlink{classAudioManager}{AudioManager}}\ *\mbox{\hyperlink{fmodAudioManager_8cxx_a2fd09b1bf95e86fc5dc237f794561f7e}{Create\_FmodAudioManager}}()\ \{}
+\DoxyCodeLine{00062\ \ \ audio\_debug(\textcolor{stringliteral}{"{}Create\_FmodAudioManager()"{}});}
+\DoxyCodeLine{00063\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classFmodAudioManager}{FmodAudioManager}};}
+\DoxyCodeLine{00064\ \}}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00070\ FmodAudioManager::}
+\DoxyCodeLine{00071\ FmodAudioManager()\ \{}
+\DoxyCodeLine{00072\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00073\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ \textcolor{comment}{//\ We\ need\ a\ varible\ temporary\ to\ check\ the\ FMOD\ Version.}}
+\DoxyCodeLine{00076\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ \ \ \ \ \ version;}
+\DoxyCodeLine{00077\ }
+\DoxyCodeLine{00078\ \ \ \_all\_managers.insert(\textcolor{keyword}{this});}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \ \ \textcolor{comment}{//\ Init\ 3D\ attributes}}
+\DoxyCodeLine{00081\ \ \ \_position.x\ =\ 0;}
+\DoxyCodeLine{00082\ \ \ \_position.y\ =\ 0;}
+\DoxyCodeLine{00083\ \ \ \_position.z\ =\ 0;}
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00085\ \ \ \_velocity.x\ =\ 0;}
+\DoxyCodeLine{00086\ \ \ \_velocity.y\ =\ 0;}
+\DoxyCodeLine{00087\ \ \ \_velocity.z\ =\ 0;}
+\DoxyCodeLine{00088\ }
+\DoxyCodeLine{00089\ \ \ \_forward.x\ =\ 0;}
+\DoxyCodeLine{00090\ \ \ \_forward.y\ =\ 0;}
+\DoxyCodeLine{00091\ \ \ \_forward.z\ =\ 0;}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00093\ \ \ \_up.x\ =\ 0;}
+\DoxyCodeLine{00094\ \ \ \_up.y\ =\ 0;}
+\DoxyCodeLine{00095\ \ \ \_up.z\ =\ 0;}
+\DoxyCodeLine{00096\ }
+\DoxyCodeLine{00097\ \ \ \_active\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \_saved\_outputtype\ =\ FMOD\_OUTPUTTYPE\_AUTODETECT;}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \ \ \textcolor{keywordflow}{if}\ (\_system\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00102\ \ \ \ \ \textcolor{comment}{//\ Create\ the\ global\ FMOD\ System\ object.\ \ This\ one\ object\ must\ be\ shared}}
+\DoxyCodeLine{00103\ \ \ \ \ \textcolor{comment}{//\ by\ all\ FmodAudioManagers\ (this\ is\ particularly\ true\ on\ OSX,\ but\ the}}
+\DoxyCodeLine{00104\ \ \ \ \ \textcolor{comment}{//\ FMOD\ documentation\ is\ unclear\ as\ to\ whether\ this\ is\ the\ intended\ design}}
+\DoxyCodeLine{00105\ \ \ \ \ \textcolor{comment}{//\ on\ all\ systems).}}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \ \ \ \ result\ =\ FMOD::System\_Create(\&\_system);}
+\DoxyCodeLine{00108\ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}FMOD::System\_Create()"{}},\ result);}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{comment}{//\ Let\ check\ the\ Version\ of\ FMOD\ to\ make\ sure\ the\ Headers\ and\ Libraries}}
+\DoxyCodeLine{00111\ \ \ \ \ \textcolor{comment}{//\ are\ correct.}}
+\DoxyCodeLine{00112\ \ \ \ \ result\ =\ \_system-\/>getVersion(\&version);}
+\DoxyCodeLine{00113\ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>getVersion()"{}},\ result);}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \ \ \ \ \textcolor{keywordflow}{if}\ (version\ <\ FMOD\_VERSION)\{}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}You\ are\ using\ an\ old\ version\ of\ FMOD.\ \ This\ program\ requires:"{}}\ <<\ FMOD\_VERSION);}
+\DoxyCodeLine{00117\ \ \ \ \ \}}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ \ \ \textcolor{comment}{//\ Set\ speaker\ mode.}}
+\DoxyCodeLine{00120\ \ \ \ \ \textcolor{keywordflow}{if}\ (fmod\_speaker\_mode.get\_value()\ ==\ FSM\_unspecified)\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (fmod\_use\_surround\_sound)\ \{}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ fmod-\/use-\/surround-\/sound\ is\ the\ old\ variable,\ now\ replaced\ by\ fmod-\/}}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ speaker-\/mode.\ \ This\ is\ for\ backward\ compatibility.}}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \ \ result\ =\ \_system-\/>setSpeakerMode(FMOD\_SPEAKERMODE\_5POINT1);}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>setSpeakerMode()"{}},\ result);}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00127\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ FMOD\_SPEAKERMODE\ speakerMode;}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ speakerMode\ =\ (FMOD\_SPEAKERMODE)\ fmod\_speaker\_mode.get\_value();}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ result\ =\ \_system-\/>setSpeakerMode(speakerMode);}
+\DoxyCodeLine{00131\ \ \ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>setSpeakerMode()"{}},\ result);}
+\DoxyCodeLine{00132\ \ \ \ \ \}}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{comment}{//\ Now\ we\ Initialize\ the\ System.}}
+\DoxyCodeLine{00135\ \ \ \ \ \textcolor{keywordtype}{int}\ nchan\ =\ fmod\_number\_of\_sound\_channels;}
+\DoxyCodeLine{00136\ \ \ \ \ \textcolor{keywordtype}{int}\ flags\ =\ FMOD\_INIT\_NORMAL;}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ \ \ result\ =\ \_system-\/>init(nchan,\ flags,\ 0);}
+\DoxyCodeLine{00139\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ ==\ FMOD\_ERR\_TOOMANYCHANNELS)\ \{}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ fmodAudio\_cat.error()}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Value\ too\ large\ for\ fmod-\/number-\/of-\/sound-\/channels:\ "{}}\ <<\ nchan}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00143\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>init()"{}},\ result);}
+\DoxyCodeLine{00145\ \ \ \ \ \}}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00147\ \ \ \ \ \_system\_is\_valid\ =\ (result\ ==\ FMOD\_OK);}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_system\_is\_valid)\ \{}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ result\ =\ \_system-\/>set3DSettings(\ \_doppler\_factor,\ \_distance\_factor,\ \_drop\_off\_factor);}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>set3DSettings()"{}},\ result);}
+\DoxyCodeLine{00152\ \ \ \ \ \}}
+\DoxyCodeLine{00153\ \ \ \}}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ \_is\_valid\ =\ \_system\_is\_valid;}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00157\ \ \ memset(\&\_midi\_info,\ 0,\ \textcolor{keyword}{sizeof}(\_midi\_info));}
+\DoxyCodeLine{00158\ \ \ \_midi\_info.cbsize\ =\ \textcolor{keyword}{sizeof}(\_midi\_info);}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ dls\_pathname\ =\ get\_dls\_pathname();}
+\DoxyCodeLine{00161\ }
+\DoxyCodeLine{00162\ \textcolor{preprocessor}{\#ifdef\ IS\_OSX}}
+\DoxyCodeLine{00163\ \ \ \textcolor{comment}{//\ Here's\ a\ big\ kludge.\ \ Don't\ ever\ let\ FMOD\ try\ to\ load\ this\ OSX-\/provided}}
+\DoxyCodeLine{00164\ \ \ \textcolor{comment}{//\ file;\ it\ crashes\ messily\ if\ you\ do.}}
+\DoxyCodeLine{00165\ \ \ \textcolor{keywordflow}{if}\ (dls\_pathname\ ==\ \textcolor{stringliteral}{"{}/System/Library/Components/CoreAudio.component/Contents/Resources/gs\_instruments.dls"{}})\ \{}
+\DoxyCodeLine{00166\ \ \ \ \ dls\_pathname\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00167\ \ \ \}}
+\DoxyCodeLine{00168\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ IS\_OSX}}
+\DoxyCodeLine{00169\ }
+\DoxyCodeLine{00170\ \ \ \textcolor{keywordflow}{if}\ (!dls\_pathname.empty())\ \{}
+\DoxyCodeLine{00171\ \ \ \ \ \_dlsname\ =\ dls\_pathname.\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}();}
+\DoxyCodeLine{00172\ \ \ \ \ \_midi\_info.dlsname\ =\ \_dlsname.c\_str();}
+\DoxyCodeLine{00173\ \ \ \}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00175\ \ \ \textcolor{keywordflow}{if}\ (\_is\_valid)\ \{}
+\DoxyCodeLine{00176\ \ \ \ \ result\ =\ \_system-\/>createChannelGroup(\textcolor{stringliteral}{"{}UserGroup"{}},\ \&\_channelgroup);}
+\DoxyCodeLine{00177\ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>createChannelGroup()"{}},\ result);}
+\DoxyCodeLine{00178\ \ \ \}}
+\DoxyCodeLine{00179\ \}}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00184\ FmodAudioManager::}
+\DoxyCodeLine{00185\ \string~FmodAudioManager()\ \{}
+\DoxyCodeLine{00186\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00187\ \ \ \textcolor{comment}{//\ Be\ sure\ to\ delete\ associated\ sounds\ before\ deleting\ the\ manager!}}
+\DoxyCodeLine{00188\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00190\ \ \ \textcolor{comment}{//\ Release\ Sounds\ Next}}
+\DoxyCodeLine{00191\ \ \ \_all\_sounds.clear();}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00193\ \ \ \textcolor{comment}{//\ Remove\ me\ from\ the\ managers\ list.}}
+\DoxyCodeLine{00194\ \ \ \_all\_managers.erase(\textcolor{keyword}{this});}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ \textcolor{keywordflow}{if}\ (\_all\_managers.empty())\ \{}
+\DoxyCodeLine{00197\ \ \ \ \ result\ =\ \_system-\/>release();}
+\DoxyCodeLine{00198\ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>release()"{}},\ result);}
+\DoxyCodeLine{00199\ \ \ \ \ \_system\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00200\ \ \ \ \ \_system\_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00201\ \ \ \}}
+\DoxyCodeLine{00202\ \}}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00207\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFmodAudioManager_a737e87fa9d93338b6a29fedf2fce02db}{FmodAudioManager::}}}
+\DoxyCodeLine{00208\ \mbox{\hyperlink{classFmodAudioManager_a737e87fa9d93338b6a29fedf2fce02db}{is\_valid}}()\ \{}
+\DoxyCodeLine{00209\ \ \ \textcolor{keywordflow}{return}\ \_is\_valid;}
+\DoxyCodeLine{00210\ \}}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00215\ FMOD::DSP\ *FmodAudioManager::}
+\DoxyCodeLine{00216\ make\_dsp(\textcolor{keyword}{const}\ \mbox{\hyperlink{structFilterProperties_1_1FilterConfig}{FilterProperties::FilterConfig}}\ \&conf)\ \{}
+\DoxyCodeLine{00217\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00218\ \ \ FMOD\_DSP\_TYPE\ dsptype;}
+\DoxyCodeLine{00219\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00220\ \ \ FMOD::DSP\ *dsp;}
+\DoxyCodeLine{00221\ \ \ \textcolor{keywordflow}{switch}\ (conf.\_type)\ \{}
+\DoxyCodeLine{00222\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_lowpass:\ \ \ \ dsptype\ =\ FMOD\_DSP\_TYPE\_LOWPASS;\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00223\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_highpass:\ \ \ dsptype\ =\ FMOD\_DSP\_TYPE\_HIGHPASS;\ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00224\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_echo:\ \ \ \ \ \ \ dsptype\ =\ FMOD\_DSP\_TYPE\_ECHO;\ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00225\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_flange:\ \ \ \ \ dsptype\ =\ FMOD\_DSP\_TYPE\_FLANGE;\ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00226\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_distort:\ \ \ \ dsptype\ =\ FMOD\_DSP\_TYPE\_DISTORTION;\ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00227\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_normalize:\ \ dsptype\ =\ FMOD\_DSP\_TYPE\_NORMALIZE;\ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_parameq:\ \ \ \ dsptype\ =\ FMOD\_DSP\_TYPE\_PARAMEQ;\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00229\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_pitchshift:\ dsptype\ =\ FMOD\_DSP\_TYPE\_PITCHSHIFT;\ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00230\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_chorus:\ \ \ \ \ dsptype\ =\ FMOD\_DSP\_TYPE\_CHORUS;\ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00231\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_sfxreverb:\ \ dsptype\ =\ FMOD\_DSP\_TYPE\_SFXREVERB;\ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00232\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_compress:\ \ \ dsptype\ =\ FMOD\_DSP\_TYPE\_COMPRESSOR;\ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00233\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00234\ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}Garbage\ in\ DSP\ configuration\ data"{}});}
+\DoxyCodeLine{00235\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00236\ \ \ \}}
+\DoxyCodeLine{00237\ }
+\DoxyCodeLine{00238\ \ \ result\ =\ \_system-\/>createDSPByType(\ dsptype,\ \&dsp);}
+\DoxyCodeLine{00239\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00240\ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}Could\ not\ create\ DSP\ object"{}});}
+\DoxyCodeLine{00241\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00242\ \ \ \}}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00244\ \ \ FMOD\_RESULT\ res1\ =\ FMOD\_OK;}
+\DoxyCodeLine{00245\ \ \ FMOD\_RESULT\ res2\ =\ FMOD\_OK;}
+\DoxyCodeLine{00246\ \ \ FMOD\_RESULT\ res3\ =\ FMOD\_OK;}
+\DoxyCodeLine{00247\ \ \ FMOD\_RESULT\ res4\ =\ FMOD\_OK;}
+\DoxyCodeLine{00248\ \ \ FMOD\_RESULT\ res5\ =\ FMOD\_OK;}
+\DoxyCodeLine{00249\ \ \ FMOD\_RESULT\ res6\ =\ FMOD\_OK;}
+\DoxyCodeLine{00250\ \ \ FMOD\_RESULT\ res7\ =\ FMOD\_OK;}
+\DoxyCodeLine{00251\ \ \ FMOD\_RESULT\ res8\ =\ FMOD\_OK;}
+\DoxyCodeLine{00252\ \ \ FMOD\_RESULT\ res9\ =\ FMOD\_OK;}
+\DoxyCodeLine{00253\ \ \ FMOD\_RESULT\ res10\ =\ FMOD\_OK;}
+\DoxyCodeLine{00254\ \ \ FMOD\_RESULT\ res11\ =\ FMOD\_OK;}
+\DoxyCodeLine{00255\ \ \ FMOD\_RESULT\ res12\ =\ FMOD\_OK;}
+\DoxyCodeLine{00256\ \ \ FMOD\_RESULT\ res13\ =\ FMOD\_OK;}
+\DoxyCodeLine{00257\ \ \ FMOD\_RESULT\ res14\ =\ FMOD\_OK;}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \textcolor{keywordflow}{switch}\ (conf.\_type)\ \{}
+\DoxyCodeLine{00260\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_lowpass:}
+\DoxyCodeLine{00261\ \ \ \ \ res1\ =\ dsp-\/>setParameter(FMOD\_DSP\_LOWPASS\_CUTOFF,\ \ \ \ \ conf.\_a);}
+\DoxyCodeLine{00262\ \ \ \ \ res2\ =\ dsp-\/>setParameter(FMOD\_DSP\_LOWPASS\_RESONANCE,\ \ conf.\_b);}
+\DoxyCodeLine{00263\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00264\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_highpass:}
+\DoxyCodeLine{00265\ \ \ \ \ res1\ =\ dsp-\/>setParameter(FMOD\_DSP\_HIGHPASS\_CUTOFF,\ \ \ \ conf.\_a);}
+\DoxyCodeLine{00266\ \ \ \ \ res2\ =\ dsp-\/>setParameter(FMOD\_DSP\_HIGHPASS\_RESONANCE,\ conf.\_b);}
+\DoxyCodeLine{00267\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00268\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_echo:}
+\DoxyCodeLine{00269\ \ \ \ \ res1\ =\ dsp-\/>setParameter(FMOD\_DSP\_ECHO\_DRYMIX,\ \ \ \ \ \ \ \ conf.\_a);}
+\DoxyCodeLine{00270\ \ \ \ \ res2\ =\ dsp-\/>setParameter(FMOD\_DSP\_ECHO\_WETMIX,\ \ \ \ \ \ \ \ conf.\_b);}
+\DoxyCodeLine{00271\ \ \ \ \ res3\ =\ dsp-\/>setParameter(FMOD\_DSP\_ECHO\_DELAY,\ \ \ \ \ \ \ \ \ conf.\_c);}
+\DoxyCodeLine{00272\ \ \ \ \ res4\ =\ dsp-\/>setParameter(FMOD\_DSP\_ECHO\_DECAYRATIO,\ \ \ \ conf.\_d);}
+\DoxyCodeLine{00273\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00274\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_flange:}
+\DoxyCodeLine{00275\ \ \ \ \ res1\ =\ dsp-\/>setParameter(FMOD\_DSP\_FLANGE\_DRYMIX,\ \ \ \ \ \ conf.\_a);}
+\DoxyCodeLine{00276\ \ \ \ \ res2\ =\ dsp-\/>setParameter(FMOD\_DSP\_FLANGE\_WETMIX,\ \ \ \ \ \ conf.\_b);}
+\DoxyCodeLine{00277\ \ \ \ \ res3\ =\ dsp-\/>setParameter(FMOD\_DSP\_FLANGE\_DEPTH,\ \ \ \ \ \ \ conf.\_c);}
+\DoxyCodeLine{00278\ \ \ \ \ res4\ =\ dsp-\/>setParameter(FMOD\_DSP\_FLANGE\_RATE,\ \ \ \ \ \ \ \ conf.\_d);}
+\DoxyCodeLine{00279\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00280\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_distort:}
+\DoxyCodeLine{00281\ \ \ \ \ res1\ =\ dsp-\/>setParameter(FMOD\_DSP\_DISTORTION\_LEVEL,\ \ \ conf.\_a);}
+\DoxyCodeLine{00282\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00283\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_normalize:}
+\DoxyCodeLine{00284\ \ \ \ \ res1\ =\ dsp-\/>setParameter(FMOD\_DSP\_NORMALIZE\_FADETIME,\ \ conf.\_a);}
+\DoxyCodeLine{00285\ \ \ \ \ res2\ =\ dsp-\/>setParameter(FMOD\_DSP\_NORMALIZE\_THRESHHOLD,conf.\_b);}
+\DoxyCodeLine{00286\ \ \ \ \ res3\ =\ dsp-\/>setParameter(FMOD\_DSP\_NORMALIZE\_MAXAMP,\ \ \ \ conf.\_c);}
+\DoxyCodeLine{00287\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00288\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_parameq:}
+\DoxyCodeLine{00289\ \ \ \ \ res1\ =\ dsp-\/>setParameter(FMOD\_DSP\_PARAMEQ\_CENTER,\ \ \ \ \ conf.\_a);}
+\DoxyCodeLine{00290\ \ \ \ \ res2\ =\ dsp-\/>setParameter(FMOD\_DSP\_PARAMEQ\_BANDWIDTH,\ \ conf.\_b);}
+\DoxyCodeLine{00291\ \ \ \ \ res3\ =\ dsp-\/>setParameter(FMOD\_DSP\_PARAMEQ\_GAIN,\ \ \ \ \ \ \ conf.\_c);}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00293\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_pitchshift:}
+\DoxyCodeLine{00294\ \ \ \ \ res1\ =\ dsp-\/>setParameter(FMOD\_DSP\_PITCHSHIFT\_PITCH,\ \ \ conf.\_a);}
+\DoxyCodeLine{00295\ \ \ \ \ res2\ =\ dsp-\/>setParameter(FMOD\_DSP\_PITCHSHIFT\_FFTSIZE,\ conf.\_b);}
+\DoxyCodeLine{00296\ \ \ \ \ res3\ =\ dsp-\/>setParameter(FMOD\_DSP\_PITCHSHIFT\_OVERLAP,\ conf.\_c);}
+\DoxyCodeLine{00297\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00298\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_chorus:}
+\DoxyCodeLine{00299\ \ \ \ \ res1\ =\ dsp-\/>setParameter(FMOD\_DSP\_CHORUS\_DRYMIX,\ \ \ \ \ \ conf.\_a);}
+\DoxyCodeLine{00300\ \ \ \ \ res2\ =\ dsp-\/>setParameter(FMOD\_DSP\_CHORUS\_WETMIX1,\ \ \ \ \ conf.\_b);}
+\DoxyCodeLine{00301\ \ \ \ \ res3\ =\ dsp-\/>setParameter(FMOD\_DSP\_CHORUS\_WETMIX2,\ \ \ \ \ conf.\_c);}
+\DoxyCodeLine{00302\ \ \ \ \ res4\ =\ dsp-\/>setParameter(FMOD\_DSP\_CHORUS\_WETMIX3,\ \ \ \ \ conf.\_d);}
+\DoxyCodeLine{00303\ \ \ \ \ res5\ =\ dsp-\/>setParameter(FMOD\_DSP\_CHORUS\_DELAY,\ \ \ \ \ \ \ conf.\_e);}
+\DoxyCodeLine{00304\ \ \ \ \ res6\ =\ dsp-\/>setParameter(FMOD\_DSP\_CHORUS\_RATE,\ \ \ \ \ \ \ \ conf.\_f);}
+\DoxyCodeLine{00305\ \ \ \ \ res7\ =\ dsp-\/>setParameter(FMOD\_DSP\_CHORUS\_DEPTH,\ \ \ \ \ \ \ conf.\_g);}
+\DoxyCodeLine{00306\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00307\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_sfxreverb:}
+\DoxyCodeLine{00308\ \ \ \ \ res1\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_DRYLEVEL,\ conf.\_a);}
+\DoxyCodeLine{00309\ \ \ \ \ res2\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_ROOM,\ \ \ \ \ conf.\_b);}
+\DoxyCodeLine{00310\ \ \ \ \ res3\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_ROOMHF,\ \ \ conf.\_c);}
+\DoxyCodeLine{00311\ \ \ \ \ res4\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_DECAYTIME,conf.\_d);}
+\DoxyCodeLine{00312\ \ \ \ \ res5\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_DECAYHFRATIO,\ \ \ \ conf.\_e);}
+\DoxyCodeLine{00313\ \ \ \ \ res6\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_REFLECTIONSLEVEL,conf.\_f);}
+\DoxyCodeLine{00314\ \ \ \ \ res7\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_REFLECTIONSDELAY,conf.\_g);}
+\DoxyCodeLine{00315\ \ \ \ \ res8\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_REVERBLEVEL,\ \ \ \ \ conf.\_h);}
+\DoxyCodeLine{00316\ \ \ \ \ res9\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_REVERBDELAY,\ \ \ \ \ conf.\_i);}
+\DoxyCodeLine{00317\ \ \ \ \ res10\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_DIFFUSION,\ \ \ \ \ \ conf.\_j);}
+\DoxyCodeLine{00318\ \ \ \ \ res11\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_DENSITY,\ \ \ \ \ \ \ \ conf.\_k);}
+\DoxyCodeLine{00319\ \ \ \ \ res12\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_HFREFERENCE,\ \ \ \ conf.\_l);}
+\DoxyCodeLine{00320\ \ \ \ \ res13\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_ROOMLF,\ \ \ \ \ \ \ \ \ conf.\_m);}
+\DoxyCodeLine{00321\ \ \ \ \ res14\ =\ dsp-\/>setParameter(FMOD\_DSP\_SFXREVERB\_LFREFERENCE,\ \ \ \ conf.\_n);}
+\DoxyCodeLine{00322\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00323\ \ \ \textcolor{keywordflow}{case}\ FilterProperties::FT\_compress:}
+\DoxyCodeLine{00324\ \ \ \ \ res1\ =\ dsp-\/>setParameter(FMOD\_DSP\_COMPRESSOR\_THRESHOLD,\ conf.\_a);}
+\DoxyCodeLine{00325\ \ \ \ \ res2\ =\ dsp-\/>setParameter(FMOD\_DSP\_COMPRESSOR\_ATTACK,\ \ \ \ conf.\_b);}
+\DoxyCodeLine{00326\ \ \ \ \ res3\ =\ dsp-\/>setParameter(FMOD\_DSP\_COMPRESSOR\_RELEASE,\ \ \ conf.\_c);}
+\DoxyCodeLine{00327\ \ \ \ \ res4\ =\ dsp-\/>setParameter(FMOD\_DSP\_COMPRESSOR\_GAINMAKEUP,conf.\_d);}
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00329\ \ \ \}}
+\DoxyCodeLine{00330\ }
+\DoxyCodeLine{00331\ \ \ \textcolor{keywordflow}{if}\ ((res1!=FMOD\_OK)||(res2!=FMOD\_OK)||(res3!=FMOD\_OK)||(res4!=FMOD\_OK)||}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ (res5!=FMOD\_OK)||(res6!=FMOD\_OK)||(res7!=FMOD\_OK)||(res8!=FMOD\_OK)||}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ (res9!=FMOD\_OK)||(res10!=FMOD\_OK)||(res11!=FMOD\_OK)||(res12!=FMOD\_OK)||}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ (res13!=FMOD\_OK)||(res14!=FMOD\_OK))\ \{}
+\DoxyCodeLine{00335\ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}Could\ not\ configure\ DSP"{}});}
+\DoxyCodeLine{00336\ \ \ \ \ dsp-\/>release();}
+\DoxyCodeLine{00337\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00338\ \ \ \}}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00340\ \ \ dsp-\/>setUserData(USER\_DSP\_MAGIC);}
+\DoxyCodeLine{00341\ }
+\DoxyCodeLine{00342\ \ \ \textcolor{keywordflow}{return}\ dsp;}
+\DoxyCodeLine{00343\ \}}
+\DoxyCodeLine{00344\ }
+\DoxyCodeLine{00353\ \textcolor{keywordtype}{void}\ FmodAudioManager::}
+\DoxyCodeLine{00354\ update\_dsp\_chain(FMOD::DSP\ *head,\ \mbox{\hyperlink{classFilterProperties}{FilterProperties}}\ *config)\ \{}
+\DoxyCodeLine{00355\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00356\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classpvector}{FilterProperties::ConfigVector}}\ \&conf\ =\ config-\/>get\_config();}
+\DoxyCodeLine{00357\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00358\ }
+\DoxyCodeLine{00359\ \ \ \textcolor{keywordflow}{while}\ (1)\ \{}
+\DoxyCodeLine{00360\ \ \ \ \ \textcolor{keywordtype}{int}\ numinputs;}
+\DoxyCodeLine{00361\ \ \ \ \ result\ =\ head-\/>getNumInputs(\&numinputs);}
+\DoxyCodeLine{00362\ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}head-\/>getNumInputs()"{}},\ result);}
+\DoxyCodeLine{00363\ \ \ \ \ \textcolor{keywordflow}{if}\ (numinputs\ !=\ 1)\ \{}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00365\ \ \ \ \ \}}
+\DoxyCodeLine{00366\ \ \ \ \ FMOD::DSP\ *prev;}
+\DoxyCodeLine{00367\ \ \ \ \ result\ =\ head-\/>getInput(0,\ \&prev,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00368\ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}head-\/>getInput()"{}},\ result);}
+\DoxyCodeLine{00369\ \ \ \ \ \textcolor{keywordtype}{void}\ *userdata;}
+\DoxyCodeLine{00370\ \ \ \ \ result\ =\ prev-\/>getUserData(\&userdata);}
+\DoxyCodeLine{00371\ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}prev-\/>getUserData()"{}},\ result);}
+\DoxyCodeLine{00372\ \ \ \ \ \textcolor{keywordflow}{if}\ (userdata\ !=\ USER\_DSP\_MAGIC)\ \{}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00374\ \ \ \ \ \}}
+\DoxyCodeLine{00375\ \ \ \ \ result\ =\ prev-\/>remove();}
+\DoxyCodeLine{00376\ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}prev-\/>remove()"{}},\ result);}
+\DoxyCodeLine{00377\ \ \ \ \ result\ =\ prev-\/>release();}
+\DoxyCodeLine{00378\ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}prev-\/>release()"{}},\ result);}
+\DoxyCodeLine{00379\ \ \ \}}
+\DoxyCodeLine{00380\ }
+\DoxyCodeLine{00381\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i<(int)(conf.size());\ i++)\ \{}
+\DoxyCodeLine{00382\ \ \ \ \ FMOD::DSP\ *dsp\ =\ make\_dsp(conf[i]);}
+\DoxyCodeLine{00383\ \ \ \ \ result\ =\ \_channelgroup-\/>addDSP(dsp,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00384\ \ \ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_channelgroup-\/>addDSP()"{}},\ result);}
+\DoxyCodeLine{00385\ \ \ \}}
+\DoxyCodeLine{00386\ \}}
+\DoxyCodeLine{00387\ }
+\DoxyCodeLine{00394\ \textcolor{keywordtype}{bool}\ FmodAudioManager::}
+\DoxyCodeLine{00395\ configure\_filters(\mbox{\hyperlink{classFilterProperties}{FilterProperties}}\ *config)\ \{}
+\DoxyCodeLine{00396\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00397\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00398\ \ \ FMOD::DSP\ *head;}
+\DoxyCodeLine{00399\ \ \ result\ =\ \_channelgroup-\/>getDSPHead(\&head);}
+\DoxyCodeLine{00400\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00401\ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}Getting\ DSP\ head:\ "{}}\ <<\ FMOD\_ErrorString(result)\ );}
+\DoxyCodeLine{00402\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00403\ \ \ \}}
+\DoxyCodeLine{00404\ \ \ update\_dsp\_chain(head,\ config);}
+\DoxyCodeLine{00405\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00406\ \}}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00411\ PT(\mbox{\hyperlink{classAudioSound}{AudioSound}})\ FmodAudioManager::}
+\DoxyCodeLine{00412\ get\_sound(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&file\_name,\ \textcolor{keywordtype}{bool}\ positional,\ \textcolor{keywordtype}{int})\ \{}
+\DoxyCodeLine{00413\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00414\ \ \ \textcolor{comment}{//\ Needed\ so\ People\ use\ Panda's\ Generic\ UNIX\ Style\ Paths\ for\ Filename.}}
+\DoxyCodeLine{00415\ \ \ \textcolor{comment}{//\ path.to\_os\_specific()\ converts\ it\ back\ to\ the\ proper\ OS\ version\ later\ on.}}
+\DoxyCodeLine{00416\ }
+\DoxyCodeLine{00417\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ path\ =\ file\_name;}
+\DoxyCodeLine{00418\ }
+\DoxyCodeLine{00419\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00420\ \ \ vfs-\/>resolve\_filename(path,\ get\_model\_path());}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00422\ \ \ \textcolor{comment}{//\ Locate\ the\ file\ on\ disk.}}
+\DoxyCodeLine{00423\ \ \ path.set\_binary();}
+\DoxyCodeLine{00424\ \ \ PT(\mbox{\hyperlink{classVirtualFile}{VirtualFile}})\ file\ =\ vfs-\/>get\_file(path);}
+\DoxyCodeLine{00425\ \ \ \textcolor{keywordflow}{if}\ (file\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00426\ \ \ \ \ \textcolor{comment}{//\ Build\ a\ new\ AudioSound\ from\ the\ audio\ data.}}
+\DoxyCodeLine{00427\ \ \ \ \ PT(\mbox{\hyperlink{classFmodAudioSound}{FmodAudioSound}})\ sound\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classFmodAudioSound}{FmodAudioSound}}(\textcolor{keyword}{this},\ file,\ positional);}
+\DoxyCodeLine{00428\ }
+\DoxyCodeLine{00429\ \ \ \ \ \_all\_sounds.insert(sound);}
+\DoxyCodeLine{00430\ \ \ \ \ \textcolor{keywordflow}{return}\ sound;}
+\DoxyCodeLine{00431\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00432\ \ \ \ \ audio\_error(\textcolor{stringliteral}{"{}createSound("{}}\ <<\ path\ <<\ \textcolor{stringliteral}{"{}):\ File\ not\ found."{}});}
+\DoxyCodeLine{00433\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_null\_sound();}
+\DoxyCodeLine{00434\ \ \ \}}
+\DoxyCodeLine{00435\ \}}
+\DoxyCodeLine{00436\ }
+\DoxyCodeLine{00440\ PT(\mbox{\hyperlink{classAudioSound}{AudioSound}})\ FmodAudioManager::}
+\DoxyCodeLine{00441\ get\_sound(\mbox{\hyperlink{classMovieAudio}{MovieAudio}}\ *source,\ \textcolor{keywordtype}{bool}\ positional,\ \textcolor{keywordtype}{int})\ \{}
+\DoxyCodeLine{00442\ \ \ nassert\_raise(\textcolor{stringliteral}{"{}FMOD\ audio\ manager\ does\ not\ support\ MovieAudio\ sources"{}});}
+\DoxyCodeLine{00443\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00444\ \}}
+\DoxyCodeLine{00445\ }
+\DoxyCodeLine{00449\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classFmodAudioManager_a1171680825258eaf03afe8d192e584f4}{FmodAudioManager::}}}
+\DoxyCodeLine{00450\ \mbox{\hyperlink{classFmodAudioManager_a1171680825258eaf03afe8d192e584f4}{get\_speaker\_setup}}()\ \{}
+\DoxyCodeLine{00451\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00452\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00453\ \ \ FMOD\_SPEAKERMODE\ speakerMode;}
+\DoxyCodeLine{00454\ \ \ \textcolor{keywordtype}{int}\ returnMode;}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00456\ \ \ result\ =\ \_system-\/>getSpeakerMode(\ \&speakerMode\ );}
+\DoxyCodeLine{00457\ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>getSpeakerMode()"{}},\ result);}
+\DoxyCodeLine{00458\ }
+\DoxyCodeLine{00459\ \ \ \textcolor{keywordflow}{switch}\ (speakerMode)\ \{}
+\DoxyCodeLine{00460\ \ \ \ \ \textcolor{keywordflow}{case}\ \ FMOD\_SPEAKERMODE\_RAW:}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ returnMode\ =\ 0;}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00463\ \ \ \ \ \textcolor{keywordflow}{case}\ \ FMOD\_SPEAKERMODE\_MONO:}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ returnMode\ =\ 1;}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00466\ \ \ \ \ \textcolor{keywordflow}{case}\ \ FMOD\_SPEAKERMODE\_STEREO:}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ returnMode\ =\ 2;}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00469\ \ \ \ \ \textcolor{keywordflow}{case}\ \ FMOD\_SPEAKERMODE\_QUAD:}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ returnMode\ =\ 3;}
+\DoxyCodeLine{00471\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00472\ \ \ \ \ \textcolor{keywordflow}{case}\ \ FMOD\_SPEAKERMODE\_SURROUND:}
+\DoxyCodeLine{00473\ \ \ \ \ \ \ returnMode\ =\ 4;}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00475\ \ \ \ \ \textcolor{keywordflow}{case}\ \ FMOD\_SPEAKERMODE\_5POINT1:}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ returnMode\ =\ 5;}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00478\ \ \ \ \ \textcolor{keywordflow}{case}\ \ FMOD\_SPEAKERMODE\_7POINT1:}
+\DoxyCodeLine{00479\ \ \ \ \ \ \ returnMode\ =\ 6;}
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00481\ \ \ \ \ \textcolor{keywordflow}{case}\ \ FMOD\_SPEAKERMODE\_MAX:}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ returnMode\ =\ 7;}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00484\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ returnMode\ =\ -\/1;}
+\DoxyCodeLine{00486\ \ \ \ \ \}}
+\DoxyCodeLine{00487\ }
+\DoxyCodeLine{00488\ \ \ \textcolor{keywordflow}{return}\ returnMode;}
+\DoxyCodeLine{00489\ \}}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00504\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_aae5e1d4db3ebada60b0218149fdbf471}{FmodAudioManager::}}}
+\DoxyCodeLine{00505\ \mbox{\hyperlink{classFmodAudioManager_aae5e1d4db3ebada60b0218149fdbf471}{set\_speaker\_setup}}(AudioManager::SpeakerModeCategory\ cat)\ \{}
+\DoxyCodeLine{00506\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00507\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00508\ \ \ FMOD\_SPEAKERMODE\ speakerModeType\ =\ (FMOD\_SPEAKERMODE)cat;}
+\DoxyCodeLine{00509\ \ \ result\ =\ \_system-\/>setSpeakerMode(\ speakerModeType);}
+\DoxyCodeLine{00510\ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>setSpeakerMode()"{}},\ result);}
+\DoxyCodeLine{00511\ \}}
+\DoxyCodeLine{00512\ }
+\DoxyCodeLine{00517\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_a99c1c691685ead9a27fd6f4bd96e13e0}{FmodAudioManager::}}}
+\DoxyCodeLine{00518\ \mbox{\hyperlink{classFmodAudioManager_a99c1c691685ead9a27fd6f4bd96e13e0}{set\_volume}}(PN\_stdfloat\ volume)\ \{}
+\DoxyCodeLine{00519\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00520\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00521\ \ \ result\ =\ \_channelgroup-\/>setVolume(volume);}
+\DoxyCodeLine{00522\ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_channelgroup-\/>setVolume()"{}},\ result);}
+\DoxyCodeLine{00523\ \}}
+\DoxyCodeLine{00524\ }
+\DoxyCodeLine{00528\ PN\_stdfloat\ \mbox{\hyperlink{classFmodAudioManager_ae477840007c848be2361d2d465fbf2b7}{FmodAudioManager::}}}
+\DoxyCodeLine{00529\ \mbox{\hyperlink{classFmodAudioManager_ae477840007c848be2361d2d465fbf2b7}{get\_volume}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00530\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00531\ \ \ \textcolor{keywordtype}{float}\ volume;}
+\DoxyCodeLine{00532\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00533\ \ \ result\ =\ \_channelgroup-\/>getVolume(\&volume);}
+\DoxyCodeLine{00534\ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_channelgroup-\/>getVolume()"{}},\ result);}
+\DoxyCodeLine{00535\ \ \ \textcolor{keywordflow}{return}\ (PN\_stdfloat)volume;}
+\DoxyCodeLine{00536\ \}}
+\DoxyCodeLine{00537\ }
+\DoxyCodeLine{00541\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_abdaa7f30a40c2045249bf22068f4cf91}{FmodAudioManager::}}}
+\DoxyCodeLine{00542\ \mbox{\hyperlink{classFmodAudioManager_abdaa7f30a40c2045249bf22068f4cf91}{set\_wavwriter}}(\textcolor{keywordtype}{bool}\ outputwav)\ \{}
+\DoxyCodeLine{00543\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00544\ \ \ \textcolor{keywordflow}{if}\ (outputwav)\ \{}
+\DoxyCodeLine{00545\ \ \ \ \ \_system-\/>getOutput(\&\_saved\_outputtype);}
+\DoxyCodeLine{00546\ \ \ \ \ \_system-\/>setOutput(FMOD\_OUTPUTTYPE\_WAVWRITER);}
+\DoxyCodeLine{00547\ \ \ \}}
+\DoxyCodeLine{00548\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00549\ \ \ \ \ \_system-\/>setOutput(\_saved\_outputtype);}
+\DoxyCodeLine{00550\ \ \ \}}
+\DoxyCodeLine{00551\ \}}
+\DoxyCodeLine{00552\ }
+\DoxyCodeLine{00553\ }
+\DoxyCodeLine{00557\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_a0a4923cdf20b2f6d4fff43cd5a8aae3b}{FmodAudioManager::}}}
+\DoxyCodeLine{00558\ \mbox{\hyperlink{classFmodAudioManager_a0a4923cdf20b2f6d4fff43cd5a8aae3b}{set\_active}}(\textcolor{keywordtype}{bool}\ active)\ \{}
+\DoxyCodeLine{00559\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00560\ \ \ \textcolor{keywordflow}{if}\ (\_active\ !=\ active)\ \{}
+\DoxyCodeLine{00561\ \ \ \ \ \_active\ =\ active;}
+\DoxyCodeLine{00562\ }
+\DoxyCodeLine{00563\ \ \ \ \ \textcolor{comment}{//\ Tell\ our\ AudioSounds\ to\ adjust:}}
+\DoxyCodeLine{00564\ \ \ \ \ \textcolor{keywordflow}{for}\ (SoundSet::iterator\ i\ =\ \_all\_sounds.begin();}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \ \ \ i\ !=\ \_all\_sounds.end();}
+\DoxyCodeLine{00566\ \ \ \ \ \ \ \ \ \ ++i)\ \{}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ (*i)-\/>set\_active(\_active);}
+\DoxyCodeLine{00568\ \ \ \ \ \}}
+\DoxyCodeLine{00569\ \ \ \}}
+\DoxyCodeLine{00570\ \}}
+\DoxyCodeLine{00571\ }
+\DoxyCodeLine{00575\ \textcolor{keywordtype}{bool}\ FmodAudioManager::}
+\DoxyCodeLine{00576\ get\_active()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00577\ \ \ \textcolor{keywordflow}{return}\ \_active;}
+\DoxyCodeLine{00578\ \}}
+\DoxyCodeLine{00579\ }
+\DoxyCodeLine{00583\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_abbb1d42f2f50d8ddfb0b637166ce24cb}{FmodAudioManager::}}}
+\DoxyCodeLine{00584\ \mbox{\hyperlink{classFmodAudioManager_abbb1d42f2f50d8ddfb0b637166ce24cb}{stop\_all\_sounds}}()\ \{}
+\DoxyCodeLine{00585\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00586\ \ \ \textcolor{comment}{//\ We\ have\ to\ walk\ through\ this\ list\ with\ some\ care,\ since\ stopping\ a\ sound}}
+\DoxyCodeLine{00587\ \ \ \textcolor{comment}{//\ may\ also\ remove\ it\ from\ the\ set\ (if\ there\ are\ no\ other\ references\ to\ the}}
+\DoxyCodeLine{00588\ \ \ \textcolor{comment}{//\ sound).}}
+\DoxyCodeLine{00589\ \ \ SoundSet::iterator\ i;}
+\DoxyCodeLine{00590\ \ \ i\ =\ \_all\_sounds.begin();}
+\DoxyCodeLine{00591\ \ \ \textcolor{keywordflow}{while}\ (i\ !=\ \_all\_sounds.end())\ \{}
+\DoxyCodeLine{00592\ \ \ \ \ SoundSet::iterator\ next\ =\ i;}
+\DoxyCodeLine{00593\ \ \ \ \ ++next;}
+\DoxyCodeLine{00594\ }
+\DoxyCodeLine{00595\ \ \ \ \ (*i)-\/>stop();}
+\DoxyCodeLine{00596\ \ \ \ \ i\ =\ next;}
+\DoxyCodeLine{00597\ \ \ \}}
+\DoxyCodeLine{00598\ \}}
+\DoxyCodeLine{00599\ }
+\DoxyCodeLine{00603\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_a3875a1bf99f0b537cf91da9910275550}{FmodAudioManager::}}}
+\DoxyCodeLine{00604\ \mbox{\hyperlink{classFmodAudioManager_a3875a1bf99f0b537cf91da9910275550}{update}}()\ \{}
+\DoxyCodeLine{00605\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00606\ \ \ \_system-\/>update();}
+\DoxyCodeLine{00607\ \}}
+\DoxyCodeLine{00608\ }
+\DoxyCodeLine{00620\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_a97986b54556f8d6377ac3c54ab8f342f}{FmodAudioManager::}}}
+\DoxyCodeLine{00621\ \mbox{\hyperlink{classFmodAudioManager_a97986b54556f8d6377ac3c54ab8f342f}{audio\_3d\_set\_listener\_attributes}}(PN\_stdfloat\ px,\ PN\_stdfloat\ py,\ PN\_stdfloat\ pz,\ PN\_stdfloat\ vx,\ PN\_stdfloat\ vy,\ PN\_stdfloat\ vz,\ PN\_stdfloat\ fx,\ PN\_stdfloat\ fy,\ PN\_stdfloat\ fz,\ PN\_stdfloat\ ux,\ PN\_stdfloat\ uy,\ PN\_stdfloat\ uz)\ \{}
+\DoxyCodeLine{00622\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00623\ \ \ audio\_debug(\textcolor{stringliteral}{"{}FmodAudioManager::audio\_3d\_set\_listener\_attributes()"{}});}
+\DoxyCodeLine{00624\ }
+\DoxyCodeLine{00625\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00626\ }
+\DoxyCodeLine{00627\ \ \ \_position.x\ =\ px;}
+\DoxyCodeLine{00628\ \ \ \_position.y\ =\ pz;}
+\DoxyCodeLine{00629\ \ \ \_position.z\ =\ py;}
+\DoxyCodeLine{00630\ }
+\DoxyCodeLine{00631\ \ \ \_velocity.x\ =\ vx;}
+\DoxyCodeLine{00632\ \ \ \_velocity.y\ =\ vz;}
+\DoxyCodeLine{00633\ \ \ \_velocity.z\ =\ vy;}
+\DoxyCodeLine{00634\ }
+\DoxyCodeLine{00635\ \ \ \_forward.x\ =\ fx;}
+\DoxyCodeLine{00636\ \ \ \_forward.y\ =\ fz;}
+\DoxyCodeLine{00637\ \ \ \_forward.z\ =\ fy;}
+\DoxyCodeLine{00638\ }
+\DoxyCodeLine{00639\ \ \ \_up.x\ =\ ux;}
+\DoxyCodeLine{00640\ \ \ \_up.y\ =\ uz;}
+\DoxyCodeLine{00641\ \ \ \_up.z\ =\ uy;}
+\DoxyCodeLine{00642\ }
+\DoxyCodeLine{00643\ \ \ result\ =\ \_system-\/>set3DListenerAttributes(\ 0,\ \&\_position,\ \&\_velocity,\ \&\_forward,\ \&\_up);}
+\DoxyCodeLine{00644\ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>set3DListenerAttributes()"{}},\ result);}
+\DoxyCodeLine{00645\ }
+\DoxyCodeLine{00646\ \}}
+\DoxyCodeLine{00647\ }
+\DoxyCodeLine{00651\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_aee555b3bec8287b065bbce5b608f8fde}{FmodAudioManager::}}}
+\DoxyCodeLine{00652\ \mbox{\hyperlink{classFmodAudioManager_aee555b3bec8287b065bbce5b608f8fde}{audio\_3d\_get\_listener\_attributes}}(PN\_stdfloat\ *px,\ PN\_stdfloat\ *py,\ PN\_stdfloat\ *pz,\ PN\_stdfloat\ *vx,\ PN\_stdfloat\ *vy,\ PN\_stdfloat\ *vz,\ PN\_stdfloat\ *fx,\ PN\_stdfloat\ *fy,\ PN\_stdfloat\ *fz,\ PN\_stdfloat\ *ux,\ PN\_stdfloat\ *uy,\ PN\_stdfloat\ *uz)\ \{}
+\DoxyCodeLine{00653\ \ \ audio\_error(\textcolor{stringliteral}{"{}audio3dGetListenerAttributes:\ currently\ unimplemented.\ Get\ the\ attributes\ of\ the\ attached\ object"{}});}
+\DoxyCodeLine{00654\ }
+\DoxyCodeLine{00655\ \}}
+\DoxyCodeLine{00656\ }
+\DoxyCodeLine{00657\ }
+\DoxyCodeLine{00662\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_a0aed37ad8dbad4201bf0c2192fc2783e}{FmodAudioManager::}}}
+\DoxyCodeLine{00663\ \mbox{\hyperlink{classFmodAudioManager_a0aed37ad8dbad4201bf0c2192fc2783e}{audio\_3d\_set\_distance\_factor}}(PN\_stdfloat\ factor)\ \{}
+\DoxyCodeLine{00664\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00665\ \ \ audio\_debug(\ \textcolor{stringliteral}{"{}FmodAudioManager::audio\_3d\_set\_distance\_factor(\ factor=\ "{}}\ <<\ factor\ <<\ \textcolor{stringliteral}{"{})"{}}\ );}
+\DoxyCodeLine{00666\ }
+\DoxyCodeLine{00667\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00668\ }
+\DoxyCodeLine{00669\ \ \ \_distance\_factor\ =\ factor;}
+\DoxyCodeLine{00670\ }
+\DoxyCodeLine{00671\ \ \ result\ =\ \_system-\/>set3DSettings(\ \_doppler\_factor,\ \_distance\_factor,\ \_drop\_off\_factor);}
+\DoxyCodeLine{00672\ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>set3DSettings()"{}},\ result);}
+\DoxyCodeLine{00673\ }
+\DoxyCodeLine{00674\ }
+\DoxyCodeLine{00675\ \}}
+\DoxyCodeLine{00676\ }
+\DoxyCodeLine{00681\ PN\_stdfloat\ \mbox{\hyperlink{classFmodAudioManager_a692198d45c04c8d59b3a947078dd333f}{FmodAudioManager::}}}
+\DoxyCodeLine{00682\ \mbox{\hyperlink{classFmodAudioManager_a692198d45c04c8d59b3a947078dd333f}{audio\_3d\_get\_distance\_factor}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00683\ \ \ audio\_debug(\textcolor{stringliteral}{"{}FmodAudioManager::audio\_3d\_get\_distance\_factor()"{}});}
+\DoxyCodeLine{00684\ }
+\DoxyCodeLine{00685\ \ \ \textcolor{keywordflow}{return}\ \_distance\_factor;}
+\DoxyCodeLine{00686\ \}}
+\DoxyCodeLine{00687\ }
+\DoxyCodeLine{00691\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_ab4bdc03900052c11aae205ab3a700d15}{FmodAudioManager::}}}
+\DoxyCodeLine{00692\ \mbox{\hyperlink{classFmodAudioManager_ab4bdc03900052c11aae205ab3a700d15}{audio\_3d\_set\_doppler\_factor}}(PN\_stdfloat\ factor)\ \{}
+\DoxyCodeLine{00693\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00694\ \ \ audio\_debug(\textcolor{stringliteral}{"{}FmodAudioManager::audio\_3d\_set\_doppler\_factor(factor="{}}<<factor<<\textcolor{stringliteral}{"{})"{}});}
+\DoxyCodeLine{00695\ }
+\DoxyCodeLine{00696\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00697\ }
+\DoxyCodeLine{00698\ \ \ \_doppler\_factor\ =\ factor;}
+\DoxyCodeLine{00699\ }
+\DoxyCodeLine{00700\ \ \ result\ =\ \_system-\/>set3DSettings(\ \_doppler\_factor,\ \_distance\_factor,\ \_drop\_off\_factor);}
+\DoxyCodeLine{00701\ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>set3DSettings()"{}},\ result);}
+\DoxyCodeLine{00702\ }
+\DoxyCodeLine{00703\ \}}
+\DoxyCodeLine{00704\ }
+\DoxyCodeLine{00708\ PN\_stdfloat\ FmodAudioManager::}
+\DoxyCodeLine{00709\ audio\_3d\_get\_doppler\_factor()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00710\ \ \ audio\_debug(\textcolor{stringliteral}{"{}FmodAudioManager::audio\_3d\_get\_doppler\_factor()"{}});}
+\DoxyCodeLine{00711\ }
+\DoxyCodeLine{00712\ \ \ \textcolor{keywordflow}{return}\ \_doppler\_factor;}
+\DoxyCodeLine{00713\ \}}
+\DoxyCodeLine{00714\ }
+\DoxyCodeLine{00718\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_a1bd4e4a10e101008b74d342f6bacdc40}{FmodAudioManager::}}}
+\DoxyCodeLine{00719\ \mbox{\hyperlink{classFmodAudioManager_a1bd4e4a10e101008b74d342f6bacdc40}{audio\_3d\_set\_drop\_off\_factor}}(PN\_stdfloat\ factor)\ \{}
+\DoxyCodeLine{00720\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00721\ \ \ audio\_debug(\textcolor{stringliteral}{"{}FmodAudioManager::audio\_3d\_set\_drop\_off\_factor("{}}<<factor<<\textcolor{stringliteral}{"{})"{}});}
+\DoxyCodeLine{00722\ }
+\DoxyCodeLine{00723\ \ \ FMOD\_RESULT\ result;}
+\DoxyCodeLine{00724\ }
+\DoxyCodeLine{00725\ \ \ \_drop\_off\_factor\ =\ factor;}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00727\ \ \ result\ =\ \_system-\/>set3DSettings(\ \_doppler\_factor,\ \_distance\_factor,\ \_drop\_off\_factor);}
+\DoxyCodeLine{00728\ \ \ fmod\_audio\_errcheck(\textcolor{stringliteral}{"{}\_system-\/>set3DSettings()"{}},\ result);}
+\DoxyCodeLine{00729\ }
+\DoxyCodeLine{00730\ \}}
+\DoxyCodeLine{00731\ }
+\DoxyCodeLine{00735\ PN\_stdfloat\ FmodAudioManager::}
+\DoxyCodeLine{00736\ audio\_3d\_get\_drop\_off\_factor()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00737\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00738\ \ \ audio\_debug(\textcolor{stringliteral}{"{}FmodAudioManager::audio\_3d\_get\_drop\_off\_factor()"{}});}
+\DoxyCodeLine{00739\ }
+\DoxyCodeLine{00740\ \ \ \textcolor{keywordflow}{return}\ \_drop\_off\_factor;}
+\DoxyCodeLine{00741\ }
+\DoxyCodeLine{00742\ \}}
+\DoxyCodeLine{00743\ }
+\DoxyCodeLine{00744\ }
+\DoxyCodeLine{00745\ }
+\DoxyCodeLine{00749\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_adc2c182c100a29744fd4b8fba428d844}{FmodAudioManager::}}}
+\DoxyCodeLine{00750\ \mbox{\hyperlink{classFmodAudioManager_adc2c182c100a29744fd4b8fba428d844}{set\_concurrent\_sound\_limit}}(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ limit)\ \{}
+\DoxyCodeLine{00751\ }
+\DoxyCodeLine{00752\ \}}
+\DoxyCodeLine{00753\ }
+\DoxyCodeLine{00757\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classFmodAudioManager_a9e931975fba21b2ecf70c1bc2d71519d}{FmodAudioManager::}}}
+\DoxyCodeLine{00758\ \mbox{\hyperlink{classFmodAudioManager_a9e931975fba21b2ecf70c1bc2d71519d}{get\_concurrent\_sound\_limit}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00759\ \ \ \textcolor{keywordflow}{return}\ 1000000;}
+\DoxyCodeLine{00760\ \}}
+\DoxyCodeLine{00761\ }
+\DoxyCodeLine{00765\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_a2ac2638874592a1a1881dba01fe0f0df}{FmodAudioManager::}}}
+\DoxyCodeLine{00766\ \mbox{\hyperlink{classFmodAudioManager_a2ac2638874592a1a1881dba01fe0f0df}{reduce\_sounds\_playing\_to}}(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ count)\ \{}
+\DoxyCodeLine{00767\ }
+\DoxyCodeLine{00768\ \}}
+\DoxyCodeLine{00769\ }
+\DoxyCodeLine{00770\ }
+\DoxyCodeLine{00774\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_addd5fb311f16398bff1bd90b0bada7e1}{FmodAudioManager::}}}
+\DoxyCodeLine{00775\ \mbox{\hyperlink{classFmodAudioManager_addd5fb311f16398bff1bd90b0bada7e1}{uncache\_sound}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&file\_name)\ \{}
+\DoxyCodeLine{00776\ \ \ audio\_debug(\textcolor{stringliteral}{"{}FmodAudioManager::uncache\_sound(\(\backslash\)"{}"{}}<<file\_name<<\textcolor{stringliteral}{"{}\(\backslash\)"{})"{}});}
+\DoxyCodeLine{00777\ }
+\DoxyCodeLine{00778\ \}}
+\DoxyCodeLine{00779\ }
+\DoxyCodeLine{00780\ }
+\DoxyCodeLine{00784\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_a28f561a969077dd23198dee01186a703}{FmodAudioManager::}}}
+\DoxyCodeLine{00785\ \mbox{\hyperlink{classFmodAudioManager_a28f561a969077dd23198dee01186a703}{clear\_cache}}()\ \{}
+\DoxyCodeLine{00786\ \ \ audio\_debug(\textcolor{stringliteral}{"{}FmodAudioManager::clear\_cache()"{}});}
+\DoxyCodeLine{00787\ }
+\DoxyCodeLine{00788\ \}}
+\DoxyCodeLine{00789\ }
+\DoxyCodeLine{00793\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFmodAudioManager_a4608c581d01d68d44a5732d3eed02b14}{FmodAudioManager::}}}
+\DoxyCodeLine{00794\ \mbox{\hyperlink{classFmodAudioManager_a4608c581d01d68d44a5732d3eed02b14}{set\_cache\_limit}}(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ count)\ \{}
+\DoxyCodeLine{00795\ \ \ audio\_debug(\textcolor{stringliteral}{"{}FmodAudioManager::set\_cache\_limit(count="{}}<<count<<\textcolor{stringliteral}{"{})"{}});}
+\DoxyCodeLine{00796\ }
+\DoxyCodeLine{00797\ \}}
+\DoxyCodeLine{00798\ }
+\DoxyCodeLine{00802\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classFmodAudioManager_a3ff254e8043bc4d112c6c01f3139deb3}{FmodAudioManager::}}}
+\DoxyCodeLine{00803\ \mbox{\hyperlink{classFmodAudioManager_a3ff254e8043bc4d112c6c01f3139deb3}{get\_cache\_limit}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00804\ \ \ audio\_debug(\textcolor{stringliteral}{"{}FmodAudioManager::get\_cache\_limit()\ returning\ "{}});}
+\DoxyCodeLine{00805\ \ \ \textcolor{comment}{//\ return\ \_cache\_limit;}}
+\DoxyCodeLine{00806\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00807\ \}}
+
+\end{DoxyCode}

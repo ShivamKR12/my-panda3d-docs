@@ -1,0 +1,514 @@
+\doxysection{loader.\+cxx}
+\hypertarget{loader_8cxx_source}{}\label{loader_8cxx_source}\index{panda/src/pgraph/loader.cxx@{panda/src/pgraph/loader.cxx}}
+\mbox{\hyperlink{loader_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{loader_8h}{loader.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{loaderFileType_8h}{loaderFileType.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{loaderFileTypeRegistry_8h}{loaderFileTypeRegistry.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pgraph_8h}{config\_pgraph.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{modelPool_8h}{modelPool.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{modelLoadRequest_8h}{modelLoadRequest.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{modelSaveRequest_8h}{modelSaveRequest.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__express_8h}{config\_express.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__putil_8h}{config\_putil.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFileSystem_8h}{virtualFileSystem.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{filename_8h}{filename.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{load__dso_8h}{load\_dso.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{string__utils_8h}{string\_utils.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamCache_8h}{bamCache.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamCacheRecord_8h}{bamCacheRecord.h}}"{}}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{sceneGraphReducer_8h}{sceneGraphReducer.h}}"{}}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{renderState_8h}{renderState.h}}"{}}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamFile_8h}{bamFile.h}}"{}}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableInt_8h}{configVariableInt.h}}"{}}}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableEnum_8h}{configVariableEnum.h}}"{}}}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00035\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \textcolor{keywordtype}{bool}\ Loader::\_file\_types\_loaded\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00038\ PT(\mbox{\hyperlink{classLoader}{Loader}})\ Loader::\_global\_ptr;}
+\DoxyCodeLine{00039\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ Loader::\_type\_handle;}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00044\ Loader::}
+\DoxyCodeLine{00045\ Loader(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name)\ :}
+\DoxyCodeLine{00046\ \ \ \mbox{\hyperlink{classNamable}{Namable}}(name)}
+\DoxyCodeLine{00047\ \{}
+\DoxyCodeLine{00048\ \ \ \_task\_manager\ =\ AsyncTaskManager::get\_global\_ptr();}
+\DoxyCodeLine{00049\ \ \ \_task\_chain\ =\ name;}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \ \ \textcolor{keywordflow}{if}\ (\_task\_manager-\/>find\_task\_chain(\_task\_chain)\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00052\ \ \ \ \ PT(\mbox{\hyperlink{classAsyncTaskChain}{AsyncTaskChain}})\ chain\ =\ \_task\_manager-\/>make\_task\_chain(\_task\_chain);}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \ \ \ \ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ loader\_num\_threads}
+\DoxyCodeLine{00055\ \ \ \ \ \ \ (\textcolor{stringliteral}{"{}loader-\/num-\/threads"{}},\ 1,}
+\DoxyCodeLine{00056\ \ \ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}The\ number\ of\ threads\ that\ will\ be\ started\ by\ the\ Loader\ class\ "{}}}
+\DoxyCodeLine{00057\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}to\ load\ models\ asynchronously.\ \ These\ threads\ will\ only\ be\ "{}}}
+\DoxyCodeLine{00058\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}started\ if\ the\ asynchronous\ interface\ is\ used,\ and\ if\ threading\ "{}}}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}support\ is\ compiled\ into\ Panda.\ \ The\ default\ is\ one\ thread,\ "{}}}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}which\ allows\ models\ to\ be\ loaded\ one\ at\ a\ time\ in\ a\ single\ "{}}}
+\DoxyCodeLine{00061\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}asychronous\ thread.\ \ You\ can\ set\ this\ higher,\ particularly\ if\ "{}}}
+\DoxyCodeLine{00062\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}you\ have\ many\ CPU's\ available,\ to\ allow\ loading\ multiple\ models\ "{}}}
+\DoxyCodeLine{00063\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}simultaneously."{}}));}
+\DoxyCodeLine{00064\ \ \ \ \ chain-\/>set\_num\_threads(loader\_num\_threads);}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \ \ \ \ \mbox{\hyperlink{classConfigVariableEnum}{ConfigVariableEnum<ThreadPriority>}}\ loader\_thread\_priority}
+\DoxyCodeLine{00067\ \ \ \ \ \ \ (\textcolor{stringliteral}{"{}loader-\/thread-\/priority"{}},\ TP\_low,}
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}The\ default\ thread\ priority\ to\ assign\ to\ the\ threads\ created\ "{}}}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}for\ asynchronous\ loading.\ \ The\ default\ is\ 'low';\ you\ may\ "{}}}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}also\ specify\ 'normal',\ 'high',\ or\ 'urgent'."{}}));}
+\DoxyCodeLine{00071\ \ \ \ \ chain-\/>set\_thread\_priority(loader\_thread\_priority);}
+\DoxyCodeLine{00072\ \ \ \}}
+\DoxyCodeLine{00073\ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00079\ PT(\mbox{\hyperlink{classAsyncTask}{AsyncTask}})\ Loader::}
+\DoxyCodeLine{00080\ make\_async\_request(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ \&options)\ \{}
+\DoxyCodeLine{00081\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classModelLoadRequest}{ModelLoadRequest}}(\textcolor{keywordtype}{string}(\textcolor{stringliteral}{"{}model:"{}})+filename.get\_basename(),}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ filename,\ options,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00083\ \}}
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00089\ PT(\mbox{\hyperlink{classAsyncTask}{AsyncTask}})\ Loader::}
+\DoxyCodeLine{00090\ make\_async\_save\_request(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ \&options,}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node)\ \{}
+\DoxyCodeLine{00092\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classModelSaveRequest}{ModelSaveRequest}}(\textcolor{keywordtype}{string}(\textcolor{stringliteral}{"{}model\_save:"{}})+filename.get\_basename(),}
+\DoxyCodeLine{00093\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ filename,\ options,\ node,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00094\ \}}
+\DoxyCodeLine{00095\ }
+\DoxyCodeLine{00100\ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ Loader::}
+\DoxyCodeLine{00101\ load\_bam\_stream(std::istream\ \&in)\ \{}
+\DoxyCodeLine{00102\ \ \ \mbox{\hyperlink{classBamFile}{BamFile}}\ bam\_file;}
+\DoxyCodeLine{00103\ \ \ \textcolor{keywordflow}{if}\ (!bam\_file.open\_read(in))\ \{}
+\DoxyCodeLine{00104\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00105\ \ \ \}}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \ \ \textcolor{keywordflow}{return}\ bam\_file.read\_node();}
+\DoxyCodeLine{00108\ \}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00113\ \textcolor{keywordtype}{void}\ Loader::}
+\DoxyCodeLine{00114\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00115\ \ \ out\ <<\ get\_type()\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ get\_name();}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00117\ \ \ \textcolor{keywordtype}{int}\ num\_tasks\ =\ \_task\_manager-\/>make\_task\_chain(\_task\_chain)-\/>get\_num\_tasks();}
+\DoxyCodeLine{00118\ \ \ \textcolor{keywordflow}{if}\ (num\_tasks\ !=\ 0)\ \{}
+\DoxyCodeLine{00119\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ num\_tasks\ <<\ \textcolor{stringliteral}{"{}\ models\ pending)"{}};}
+\DoxyCodeLine{00120\ \ \ \}}
+\DoxyCodeLine{00121\ \}}
+\DoxyCodeLine{00122\ }
+\DoxyCodeLine{00130\ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ Loader::}
+\DoxyCodeLine{00131\ load\_file(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ \&options)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00132\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ this\_filename(filename);}
+\DoxyCodeLine{00133\ \ \ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ this\_options(options);}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00135\ \ \ \textcolor{keywordtype}{bool}\ report\_errors\ =\ (this\_options.get\_flags()\ \&\ LoaderOptions::LF\_report\_errors)\ !=\ 0;}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \ \ \textcolor{keywordtype}{string}\ extension\ =\ this\_filename.get\_extension();}
+\DoxyCodeLine{00138\ \ \ \textcolor{keywordflow}{if}\ (extension.empty())\ \{}
+\DoxyCodeLine{00139\ \ \ \ \ \textcolor{comment}{//\ If\ the\ filename\ has\ no\ filename\ extension,\ append\ the\ default\ extension}}
+\DoxyCodeLine{00140\ \ \ \ \ \textcolor{comment}{//\ specified\ in\ the\ Config\ file.}}
+\DoxyCodeLine{00141\ \ \ \ \ this\_filename\ =\ this\_filename.get\_fullpath()\ +\ default\_model\_extension.get\_value();}
+\DoxyCodeLine{00142\ \ \ \ \ extension\ =\ this\_filename.get\_extension();}
+\DoxyCodeLine{00143\ \ \ \}}
+\DoxyCodeLine{00144\ }
+\DoxyCodeLine{00145\ \ \ \textcolor{keywordtype}{bool}\ compressed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00146\ \textcolor{preprocessor}{\#ifdef\ HAVE\_ZLIB}}
+\DoxyCodeLine{00147\ \ \ \textcolor{keywordflow}{if}\ (extension\ ==\ \textcolor{stringliteral}{"{}pz"{}}\ ||\ extension\ ==\ \textcolor{stringliteral}{"{}gz"{}})\ \{}
+\DoxyCodeLine{00148\ \ \ \ \ compressed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00149\ \ \ \ \ extension\ =\ \mbox{\hyperlink{classFilename}{Filename}}(this\_filename.get\_basename\_wo\_extension()).get\_extension();}
+\DoxyCodeLine{00150\ \ \ \}}
+\DoxyCodeLine{00151\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ \ \ \textcolor{keywordflow}{if}\ (extension.empty())\ \{}
+\DoxyCodeLine{00154\ \ \ \ \ \textcolor{keywordflow}{if}\ (report\_errors)\ \{}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cannot\ load\ "{}}\ <<\ this\_filename}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ without\ filename\ extension.\ \ Loading\ of\ model\ filenames\ with\ an\ "{}}}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}implicit\ extension\ is\ deprecated\ in\ Panda3D.\ \ Please\ "{}}}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}correct\ the\ filename\ reference.\ \ If\ necessary,\ you\ may\ put\ the\ "{}}}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}line\ \(\backslash\)"{}default-\/model-\/extension\ .bam\(\backslash\)"{}\ or\ \(\backslash\)"{}default-\/model-\/extension\ .egg\(\backslash\)"{}\ "{}}}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}in\ your\ Config.prc\ to\ globally\ assume\ a\ particular\ model\ "{}}}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}filename\ extension.\(\backslash\)n"{}};}
+\DoxyCodeLine{00163\ \ \ \ \ \}}
+\DoxyCodeLine{00164\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00165\ \ \ \}}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00167\ \ \ \mbox{\hyperlink{classLoaderFileTypeRegistry}{LoaderFileTypeRegistry}}\ *reg\ =\ \mbox{\hyperlink{classLoaderFileTypeRegistry_ac6954c075886ef7cfe96564e80e83ed8}{LoaderFileTypeRegistry::get\_global\_ptr}}();}
+\DoxyCodeLine{00168\ \ \ \mbox{\hyperlink{classLoaderFileType}{LoaderFileType}}\ *requested\_type\ =\ reg-\/>\mbox{\hyperlink{classLoaderFileTypeRegistry_ada576ae55e4df4e3f97ab332dbed28d6}{get\_type\_from\_extension}}(extension);}
+\DoxyCodeLine{00169\ \ \ \textcolor{comment}{//\ requested\_type\ may\ be\ nullptr\ at\ this\ point,\ because\ there's\ still\ a}}
+\DoxyCodeLine{00170\ \ \ \textcolor{comment}{//\ chance\ we\ can\ load\ it\ via\ the\ model-\/cache\ or\ by\ adding\ .bam\ to\ the\ end.}}
+\DoxyCodeLine{00171\ \ \ \textcolor{keywordflow}{if}\ (requested\_type\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00172\ \ \ \ \ \textcolor{keywordflow}{if}\ (!requested\_type-\/>\mbox{\hyperlink{classLoaderFileType_ad1b17815035298a6815187b27d95d6be}{supports\_load}}())\ \{}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (report\_errors)\ \{}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ \ \ <<\ requested\_type-\/>get\_name()\ <<\ \textcolor{stringliteral}{"{}\ file\ type\ (."{}}}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ \ \ <<\ extension\ <<\ \textcolor{stringliteral}{"{})\ does\ not\ support\ loading.\(\backslash\)n"{}};}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00179\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (compressed\ \&\&\ !requested\_type-\/>\mbox{\hyperlink{classLoaderFileType_a40a54dc9e59fdfd793da082d97b97be9}{supports\_compressed}}())\ \{}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (report\_errors)\ \{}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ \ \ <<\ requested\_type-\/>get\_name()\ <<\ \textcolor{stringliteral}{"{}\ file\ type\ (."{}}}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ \ \ <<\ extension\ <<\ \textcolor{stringliteral}{"{})\ does\ not\ support\ in-\/line\ compression.\(\backslash\)n"{}};}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00186\ \ \ \ \ \}}
+\DoxyCodeLine{00187\ \ \ \}}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordtype}{bool}\ search\ =\ (this\_options.get\_flags()\ \&\ LoaderOptions::LF\_search)\ !=\ 0;}
+\DoxyCodeLine{00190\ \ \ \textcolor{keywordflow}{if}\ (!filename.is\_local())\ \{}
+\DoxyCodeLine{00191\ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ a\ global\ filename,\ we\ don't\ search\ the\ model\ path.}}
+\DoxyCodeLine{00192\ \ \ \ \ search\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00193\ \ \ \}}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00195\ \ \ \textcolor{comment}{//\ Now\ that\ we've\ decided\ whether\ to\ search\ for\ the\ file,\ don't\ try\ to}}
+\DoxyCodeLine{00196\ \ \ \textcolor{comment}{//\ search\ again.}}
+\DoxyCodeLine{00197\ \ \ this\_options.set\_flags(this\_options.get\_flags()\ \&\ \mbox{\hyperlink{classLoaderOptions}{\string~LoaderOptions}}::LF\_search);}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00199\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ \textcolor{keywordflow}{if}\ (search)\ \{}
+\DoxyCodeLine{00202\ \ \ \ \ \textcolor{comment}{//\ Look\ for\ the\ file\ along\ the\ model\ path.}}
+\DoxyCodeLine{00203\ \ \ \ \ \mbox{\hyperlink{classDSearchPath}{DSearchPath}}\ model\_path(get\_model\_path());}
+\DoxyCodeLine{00204\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_dirs\ =\ model\_path.get\_num\_directories();}
+\DoxyCodeLine{00205\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_dirs;\ ++i)\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ pathname(model\_path.get\_directory(i),\ this\_filename);}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ result\ =\ try\_load\_file(pathname,\ this\_options,}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ requested\_type);}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00212\ \ \ \ \ \}}
+\DoxyCodeLine{00213\ }
+\DoxyCodeLine{00214\ \ \ \ \ \textcolor{keywordflow}{if}\ (report\_errors)\ \{}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ any\_exist\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_dirs;\ ++i)\ \{}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ pathname(model\_path.get\_directory(i),\ this\_filename);}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (vfs-\/>exists(pathname))\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ \ \ any\_exist\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (any\_exist)\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (requested\_type\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Extension\ of\ file\ "{}}\ <<\ this\_filename}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ is\ unrecognized;\ cannot\ load.\(\backslash\)n"{}};}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \ \ loader\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Currently\ known\ scene\ file\ types\ are:\(\backslash\)n"{}};}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ \ \ reg-\/>\mbox{\hyperlink{classLoaderFileTypeRegistry_a9ddeb700a48266376659fad54825c46a}{write}}(loader\_cat.error(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ load\ file\ "{}}\ <<\ this\_filename}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}:\ all\ matching\ files\ on\ model\ path\ invalid\ "{}}}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}(the\ model\ path\ is\ currently:\ \(\backslash\)"{}"{}}\ <<\ get\_model\_path()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ load\ file\ "{}}\ <<\ this\_filename}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}:\ not\ found\ on\ model\ path\ "{}}}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}(currently:\ \(\backslash\)"{}"{}}\ <<\ get\_model\_path()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00243\ \ \ \ \ \}}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00245\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00246\ \ \ \ \ \textcolor{comment}{//\ Look\ for\ the\ file\ only\ where\ it\ is.}}
+\DoxyCodeLine{00247\ \ \ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00248\ \ \ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ result\ =\ try\_load\_file(this\_filename,\ this\_options,\ requested\_type);}
+\DoxyCodeLine{00249\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00251\ \ \ \ \ \}}
+\DoxyCodeLine{00252\ \ \ \ \ \textcolor{keywordflow}{if}\ (report\_errors)\ \{}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (vfs-\/>exists(this\_filename))\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (requested\_type\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Extension\ of\ file\ "{}}\ <<\ this\_filename}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ is\ unrecognized;\ cannot\ load.\(\backslash\)n"{}};}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \ \ loader\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Currently\ known\ scene\ file\ types\ are:\(\backslash\)n"{}};}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \ \ \ \ reg-\/>\mbox{\hyperlink{classLoaderFileTypeRegistry_a9ddeb700a48266376659fad54825c46a}{write}}(loader\_cat.error(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ load\ file\ "{}}\ <<\ this\_filename\ <<\ \textcolor{stringliteral}{"{}:\ invalid.\(\backslash\)n"{}};}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ load\ file\ "{}}\ <<\ this\_filename\ <<\ \textcolor{stringliteral}{"{}:\ does\ not\ exist.\(\backslash\)n"{}};}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00268\ \ \ \ \ \}}
+\DoxyCodeLine{00269\ \ \ \}}
+\DoxyCodeLine{00270\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00271\ \}}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00277\ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ Loader::}
+\DoxyCodeLine{00278\ try\_load\_file(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&pathname,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ \&options,}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classLoaderFileType}{LoaderFileType}}\ *requested\_type)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00280\ \ \ \mbox{\hyperlink{classBamCache}{BamCache}}\ *cache\ =\ BamCache::get\_global\_ptr();}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \ \ \textcolor{keywordtype}{bool}\ allow\_ram\_cache\ =}
+\DoxyCodeLine{00283\ \ \ \ \ ((options.get\_flags()\ \&\ LoaderOptions::LF\_no\_ram\_cache)\ ==\ 0);}
+\DoxyCodeLine{00284\ }
+\DoxyCodeLine{00285\ \ \ \textcolor{keywordflow}{if}\ (allow\_ram\_cache)\ \{}
+\DoxyCodeLine{00286\ \ \ \ \ \textcolor{comment}{//\ If\ we're\ allowing\ a\ RAM\ cache,\ use\ the\ ModelPool\ to\ load\ the\ file.}}
+\DoxyCodeLine{00287\ \ \ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ node\ =\ ModelPool::get\_model(pathname,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00288\ \ \ \ \ \textcolor{keywordflow}{if}\ (node\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((options.get\_flags()\ \&\ LoaderOptions::LF\_allow\_instance)\ ==\ 0)\ \{}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (loader\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \ \ \ \ loader\_cat.debug()}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Model\ "{}}\ <<\ pathname\ <<\ \textcolor{stringliteral}{"{}\ found\ in\ ModelPool.\(\backslash\)n"{}};}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ But\ return\ a\ deep\ copy\ of\ the\ shared\ model.}}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ \ \ node\ =\ \mbox{\hyperlink{classNodePath}{NodePath}}(node).copy\_to(\mbox{\hyperlink{classNodePath}{NodePath}}()).node();}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ node;}
+\DoxyCodeLine{00298\ \ \ \ \ \}}
+\DoxyCodeLine{00299\ \ \ \}}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00301\ \ \ \textcolor{keywordtype}{bool}\ report\_errors\ =\ ((options.get\_flags()\ \&\ LoaderOptions::LF\_report\_errors)\ !=\ 0\ ||\ loader\_cat.is\_debug());}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00303\ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record;}
+\DoxyCodeLine{00304\ \ \ \textcolor{keywordflow}{if}\ (cache-\/>get\_cache\_models()\ \&\&}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ (options.get\_flags()\ \&\ LoaderOptions::LF\_no\_disk\_cache)\ ==\ 0)\ \{}
+\DoxyCodeLine{00306\ \ \ \ \ \textcolor{comment}{//\ See\ if\ the\ model\ can\ be\ found\ in\ the\ on-\/disk\ cache,\ if\ it\ is\ active.}}
+\DoxyCodeLine{00307\ \ \ \ \ record\ =\ cache-\/>lookup(pathname,\ \textcolor{stringliteral}{"{}bam"{}});}
+\DoxyCodeLine{00308\ \ \ \ \ \textcolor{keywordflow}{if}\ (record\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (record-\/>has\_data())\ \{}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (report\_errors)\ \{}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \ \ loader\_cat.info()}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Model\ "{}}\ <<\ pathname\ <<\ \textcolor{stringliteral}{"{}\ found\ in\ disk\ cache.\(\backslash\)n"{}};}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ result\ =\ DCAST(\mbox{\hyperlink{classPandaNode}{PandaNode}},\ record-\/>get\_data());}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (premunge\_data)\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer}{SceneGraphReducer}}\ sgr;}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \ \ sgr.premunge(result,\ RenderState::make\_empty());}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00320\ }
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result-\/>is\_of\_type(ModelRoot::get\_class\_type()))\ \{}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classModelRoot}{ModelRoot}}\ *model\_root\ =\ DCAST(\mbox{\hyperlink{classModelRoot}{ModelRoot}},\ result.p());}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ \ \ model\_root-\/>set\_fullpath(pathname);}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ \ \ model\_root-\/>set\_timestamp(record-\/>get\_source\_timestamp());}
+\DoxyCodeLine{00325\ }
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (allow\_ram\_cache)\ \{}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Store\ the\ loaded\ model\ in\ the\ RAM\ cache,\ and\ make\ sure\ we}}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ return\ a\ copy\ so\ that\ this\ node\ can\ be\ modified\ independently}}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ from\ the\ RAM\ cached\ version.}}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ \ \ \ \ ModelPool::add\_model(pathname,\ model\_root);}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((options.get\_flags()\ \&\ LoaderOptions::LF\_allow\_instance)\ ==\ 0)\ \{}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classNodePath}{NodePath}}(model\_root).copy\_to(\mbox{\hyperlink{classNodePath}{NodePath}}()).node();}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00338\ \ \ \ \ \}}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00340\ \ \ \ \ \textcolor{keywordflow}{if}\ (loader\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ loader\_cat.debug()}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Model\ "{}}\ <<\ pathname\ <<\ \textcolor{stringliteral}{"{}\ not\ found\ in\ cache.\(\backslash\)n"{}};}
+\DoxyCodeLine{00343\ \ \ \ \ \}}
+\DoxyCodeLine{00344\ \ \ \}}
+\DoxyCodeLine{00345\ }
+\DoxyCodeLine{00346\ \ \ \textcolor{keywordflow}{if}\ (options.get\_flags()\ \&\ LoaderOptions::LF\_cache\_only)\ \{}
+\DoxyCodeLine{00347\ \ \ \ \ \textcolor{comment}{//\ We're\ not\ allowed\ to\ read\ from\ disk.}}
+\DoxyCodeLine{00348\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00349\ \ \ \}}
+\DoxyCodeLine{00350\ }
+\DoxyCodeLine{00351\ \ \ \textcolor{comment}{//\ Load\ the\ model\ from\ disk.}}
+\DoxyCodeLine{00352\ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ result;}
+\DoxyCodeLine{00353\ \ \ \textcolor{keywordflow}{if}\ (requested\_type\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00354\ \ \ \ \ result\ =\ requested\_type-\/>load\_file(pathname,\ options,\ record);}
+\DoxyCodeLine{00355\ \ \ \}}
+\DoxyCodeLine{00356\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00357\ \ \ \ \ \textcolor{keywordflow}{if}\ (record\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \textcolor{comment}{//\ Store\ the\ loaded\ model\ in\ the\ model\ cache.}}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ record-\/>set\_data(result);}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ cache-\/>store(record);}
+\DoxyCodeLine{00361\ \ \ \ \ \}}
+\DoxyCodeLine{00362\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00363\ \ \ \ \ \textcolor{comment}{//\ Do\ we\ have\ the\ same\ filename,\ but\ with\ .bam\ appended\ to\ the\ end?}}
+\DoxyCodeLine{00364\ \ \ \ \ \textcolor{keywordtype}{string}\ extension\ =\ pathname.get\_extension();}
+\DoxyCodeLine{00365\ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ pathname\_bam\ =\ pathname;}
+\DoxyCodeLine{00366\ \ \ \ \ \textcolor{keywordflow}{if}\ (extension\ ==\ \textcolor{stringliteral}{"{}pz"{}}\ ||\ extension\ ==\ \textcolor{stringliteral}{"{}gz"{}})\ \{}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \textcolor{comment}{//\ Strip\ .pz/.gz,\ so\ that\ model.egg.pz\ -\/>\ model.egg.bam}}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ extension\ =\ pathname\_bam.get\_extension();}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ pathname\_bam\ =\ pathname\_bam.get\_fullpath\_wo\_extension();}
+\DoxyCodeLine{00370\ \ \ \ \ \}}
+\DoxyCodeLine{00371\ \ \ \ \ \textcolor{keywordflow}{if}\ (extension\ ==\ \textcolor{stringliteral}{"{}bam"{}})\ \{}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \textcolor{comment}{//\ Don't\ try\ to\ load\ .bam.bam\ files,\ that\ is\ just\ silly.}}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00374\ \ \ \ \ \}}
+\DoxyCodeLine{00375\ \ \ \ \ pathname\_bam\ +=\ \textcolor{stringliteral}{"{}.bam"{}};}
+\DoxyCodeLine{00376\ }
+\DoxyCodeLine{00377\ \ \ \ \ \mbox{\hyperlink{classBamFile}{BamFile}}\ bam\_file;}
+\DoxyCodeLine{00378\ \ \ \ \ \textcolor{keywordflow}{if}\ (!bam\_file.open\_read(pathname\_bam,\ report\_errors))\ \{}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00380\ \ \ \ \ \}}
+\DoxyCodeLine{00381\ }
+\DoxyCodeLine{00382\ \ \ \ \ bam\_file.get\_reader()-\/>set\_loader\_options(options);}
+\DoxyCodeLine{00383\ \ \ \ \ result\ =\ bam\_file.read\_node(report\_errors);}
+\DoxyCodeLine{00384\ }
+\DoxyCodeLine{00385\ \ \ \ \ nassertr\_always(result\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ result-\/>is\_of\_type(ModelRoot::get\_class\_type()),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00386\ \ \ \ \ \textcolor{comment}{//\ We\ don't\ bother\ with\ the\ model-\/cache\ here,\ since\ this\ .bam\ file\ is}}
+\DoxyCodeLine{00387\ \ \ \ \ \textcolor{comment}{//\ already\ effectively\ a\ cached\ version\ of\ the\ original\ model.}}
+\DoxyCodeLine{00388\ \ \ \}}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \textcolor{keywordflow}{if}\ (premunge\_data)\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ \mbox{\hyperlink{classSceneGraphReducer}{SceneGraphReducer}}\ sgr;}
+\DoxyCodeLine{00392\ \ \ \ \ sgr.premunge(result,\ RenderState::make\_empty());}
+\DoxyCodeLine{00393\ \ \ \}}
+\DoxyCodeLine{00394\ }
+\DoxyCodeLine{00395\ \ \ \textcolor{keywordflow}{if}\ (result-\/>is\_of\_type(ModelRoot::get\_class\_type()))\ \{}
+\DoxyCodeLine{00396\ \ \ \ \ ((\mbox{\hyperlink{classModelRoot}{ModelRoot}}\ *)result.p())-\/>set\_fullpath(pathname);}
+\DoxyCodeLine{00397\ }
+\DoxyCodeLine{00398\ \ \ \ \ \textcolor{keywordflow}{if}\ (allow\_ram\_cache)\ \{}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \textcolor{comment}{//\ Store\ the\ loaded\ model\ in\ the\ RAM\ cache,\ and\ make\ sure\ we\ return\ a}}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \textcolor{comment}{//\ copy\ so\ that\ this\ node\ can\ be\ modified\ independently\ from\ the\ RAM}}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \textcolor{comment}{//\ cached\ version.}}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ ModelPool::add\_model(pathname,\ DCAST(\mbox{\hyperlink{classModelRoot}{ModelRoot}},\ result.p()));}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((options.get\_flags()\ \&\ LoaderOptions::LF\_allow\_instance)\ ==\ 0)\ \{}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ result\ =\ \mbox{\hyperlink{classNodePath}{NodePath}}(result).copy\_to(\mbox{\hyperlink{classNodePath}{NodePath}}()).node();}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00406\ \ \ \ \ \}}
+\DoxyCodeLine{00407\ \ \ \}}
+\DoxyCodeLine{00408\ }
+\DoxyCodeLine{00409\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00410\ \}}
+\DoxyCodeLine{00411\ }
+\DoxyCodeLine{00416\ \textcolor{keywordtype}{bool}\ Loader::}
+\DoxyCodeLine{00417\ save\_file(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ \&options,}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00419\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ this\_filename(filename);}
+\DoxyCodeLine{00420\ \ \ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ this\_options(options);}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00422\ \ \ \textcolor{keywordtype}{bool}\ report\_errors\ =\ (this\_options.get\_flags()\ \&\ LoaderOptions::LF\_report\_errors)\ !=\ 0;}
+\DoxyCodeLine{00423\ }
+\DoxyCodeLine{00424\ \ \ \textcolor{keywordtype}{string}\ extension\ =\ this\_filename.get\_extension();}
+\DoxyCodeLine{00425\ \ \ \textcolor{keywordflow}{if}\ (extension.empty())\ \{}
+\DoxyCodeLine{00426\ \ \ \ \ \textcolor{comment}{//\ If\ the\ filename\ has\ no\ filename\ extension,\ append\ the\ default\ extension}}
+\DoxyCodeLine{00427\ \ \ \ \ \textcolor{comment}{//\ specified\ in\ the\ Config\ file.}}
+\DoxyCodeLine{00428\ \ \ \ \ this\_filename\ =\ this\_filename.get\_fullpath()\ +\ default\_model\_extension.get\_value();}
+\DoxyCodeLine{00429\ \ \ \ \ extension\ =\ this\_filename.get\_extension();}
+\DoxyCodeLine{00430\ \ \ \}}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00432\ \ \ \textcolor{keywordtype}{bool}\ compressed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00433\ \textcolor{preprocessor}{\#ifdef\ HAVE\_ZLIB}}
+\DoxyCodeLine{00434\ \ \ \textcolor{keywordflow}{if}\ (extension\ ==\ \textcolor{stringliteral}{"{}pz"{}}\ ||\ extension\ ==\ \textcolor{stringliteral}{"{}gz"{}})\ \{}
+\DoxyCodeLine{00435\ \ \ \ \ compressed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00436\ \ \ \ \ extension\ =\ \mbox{\hyperlink{classFilename}{Filename}}(this\_filename.get\_basename\_wo\_extension()).get\_extension();}
+\DoxyCodeLine{00437\ \ \ \}}
+\DoxyCodeLine{00438\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{00439\ }
+\DoxyCodeLine{00440\ \ \ \textcolor{keywordflow}{if}\ (extension.empty())\ \{}
+\DoxyCodeLine{00441\ \ \ \ \ \textcolor{keywordflow}{if}\ (report\_errors)\ \{}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cannot\ save\ "{}}\ <<\ this\_filename}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ without\ filename\ extension.\(\backslash\)n"{}};}
+\DoxyCodeLine{00445\ \ \ \ \ \}}
+\DoxyCodeLine{00446\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00447\ \ \ \}}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00449\ \ \ \mbox{\hyperlink{classLoaderFileTypeRegistry}{LoaderFileTypeRegistry}}\ *reg\ =\ \mbox{\hyperlink{classLoaderFileTypeRegistry_ac6954c075886ef7cfe96564e80e83ed8}{LoaderFileTypeRegistry::get\_global\_ptr}}();}
+\DoxyCodeLine{00450\ \ \ \mbox{\hyperlink{classLoaderFileType}{LoaderFileType}}\ *requested\_type\ =}
+\DoxyCodeLine{00451\ \ \ \ \ reg-\/>\mbox{\hyperlink{classLoaderFileTypeRegistry_ada576ae55e4df4e3f97ab332dbed28d6}{get\_type\_from\_extension}}(extension);}
+\DoxyCodeLine{00452\ }
+\DoxyCodeLine{00453\ \ \ \textcolor{keywordflow}{if}\ (requested\_type\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00454\ \ \ \ \ \textcolor{keywordflow}{if}\ (report\_errors)\ \{}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Extension\ of\ file\ "{}}\ <<\ this\_filename}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ is\ unrecognized;\ cannot\ save.\(\backslash\)n"{}};}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ loader\_cat.error(\textcolor{keyword}{false})}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Currently\ known\ scene\ file\ types\ are:\(\backslash\)n"{}};}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ reg-\/>\mbox{\hyperlink{classLoaderFileTypeRegistry_a9ddeb700a48266376659fad54825c46a}{write}}(loader\_cat.error(\textcolor{keyword}{false}),\ 2);}
+\DoxyCodeLine{00461\ \ \ \ \ \}}
+\DoxyCodeLine{00462\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00463\ }
+\DoxyCodeLine{00464\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!requested\_type-\/>\mbox{\hyperlink{classLoaderFileType_a94ddad6589a8a08182e2be02d2c0c9b0}{supports\_save}}())\ \{}
+\DoxyCodeLine{00465\ \ \ \ \ \textcolor{keywordflow}{if}\ (report\_errors)\ \{}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \ \ <<\ requested\_type-\/>get\_name()\ <<\ \textcolor{stringliteral}{"{}\ file\ type\ (."{}}}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ <<\ extension\ <<\ \textcolor{stringliteral}{"{})\ does\ not\ support\ saving.\(\backslash\)n"{}};}
+\DoxyCodeLine{00469\ \ \ \ \ \}}
+\DoxyCodeLine{00470\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00471\ }
+\DoxyCodeLine{00472\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (compressed\ \&\&\ !requested\_type-\/>\mbox{\hyperlink{classLoaderFileType_a40a54dc9e59fdfd793da082d97b97be9}{supports\_compressed}}())\ \{}
+\DoxyCodeLine{00473\ \ \ \ \ \textcolor{keywordflow}{if}\ (report\_errors)\ \{}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ \ \ <<\ requested\_type-\/>get\_name()\ <<\ \textcolor{stringliteral}{"{}\ file\ type\ (."{}}}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \ \ <<\ extension\ <<\ \textcolor{stringliteral}{"{})\ does\ not\ support\ in-\/line\ compression.\(\backslash\)n"{}};}
+\DoxyCodeLine{00477\ \ \ \ \ \}}
+\DoxyCodeLine{00478\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00479\ \ \ \}}
+\DoxyCodeLine{00480\ }
+\DoxyCodeLine{00481\ \ \ \textcolor{keywordtype}{bool}\ result\ =\ try\_save\_file(this\_filename,\ this\_options,\ node,\ requested\_type);}
+\DoxyCodeLine{00482\ \ \ \textcolor{keywordflow}{if}\ (!result)\ \{}
+\DoxyCodeLine{00483\ \ \ \ \ \textcolor{keywordflow}{if}\ (report\_errors)\ \{}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ loader\_cat.error()}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ save\ file\ "{}}\ <<\ this\_filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00486\ \ \ \ \ \}}
+\DoxyCodeLine{00487\ \ \ \}}
+\DoxyCodeLine{00488\ }
+\DoxyCodeLine{00489\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00490\ \}}
+\DoxyCodeLine{00491\ }
+\DoxyCodeLine{00496\ \textcolor{keywordtype}{bool}\ Loader::}
+\DoxyCodeLine{00497\ try\_save\_file(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&pathname,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ \&options,}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node,\ \mbox{\hyperlink{classLoaderFileType}{LoaderFileType}}\ *requested\_type)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00499\ \ \ \textcolor{keywordflow}{return}\ requested\_type-\/>save\_file(pathname,\ options,\ node);}
+\DoxyCodeLine{00500\ \}}
+\DoxyCodeLine{00501\ }
+\DoxyCodeLine{00507\ \textcolor{keywordtype}{void}\ Loader::}
+\DoxyCodeLine{00508\ load\_file\_types()\ \{}
+\DoxyCodeLine{00509\ \ \ \textcolor{keywordflow}{if}\ (!\_file\_types\_loaded)\ \{}
+\DoxyCodeLine{00510\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_unique\_values\ =\ load\_file\_type.get\_num\_unique\_values();}
+\DoxyCodeLine{00511\ }
+\DoxyCodeLine{00512\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_unique\_values;\ i++)\ \{}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ param\ =\ load\_file\_type.get\_unique\_value(i);}
+\DoxyCodeLine{00514\ }
+\DoxyCodeLine{00515\ \ \ \ \ \ \ vector\_string\ words;}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \mbox{\hyperlink{string__utils_8cxx_a67cbdf41c41ef284b3d1579cefca761f}{extract\_words}}(param,\ words);}
+\DoxyCodeLine{00517\ }
+\DoxyCodeLine{00518\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (words.size()\ ==\ 1)\ \{}
+\DoxyCodeLine{00519\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Exactly\ one\ word:\ load\ the\ named\ library\ immediately.}}
+\DoxyCodeLine{00520\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ name\ =\ words[0];}
+\DoxyCodeLine{00521\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ dlname\ =\ Filename::dso\_filename(\textcolor{stringliteral}{"{}lib"{}}\ +\ name\ +\ \textcolor{stringliteral}{"{}.so"{}});}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \ \ loader\_cat.info()}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}loading\ file\ type\ module:\ "{}}\ <<\ name\ <<\ std::endl;}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{void}\ *tmp\ =\ load\_dso(get\_plugin\_path().get\_value(),\ dlname);}
+\DoxyCodeLine{00525\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tmp\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \ \ \ \ loader\_cat.warning()}
+\DoxyCodeLine{00527\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ load\ "{}}\ <<\ dlname.\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}()}
+\DoxyCodeLine{00528\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ load\_dso\_error()\ <<\ std::endl;}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (loader\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ \ \ \ \ loader\_cat.debug()}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}done\ loading\ file\ type\ module:\ "{}}\ <<\ name\ <<\ std::endl;}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00533\ }
+\DoxyCodeLine{00534\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (words.size()\ >\ 1)\ \{}
+\DoxyCodeLine{00535\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Multiple\ words:\ the\ first\ n\ words\ are\ filename\ extensions,\ and\ the}}
+\DoxyCodeLine{00536\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ last\ word\ is\ the\ name\ of\ the\ library\ to\ load\ should\ any\ of\ those}}
+\DoxyCodeLine{00537\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ filename\ extensions\ be\ encountered.}}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classLoaderFileTypeRegistry}{LoaderFileTypeRegistry}}\ *registry\ =\ \mbox{\hyperlink{classLoaderFileTypeRegistry_ac6954c075886ef7cfe96564e80e83ed8}{LoaderFileTypeRegistry::get\_global\_ptr}}();}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ num\_extensions\ =\ words.size()\ -\/\ 1;}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ library\_name\ =\ words[num\_extensions];}
+\DoxyCodeLine{00541\ }
+\DoxyCodeLine{00542\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ num\_extensions;\ i++)\ \{}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ extension\ =\ words[i];}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (extension[0]\ ==\ \textcolor{charliteral}{'.'})\ \{}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \ \ \ \ \ \ extension\ =\ extension.substr(1);}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00547\ }
+\DoxyCodeLine{00548\ \ \ \ \ \ \ \ \ \ \ registry-\/>\mbox{\hyperlink{classLoaderFileTypeRegistry_afdee2e3ed25931b0ac40388b98b87cc3}{register\_deferred\_type}}(extension,\ library\_name);}
+\DoxyCodeLine{00549\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00550\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00551\ \ \ \ \ \}}
+\DoxyCodeLine{00552\ }
+\DoxyCodeLine{00553\ \ \ \ \ \_file\_types\_loaded\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00554\ \ \ \}}
+\DoxyCodeLine{00555\ \}}
+\DoxyCodeLine{00556\ }
+\DoxyCodeLine{00560\ \textcolor{keywordtype}{void}\ Loader::}
+\DoxyCodeLine{00561\ make\_global\_ptr()\ \{}
+\DoxyCodeLine{00562\ \ \ nassertv(\_global\_ptr\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00563\ }
+\DoxyCodeLine{00564\ \ \ \_global\_ptr\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLoader}{Loader}}(\textcolor{stringliteral}{"{}loader"{}});}
+\DoxyCodeLine{00565\ \}}
+
+\end{DoxyCode}

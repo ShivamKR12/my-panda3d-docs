@@ -1,0 +1,984 @@
+\doxysection{light\+Attrib.\+cxx}
+\hypertarget{lightAttrib_8cxx_source}{}\label{lightAttrib_8cxx_source}\index{panda/src/pgraph/lightAttrib.cxx@{panda/src/pgraph/lightAttrib.cxx}}
+\mbox{\hyperlink{lightAttrib_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightAttrib_8h}{lightAttrib.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pandaNode_8h}{pandaNode.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{nodePath_8h}{nodePath.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{graphicsStateGuardianBase_8h}{graphicsStateGuardianBase.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamReader_8h}{bamReader.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamWriter_8h}{bamWriter.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagram_8h}{datagram.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagramIterator_8h}{datagramIterator.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pgraph_8h}{config\_pgraph.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{attribNodeRegistry_8h}{attribNodeRegistry.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{indent_8h}{indent.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <iterator>}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::\_empty\_attrib;}
+\DoxyCodeLine{00028\ \textcolor{keywordtype}{int}\ LightAttrib::\_attrib\_slot;}
+\DoxyCodeLine{00029\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::\_all\_off\_attrib;}
+\DoxyCodeLine{00030\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ LightAttrib::\_type\_handle;}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{comment}{//\ This\ STL\ Function\ object\ is\ used\ in\ sort\_on\_lights(),\ below,\ to\ sort\ a\ list}}
+\DoxyCodeLine{00033\ \textcolor{comment}{//\ of\ Lights\ in\ reverse\ order\ by\ priority.\ \ In\ the\ case\ of\ two\ lights\ with}}
+\DoxyCodeLine{00034\ \textcolor{comment}{//\ equal\ priority,\ the\ class\ priority\ is\ compared.}}
+\DoxyCodeLine{00035\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classCompareLightPriorities}{CompareLightPriorities}}\ \{}
+\DoxyCodeLine{00036\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00037\ \ \ \textcolor{keywordtype}{bool}\ operator\ ()(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&a,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&b)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00038\ \ \ \ \ nassertr(!a.is\_empty()\ \&\&\ !b.is\_empty(),\ a\ <\ b);}
+\DoxyCodeLine{00039\ \ \ \ \ \mbox{\hyperlink{classLight}{Light}}\ *la\ =\ a.node()-\/>as\_light();}
+\DoxyCodeLine{00040\ \ \ \ \ \mbox{\hyperlink{classLight}{Light}}\ *lb\ =\ b.node()-\/>as\_light();}
+\DoxyCodeLine{00041\ \ \ \ \ nassertr(la\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ lb\ !=\ \textcolor{keyword}{nullptr},\ a\ <\ b);}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \ \ \ \ \textcolor{keywordflow}{if}\ (la-\/>get\_priority()\ !=\ lb-\/>get\_priority())\ \{}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ la-\/>get\_priority()\ >\ lb-\/>get\_priority();}
+\DoxyCodeLine{00045\ \ \ \ \ \}}
+\DoxyCodeLine{00046\ \ \ \ \ \textcolor{keywordflow}{return}\ la-\/>get\_class\_priority()\ >\ lb-\/>get\_class\_priority();}
+\DoxyCodeLine{00047\ \ \ \}}
+\DoxyCodeLine{00048\ \};}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00054\ LightAttrib::}
+\DoxyCodeLine{00055\ LightAttrib(\textcolor{keyword}{const}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ \&copy)\ :}
+\DoxyCodeLine{00056\ \ \ \_on\_lights(copy.\_on\_lights),}
+\DoxyCodeLine{00057\ \ \ \_off\_lights(copy.\_off\_lights),}
+\DoxyCodeLine{00058\ \ \ \_off\_all\_lights(copy.\_off\_all\_lights),}
+\DoxyCodeLine{00059\ \ \ \_sort\_seq(\mbox{\hyperlink{classUpdateSeq}{UpdateSeq}}::old())}
+\DoxyCodeLine{00060\ \{}
+\DoxyCodeLine{00061\ \ \ \textcolor{comment}{//\ Increase\ the\ attrib\_ref\ of\ all\ the\ lights\ in\ this\ attribute.}}
+\DoxyCodeLine{00062\ \ \ Lights::const\_iterator\ it;}
+\DoxyCodeLine{00063\ \ \ \textcolor{keywordflow}{for}\ (it\ =\ \_on\_lights.begin();\ it\ !=\ \_on\_lights.end();\ ++it)\ \{}
+\DoxyCodeLine{00064\ \ \ \ \ \mbox{\hyperlink{classLight}{Light}}\ *lobj\ =\ (*it).node()-\/>as\_light();}
+\DoxyCodeLine{00065\ \ \ \ \ nassertd(lobj\ !=\ \textcolor{keyword}{nullptr})\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00066\ \ \ \ \ lobj-\/>\mbox{\hyperlink{classLight_a6a3d2cf9f7cf89c89e51b1adf814ec82}{attrib\_ref}}();}
+\DoxyCodeLine{00067\ \ \ \}}
+\DoxyCodeLine{00068\ \}}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00073\ LightAttrib::}
+\DoxyCodeLine{00074\ \string~LightAttrib()\ \{}
+\DoxyCodeLine{00075\ \ \ \textcolor{comment}{//\ Call\ attrib\_unref()\ on\ all\ on\ lights.}}
+\DoxyCodeLine{00076\ \ \ Lights::const\_iterator\ it;}
+\DoxyCodeLine{00077\ \ \ \textcolor{keywordflow}{for}\ (it\ =\ \_on\_lights.begin();\ it\ !=\ \_on\_lights.end();\ ++it)\ \{}
+\DoxyCodeLine{00078\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&np\ =\ *it;}
+\DoxyCodeLine{00079\ \ \ \ \ \textcolor{keywordflow}{if}\ (!np.is\_empty())\ \{}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ \mbox{\hyperlink{classLight}{Light}}\ *lobj\ =\ np.node()-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}();}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (lobj\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ lobj-\/>\mbox{\hyperlink{classLight_ae010fdd974ea227f0aecf223d57ed4d3}{attrib\_unref}}();}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00084\ \ \ \ \ \}}
+\DoxyCodeLine{00085\ \ \ \}}
+\DoxyCodeLine{00086\ \}}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00094\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00095\ make(LightAttrib::Operation\ op,\ \mbox{\hyperlink{classLight}{Light}}\ *light)\ \{}
+\DoxyCodeLine{00096\ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{00097\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ deprecated\ LightAttrib\ interface.\(\backslash\)n"{}};}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ attrib;}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \ \ \textcolor{keywordflow}{switch}\ (op)\ \{}
+\DoxyCodeLine{00102\ \ \ \textcolor{keywordflow}{case}\ O\_set:}
+\DoxyCodeLine{00103\ \ \ \ \ attrib\ =\ make\_all\_off();}
+\DoxyCodeLine{00104\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light-\/>as\_node()));}
+\DoxyCodeLine{00105\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \ \ \textcolor{keywordflow}{case}\ O\_add:}
+\DoxyCodeLine{00108\ \ \ \ \ attrib\ =\ make();}
+\DoxyCodeLine{00109\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light-\/>as\_node()));}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \textcolor{keywordflow}{case}\ O\_remove:}
+\DoxyCodeLine{00113\ \ \ \ \ attrib\ =\ make();}
+\DoxyCodeLine{00114\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light-\/>as\_node()));}
+\DoxyCodeLine{00115\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00116\ \ \ \}}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \ \ nassert\_raise(\textcolor{stringliteral}{"{}invalid\ operation"{}});}
+\DoxyCodeLine{00119\ \ \ \textcolor{keywordflow}{return}\ make();}
+\DoxyCodeLine{00120\ \}}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00128\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00129\ make(LightAttrib::Operation\ op,\ \mbox{\hyperlink{classLight}{Light}}\ *light1,\ \mbox{\hyperlink{classLight}{Light}}\ *light2)\ \{}
+\DoxyCodeLine{00130\ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{00131\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ deprecated\ LightAttrib\ interface.\(\backslash\)n"{}};}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \ \ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ attrib;}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00135\ \ \ \textcolor{keywordflow}{switch}\ (op)\ \{}
+\DoxyCodeLine{00136\ \ \ \textcolor{keywordflow}{case}\ O\_set:}
+\DoxyCodeLine{00137\ \ \ \ \ attrib\ =\ make\_all\_off();}
+\DoxyCodeLine{00138\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light1-\/>as\_node()));}
+\DoxyCodeLine{00139\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light2-\/>as\_node()));}
+\DoxyCodeLine{00140\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00142\ \ \ \textcolor{keywordflow}{case}\ O\_add:}
+\DoxyCodeLine{00143\ \ \ \ \ attrib\ =\ make();}
+\DoxyCodeLine{00144\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light1-\/>as\_node()));}
+\DoxyCodeLine{00145\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light2-\/>as\_node()));}
+\DoxyCodeLine{00146\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \ \ \textcolor{keywordflow}{case}\ O\_remove:}
+\DoxyCodeLine{00149\ \ \ \ \ attrib\ =\ make();}
+\DoxyCodeLine{00150\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light1-\/>as\_node()));}
+\DoxyCodeLine{00151\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light2-\/>as\_node()));}
+\DoxyCodeLine{00152\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00153\ \ \ \}}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ nassert\_raise(\textcolor{stringliteral}{"{}invalid\ operation"{}});}
+\DoxyCodeLine{00156\ \ \ \textcolor{keywordflow}{return}\ make();}
+\DoxyCodeLine{00157\ \}}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00165\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00166\ make(LightAttrib::Operation\ op,\ \mbox{\hyperlink{classLight}{Light}}\ *light1,\ \mbox{\hyperlink{classLight}{Light}}\ *light2,}
+\DoxyCodeLine{00167\ \ \ \ \ \ \mbox{\hyperlink{classLight}{Light}}\ *light3)\ \{}
+\DoxyCodeLine{00168\ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{00169\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ deprecated\ LightAttrib\ interface.\(\backslash\)n"{}};}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00171\ \ \ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ attrib;}
+\DoxyCodeLine{00172\ }
+\DoxyCodeLine{00173\ \ \ \textcolor{keywordflow}{switch}\ (op)\ \{}
+\DoxyCodeLine{00174\ \ \ \textcolor{keywordflow}{case}\ O\_set:}
+\DoxyCodeLine{00175\ \ \ \ \ attrib\ =\ make\_all\_off();}
+\DoxyCodeLine{00176\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light1-\/>as\_node()));}
+\DoxyCodeLine{00177\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light2-\/>as\_node()));}
+\DoxyCodeLine{00178\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light3-\/>as\_node()));}
+\DoxyCodeLine{00179\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00181\ \ \ \textcolor{keywordflow}{case}\ O\_add:}
+\DoxyCodeLine{00182\ \ \ \ \ attrib\ =\ make();}
+\DoxyCodeLine{00183\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light1-\/>as\_node()));}
+\DoxyCodeLine{00184\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light2-\/>as\_node()));}
+\DoxyCodeLine{00185\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light3-\/>as\_node()));}
+\DoxyCodeLine{00186\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00187\ }
+\DoxyCodeLine{00188\ \ \ \textcolor{keywordflow}{case}\ O\_remove:}
+\DoxyCodeLine{00189\ \ \ \ \ attrib\ =\ make();}
+\DoxyCodeLine{00190\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light1-\/>as\_node()));}
+\DoxyCodeLine{00191\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light2-\/>as\_node()));}
+\DoxyCodeLine{00192\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light3-\/>as\_node()));}
+\DoxyCodeLine{00193\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00194\ \ \ \}}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ nassert\_raise(\textcolor{stringliteral}{"{}invalid\ operation"{}});}
+\DoxyCodeLine{00197\ \ \ \textcolor{keywordflow}{return}\ make();}
+\DoxyCodeLine{00198\ \}}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00206\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00207\ make(LightAttrib::Operation\ op,\ \mbox{\hyperlink{classLight}{Light}}\ *light1,\ \mbox{\hyperlink{classLight}{Light}}\ *light2,}
+\DoxyCodeLine{00208\ \ \ \ \ \ \mbox{\hyperlink{classLight}{Light}}\ *light3,\ \mbox{\hyperlink{classLight}{Light}}\ *light4)\ \{}
+\DoxyCodeLine{00209\ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{00210\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ deprecated\ LightAttrib\ interface.\(\backslash\)n"{}};}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00212\ \ \ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ attrib;}
+\DoxyCodeLine{00213\ }
+\DoxyCodeLine{00214\ \ \ \textcolor{keywordflow}{switch}\ (op)\ \{}
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordflow}{case}\ O\_set:}
+\DoxyCodeLine{00216\ \ \ \ \ attrib\ =\ make\_all\_off();}
+\DoxyCodeLine{00217\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light1-\/>as\_node()));}
+\DoxyCodeLine{00218\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light2-\/>as\_node()));}
+\DoxyCodeLine{00219\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light3-\/>as\_node()));}
+\DoxyCodeLine{00220\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light4-\/>as\_node()));}
+\DoxyCodeLine{00221\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00223\ \ \ \textcolor{keywordflow}{case}\ O\_add:}
+\DoxyCodeLine{00224\ \ \ \ \ attrib\ =\ make();}
+\DoxyCodeLine{00225\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light1-\/>as\_node()));}
+\DoxyCodeLine{00226\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light2-\/>as\_node()));}
+\DoxyCodeLine{00227\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light3-\/>as\_node()));}
+\DoxyCodeLine{00228\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light4-\/>as\_node()));}
+\DoxyCodeLine{00229\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00230\ }
+\DoxyCodeLine{00231\ \ \ \textcolor{keywordflow}{case}\ O\_remove:}
+\DoxyCodeLine{00232\ \ \ \ \ attrib\ =\ make();}
+\DoxyCodeLine{00233\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light1-\/>as\_node()));}
+\DoxyCodeLine{00234\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light2-\/>as\_node()));}
+\DoxyCodeLine{00235\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light3-\/>as\_node()));}
+\DoxyCodeLine{00236\ \ \ \ \ attrib\ =\ DCAST(\mbox{\hyperlink{classLightAttrib}{LightAttrib}},\ attrib)-\/>add\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light4-\/>as\_node()));}
+\DoxyCodeLine{00237\ \ \ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{00238\ \ \ \}}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00240\ \ \ nassert\_raise(\textcolor{stringliteral}{"{}invalid\ operation"{}});}
+\DoxyCodeLine{00241\ \ \ \textcolor{keywordflow}{return}\ make();}
+\DoxyCodeLine{00242\ \}}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00248\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00249\ make\_default()\ \{}
+\DoxyCodeLine{00250\ \ \ \textcolor{keywordflow}{return}\ return\_new(\textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}});}
+\DoxyCodeLine{00251\ \}}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00264\ LightAttrib::Operation\ \mbox{\hyperlink{classLightAttrib_ad74bacbdae55dc6d7a8ad7688dfba6a3}{LightAttrib::}}}
+\DoxyCodeLine{00265\ \mbox{\hyperlink{classLightAttrib_ad74bacbdae55dc6d7a8ad7688dfba6a3}{get\_operation}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00266\ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{00267\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ deprecated\ LightAttrib\ interface.\(\backslash\)n"{}};}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ \textcolor{keywordflow}{if}\ (has\_all\_off())\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \textcolor{keywordflow}{return}\ O\_set;}
+\DoxyCodeLine{00271\ }
+\DoxyCodeLine{00272\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (get\_num\_off\_lights()\ ==\ 0)\ \{}
+\DoxyCodeLine{00273\ \ \ \ \ \textcolor{keywordflow}{return}\ O\_add;}
+\DoxyCodeLine{00274\ }
+\DoxyCodeLine{00275\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00276\ \ \ \ \ \textcolor{keywordflow}{return}\ O\_remove;}
+\DoxyCodeLine{00277\ \ \ \}}
+\DoxyCodeLine{00278\ \}}
+\DoxyCodeLine{00279\ }
+\DoxyCodeLine{00287\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classLightAttrib_a2873602675e4fc6cb22826521f361817}{LightAttrib::}}}
+\DoxyCodeLine{00288\ \mbox{\hyperlink{classLightAttrib_a2873602675e4fc6cb22826521f361817}{get\_num\_lights}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00289\ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{00290\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ deprecated\ LightAttrib\ interface.\(\backslash\)n"{}};}
+\DoxyCodeLine{00291\ }
+\DoxyCodeLine{00292\ \ \ \textcolor{keywordflow}{if}\ (get\_num\_off\_lights()\ ==\ 0)\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_num\_on\_lights();}
+\DoxyCodeLine{00294\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_num\_off\_lights();}
+\DoxyCodeLine{00296\ \ \ \}}
+\DoxyCodeLine{00297\ \}}
+\DoxyCodeLine{00298\ }
+\DoxyCodeLine{00306\ \mbox{\hyperlink{classLight}{Light}}\ *\mbox{\hyperlink{classLightAttrib_afb2d56e944a0153e8c4e58f9ff0a7950}{LightAttrib::}}}
+\DoxyCodeLine{00307\ \mbox{\hyperlink{classLightAttrib_afb2d56e944a0153e8c4e58f9ff0a7950}{get\_light}}(\textcolor{keywordtype}{int}\ n)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00308\ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{00309\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ deprecated\ LightAttrib\ interface.\(\backslash\)n"{}};}
+\DoxyCodeLine{00310\ }
+\DoxyCodeLine{00311\ \ \ \textcolor{keywordflow}{if}\ (get\_num\_off\_lights()\ ==\ 0)\ \{}
+\DoxyCodeLine{00312\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_on\_light(n).node()-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}();}
+\DoxyCodeLine{00313\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00314\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_off\_light(n).node()-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}();}
+\DoxyCodeLine{00315\ \ \ \}}
+\DoxyCodeLine{00316\ \}}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00326\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classLightAttrib_ab1325d3b8793d12690fd33a93147bb72}{LightAttrib::}}}
+\DoxyCodeLine{00327\ \mbox{\hyperlink{classLightAttrib_ab1325d3b8793d12690fd33a93147bb72}{has\_light}}(\mbox{\hyperlink{classLight}{Light}}\ *light)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00328\ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{00329\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ deprecated\ LightAttrib\ interface.\(\backslash\)n"{}};}
+\DoxyCodeLine{00330\ }
+\DoxyCodeLine{00331\ \ \ \textcolor{keywordflow}{if}\ (get\_num\_off\_lights()\ ==\ 0)\ \{}
+\DoxyCodeLine{00332\ \ \ \ \ \textcolor{keywordflow}{return}\ has\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light-\/>as\_node()));}
+\DoxyCodeLine{00333\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00334\ \ \ \ \ \textcolor{keywordflow}{return}\ has\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light-\/>as\_node()));}
+\DoxyCodeLine{00335\ \ \ \}}
+\DoxyCodeLine{00336\ \}}
+\DoxyCodeLine{00337\ }
+\DoxyCodeLine{00344\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00345\ add\_light(\mbox{\hyperlink{classLight}{Light}}\ *light)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00346\ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{00347\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ deprecated\ LightAttrib\ interface.\(\backslash\)n"{}};}
+\DoxyCodeLine{00348\ }
+\DoxyCodeLine{00349\ \ \ \textcolor{keywordflow}{if}\ (get\_num\_off\_lights()\ ==\ 0)\ \{}
+\DoxyCodeLine{00350\ \ \ \ \ \textcolor{keywordflow}{return}\ add\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light-\/>as\_node()));}
+\DoxyCodeLine{00351\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00352\ \ \ \ \ \textcolor{keywordflow}{return}\ add\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light-\/>as\_node()));}
+\DoxyCodeLine{00353\ \ \ \}}
+\DoxyCodeLine{00354\ \}}
+\DoxyCodeLine{00355\ }
+\DoxyCodeLine{00362\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00363\ remove\_light(\mbox{\hyperlink{classLight}{Light}}\ *light)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00364\ \ \ pgraph\_cat.warning()}
+\DoxyCodeLine{00365\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ deprecated\ LightAttrib\ interface.\(\backslash\)n"{}};}
+\DoxyCodeLine{00366\ }
+\DoxyCodeLine{00367\ \ \ \textcolor{keywordflow}{if}\ (get\_num\_off\_lights()\ ==\ 0)\ \{}
+\DoxyCodeLine{00368\ \ \ \ \ \textcolor{keywordflow}{return}\ remove\_on\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light-\/>as\_node()));}
+\DoxyCodeLine{00369\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00370\ \ \ \ \ \textcolor{keywordflow}{return}\ remove\_off\_light(\mbox{\hyperlink{classNodePath}{NodePath}}(light-\/>as\_node()));}
+\DoxyCodeLine{00371\ \ \ \}}
+\DoxyCodeLine{00372\ \}}
+\DoxyCodeLine{00373\ }
+\DoxyCodeLine{00377\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00378\ make()\ \{}
+\DoxyCodeLine{00379\ \ \ \textcolor{comment}{//\ We\ make\ it\ a\ special\ case\ and\ store\ a\ pointer\ to\ the\ empty\ attrib\ forever}}
+\DoxyCodeLine{00380\ \ \ \textcolor{comment}{//\ once\ we\ find\ it\ the\ first\ time,\ as\ an\ optimization.}}
+\DoxyCodeLine{00381\ \ \ \textcolor{keywordflow}{if}\ (\_empty\_attrib\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00382\ \ \ \ \ \_empty\_attrib\ =\ return\_new(\textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}});}
+\DoxyCodeLine{00383\ \ \ \}}
+\DoxyCodeLine{00384\ }
+\DoxyCodeLine{00385\ \ \ \textcolor{keywordflow}{return}\ \_empty\_attrib;}
+\DoxyCodeLine{00386\ \}}
+\DoxyCodeLine{00387\ }
+\DoxyCodeLine{00392\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00393\ make\_all\_off()\ \{}
+\DoxyCodeLine{00394\ \ \ \textcolor{comment}{//\ We\ make\ it\ a\ special\ case\ and\ store\ a\ pointer\ to\ the\ off\ attrib\ forever}}
+\DoxyCodeLine{00395\ \ \ \textcolor{comment}{//\ once\ we\ find\ it\ the\ first\ time,\ as\ an\ optimization.}}
+\DoxyCodeLine{00396\ \ \ \textcolor{keywordflow}{if}\ (\_all\_off\_attrib\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00397\ \ \ \ \ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *attrib\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}};}
+\DoxyCodeLine{00398\ \ \ \ \ attrib-\/>\_off\_all\_lights\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00399\ \ \ \ \ \_all\_off\_attrib\ =\ return\_new(attrib);}
+\DoxyCodeLine{00400\ \ \ \}}
+\DoxyCodeLine{00401\ }
+\DoxyCodeLine{00402\ \ \ \textcolor{keywordflow}{return}\ \_all\_off\_attrib;}
+\DoxyCodeLine{00403\ \}}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00409\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00410\ add\_on\_light(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&light)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00411\ \ \ nassertr(!light.is\_empty(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00412\ \ \ \mbox{\hyperlink{classLight}{Light}}\ *lobj\ =\ light.node()-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}();}
+\DoxyCodeLine{00413\ \ \ nassertr(lobj\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00414\ }
+\DoxyCodeLine{00415\ \ \ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *attrib\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00416\ }
+\DoxyCodeLine{00417\ \ \ std::pair<Lights::iterator,\ bool>\ insert\_result\ =}
+\DoxyCodeLine{00418\ \ \ \ \ attrib-\/>\_on\_lights.insert(Lights::value\_type(light));}
+\DoxyCodeLine{00419\ \ \ \textcolor{keywordflow}{if}\ (insert\_result.second)\ \{}
+\DoxyCodeLine{00420\ \ \ \ \ lobj-\/>\mbox{\hyperlink{classLight_a6a3d2cf9f7cf89c89e51b1adf814ec82}{attrib\_ref}}();}
+\DoxyCodeLine{00421\ }
+\DoxyCodeLine{00422\ \ \ \ \ \textcolor{comment}{//\ Also\ ensure\ it\ is\ removed\ from\ the\ off\_lights\ list.}}
+\DoxyCodeLine{00423\ \ \ \ \ attrib-\/>\_off\_lights.erase(light);}
+\DoxyCodeLine{00424\ \ \ \}}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ \textcolor{keywordflow}{return}\ return\_new(attrib);}
+\DoxyCodeLine{00427\ \}}
+\DoxyCodeLine{00428\ }
+\DoxyCodeLine{00433\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00434\ remove\_on\_light(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&light)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00435\ \ \ nassertr(!light.is\_empty(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00436\ \ \ \mbox{\hyperlink{classLight}{Light}}\ *lobj\ =\ light.node()-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}();}
+\DoxyCodeLine{00437\ \ \ nassertr(lobj\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00438\ }
+\DoxyCodeLine{00439\ \ \ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *attrib\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00440\ \ \ \textcolor{keywordflow}{if}\ (attrib-\/>\_on\_lights.erase(light))\ \{}
+\DoxyCodeLine{00441\ \ \ \ \ lobj-\/>\mbox{\hyperlink{classLight_ae010fdd974ea227f0aecf223d57ed4d3}{attrib\_unref}}();}
+\DoxyCodeLine{00442\ \ \ \}}
+\DoxyCodeLine{00443\ \ \ \textcolor{keywordflow}{return}\ return\_new(attrib);}
+\DoxyCodeLine{00444\ \}}
+\DoxyCodeLine{00445\ }
+\DoxyCodeLine{00450\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00451\ replace\_on\_light(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&source,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&dest)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00452\ \ \ \textcolor{keywordflow}{if}\ (source\ ==\ dest)\ \{}
+\DoxyCodeLine{00453\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00454\ \ \ \}}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00456\ \ \ nassertr(!source.is\_empty(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00457\ \ \ \mbox{\hyperlink{classLight}{Light}}\ *slobj\ =\ source.node()-\/>as\_light();}
+\DoxyCodeLine{00458\ \ \ nassertr(slobj\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00459\ }
+\DoxyCodeLine{00460\ \ \ nassertr(!dest.is\_empty(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00461\ \ \ \mbox{\hyperlink{classLight}{Light}}\ *dlobj\ =\ dest.node()-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}();}
+\DoxyCodeLine{00462\ \ \ nassertr(dlobj\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00463\ }
+\DoxyCodeLine{00464\ \ \ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *attrib\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00465\ }
+\DoxyCodeLine{00466\ \ \ \textcolor{keyword}{auto}\ it\ =\ attrib-\/>\_on\_lights.find(source);}
+\DoxyCodeLine{00467\ \ \ \textcolor{keywordflow}{if}\ (it\ !=\ attrib-\/>\_on\_lights.end())\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ dlobj-\/>\mbox{\hyperlink{classLight_a6a3d2cf9f7cf89c89e51b1adf814ec82}{attrib\_ref}}();}
+\DoxyCodeLine{00469\ \ \ \ \ slobj-\/>\mbox{\hyperlink{classLight_ae010fdd974ea227f0aecf223d57ed4d3}{attrib\_unref}}();}
+\DoxyCodeLine{00470\ }
+\DoxyCodeLine{00471\ \ \ \ \ *it\ =\ dest;}
+\DoxyCodeLine{00472\ \ \ \ \ attrib-\/>\_on\_lights.sort();}
+\DoxyCodeLine{00473\ \ \ \}}
+\DoxyCodeLine{00474\ \ \ \textcolor{keywordflow}{return}\ return\_new(attrib);}
+\DoxyCodeLine{00475\ \}}
+\DoxyCodeLine{00476\ }
+\DoxyCodeLine{00481\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00482\ add\_off\_light(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&light)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00483\ \ \ nassertr(!light.is\_empty(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00484\ \ \ \mbox{\hyperlink{classLight}{Light}}\ *lobj\ =\ light.node()-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}();}
+\DoxyCodeLine{00485\ \ \ nassertr(lobj\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00487\ \ \ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *attrib\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00488\ \ \ \textcolor{keywordflow}{if}\ (!\_off\_all\_lights)\ \{}
+\DoxyCodeLine{00489\ \ \ \ \ attrib-\/>\_off\_lights.insert(light);}
+\DoxyCodeLine{00490\ \ \ \}}
+\DoxyCodeLine{00491\ \ \ \textcolor{keywordflow}{if}\ (attrib-\/>\_on\_lights.erase(light))\ \{}
+\DoxyCodeLine{00492\ \ \ \ \ lobj-\/>\mbox{\hyperlink{classLight_ae010fdd974ea227f0aecf223d57ed4d3}{attrib\_unref}}();}
+\DoxyCodeLine{00493\ \ \ \}}
+\DoxyCodeLine{00494\ \ \ \textcolor{keywordflow}{return}\ return\_new(attrib);}
+\DoxyCodeLine{00495\ \}}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00501\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00502\ remove\_off\_light(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&light)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00503\ \ \ nassertr(!light.is\_empty()\ \&\&\ light.node()-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}()\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00504\ \ \ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *attrib\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00505\ \ \ attrib-\/>\_off\_lights.erase(light);}
+\DoxyCodeLine{00506\ \ \ \textcolor{keywordflow}{return}\ return\_new(attrib);}
+\DoxyCodeLine{00507\ \}}
+\DoxyCodeLine{00508\ }
+\DoxyCodeLine{00513\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00514\ replace\_off\_light(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&source,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&dest)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00515\ \ \ \textcolor{keywordflow}{if}\ (source\ ==\ dest)\ \{}
+\DoxyCodeLine{00516\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00517\ \ \ \}}
+\DoxyCodeLine{00518\ }
+\DoxyCodeLine{00519\ \ \ nassertr(!source.is\_empty(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00520\ \ \ \mbox{\hyperlink{classLight}{Light}}\ *slobj\ =\ source.node()-\/>as\_light();}
+\DoxyCodeLine{00521\ \ \ nassertr(slobj\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00523\ \ \ nassertr(!dest.is\_empty(),\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00524\ \ \ \mbox{\hyperlink{classLight}{Light}}\ *dlobj\ =\ dest.node()-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}();}
+\DoxyCodeLine{00525\ \ \ nassertr(dlobj\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00526\ }
+\DoxyCodeLine{00527\ \ \ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *attrib\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00528\ }
+\DoxyCodeLine{00529\ \ \ \textcolor{keyword}{auto}\ it\ =\ attrib-\/>\_off\_lights.find(source);}
+\DoxyCodeLine{00530\ \ \ \textcolor{keywordflow}{if}\ (it\ !=\ attrib-\/>\_off\_lights.end())\ \{}
+\DoxyCodeLine{00531\ \ \ \ \ dlobj-\/>\mbox{\hyperlink{classLight_a6a3d2cf9f7cf89c89e51b1adf814ec82}{attrib\_ref}}();}
+\DoxyCodeLine{00532\ \ \ \ \ slobj-\/>\mbox{\hyperlink{classLight_ae010fdd974ea227f0aecf223d57ed4d3}{attrib\_unref}}();}
+\DoxyCodeLine{00533\ }
+\DoxyCodeLine{00534\ \ \ \ \ *it\ =\ dest;}
+\DoxyCodeLine{00535\ \ \ \ \ attrib-\/>\_off\_lights.sort();}
+\DoxyCodeLine{00536\ \ \ \}}
+\DoxyCodeLine{00537\ \ \ \textcolor{keywordflow}{return}\ return\_new(attrib);}
+\DoxyCodeLine{00538\ \}}
+\DoxyCodeLine{00539\ }
+\DoxyCodeLine{00545\ \mbox{\hyperlink{classNodePath}{NodePath}}\ LightAttrib::}
+\DoxyCodeLine{00546\ get\_most\_important\_light()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00547\ \ \ check\_sorted();}
+\DoxyCodeLine{00548\ }
+\DoxyCodeLine{00549\ \ \ \textcolor{keywordflow}{if}\ (\_num\_non\_ambient\_lights\ >\ 0)\ \{}
+\DoxyCodeLine{00550\ \ \ \ \ \textcolor{keywordflow}{return}\ \_sorted\_on\_lights[0];}
+\DoxyCodeLine{00551\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00552\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classNodePath}{NodePath}}();}
+\DoxyCodeLine{00553\ \ \ \}}
+\DoxyCodeLine{00554\ \}}
+\DoxyCodeLine{00555\ }
+\DoxyCodeLine{00559\ LColor\ LightAttrib::}
+\DoxyCodeLine{00560\ get\_ambient\_contribution()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00561\ \ \ check\_sorted();}
+\DoxyCodeLine{00562\ }
+\DoxyCodeLine{00563\ \ \ LVecBase4\ total(0);}
+\DoxyCodeLine{00564\ }
+\DoxyCodeLine{00565\ \ \ Lights::const\_iterator\ li;}
+\DoxyCodeLine{00566\ \ \ li\ =\ \_sorted\_on\_lights.begin()\ +\ \_num\_non\_ambient\_lights;}
+\DoxyCodeLine{00567\ \ \ \textcolor{keywordflow}{for}\ (;\ li\ !=\ \_sorted\_on\_lights.end();\ ++li)\ \{}
+\DoxyCodeLine{00568\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&np\ =\ (*li);}
+\DoxyCodeLine{00569\ \ \ \ \ \mbox{\hyperlink{classLight}{Light}}\ *light\ =\ np.node()-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}();}
+\DoxyCodeLine{00570\ \ \ \ \ nassertd(light\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ light-\/>is\_ambient\_light())\ continue;}
+\DoxyCodeLine{00571\ }
+\DoxyCodeLine{00572\ \ \ \ \ total\ +=\ light-\/>get\_color();}
+\DoxyCodeLine{00573\ \ \ \}}
+\DoxyCodeLine{00574\ }
+\DoxyCodeLine{00575\ \ \ return\ total;}
+\DoxyCodeLine{00576\ \}}
+\DoxyCodeLine{00577\ }
+\DoxyCodeLine{00581\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}::}
+\DoxyCodeLine{00582\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00583\ \ \ out\ <<\ get\_type()\ <<\ \textcolor{stringliteral}{"{}:"{}};}
+\DoxyCodeLine{00584\ \ \ \textcolor{keywordflow}{if}\ (\_off\_lights.empty())\ \{}
+\DoxyCodeLine{00585\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_on\_lights.empty())\ \{}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_off\_all\_lights)\ \{}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}all\ off"{}};}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}identity"{}};}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00591\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00592\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_off\_all\_lights)\ \{}
+\DoxyCodeLine{00593\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}set"{}};}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}on"{}};}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00597\ \ \ \ \ \}}
+\DoxyCodeLine{00598\ }
+\DoxyCodeLine{00599\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00600\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}off"{}};}
+\DoxyCodeLine{00601\ \ \ \ \ Lights::const\_iterator\ fi;}
+\DoxyCodeLine{00602\ \ \ \ \ \textcolor{keywordflow}{for}\ (fi\ =\ \_off\_lights.begin();\ fi\ !=\ \_off\_lights.end();\ ++fi)\ \{}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ light\ =\ (*fi);}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (light.is\_empty())\ \{}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ light;}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ light.get\_name();}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00609\ \ \ \ \ \}}
+\DoxyCodeLine{00610\ }
+\DoxyCodeLine{00611\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_on\_lights.empty())\ \{}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ on"{}};}
+\DoxyCodeLine{00613\ \ \ \ \ \}}
+\DoxyCodeLine{00614\ \ \ \}}
+\DoxyCodeLine{00615\ }
+\DoxyCodeLine{00616\ \ \ Lights::const\_iterator\ li;}
+\DoxyCodeLine{00617\ \ \ \textcolor{keywordflow}{for}\ (li\ =\ \_on\_lights.begin();\ li\ !=\ \_on\_lights.end();\ ++li)\ \{}
+\DoxyCodeLine{00618\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ light\ =\ (*li);}
+\DoxyCodeLine{00619\ \ \ \ \ \textcolor{keywordflow}{if}\ (light.is\_empty())\ \{}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ light;}
+\DoxyCodeLine{00621\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ light.get\_name();}
+\DoxyCodeLine{00623\ \ \ \ \ \}}
+\DoxyCodeLine{00624\ \ \ \}}
+\DoxyCodeLine{00625\ \}}
+\DoxyCodeLine{00626\ }
+\DoxyCodeLine{00630\ \textcolor{keywordtype}{void}\ LightAttrib::}
+\DoxyCodeLine{00631\ write(std::ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00632\ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level)\ <<\ get\_type()\ <<\ \textcolor{stringliteral}{"{}:"{}};}
+\DoxyCodeLine{00633\ \ \ \textcolor{keywordflow}{if}\ (\_off\_lights.empty())\ \{}
+\DoxyCodeLine{00634\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_on\_lights.empty())\ \{}
+\DoxyCodeLine{00635\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_off\_all\_lights)\ \{}
+\DoxyCodeLine{00636\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}all\ off\(\backslash\)n"{}};}
+\DoxyCodeLine{00637\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}identity\(\backslash\)n"{}};}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00640\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00641\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_off\_all\_lights)\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}set\(\backslash\)n"{}};}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}on\(\backslash\)n"{}};}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00646\ \ \ \ \ \}}
+\DoxyCodeLine{00647\ }
+\DoxyCodeLine{00648\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00649\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}off\(\backslash\)n"{}};}
+\DoxyCodeLine{00650\ \ \ \ \ Lights::const\_iterator\ fi;}
+\DoxyCodeLine{00651\ \ \ \ \ \textcolor{keywordflow}{for}\ (fi\ =\ \_off\_lights.begin();\ fi\ !=\ \_off\_lights.end();\ ++fi)\ \{}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ light\ =\ (*fi);}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level\ +\ 2)\ <<\ light\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00654\ \ \ \ \ \}}
+\DoxyCodeLine{00655\ }
+\DoxyCodeLine{00656\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_on\_lights.empty())\ \{}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level)\ <<\ \textcolor{stringliteral}{"{}on\(\backslash\)n"{}};}
+\DoxyCodeLine{00658\ \ \ \ \ \}}
+\DoxyCodeLine{00659\ \ \ \}}
+\DoxyCodeLine{00660\ }
+\DoxyCodeLine{00661\ \ \ Lights::const\_iterator\ li;}
+\DoxyCodeLine{00662\ \ \ \textcolor{keywordflow}{for}\ (li\ =\ \_on\_lights.begin();\ li\ !=\ \_on\_lights.end();\ ++li)\ \{}
+\DoxyCodeLine{00663\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ light\ =\ (*li);}
+\DoxyCodeLine{00664\ \ \ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level\ +\ 2)\ <<\ light\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00665\ \ \ \}}
+\DoxyCodeLine{00666\ \}}
+\DoxyCodeLine{00667\ }
+\DoxyCodeLine{00679\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classLightAttrib_a44acbb10f3903a27dd300ce6da860ea8}{LightAttrib::}}}
+\DoxyCodeLine{00680\ \mbox{\hyperlink{classLightAttrib_a44acbb10f3903a27dd300ce6da860ea8}{compare\_to\_impl}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00681\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *ta\ =\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *)other;}
+\DoxyCodeLine{00682\ }
+\DoxyCodeLine{00683\ \ \ \textcolor{keywordflow}{if}\ (\_off\_all\_lights\ !=\ ta-\/>\_off\_all\_lights)\ \{}
+\DoxyCodeLine{00684\ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{int})\_off\_all\_lights\ -\/\ (int)ta-\/>\_off\_all\_lights;}
+\DoxyCodeLine{00685\ \ \ \}}
+\DoxyCodeLine{00686\ }
+\DoxyCodeLine{00687\ \ \ Lights::const\_iterator\ li\ =\ \_on\_lights.begin();}
+\DoxyCodeLine{00688\ \ \ Lights::const\_iterator\ oli\ =\ ta-\/>\_on\_lights.begin();}
+\DoxyCodeLine{00689\ }
+\DoxyCodeLine{00690\ \ \ \textcolor{keywordflow}{while}\ (li\ !=\ \_on\_lights.end()\ \&\&\ oli\ !=\ ta-\/>\_on\_lights.end())\ \{}
+\DoxyCodeLine{00691\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ light\ =\ (*li);}
+\DoxyCodeLine{00692\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ other\_light\ =\ (*oli);}
+\DoxyCodeLine{00693\ }
+\DoxyCodeLine{00694\ \ \ \ \ \textcolor{keywordtype}{int}\ compare\ =\ light.compare\_to(other\_light);}
+\DoxyCodeLine{00695\ \ \ \ \ \textcolor{keywordflow}{if}\ (compare\ !=\ 0)\ \{}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ compare;}
+\DoxyCodeLine{00697\ \ \ \ \ \}}
+\DoxyCodeLine{00698\ }
+\DoxyCodeLine{00699\ \ \ \ \ ++li;}
+\DoxyCodeLine{00700\ \ \ \ \ ++oli;}
+\DoxyCodeLine{00701\ \ \ \}}
+\DoxyCodeLine{00702\ }
+\DoxyCodeLine{00703\ \ \ \textcolor{keywordflow}{if}\ (li\ !=\ \_on\_lights.end())\ \{}
+\DoxyCodeLine{00704\ \ \ \ \ \textcolor{keywordflow}{return}\ 1;}
+\DoxyCodeLine{00705\ \ \ \}}
+\DoxyCodeLine{00706\ \ \ \textcolor{keywordflow}{if}\ (oli\ !=\ ta-\/>\_on\_lights.end())\ \{}
+\DoxyCodeLine{00707\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00708\ \ \ \}}
+\DoxyCodeLine{00709\ }
+\DoxyCodeLine{00710\ \ \ Lights::const\_iterator\ fi\ =\ \_off\_lights.begin();}
+\DoxyCodeLine{00711\ \ \ Lights::const\_iterator\ ofi\ =\ ta-\/>\_off\_lights.begin();}
+\DoxyCodeLine{00712\ }
+\DoxyCodeLine{00713\ \ \ \textcolor{keywordflow}{while}\ (fi\ !=\ \_off\_lights.end()\ \&\&\ ofi\ !=\ ta-\/>\_off\_lights.end())\ \{}
+\DoxyCodeLine{00714\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ light\ =\ (*fi);}
+\DoxyCodeLine{00715\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ other\_light\ =\ (*ofi);}
+\DoxyCodeLine{00716\ }
+\DoxyCodeLine{00717\ \ \ \ \ \textcolor{keywordtype}{int}\ compare\ =\ light.compare\_to(other\_light);}
+\DoxyCodeLine{00718\ \ \ \ \ \textcolor{keywordflow}{if}\ (compare\ !=\ 0)\ \{}
+\DoxyCodeLine{00719\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ compare;}
+\DoxyCodeLine{00720\ \ \ \ \ \}}
+\DoxyCodeLine{00721\ }
+\DoxyCodeLine{00722\ \ \ \ \ ++fi;}
+\DoxyCodeLine{00723\ \ \ \ \ ++ofi;}
+\DoxyCodeLine{00724\ \ \ \}}
+\DoxyCodeLine{00725\ }
+\DoxyCodeLine{00726\ \ \ \textcolor{keywordflow}{if}\ (fi\ !=\ \_off\_lights.end())\ \{}
+\DoxyCodeLine{00727\ \ \ \ \ \textcolor{keywordflow}{return}\ 1;}
+\DoxyCodeLine{00728\ \ \ \}}
+\DoxyCodeLine{00729\ \ \ \textcolor{keywordflow}{if}\ (ofi\ !=\ ta-\/>\_off\_lights.end())\ \{}
+\DoxyCodeLine{00730\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00731\ \ \ \}}
+\DoxyCodeLine{00732\ }
+\DoxyCodeLine{00733\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00734\ \}}
+\DoxyCodeLine{00735\ }
+\DoxyCodeLine{00742\ \textcolor{keywordtype}{size\_t}\ \mbox{\hyperlink{classLightAttrib_a569555b083715abd3fe543be4cbbd367}{LightAttrib::}}}
+\DoxyCodeLine{00743\ \mbox{\hyperlink{classLightAttrib_a569555b083715abd3fe543be4cbbd367}{get\_hash\_impl}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00744\ \ \ \textcolor{keywordtype}{size\_t}\ hash\ =\ 0;}
+\DoxyCodeLine{00745\ }
+\DoxyCodeLine{00746\ \ \ Lights::const\_iterator\ li;}
+\DoxyCodeLine{00747\ \ \ \textcolor{keywordflow}{for}\ (li\ =\ \_on\_lights.begin();\ li\ !=\ \_on\_lights.end();\ ++li)\ \{}
+\DoxyCodeLine{00748\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ light\ =\ (*li);}
+\DoxyCodeLine{00749\ \ \ \ \ hash\ =\ light.add\_hash(hash);}
+\DoxyCodeLine{00750\ \ \ \}}
+\DoxyCodeLine{00751\ }
+\DoxyCodeLine{00752\ \ \ \textcolor{comment}{//\ This\ bool\ value\ goes\ here,\ between\ the\ two\ lists,\ to\ differentiate}}
+\DoxyCodeLine{00753\ \ \ \textcolor{comment}{//\ between\ the\ two.}}
+\DoxyCodeLine{00754\ \ \ hash\ =\ int\_hash::add\_hash(hash,\ (\textcolor{keywordtype}{int})\_off\_all\_lights);}
+\DoxyCodeLine{00755\ }
+\DoxyCodeLine{00756\ \ \ \textcolor{keywordflow}{for}\ (li\ =\ \_off\_lights.begin();\ li\ !=\ \_off\_lights.end();\ ++li)\ \{}
+\DoxyCodeLine{00757\ \ \ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ light\ =\ (*li);}
+\DoxyCodeLine{00758\ \ \ \ \ hash\ =\ light.add\_hash(hash);}
+\DoxyCodeLine{00759\ \ \ \}}
+\DoxyCodeLine{00760\ }
+\DoxyCodeLine{00761\ \ \ \textcolor{keywordflow}{return}\ hash;}
+\DoxyCodeLine{00762\ \}}
+\DoxyCodeLine{00763\ }
+\DoxyCodeLine{00775\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ LightAttrib::}
+\DoxyCodeLine{00776\ compose\_impl(\textcolor{keyword}{const}\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00777\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *ta\ =\ (\textcolor{keyword}{const}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *)other;}
+\DoxyCodeLine{00778\ }
+\DoxyCodeLine{00779\ \ \ \textcolor{keywordflow}{if}\ (ta-\/>\_off\_all\_lights)\ \{}
+\DoxyCodeLine{00780\ \ \ \ \ \textcolor{comment}{//\ If\ the\ other\ type\ turns\ off\ all\ lights,\ it\ doesn't\ matter\ what\ we\ are.}}
+\DoxyCodeLine{00781\ \ \ \ \ \textcolor{keywordflow}{return}\ ta;}
+\DoxyCodeLine{00782\ \ \ \}}
+\DoxyCodeLine{00783\ }
+\DoxyCodeLine{00784\ \ \ \textcolor{comment}{//\ This\ is\ a\ three-\/way\ merge\ between\ ai,\ bi,\ and\ ci,\ except\ that\ bi\ and\ ci}}
+\DoxyCodeLine{00785\ \ \ \textcolor{comment}{//\ should\ have\ no\ intersection\ and\ therefore\ needn't\ be\ compared\ to\ each}}
+\DoxyCodeLine{00786\ \ \ \textcolor{comment}{//\ other.}}
+\DoxyCodeLine{00787\ \ \ Lights::const\_iterator\ ai\ =\ \_on\_lights.begin();}
+\DoxyCodeLine{00788\ \ \ Lights::const\_iterator\ bi\ =\ ta-\/>\_on\_lights.begin();}
+\DoxyCodeLine{00789\ \ \ Lights::const\_iterator\ ci\ =\ ta-\/>\_off\_lights.begin();}
+\DoxyCodeLine{00790\ }
+\DoxyCodeLine{00791\ \ \ \textcolor{comment}{//\ Create\ a\ new\ LightAttrib\ that\ will\ hold\ the\ result.}}
+\DoxyCodeLine{00792\ \ \ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *new\_attrib\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}};}
+\DoxyCodeLine{00793\ \ \ std::back\_insert\_iterator<Lights>\ result\ =}
+\DoxyCodeLine{00794\ \ \ \ \ std::back\_inserter(new\_attrib-\/>\_on\_lights);}
+\DoxyCodeLine{00795\ }
+\DoxyCodeLine{00796\ \ \ \textcolor{keywordflow}{while}\ (ai\ !=\ \_on\_lights.end()\ \&\&}
+\DoxyCodeLine{00797\ \ \ \ \ \ \ \ \ \ bi\ !=\ ta-\/>\_on\_lights.end()\ \&\&}
+\DoxyCodeLine{00798\ \ \ \ \ \ \ \ \ \ ci\ !=\ ta-\/>\_off\_lights.end())\ \{}
+\DoxyCodeLine{00799\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*ai)\ <\ (*bi))\ \{}
+\DoxyCodeLine{00800\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((*ai)\ <\ (*ci))\ \{}
+\DoxyCodeLine{00801\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ a\ light\ that\ we\ have\ in\ the\ original,\ which\ is\ not\ present}}
+\DoxyCodeLine{00802\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ in\ the\ secondary.}}
+\DoxyCodeLine{00803\ \ \ \ \ \ \ \ \ *result\ =\ *ai;}
+\DoxyCodeLine{00804\ \ \ \ \ \ \ \ \ ++ai;}
+\DoxyCodeLine{00805\ \ \ \ \ \ \ \ \ ++result;}
+\DoxyCodeLine{00806\ }
+\DoxyCodeLine{00807\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((*ci)\ <\ (*ai))\ \{}
+\DoxyCodeLine{00808\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ a\ light\ that\ is\ turned\ off\ in\ the\ secondary,\ but\ was\ not}}
+\DoxyCodeLine{00809\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ present\ in\ the\ original.}}
+\DoxyCodeLine{00810\ \ \ \ \ \ \ \ \ ++ci;}
+\DoxyCodeLine{00811\ }
+\DoxyCodeLine{00812\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{\ \textcolor{comment}{//\ (*ci)\ ==\ (*ai)}}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ a\ light\ that\ is\ turned\ off\ in\ the\ secondary,\ and\ was}}
+\DoxyCodeLine{00814\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ present\ in\ the\ original.}}
+\DoxyCodeLine{00815\ \ \ \ \ \ \ \ \ ++ai;}
+\DoxyCodeLine{00816\ \ \ \ \ \ \ \ \ ++ci;}
+\DoxyCodeLine{00817\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00818\ }
+\DoxyCodeLine{00819\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((*bi)\ <\ (*ai))\ \{}
+\DoxyCodeLine{00820\ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ a\ new\ light\ we\ have\ in\ the\ secondary,\ that\ was\ not\ present\ in}}
+\DoxyCodeLine{00821\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ original.}}
+\DoxyCodeLine{00822\ \ \ \ \ \ \ *result\ =\ *bi;}
+\DoxyCodeLine{00823\ \ \ \ \ \ \ ++bi;}
+\DoxyCodeLine{00824\ \ \ \ \ \ \ ++result;}
+\DoxyCodeLine{00825\ }
+\DoxyCodeLine{00826\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{\ \ \textcolor{comment}{//\ (*bi)\ ==\ (*ai)}}
+\DoxyCodeLine{00827\ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ a\ light\ we\ have\ in\ both.}}
+\DoxyCodeLine{00828\ \ \ \ \ \ \ *result\ =\ *bi;}
+\DoxyCodeLine{00829\ \ \ \ \ \ \ ++ai;}
+\DoxyCodeLine{00830\ \ \ \ \ \ \ ++bi;}
+\DoxyCodeLine{00831\ \ \ \ \ \ \ ++result;}
+\DoxyCodeLine{00832\ \ \ \ \ \}}
+\DoxyCodeLine{00833\ \ \ \}}
+\DoxyCodeLine{00834\ }
+\DoxyCodeLine{00835\ \ \ \textcolor{keywordflow}{while}\ (ai\ !=\ \_on\_lights.end()\ \&\&\ bi\ !=\ ta-\/>\_on\_lights.end())\ \{}
+\DoxyCodeLine{00836\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*ai)\ <\ (*bi))\ \{}
+\DoxyCodeLine{00837\ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ a\ light\ that\ we\ have\ in\ the\ original,\ which\ is\ not\ present\ in}}
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ secondary.}}
+\DoxyCodeLine{00839\ \ \ \ \ \ \ *result\ =\ *ai;}
+\DoxyCodeLine{00840\ \ \ \ \ \ \ ++ai;}
+\DoxyCodeLine{00841\ \ \ \ \ \ \ ++result;}
+\DoxyCodeLine{00842\ }
+\DoxyCodeLine{00843\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((*bi)\ <\ (*ai))\ \{}
+\DoxyCodeLine{00844\ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ a\ new\ light\ we\ have\ in\ the\ secondary,\ that\ was\ not\ present\ in}}
+\DoxyCodeLine{00845\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ original.}}
+\DoxyCodeLine{00846\ \ \ \ \ \ \ *result\ =\ *bi;}
+\DoxyCodeLine{00847\ \ \ \ \ \ \ ++bi;}
+\DoxyCodeLine{00848\ \ \ \ \ \ \ ++result;}
+\DoxyCodeLine{00849\ }
+\DoxyCodeLine{00850\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00851\ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ a\ light\ we\ have\ in\ both.}}
+\DoxyCodeLine{00852\ \ \ \ \ \ \ *result\ =\ *bi;}
+\DoxyCodeLine{00853\ \ \ \ \ \ \ ++ai;}
+\DoxyCodeLine{00854\ \ \ \ \ \ \ ++bi;}
+\DoxyCodeLine{00855\ \ \ \ \ \ \ ++result;}
+\DoxyCodeLine{00856\ \ \ \ \ \}}
+\DoxyCodeLine{00857\ \ \ \}}
+\DoxyCodeLine{00858\ }
+\DoxyCodeLine{00859\ \ \ \textcolor{keywordflow}{while}\ (ai\ !=\ \_on\_lights.end()\ \&\&\ ci\ !=\ ta-\/>\_off\_lights.end())\ \{}
+\DoxyCodeLine{00860\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*ai)\ <\ (*ci))\ \{}
+\DoxyCodeLine{00861\ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ a\ light\ that\ we\ have\ in\ the\ original,\ which\ is\ not\ present\ in}}
+\DoxyCodeLine{00862\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ secondary.}}
+\DoxyCodeLine{00863\ \ \ \ \ \ \ *result\ =\ *ai;}
+\DoxyCodeLine{00864\ \ \ \ \ \ \ ++ai;}
+\DoxyCodeLine{00865\ \ \ \ \ \ \ ++result;}
+\DoxyCodeLine{00866\ }
+\DoxyCodeLine{00867\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((*ci)\ <\ (*ai))\ \{}
+\DoxyCodeLine{00868\ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ a\ light\ that\ is\ turned\ off\ in\ the\ secondary,\ but\ was\ not}}
+\DoxyCodeLine{00869\ \ \ \ \ \ \ \textcolor{comment}{//\ present\ in\ the\ original.}}
+\DoxyCodeLine{00870\ \ \ \ \ \ \ ++ci;}
+\DoxyCodeLine{00871\ }
+\DoxyCodeLine{00872\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{\ \textcolor{comment}{//\ (*ci)\ ==\ (*ai)}}
+\DoxyCodeLine{00873\ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ a\ light\ that\ is\ turned\ off\ in\ the\ secondary,\ and\ was\ present}}
+\DoxyCodeLine{00874\ \ \ \ \ \ \ \textcolor{comment}{//\ in\ the\ original.}}
+\DoxyCodeLine{00875\ \ \ \ \ \ \ ++ai;}
+\DoxyCodeLine{00876\ \ \ \ \ \ \ ++ci;}
+\DoxyCodeLine{00877\ \ \ \ \ \}}
+\DoxyCodeLine{00878\ \ \ \}}
+\DoxyCodeLine{00879\ }
+\DoxyCodeLine{00880\ \ \ \textcolor{keywordflow}{while}\ (ai\ !=\ \_on\_lights.end())\ \{}
+\DoxyCodeLine{00881\ \ \ \ \ *result\ =\ *ai;}
+\DoxyCodeLine{00882\ \ \ \ \ ++ai;}
+\DoxyCodeLine{00883\ \ \ \ \ ++result;}
+\DoxyCodeLine{00884\ \ \ \}}
+\DoxyCodeLine{00885\ }
+\DoxyCodeLine{00886\ \ \ \textcolor{keywordflow}{while}\ (bi\ !=\ ta-\/>\_on\_lights.end())\ \{}
+\DoxyCodeLine{00887\ \ \ \ \ *result\ =\ *bi;}
+\DoxyCodeLine{00888\ \ \ \ \ ++bi;}
+\DoxyCodeLine{00889\ \ \ \ \ ++result;}
+\DoxyCodeLine{00890\ \ \ \}}
+\DoxyCodeLine{00891\ }
+\DoxyCodeLine{00892\ \ \ \textcolor{comment}{//\ Increase\ the\ attrib\_ref\ of\ all\ the\ lights\ in\ this\ new\ attribute.}}
+\DoxyCodeLine{00893\ \ \ Lights::const\_iterator\ it;}
+\DoxyCodeLine{00894\ \ \ \textcolor{keywordflow}{for}\ (it\ =\ new\_attrib-\/>\_on\_lights.begin();\ it\ !=\ new\_attrib-\/>\_on\_lights.end();\ ++it)\ \{}
+\DoxyCodeLine{00895\ \ \ \ \ \mbox{\hyperlink{classLight}{Light}}\ *lobj\ =\ (*it).node()-\/>as\_light();}
+\DoxyCodeLine{00896\ \ \ \ \ nassertd(lobj\ !=\ \textcolor{keyword}{nullptr})\ continue;}
+\DoxyCodeLine{00897\ \ \ \ \ lobj-\/>attrib\_ref();}
+\DoxyCodeLine{00898\ \ \ \}}
+\DoxyCodeLine{00899\ }
+\DoxyCodeLine{00900\ \ \ \textcolor{comment}{//\ This\ is\ needed\ since\ \_sorted\_on\_lights\ is\ not\ yet\ populated.}}
+\DoxyCodeLine{00901\ \ \ new\_attrib-\/>\_sort\_seq\ =\ \mbox{\hyperlink{classUpdateSeq}{UpdateSeq}}::old();}
+\DoxyCodeLine{00902\ }
+\DoxyCodeLine{00903\ \ \ return\ return\_new(new\_attrib);}
+\DoxyCodeLine{00904\ \}}
+\DoxyCodeLine{00905\ }
+\DoxyCodeLine{00912\ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}::}
+\DoxyCodeLine{00913\ invert\_compose\_impl(const\ \mbox{\hyperlink{classRenderAttrib}{RenderAttrib}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00914\ \ \ \textcolor{comment}{//\ I\ think\ in\ this\ case\ the\ other\ attrib\ always\ wins.\ \ Maybe\ this\ needs\ a}}
+\DoxyCodeLine{00915\ \ \ \textcolor{comment}{//\ bit\ more\ thought.\ \ It's\ hard\ to\ imagine\ that\ it's\ even\ important\ to}}
+\DoxyCodeLine{00916\ \ \ \textcolor{comment}{//\ compute\ this\ properly.}}
+\DoxyCodeLine{00917\ \ \ \textcolor{keywordflow}{return}\ other;}
+\DoxyCodeLine{00918\ \}}
+\DoxyCodeLine{00919\ }
+\DoxyCodeLine{00924\ \textcolor{keywordtype}{void}\ LightAttrib::}
+\DoxyCodeLine{00925\ sort\_on\_lights()\ \{}
+\DoxyCodeLine{00926\ \ \ \_sort\_seq\ =\ Light::get\_sort\_seq();}
+\DoxyCodeLine{00927\ }
+\DoxyCodeLine{00928\ \ \ \textcolor{comment}{//\ Separate\ the\ list\ of\ lights\ into\ ambient\ lights\ and\ other\ lights.}}
+\DoxyCodeLine{00929\ \ \ \_sorted\_on\_lights.clear();}
+\DoxyCodeLine{00930\ \ \ OrderedLights\ ambient\_lights;}
+\DoxyCodeLine{00931\ }
+\DoxyCodeLine{00932\ \ \ Lights::const\_iterator\ li;}
+\DoxyCodeLine{00933\ \ \ \textcolor{keywordflow}{for}\ (li\ =\ \_on\_lights.begin();\ li\ !=\ \_on\_lights.end();\ ++li)\ \{}
+\DoxyCodeLine{00934\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&np\ =\ (*li);}
+\DoxyCodeLine{00935\ \ \ \ \ nassertd(!np.is\_empty()\ \&\&\ np.node()-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}()\ !=\ \textcolor{keyword}{nullptr})\ continue;}
+\DoxyCodeLine{00936\ }
+\DoxyCodeLine{00937\ \ \ \ \ if\ (!np.node()-\/>is\_ambient\_light())\ \{}
+\DoxyCodeLine{00938\ \ \ \ \ \ \ \_sorted\_on\_lights.push\_back(np);}
+\DoxyCodeLine{00939\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00940\ \ \ \ \ \ \ ambient\_lights.push\_back(np);}
+\DoxyCodeLine{00941\ \ \ \ \ \}}
+\DoxyCodeLine{00942\ \ \ \}}
+\DoxyCodeLine{00943\ }
+\DoxyCodeLine{00944\ \ \ \textcolor{comment}{//\ Remember\ how\ many\ lights\ were\ non-\/ambient\ lights,\ which\ makes\ it\ easier}}
+\DoxyCodeLine{00945\ \ \ \textcolor{comment}{//\ to\ traverse\ through\ the\ list\ of\ non-\/ambient\ lights.}}
+\DoxyCodeLine{00946\ \ \ \_num\_non\_ambient\_lights\ =\ \_sorted\_on\_lights.size();}
+\DoxyCodeLine{00947\ }
+\DoxyCodeLine{00948\ \ \ \textcolor{comment}{//\ This\ sort\ function\ uses\ the\ STL\ function\ object\ defined\ above.}}
+\DoxyCodeLine{00949\ \ \ sort(\_sorted\_on\_lights.begin(),\ \_sorted\_on\_lights.end(),}
+\DoxyCodeLine{00950\ \ \ \ \ \ \ \ \mbox{\hyperlink{classCompareLightPriorities}{CompareLightPriorities}}());}
+\DoxyCodeLine{00951\ }
+\DoxyCodeLine{00952\ \ \ \textcolor{comment}{//\ Now\ insert\ the\ ambient\ lights\ back\ at\ the\ end.\ \ We\ don't\ really\ care}}
+\DoxyCodeLine{00953\ \ \ \textcolor{comment}{//\ about\ their\ relative\ priorities,\ because\ their\ contribution\ will\ simply}}
+\DoxyCodeLine{00954\ \ \ \textcolor{comment}{//\ be\ summed\ up\ in\ the\ end\ anyway.}}
+\DoxyCodeLine{00955\ \ \ \_sorted\_on\_lights.insert(\_sorted\_on\_lights.end(),}
+\DoxyCodeLine{00956\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ambient\_lights.begin(),\ ambient\_lights.end());}
+\DoxyCodeLine{00957\ \}}
+\DoxyCodeLine{00958\ }
+\DoxyCodeLine{00962\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classLightAttrib_a22b44d857cca6169c8bdee55a312a368}{LightAttrib::}}}
+\DoxyCodeLine{00963\ \mbox{\hyperlink{classLightAttrib_a22b44d857cca6169c8bdee55a312a368}{register\_with\_read\_factory}}()\ \{}
+\DoxyCodeLine{00964\ \ \ BamReader::get\_factory()-\/>register\_factory(get\_class\_type(),\ \mbox{\hyperlink{classLightAttrib_af13d44a2928cee237f91b3214dbee5d0}{make\_from\_bam}});}
+\DoxyCodeLine{00965\ \}}
+\DoxyCodeLine{00966\ }
+\DoxyCodeLine{00971\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classLightAttrib_a0d885b72b3b139a515f4397ddee6ba1b}{LightAttrib::}}}
+\DoxyCodeLine{00972\ \mbox{\hyperlink{classLightAttrib_a0d885b72b3b139a515f4397ddee6ba1b}{write\_datagram}}(\mbox{\hyperlink{classBamWriter}{BamWriter}}\ *manager,\ \mbox{\hyperlink{classDatagram}{Datagram}}\ \&dg)\ \{}
+\DoxyCodeLine{00973\ \ \ \mbox{\hyperlink{classRenderAttrib_a71362ffe83327f2de6b2b9ffb958d8d4}{RenderAttrib::write\_datagram}}(manager,\ dg);}
+\DoxyCodeLine{00974\ }
+\DoxyCodeLine{00975\ \ \ dg.add\_bool(\_off\_all\_lights);}
+\DoxyCodeLine{00976\ }
+\DoxyCodeLine{00977\ \ \ \textcolor{comment}{//\ write\ the\ number\ of\ off\_lights}}
+\DoxyCodeLine{00978\ \ \ dg.add\_uint16(get\_num\_off\_lights());}
+\DoxyCodeLine{00979\ }
+\DoxyCodeLine{00980\ \ \ \textcolor{comment}{//\ write\ the\ off\ lights\ pointers\ if\ any}}
+\DoxyCodeLine{00981\ \ \ Lights::const\_iterator\ fi;}
+\DoxyCodeLine{00982\ \ \ \textcolor{keywordflow}{if}\ (manager-\/>get\_file\_minor\_ver()\ <\ 40)\ \{}
+\DoxyCodeLine{00983\ \ \ \ \ \textcolor{keywordflow}{for}\ (fi\ =\ \_off\_lights.begin();\ fi\ !=\ \_off\_lights.end();\ ++fi)\ \{}
+\DoxyCodeLine{00984\ \ \ \ \ \ \ manager-\/>\mbox{\hyperlink{classBamWriter_a634bd4eb8e9b33ffde91a27c02f80467}{write\_pointer}}(dg,\ fi-\/>node());}
+\DoxyCodeLine{00985\ \ \ \ \ \}}
+\DoxyCodeLine{00986\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00987\ \ \ \ \ \textcolor{keywordflow}{for}\ (fi\ =\ \_off\_lights.begin();\ fi\ !=\ \_off\_lights.end();\ ++fi)\ \{}
+\DoxyCodeLine{00988\ \ \ \ \ \ \ (*fi).write\_datagram(manager,\ dg);}
+\DoxyCodeLine{00989\ \ \ \ \ \}}
+\DoxyCodeLine{00990\ \ \ \}}
+\DoxyCodeLine{00991\ }
+\DoxyCodeLine{00992\ \ \ \textcolor{comment}{//\ write\ the\ number\ of\ on\ lights}}
+\DoxyCodeLine{00993\ \ \ dg.add\_uint16(get\_num\_on\_lights());}
+\DoxyCodeLine{00994\ \ \ \textcolor{comment}{//\ write\ the\ on\ lights\ pointers\ if\ any}}
+\DoxyCodeLine{00995\ \ \ Lights::const\_iterator\ nti;}
+\DoxyCodeLine{00996\ \ \ \textcolor{keywordflow}{if}\ (manager-\/>get\_file\_minor\_ver()\ <\ 40)\ \{}
+\DoxyCodeLine{00997\ \ \ \ \ \textcolor{keywordflow}{for}\ (nti\ =\ \_on\_lights.begin();\ nti\ !=\ \_on\_lights.end();\ ++nti)\ \{}
+\DoxyCodeLine{00998\ \ \ \ \ \ \ manager-\/>\mbox{\hyperlink{classBamWriter_a634bd4eb8e9b33ffde91a27c02f80467}{write\_pointer}}(dg,\ nti-\/>node());}
+\DoxyCodeLine{00999\ \ \ \ \ \}}
+\DoxyCodeLine{01000\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01001\ \ \ \ \ \textcolor{keywordflow}{for}\ (nti\ =\ \_on\_lights.begin();\ nti\ !=\ \_on\_lights.end();\ ++nti)\ \{}
+\DoxyCodeLine{01002\ \ \ \ \ \ \ (*nti).write\_datagram(manager,\ dg);}
+\DoxyCodeLine{01003\ \ \ \ \ \}}
+\DoxyCodeLine{01004\ \ \ \}}
+\DoxyCodeLine{01005\ \}}
+\DoxyCodeLine{01006\ }
+\DoxyCodeLine{01011\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classLightAttrib_a825abbaf9e7257bf968222540a0a2524}{LightAttrib::}}}
+\DoxyCodeLine{01012\ \mbox{\hyperlink{classLightAttrib_a825abbaf9e7257bf968222540a0a2524}{complete\_pointers}}(\mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ **p\_list,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{01013\ \ \ \textcolor{keywordtype}{int}\ pi\ =\ \mbox{\hyperlink{classTypedWritable_addc29bb978851cacca2196f8a1f35014}{RenderAttrib::complete\_pointers}}(p\_list,\ manager);}
+\DoxyCodeLine{01014\ }
+\DoxyCodeLine{01015\ \ \ \textcolor{keywordflow}{if}\ (manager-\/>get\_file\_minor\_ver()\ >=\ 40)\ \{}
+\DoxyCodeLine{01016\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_off\_lights.size();\ ++i)\ \{}
+\DoxyCodeLine{01017\ \ \ \ \ \ \ pi\ +=\ \_off\_lights[i].complete\_pointers(p\_list\ +\ pi,\ manager);}
+\DoxyCodeLine{01018\ \ \ \ \ \}}
+\DoxyCodeLine{01019\ }
+\DoxyCodeLine{01020\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_on\_lights.size();\ ++i)\ \{}
+\DoxyCodeLine{01021\ \ \ \ \ \ \ pi\ +=\ \_on\_lights[i].complete\_pointers(p\_list\ +\ pi,\ manager);}
+\DoxyCodeLine{01022\ \ \ \ \ \}}
+\DoxyCodeLine{01023\ }
+\DoxyCodeLine{01024\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01025\ \ \ \ \ \mbox{\hyperlink{classLightAttrib_1_1BamAuxData}{BamAuxData}}\ *aux\ =\ (\mbox{\hyperlink{classLightAttrib_1_1BamAuxData}{BamAuxData}}\ *)manager-\/>\mbox{\hyperlink{classBamReader_ad712ff1b19f81915b7619978ce485254}{get\_aux\_data}}(\textcolor{keyword}{this},\ \textcolor{stringliteral}{"{}lights"{}});}
+\DoxyCodeLine{01026\ \ \ \ \ nassertr(aux\ !=\ \textcolor{keyword}{nullptr},\ pi);}
+\DoxyCodeLine{01027\ }
+\DoxyCodeLine{01028\ \ \ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{01029\ \ \ \ \ aux-\/>\_off\_list.reserve(aux-\/>\_num\_off\_lights);}
+\DoxyCodeLine{01030\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ aux-\/>\_num\_off\_lights;\ ++i)\ \{}
+\DoxyCodeLine{01031\ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node;}
+\DoxyCodeLine{01032\ \ \ \ \ \ \ DCAST\_INTO\_R(node,\ p\_list[pi++],\ pi);}
+\DoxyCodeLine{01033\ \ \ \ \ \ \ aux-\/>\_off\_list.push\_back(node);}
+\DoxyCodeLine{01034\ \ \ \ \ \}}
+\DoxyCodeLine{01035\ }
+\DoxyCodeLine{01036\ \ \ \ \ aux-\/>\_on\_list.reserve(aux-\/>\_num\_on\_lights);}
+\DoxyCodeLine{01037\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ aux-\/>\_num\_on\_lights;\ ++i)\ \{}
+\DoxyCodeLine{01038\ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node;}
+\DoxyCodeLine{01039\ \ \ \ \ \ \ DCAST\_INTO\_R(node,\ p\_list[pi++],\ pi);}
+\DoxyCodeLine{01040\ \ \ \ \ \ \ aux-\/>\_on\_list.push\_back(node);}
+\DoxyCodeLine{01041\ \ \ \ \ \}}
+\DoxyCodeLine{01042\ \ \ \}}
+\DoxyCodeLine{01043\ }
+\DoxyCodeLine{01044\ \ \ \textcolor{keywordflow}{return}\ pi;}
+\DoxyCodeLine{01045\ \}}
+\DoxyCodeLine{01046\ }
+\DoxyCodeLine{01052\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classLightAttrib_abc1c8b4352cb5850561aacdfae40e6af}{LightAttrib::}}}
+\DoxyCodeLine{01053\ \mbox{\hyperlink{classLightAttrib_abc1c8b4352cb5850561aacdfae40e6af}{finalize}}(\mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{01054\ \ \ \textcolor{keywordflow}{if}\ (manager-\/>get\_file\_minor\_ver()\ >=\ 40)\ \{}
+\DoxyCodeLine{01055\ \ \ \ \ \mbox{\hyperlink{classAttribNodeRegistry}{AttribNodeRegistry}}\ *areg\ =\ AttribNodeRegistry::get\_global\_ptr();}
+\DoxyCodeLine{01056\ }
+\DoxyCodeLine{01057\ \ \ \ \ \textcolor{comment}{//\ Check\ if\ any\ of\ the\ nodes\ we\ loaded\ are\ mentioned\ in\ the}}
+\DoxyCodeLine{01058\ \ \ \ \ \textcolor{comment}{//\ AttribNodeRegistry.\ \ If\ so,\ replace\ them.}}
+\DoxyCodeLine{01059\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_off\_lights.size();\ ++i)\ \{}
+\DoxyCodeLine{01060\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ n\ =\ areg-\/>\mbox{\hyperlink{classAttribNodeRegistry_a3b2d5c8b8be01b4e705e9001ace267b0}{find\_node}}(\_off\_lights[i]);}
+\DoxyCodeLine{01061\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (n\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01062\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it's\ in\ the\ registry,\ replace\ it.}}
+\DoxyCodeLine{01063\ \ \ \ \ \ \ \ \ \_off\_lights[i]\ =\ areg-\/>\mbox{\hyperlink{classAttribNodeRegistry_a14e724b1717905ef09a523347166232c}{get\_node}}(n);}
+\DoxyCodeLine{01064\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01065\ \ \ \ \ \}}
+\DoxyCodeLine{01066\ }
+\DoxyCodeLine{01067\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_on\_lights.size();\ ++i)\ \{}
+\DoxyCodeLine{01068\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ n\ =\ areg-\/>\mbox{\hyperlink{classAttribNodeRegistry_a3b2d5c8b8be01b4e705e9001ace267b0}{find\_node}}(\_on\_lights[i]);}
+\DoxyCodeLine{01069\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (n\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01070\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it's\ in\ the\ registry,\ replace\ it.}}
+\DoxyCodeLine{01071\ \ \ \ \ \ \ \ \ \_on\_lights[i]\ =\ areg-\/>\mbox{\hyperlink{classAttribNodeRegistry_a14e724b1717905ef09a523347166232c}{get\_node}}(n);}
+\DoxyCodeLine{01072\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01073\ }
+\DoxyCodeLine{01074\ \ \ \ \ \ \ \mbox{\hyperlink{classLight}{Light}}\ *lobj\ =\ \_on\_lights[i].node()-\/>as\_light();}
+\DoxyCodeLine{01075\ \ \ \ \ \ \ nassertd(lobj\ !=\ \textcolor{keyword}{nullptr})\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01076\ \ \ \ \ \ \ lobj-\/>\mbox{\hyperlink{classLight_a6a3d2cf9f7cf89c89e51b1adf814ec82}{attrib\_ref}}();}
+\DoxyCodeLine{01077\ \ \ \ \ \}}
+\DoxyCodeLine{01078\ }
+\DoxyCodeLine{01079\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01080\ \ \ \ \ \textcolor{comment}{//\ Now\ it's\ safe\ to\ convert\ our\ saved\ PandaNodes\ into\ NodePaths.}}
+\DoxyCodeLine{01081\ \ \ \ \ \mbox{\hyperlink{classLightAttrib_1_1BamAuxData}{BamAuxData}}\ *aux\ =\ (\mbox{\hyperlink{classLightAttrib_1_1BamAuxData}{BamAuxData}}\ *)manager-\/>\mbox{\hyperlink{classBamReader_ad712ff1b19f81915b7619978ce485254}{get\_aux\_data}}(\textcolor{keyword}{this},\ \textcolor{stringliteral}{"{}lights"{}});}
+\DoxyCodeLine{01082\ \ \ \ \ nassertv(aux\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01083\ \ \ \ \ nassertv(aux-\/>\_num\_off\_lights\ ==\ (\textcolor{keywordtype}{int})aux-\/>\_off\_list.size());}
+\DoxyCodeLine{01084\ \ \ \ \ nassertv(aux-\/>\_num\_on\_lights\ ==\ (\textcolor{keywordtype}{int})aux-\/>\_on\_list.size());}
+\DoxyCodeLine{01085\ }
+\DoxyCodeLine{01086\ \ \ \ \ \mbox{\hyperlink{classAttribNodeRegistry}{AttribNodeRegistry}}\ *areg\ =\ AttribNodeRegistry::get\_global\_ptr();}
+\DoxyCodeLine{01087\ }
+\DoxyCodeLine{01088\ \ \ \ \ \_off\_lights.reserve(aux-\/>\_off\_list.size());}
+\DoxyCodeLine{01089\ \ \ \ \ NodeList::iterator\ ni;}
+\DoxyCodeLine{01090\ \ \ \ \ \textcolor{keywordflow}{for}\ (ni\ =\ aux-\/>\_off\_list.begin();\ ni\ !=\ aux-\/>\_off\_list.end();\ ++ni)\ \{}
+\DoxyCodeLine{01091\ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node\ =\ (*ni);}
+\DoxyCodeLine{01092\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ n\ =\ areg-\/>\mbox{\hyperlink{classAttribNodeRegistry_a3b2d5c8b8be01b4e705e9001ace267b0}{find\_node}}(node-\/>get\_type(),\ node-\/>get\_name());}
+\DoxyCodeLine{01093\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (n\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01094\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it's\ in\ the\ registry,\ add\ that\ NodePath.}}
+\DoxyCodeLine{01095\ \ \ \ \ \ \ \ \ \_off\_lights.push\_back(areg-\/>\mbox{\hyperlink{classAttribNodeRegistry_a14e724b1717905ef09a523347166232c}{get\_node}}(n));}
+\DoxyCodeLine{01096\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01097\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ add\ any\ arbitrary\ NodePath.\ \ Complain\ if\ it's\ ambiguous.}}
+\DoxyCodeLine{01098\ \ \ \ \ \ \ \ \ \_off\_lights.push\_back(\mbox{\hyperlink{classNodePath}{NodePath}}(node));}
+\DoxyCodeLine{01099\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01100\ \ \ \ \ \}}
+\DoxyCodeLine{01101\ }
+\DoxyCodeLine{01102\ \ \ \ \ \_on\_lights.reserve(aux-\/>\_on\_list.size());}
+\DoxyCodeLine{01103\ \ \ \ \ \textcolor{keywordflow}{for}\ (ni\ =\ aux-\/>\_on\_list.begin();\ ni\ !=\ aux-\/>\_on\_list.end();\ ++ni)\ \{}
+\DoxyCodeLine{01104\ \ \ \ \ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node\ =\ (*ni);}
+\DoxyCodeLine{01105\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ n\ =\ areg-\/>\mbox{\hyperlink{classAttribNodeRegistry_a3b2d5c8b8be01b4e705e9001ace267b0}{find\_node}}(node-\/>get\_type(),\ node-\/>get\_name());}
+\DoxyCodeLine{01106\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (n\ !=\ -\/1)\ \{}
+\DoxyCodeLine{01107\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it's\ in\ the\ registry,\ add\ that\ NodePath.}}
+\DoxyCodeLine{01108\ \ \ \ \ \ \ \ \ \_on\_lights.push\_back(areg-\/>\mbox{\hyperlink{classAttribNodeRegistry_a14e724b1717905ef09a523347166232c}{get\_node}}(n));}
+\DoxyCodeLine{01109\ \ \ \ \ \ \ \ \ node\ =\ \_on\_lights.back().node();}
+\DoxyCodeLine{01110\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01111\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ add\ any\ arbitrary\ NodePath.\ \ Complain\ if\ it's\ ambiguous.}}
+\DoxyCodeLine{01112\ \ \ \ \ \ \ \ \ \_on\_lights.push\_back(\mbox{\hyperlink{classNodePath}{NodePath}}(node));}
+\DoxyCodeLine{01113\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01114\ }
+\DoxyCodeLine{01115\ \ \ \ \ \ \ \mbox{\hyperlink{classLight}{Light}}\ *lobj\ =\ node-\/>\mbox{\hyperlink{classPandaNode_af78c62764c93b98f10de8595b5cff167}{as\_light}}();}
+\DoxyCodeLine{01116\ \ \ \ \ \ \ nassertd(lobj\ !=\ \textcolor{keyword}{nullptr})\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01117\ \ \ \ \ \ \ lobj-\/>\mbox{\hyperlink{classLight_a6a3d2cf9f7cf89c89e51b1adf814ec82}{attrib\_ref}}();}
+\DoxyCodeLine{01118\ \ \ \ \ \}}
+\DoxyCodeLine{01119\ \ \ \}}
+\DoxyCodeLine{01120\ }
+\DoxyCodeLine{01121\ \ \ \textcolor{comment}{//\ Now\ that\ the\ NodePaths\ have\ been\ filled\ in,\ we\ can\ sort\ the\ list.}}
+\DoxyCodeLine{01122\ \ \ \_off\_lights.sort();}
+\DoxyCodeLine{01123\ \ \ \_on\_lights.sort();}
+\DoxyCodeLine{01124\ \}}
+\DoxyCodeLine{01125\ }
+\DoxyCodeLine{01131\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\mbox{\hyperlink{classLightAttrib_af13d44a2928cee237f91b3214dbee5d0}{LightAttrib::}}}
+\DoxyCodeLine{01132\ \mbox{\hyperlink{classLightAttrib_af13d44a2928cee237f91b3214dbee5d0}{make\_from\_bam}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFactoryParams}{FactoryParams}}\ \&params)\ \{}
+\DoxyCodeLine{01133\ \ \ \mbox{\hyperlink{classLightAttrib}{LightAttrib}}\ *attrib\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib}{LightAttrib}};}
+\DoxyCodeLine{01134\ \ \ \mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ scan;}
+\DoxyCodeLine{01135\ \ \ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager;}
+\DoxyCodeLine{01136\ }
+\DoxyCodeLine{01137\ \ \ parse\_params(params,\ scan,\ manager);}
+\DoxyCodeLine{01138\ \ \ attrib-\/>\mbox{\hyperlink{classLightAttrib_afefd9aee7130b20fd8ef72bf09d5c7e0}{fillin}}(scan,\ manager);}
+\DoxyCodeLine{01139\ }
+\DoxyCodeLine{01140\ \ \ manager-\/>\mbox{\hyperlink{classBamReader_a0c2e8dc5a794a4263139116b5b8dcb2d}{register\_finalize}}(attrib);}
+\DoxyCodeLine{01141\ }
+\DoxyCodeLine{01142\ \ \ \textcolor{keywordflow}{return}\ attrib;}
+\DoxyCodeLine{01143\ \}}
+\DoxyCodeLine{01144\ }
+\DoxyCodeLine{01149\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classLightAttrib_afefd9aee7130b20fd8ef72bf09d5c7e0}{LightAttrib::}}}
+\DoxyCodeLine{01150\ \mbox{\hyperlink{classLightAttrib_afefd9aee7130b20fd8ef72bf09d5c7e0}{fillin}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{01151\ \ \ \mbox{\hyperlink{classRenderAttrib_af4f7151db19835a2e7b74b458c3563f1}{RenderAttrib::fillin}}(scan,\ manager);}
+\DoxyCodeLine{01152\ }
+\DoxyCodeLine{01153\ \ \ \_off\_all\_lights\ =\ scan.get\_bool();}
+\DoxyCodeLine{01154\ }
+\DoxyCodeLine{01155\ \ \ \textcolor{keywordflow}{if}\ (manager-\/>get\_file\_minor\_ver()\ >=\ 40)\ \{}
+\DoxyCodeLine{01156\ \ \ \ \ \_off\_lights.resize(scan.get\_uint16());}
+\DoxyCodeLine{01157\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_off\_lights.size();\ ++i)\ \{}
+\DoxyCodeLine{01158\ \ \ \ \ \ \ \_off\_lights[i].fillin(scan,\ manager);}
+\DoxyCodeLine{01159\ \ \ \ \ \}}
+\DoxyCodeLine{01160\ }
+\DoxyCodeLine{01161\ \ \ \ \ \_on\_lights.resize(scan.get\_uint16());}
+\DoxyCodeLine{01162\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_on\_lights.size();\ ++i)\ \{}
+\DoxyCodeLine{01163\ \ \ \ \ \ \ \_on\_lights[i].fillin(scan,\ manager);}
+\DoxyCodeLine{01164\ \ \ \ \ \}}
+\DoxyCodeLine{01165\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01166\ \ \ \ \ \mbox{\hyperlink{classLightAttrib_1_1BamAuxData}{BamAuxData}}\ *aux\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classLightAttrib_1_1BamAuxData}{BamAuxData}};}
+\DoxyCodeLine{01167\ \ \ \ \ manager-\/>\mbox{\hyperlink{classBamReader_a97cb720e14628af2131871369039b986}{set\_aux\_data}}(\textcolor{keyword}{this},\ \textcolor{stringliteral}{"{}lights"{}},\ aux);}
+\DoxyCodeLine{01168\ }
+\DoxyCodeLine{01169\ \ \ \ \ aux-\/>\_num\_off\_lights\ =\ scan.get\_uint16();}
+\DoxyCodeLine{01170\ \ \ \ \ manager-\/>\mbox{\hyperlink{classBamReader_a10ea3ed8500e58d80ff4c58e4f1771cb}{read\_pointers}}(scan,\ aux-\/>\_num\_off\_lights);}
+\DoxyCodeLine{01171\ }
+\DoxyCodeLine{01172\ \ \ \ \ aux-\/>\_num\_on\_lights\ =\ scan.get\_uint16();}
+\DoxyCodeLine{01173\ \ \ \ \ manager-\/>\mbox{\hyperlink{classBamReader_a10ea3ed8500e58d80ff4c58e4f1771cb}{read\_pointers}}(scan,\ aux-\/>\_num\_on\_lights);}
+\DoxyCodeLine{01174\ \ \ \}}
+\DoxyCodeLine{01175\ }
+\DoxyCodeLine{01176\ \ \ \_sorted\_on\_lights.clear();}
+\DoxyCodeLine{01177\ \ \ \_sort\_seq\ =\ UpdateSeq::old();}
+\DoxyCodeLine{01178\ \}}
+
+\end{DoxyCode}

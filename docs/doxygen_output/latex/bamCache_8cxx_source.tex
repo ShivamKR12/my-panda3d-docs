@@ -1,0 +1,874 @@
+\doxysection{bam\+Cache.\+cxx}
+\hypertarget{bamCache_8cxx_source}{}\label{bamCache_8cxx_source}\index{panda/src/putil/bamCache.cxx@{panda/src/putil/bamCache.cxx}}
+\mbox{\hyperlink{bamCache_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamCache_8h}{bamCache.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamCacheIndex_8h}{bamCacheIndex.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamReader_8h}{bamReader.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamWriter_8h}{bamWriter.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{hashVal_8h}{hashVal.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagramInputFile_8h}{datagramInputFile.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagramOutputFile_8h}{datagramOutputFile.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__putil_8h}{config\_putil.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bam_8h}{bam.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{typeRegistry_8h}{typeRegistry.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{string__utils_8h}{string\_utils.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableInt_8h}{configVariableInt.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableString_8h}{configVariableString.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableFilename_8h}{configVariableFilename.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFileSystem_8h}{virtualFileSystem.h}}"{}}}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ \textcolor{keyword}{using\ }std::istream;}
+\DoxyCodeLine{00031\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00032\ \textcolor{keyword}{using\ }\mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}};}
+\DoxyCodeLine{00033\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00035\ \mbox{\hyperlink{classBamCache}{BamCache}}\ *BamCache::\_global\_ptr\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00040\ BamCache::}
+\DoxyCodeLine{00041\ BamCache()\ :}
+\DoxyCodeLine{00042\ \ \ \_active(true),}
+\DoxyCodeLine{00043\ \ \ \_read\_only(false),}
+\DoxyCodeLine{00044\ \ \ \_index(new\ \mbox{\hyperlink{classBamCacheIndex}{BamCacheIndex}}),}
+\DoxyCodeLine{00045\ \ \ \_index\_stale\_since(0)}
+\DoxyCodeLine{00046\ \{}
+\DoxyCodeLine{00047\ \ \ \mbox{\hyperlink{classConfigVariableFilename}{ConfigVariableFilename}}\ model\_cache\_dir}
+\DoxyCodeLine{00048\ \ \ \ \ (\textcolor{stringliteral}{"{}model-\/cache-\/dir"{}},\ \mbox{\hyperlink{classFilename}{Filename}}(),}
+\DoxyCodeLine{00049\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}The\ full\ path\ to\ a\ directory,\ local\ to\ this\ computer,\ in\ which\ "{}}}
+\DoxyCodeLine{00050\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}model\ and\ texture\ files\ will\ be\ cached\ on\ load.\ \ If\ a\ directory\ "{}}}
+\DoxyCodeLine{00051\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}name\ is\ specified\ here,\ files\ may\ be\ loaded\ from\ the\ cache\ "{}}}
+\DoxyCodeLine{00052\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}instead\ of\ from\ their\ actual\ pathnames,\ which\ may\ save\ load\ time,\ "{}}}
+\DoxyCodeLine{00053\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}especially\ if\ you\ are\ loading\ egg\ files\ instead\ of\ bam\ files,\ "{}}}
+\DoxyCodeLine{00054\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}or\ if\ you\ are\ loading\ models\ from\ a\ shared\ network\ drive.\ \ "{}}}
+\DoxyCodeLine{00055\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}If\ this\ is\ the\ empty\ string,\ no\ cache\ will\ be\ used."{}}));}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00057\ \ \ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ model\_cache\_flush}
+\DoxyCodeLine{00058\ \ \ \ \ (\textcolor{stringliteral}{"{}model-\/cache-\/flush"{}},\ 30,}
+\DoxyCodeLine{00059\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ is\ the\ amount\ of\ time,\ in\ seconds,\ between\ automatic\ "{}}}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}flushes\ of\ the\ model-\/cache\ index."{}}));}
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00062\ \ \ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}\ model\_cache\_models}
+\DoxyCodeLine{00063\ \ \ \ \ (\textcolor{stringliteral}{"{}model-\/cache-\/models"{}},\ \textcolor{keyword}{true},}
+\DoxyCodeLine{00064\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}If\ this\ is\ set\ to\ true,\ models\ will\ be\ cached\ in\ the\ "{}}}
+\DoxyCodeLine{00065\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}model\ cache,\ as\ bam\ files."{}}));}
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00067\ \ \ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}\ model\_cache\_textures}
+\DoxyCodeLine{00068\ \ \ \ \ (\textcolor{stringliteral}{"{}model-\/cache-\/textures"{}},\ \textcolor{keyword}{true},}
+\DoxyCodeLine{00069\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}If\ this\ is\ set\ to\ true,\ textures\ will\ also\ be\ cached\ in\ the\ "{}}}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}model\ cache,\ as\ txo\ files."{}}));}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00072\ \ \ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}\ model\_cache\_compressed\_textures}
+\DoxyCodeLine{00073\ \ \ \ \ (\textcolor{stringliteral}{"{}model-\/cache-\/compressed-\/textures"{}},\ \textcolor{keyword}{false},}
+\DoxyCodeLine{00074\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}If\ this\ is\ set\ to\ true,\ compressed\ textures\ will\ be\ cached\ "{}}}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}in\ the\ model\ cache,\ in\ their\ compressed\ form\ as\ downloaded\ "{}}}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}by\ the\ GSG.\ \ This\ may\ be\ set\ in\ conjunction\ with\ "{}}}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}model-\/cache-\/textures,\ or\ it\ may\ be\ independent."{}}));}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00079\ \ \ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}\ model\_cache\_compiled\_shaders}
+\DoxyCodeLine{00080\ \ \ \ \ (\textcolor{stringliteral}{"{}model-\/cache-\/compiled-\/shaders"{}},\ \textcolor{keyword}{false},}
+\DoxyCodeLine{00081\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}If\ this\ is\ set\ to\ true,\ compiled\ shaders\ will\ be\ cached\ "{}}}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}in\ the\ model\ cache,\ in\ their\ binary\ form\ as\ downloaded\ "{}}}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}by\ the\ GSG."{}}));}
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00085\ \ \ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ model\_cache\_max\_kbytes}
+\DoxyCodeLine{00086\ \ \ \ \ (\textcolor{stringliteral}{"{}model-\/cache-\/max-\/kbytes"{}},\ 10485760,}
+\DoxyCodeLine{00087\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ is\ the\ maximum\ size\ of\ the\ model\ cache,\ in\ kilobytes."{}}));}
+\DoxyCodeLine{00088\ }
+\DoxyCodeLine{00089\ \ \ \_cache\_models\ =\ model\_cache\_models;}
+\DoxyCodeLine{00090\ \ \ \_cache\_textures\ =\ model\_cache\_textures;}
+\DoxyCodeLine{00091\ \ \ \_cache\_compressed\_textures\ =\ model\_cache\_compressed\_textures;}
+\DoxyCodeLine{00092\ \ \ \_cache\_compiled\_shaders\ =\ model\_cache\_compiled\_shaders;}
+\DoxyCodeLine{00093\ }
+\DoxyCodeLine{00094\ \ \ \_flush\_time\ =\ model\_cache\_flush;}
+\DoxyCodeLine{00095\ \ \ \_max\_kbytes\ =\ model\_cache\_max\_kbytes;}
+\DoxyCodeLine{00096\ }
+\DoxyCodeLine{00097\ \ \ \textcolor{keywordflow}{if}\ (!model\_cache\_dir.empty())\ \{}
+\DoxyCodeLine{00098\ \ \ \ \ set\_root(model\_cache\_dir);}
+\DoxyCodeLine{00099\ \ \ \}}
+\DoxyCodeLine{00100\ \}}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00105\ BamCache::}
+\DoxyCodeLine{00106\ \string~BamCache()\ \{}
+\DoxyCodeLine{00107\ \ \ flush\_index();}
+\DoxyCodeLine{00108\ \ \ \textcolor{keyword}{delete}\ \_index;}
+\DoxyCodeLine{00109\ \ \ \_index\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00110\ \}}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00121\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00122\ set\_root(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&root)\ \{}
+\DoxyCodeLine{00123\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00124\ \ \ flush\_index();}
+\DoxyCodeLine{00125\ \ \ \_root\ =\ root;}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00127\ \ \ \textcolor{comment}{//\ The\ root\ filename\ must\ be\ a\ directory.}}
+\DoxyCodeLine{00128\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00129\ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>is\_directory(\_root))\ \{}
+\DoxyCodeLine{00130\ \ \ \ \ vfs-\/>make\_directory\_full(\_root);}
+\DoxyCodeLine{00131\ \ \ \}}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \ \ \textcolor{keyword}{delete}\ \_index;}
+\DoxyCodeLine{00134\ \ \ \_index\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBamCacheIndex}{BamCacheIndex}};}
+\DoxyCodeLine{00135\ \ \ \_index\_stale\_since\ =\ 0;}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>is\_directory(\_root))\ \{}
+\DoxyCodeLine{00138\ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ make\ directory\ "{}}\ <<\ \_root\ <<\ \textcolor{stringliteral}{"{},\ caching\ disabled.\(\backslash\)n"{}};}
+\DoxyCodeLine{00140\ \ \ \ \ \_active\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00141\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00142\ \ \ \}}
+\DoxyCodeLine{00143\ }
+\DoxyCodeLine{00144\ \ \ read\_index();}
+\DoxyCodeLine{00145\ \ \ check\_cache\_size();}
+\DoxyCodeLine{00146\ \}}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00164\ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ BamCache::}
+\DoxyCodeLine{00165\ lookup(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&source\_filename,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&cache\_extension)\ \{}
+\DoxyCodeLine{00166\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00167\ \ \ consider\_flush\_index();}
+\DoxyCodeLine{00168\ }
+\DoxyCodeLine{00169\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00171\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ source\_pathname(source\_filename);}
+\DoxyCodeLine{00172\ \ \ source\_pathname.\mbox{\hyperlink{classFilename_ae7676d5949ee4b0023c4fa8396480719}{make\_absolute}}(vfs-\/>get\_cwd());}
+\DoxyCodeLine{00173\ }
+\DoxyCodeLine{00174\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ rel\_pathname(source\_pathname);}
+\DoxyCodeLine{00175\ \ \ rel\_pathname.\mbox{\hyperlink{classFilename_ad4b5858950028cbfdba4e703f97e94c7}{make\_relative\_to}}(\_root,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00176\ \ \ \textcolor{keywordflow}{if}\ (rel\_pathname.is\_local())\ \{}
+\DoxyCodeLine{00177\ \ \ \ \ \textcolor{comment}{//\ If\ the\ source\ pathname\ is\ already\ within\ the\ cache\ directory,\ don't}}
+\DoxyCodeLine{00178\ \ \ \ \ \textcolor{comment}{//\ cache\ it\ further.}}
+\DoxyCodeLine{00179\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00180\ \ \ \}}
+\DoxyCodeLine{00181\ }
+\DoxyCodeLine{00182\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ cache\_filename\ =\ hash\_filename(source\_pathname.get\_fullpath());}
+\DoxyCodeLine{00183\ \ \ cache\_filename.\mbox{\hyperlink{classFilename_ab41121b22b7bddd945d9d76f1d550bc0}{set\_extension}}(cache\_extension);}
+\DoxyCodeLine{00184\ }
+\DoxyCodeLine{00185\ \ \ \textcolor{keywordflow}{return}\ find\_and\_read\_record(source\_pathname,\ cache\_filename);}
+\DoxyCodeLine{00186\ \}}
+\DoxyCodeLine{00187\ }
+\DoxyCodeLine{00193\ \textcolor{keywordtype}{bool}\ BamCache::}
+\DoxyCodeLine{00194\ store(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}}\ *record)\ \{}
+\DoxyCodeLine{00195\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00196\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00197\ \ \ nassertr(!record-\/>\_cache\_pathname.empty(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00198\ \ \ nassertr(record-\/>has\_data(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00200\ \ \ \textcolor{keywordflow}{if}\ (\_read\_only)\ \{}
+\DoxyCodeLine{00201\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00202\ \ \ \}}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00204\ \ \ consider\_flush\_index();}
+\DoxyCodeLine{00205\ }
+\DoxyCodeLine{00206\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00207\ \ \ \textcolor{comment}{//\ Ensure\ that\ the\ cache\_pathname\ is\ within\ the\ \_root\ directory\ tree.}}
+\DoxyCodeLine{00208\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ rel\_pathname(record-\/>\_cache\_pathname);}
+\DoxyCodeLine{00209\ \ \ rel\_pathname.make\_relative\_to(\_root,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00210\ \ \ nassertr(rel\_pathname.is\_local(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00211\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{00212\ }
+\DoxyCodeLine{00213\ \ \ record-\/>\_recorded\_time\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ cache\_pathname\ =\ Filename::binary\_filename(record-\/>\_cache\_pathname);}
+\DoxyCodeLine{00216\ }
+\DoxyCodeLine{00217\ \ \ \textcolor{comment}{//\ We\ actually\ do\ the\ write\ to\ a\ temporary\ filename\ first,\ and\ then\ move\ it}}
+\DoxyCodeLine{00218\ \ \ \textcolor{comment}{//\ into\ place,\ so\ that\ no\ one\ attempts\ to\ read\ the\ file\ while\ it\ is\ in\ the}}
+\DoxyCodeLine{00219\ \ \ \textcolor{comment}{//\ process\ of\ being\ written.}}
+\DoxyCodeLine{00220\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00221\ \ \ \textcolor{keywordtype}{string}\ extension\ =\ current\_thread-\/>get\_unique\_id()\ +\ string(\textcolor{stringliteral}{"{}.tmp"{}});}
+\DoxyCodeLine{00222\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ temp\_pathname\ =\ cache\_pathname;}
+\DoxyCodeLine{00223\ \ \ temp\_pathname.\mbox{\hyperlink{classFilename_ab41121b22b7bddd945d9d76f1d550bc0}{set\_extension}}(extension);}
+\DoxyCodeLine{00224\ \ \ temp\_pathname.set\_binary();}
+\DoxyCodeLine{00225\ }
+\DoxyCodeLine{00226\ \ \ \mbox{\hyperlink{classDatagramOutputFile}{DatagramOutputFile}}\ dout;}
+\DoxyCodeLine{00227\ \ \ \textcolor{keywordflow}{if}\ (!dout.open(temp\_pathname))\ \{}
+\DoxyCodeLine{00228\ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ write\ cache\ file:\ "{}}\ <<\ temp\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00230\ \ \ \ \ vfs-\/>delete\_file(temp\_pathname);}
+\DoxyCodeLine{00231\ \ \ \ \ emergency\_read\_only();}
+\DoxyCodeLine{00232\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00233\ \ \ \}}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00235\ \ \ \textcolor{keywordflow}{if}\ (!dout.write\_header(\_bam\_header))\ \{}
+\DoxyCodeLine{00236\ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ to\ "{}}\ <<\ temp\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00238\ \ \ \ \ vfs-\/>delete\_file(temp\_pathname);}
+\DoxyCodeLine{00239\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00240\ \ \ \}}
+\DoxyCodeLine{00241\ }
+\DoxyCodeLine{00242\ \ \ \{}
+\DoxyCodeLine{00243\ \ \ \ \ \mbox{\hyperlink{classBamWriter}{BamWriter}}\ writer(\&dout);}
+\DoxyCodeLine{00244\ \ \ \ \ \textcolor{keywordflow}{if}\ (!writer.init())\ \{}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ Bam\ header\ to\ "{}}\ <<\ temp\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ vfs-\/>delete\_file(temp\_pathname);}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00249\ \ \ \ \ \}}
+\DoxyCodeLine{00250\ }
+\DoxyCodeLine{00251\ \ \ \ \ \mbox{\hyperlink{classTypeRegistry}{TypeRegistry}}\ *type\_registry\ =\ TypeRegistry::ptr();}
+\DoxyCodeLine{00252\ \ \ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ texture\_type\ =\ type\_registry-\/>\mbox{\hyperlink{classTypeRegistry_ace84a2c2729c7c85c6456ba84b6f46d3}{find\_type}}(\textcolor{stringliteral}{"{}Texture"{}});}
+\DoxyCodeLine{00253\ \ \ \ \ \textcolor{keywordflow}{if}\ (record-\/>get\_data()-\/>is\_of\_type(texture\_type))\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \textcolor{comment}{//\ Texture\ objects\ write\ the\ actual\ texture\ image.}}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ writer.set\_file\_texture\_mode(BamWriter::BTM\_rawdata);}
+\DoxyCodeLine{00256\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \textcolor{comment}{//\ Any\ other\ kinds\ of\ objects\ write\ texture\ references.}}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ writer.set\_file\_texture\_mode(BamWriter::BTM\_fullpath);}
+\DoxyCodeLine{00259\ \ \ \ \ \}}
+\DoxyCodeLine{00260\ }
+\DoxyCodeLine{00261\ \ \ \ \ \textcolor{comment}{//\ This\ is\ necessary\ for\ relative\ NodePaths\ to\ work.}}
+\DoxyCodeLine{00262\ \ \ \ \ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ node\_type\ =\ type\_registry-\/>\mbox{\hyperlink{classTypeRegistry_ace84a2c2729c7c85c6456ba84b6f46d3}{find\_type}}(\textcolor{stringliteral}{"{}PandaNode"{}});}
+\DoxyCodeLine{00263\ \ \ \ \ \textcolor{keywordflow}{if}\ (record-\/>get\_data()-\/>is\_of\_type(node\_type))\ \{}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ writer.set\_root\_node(record-\/>get\_data());}
+\DoxyCodeLine{00265\ \ \ \ \ \}}
+\DoxyCodeLine{00266\ }
+\DoxyCodeLine{00267\ \ \ \ \ \textcolor{keywordflow}{if}\ (!writer.write\_object(record))\ \{}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ object\ to\ "{}}\ <<\ temp\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ vfs-\/>delete\_file(temp\_pathname);}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00272\ \ \ \ \ \}}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \ \ \ \ \textcolor{keywordflow}{if}\ (!writer.write\_object(record-\/>get\_data()))\ \{}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ object\ data\ to\ "{}}\ <<\ temp\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ vfs-\/>delete\_file(temp\_pathname);}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00279\ \ \ \ \ \}}
+\DoxyCodeLine{00280\ }
+\DoxyCodeLine{00281\ \ \ \ \ \textcolor{comment}{//\ Now\ that\ we\ are\ done\ with\ the\ BamWriter,\ it's\ important\ to\ let\ it}}
+\DoxyCodeLine{00282\ \ \ \ \ \textcolor{comment}{//\ destruct\ now\ and\ clean\ itself\ up,\ or\ it\ might\ get\ mad\ if\ we\ delete\ any}}
+\DoxyCodeLine{00283\ \ \ \ \ \textcolor{comment}{//\ TypedWritables\ below\ that\ haven't\ been\ written\ yet.}}
+\DoxyCodeLine{00284\ \ \ \}}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ record-\/>\_record\_size\ =\ dout.\mbox{\hyperlink{classDatagramOutputFile_a7ac3a33a09b7853b96a9f86456b340da}{get\_file\_pos}}();}
+\DoxyCodeLine{00287\ \ \ dout.close();}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ \textcolor{comment}{//\ Now\ move\ the\ file\ into\ place.}}
+\DoxyCodeLine{00290\ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>rename\_file(temp\_pathname,\ cache\_pathname)\ \&\&\ vfs-\/>exists(temp\_pathname))\ \{}
+\DoxyCodeLine{00291\ \ \ \ \ vfs-\/>delete\_file(cache\_pathname);}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>rename\_file(temp\_pathname,\ cache\_pathname))\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ rename\ "{}}\ <<\ temp\_pathname\ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ \ \ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ vfs-\/>delete\_file(temp\_pathname);}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00298\ \ \ \ \ \}}
+\DoxyCodeLine{00299\ \ \ \}}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00301\ \ \ add\_to\_index(record);}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00303\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00304\ \}}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00311\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00312\ emergency\_read\_only()\ \{}
+\DoxyCodeLine{00313\ \ \ util\_cat.error()\ <<}
+\DoxyCodeLine{00314\ \ \ \ \ \textcolor{stringliteral}{"{}Could\ not\ write\ to\ the\ Bam\ Cache.\ \ Disabling\ future\ attempts.\(\backslash\)n"{}};}
+\DoxyCodeLine{00315\ \ \ \_read\_only\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00316\ \}}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00322\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00323\ consider\_flush\_index()\ \{}
+\DoxyCodeLine{00324\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ ||\ defined(DEBUG\_THREADS)}}
+\DoxyCodeLine{00325\ \ \ \textcolor{keywordflow}{if}\ (!\_lock.try\_lock())\ \{}
+\DoxyCodeLine{00326\ \ \ \ \ \textcolor{comment}{//\ If\ we\ can't\ grab\ the\ lock,\ no\ big\ deal.\ \ We\ don't\ want\ to\ hold\ up}}
+\DoxyCodeLine{00327\ \ \ \ \ \textcolor{comment}{//\ the\ frame\ waiting\ for\ a\ cache\ operation.\ \ We\ can\ try\ again\ later.}}
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00329\ \ \ \}}
+\DoxyCodeLine{00330\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00331\ }
+\DoxyCodeLine{00332\ \ \ \textcolor{keywordflow}{if}\ (\_index\_stale\_since\ !=\ 0)\ \{}
+\DoxyCodeLine{00333\ \ \ \ \ \textcolor{keywordtype}{int}\ elapsed\ =\ (int)time(\textcolor{keyword}{nullptr})\ -\/\ (int)\_index\_stale\_since;}
+\DoxyCodeLine{00334\ \ \ \ \ \textcolor{keywordflow}{if}\ (elapsed\ >\ \_flush\_time)\ \{}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ flush\_index();}
+\DoxyCodeLine{00336\ \ \ \ \ \}}
+\DoxyCodeLine{00337\ \ \ \}}
+\DoxyCodeLine{00338\ }
+\DoxyCodeLine{00339\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ ||\ defined(DEBUG\_THREADS)}}
+\DoxyCodeLine{00340\ \ \ \_lock.unlock();}
+\DoxyCodeLine{00341\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00342\ \}}
+\DoxyCodeLine{00343\ }
+\DoxyCodeLine{00347\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00348\ flush\_index()\ \{}
+\DoxyCodeLine{00349\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00350\ \ \ \textcolor{keywordflow}{if}\ (\_index\_stale\_since\ ==\ 0)\ \{}
+\DoxyCodeLine{00351\ \ \ \ \ \textcolor{comment}{//\ Never\ mind.}}
+\DoxyCodeLine{00352\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00353\ \ \ \}}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00355\ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_read\_only)\ \{}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00358\ \ \ \ \ \}}
+\DoxyCodeLine{00359\ }
+\DoxyCodeLine{00360\ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ temp\_pathname\ =\ \mbox{\hyperlink{classFilename_ab0650c0800c5af778d667c6b855e644a}{Filename::temporary}}(\_root,\ \textcolor{stringliteral}{"{}index-\/"{}},\ \textcolor{stringliteral}{"{}.boo"{}});}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ \ \ \textcolor{keywordflow}{if}\ (!do\_write\_index(temp\_pathname,\ \_index))\ \{}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ emergency\_read\_only();}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00365\ \ \ \ \ \}}
+\DoxyCodeLine{00366\ }
+\DoxyCodeLine{00367\ \ \ \ \ \textcolor{comment}{//\ Now\ atomically\ write\ the\ name\ of\ this\ index\ file\ to\ the\ index\ reference}}
+\DoxyCodeLine{00368\ \ \ \ \ \textcolor{comment}{//\ file.}}
+\DoxyCodeLine{00369\ \ \ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00370\ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ index\_ref\_pathname(\_root,\ \mbox{\hyperlink{classFilename}{Filename}}(\textcolor{stringliteral}{"{}index\_name.txt"{}}));}
+\DoxyCodeLine{00371\ \ \ \ \ \textcolor{keywordtype}{string}\ old\_index\ =\ \_index\_ref\_contents;}
+\DoxyCodeLine{00372\ \ \ \ \ \textcolor{keywordtype}{string}\ new\_index\ =\ temp\_pathname.get\_basename()\ +\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00373\ \ \ \ \ \textcolor{keywordtype}{string}\ orig\_index;}
+\DoxyCodeLine{00374\ }
+\DoxyCodeLine{00375\ \ \ \ \ \textcolor{keywordflow}{if}\ (vfs-\/>\mbox{\hyperlink{classVirtualFileSystem_ac1d017feddbc5852e5aad3be09e9341c}{atomic\_compare\_and\_exchange\_contents}}(index\_ref\_pathname,\ orig\_index,\ old\_index,\ new\_index))\ \{}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ successfully\ wrote\ our\ version\ of\ the\ index,\ and\ no\ other\ process}}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \textcolor{comment}{//\ beat\ us\ to\ it.\ \ Our\ index\ is\ now\ the\ official\ one.\ \ Remove\ the\ old}}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \textcolor{comment}{//\ index.}}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ vfs-\/>delete\_file(\_index\_pathname);}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \_index\_pathname\ =\ temp\_pathname;}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \_index\_ref\_contents\ =\ new\_index;}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \_index\_stale\_since\ =\ 0;}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00384\ \ \ \ \ \}}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00386\ \ \ \ \ \textcolor{comment}{//\ Shoot,\ some\ other\ process\ updated\ the\ index\ while\ we\ were\ trying\ to}}
+\DoxyCodeLine{00387\ \ \ \ \ \textcolor{comment}{//\ update\ it,\ and\ they\ beat\ us\ to\ it.\ \ We\ have\ to\ merge,\ and\ try\ again.}}
+\DoxyCodeLine{00388\ \ \ \ \ vfs-\/>delete\_file(temp\_pathname);}
+\DoxyCodeLine{00389\ \ \ \ \ \_index\_pathname\ =\ \mbox{\hyperlink{classFilename}{Filename}}(\_root,\ \mbox{\hyperlink{classFilename}{Filename}}(\mbox{\hyperlink{string__utils_8cxx_a3101bc0142a49d9d11ad3f8cac766a2d}{trim}}(orig\_index)));}
+\DoxyCodeLine{00390\ \ \ \ \ \_index\_ref\_contents\ =\ orig\_index;}
+\DoxyCodeLine{00391\ \ \ \ \ read\_index();}
+\DoxyCodeLine{00392\ \ \ \}}
+\DoxyCodeLine{00393\ \ \ check\_cache\_size();}
+\DoxyCodeLine{00394\ \}}
+\DoxyCodeLine{00395\ }
+\DoxyCodeLine{00399\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00400\ list\_index(ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00401\ \ \ \_index-\/>write(out,\ indent\_level);}
+\DoxyCodeLine{00402\ \}}
+\DoxyCodeLine{00403\ }
+\DoxyCodeLine{00408\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00409\ read\_index()\ \{}
+\DoxyCodeLine{00410\ \ \ \textcolor{keywordflow}{if}\ (!read\_index\_pathname(\_index\_pathname,\ \_index\_ref\_contents))\ \{}
+\DoxyCodeLine{00411\ \ \ \ \ \textcolor{comment}{//\ Couldn't\ read\ the\ index\ ref;\ rebuild\ the\ index.}}
+\DoxyCodeLine{00412\ \ \ \ \ rebuild\_index();}
+\DoxyCodeLine{00413\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00414\ \ \ \}}
+\DoxyCodeLine{00415\ }
+\DoxyCodeLine{00416\ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00417\ \ \ \ \ \mbox{\hyperlink{classBamCacheIndex}{BamCacheIndex}}\ *new\_index\ =\ do\_read\_index(\_index\_pathname);}
+\DoxyCodeLine{00418\ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_index\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ merge\_index(new\_index);}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00421\ \ \ \ \ \}}
+\DoxyCodeLine{00422\ }
+\DoxyCodeLine{00423\ \ \ \ \ \textcolor{comment}{//\ We\ couldn't\ read\ the\ index.\ \ Maybe\ it's\ been\ removed\ already.\ \ See\ if}}
+\DoxyCodeLine{00424\ \ \ \ \ \textcolor{comment}{//\ the\ index\_pathname\ has\ changed.}}
+\DoxyCodeLine{00425\ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ old\_index\_pathname\ =\ \_index\_pathname;}
+\DoxyCodeLine{00426\ \ \ \ \ \textcolor{keywordflow}{if}\ (!read\_index\_pathname(\_index\_pathname,\ \_index\_ref\_contents))\ \{}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \textcolor{comment}{//\ Couldn't\ read\ the\ index\ ref;\ rebuild\ the\ index.}}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ rebuild\_index();}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00430\ \ \ \ \ \}}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{keywordflow}{if}\ (old\_index\_pathname\ ==\ \_index\_pathname)\ \{}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \textcolor{comment}{//\ Nope,\ we\ just\ couldn't\ read\ it.\ \ Delete\ it\ and\ build\ a\ new\ one.}}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ vfs-\/>delete\_file(\_index\_pathname);}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ rebuild\_index();}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ flush\_index();}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00439\ \ \ \ \ \}}
+\DoxyCodeLine{00440\ \ \ \}}
+\DoxyCodeLine{00441\ \}}
+\DoxyCodeLine{00442\ }
+\DoxyCodeLine{00447\ \textcolor{keywordtype}{bool}\ BamCache::}
+\DoxyCodeLine{00448\ read\_index\_pathname(\mbox{\hyperlink{classFilename}{Filename}}\ \&index\_pathname,\ \textcolor{keywordtype}{string}\ \&index\_ref\_contents)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00449\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00450\ \ \ index\_ref\_contents.clear();}
+\DoxyCodeLine{00451\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ index\_ref\_pathname(\_root,\ \mbox{\hyperlink{classFilename}{Filename}}(\textcolor{stringliteral}{"{}index\_name.txt"{}}));}
+\DoxyCodeLine{00452\ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>\mbox{\hyperlink{classVirtualFileSystem_afeefbe0c6e16290abfdb375aa92aabc2}{atomic\_read\_contents}}(index\_ref\_pathname,\ index\_ref\_contents))\ \{}
+\DoxyCodeLine{00453\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00454\ \ \ \}}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00456\ \ \ \textcolor{keywordtype}{string}\ trimmed\ =\ \mbox{\hyperlink{string__utils_8cxx_a3101bc0142a49d9d11ad3f8cac766a2d}{trim}}(index\_ref\_contents);}
+\DoxyCodeLine{00457\ \ \ \textcolor{keywordflow}{if}\ (trimmed.empty())\ \{}
+\DoxyCodeLine{00458\ \ \ \ \ index\_pathname\ =\ \mbox{\hyperlink{classFilename}{Filename}}();}
+\DoxyCodeLine{00459\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00460\ \ \ \ \ index\_pathname\ =\ \mbox{\hyperlink{classFilename}{Filename}}(\_root,\ \mbox{\hyperlink{classFilename}{Filename}}(trimmed));}
+\DoxyCodeLine{00461\ \ \ \}}
+\DoxyCodeLine{00462\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00463\ \}}
+\DoxyCodeLine{00464\ }
+\DoxyCodeLine{00472\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00473\ merge\_index(\mbox{\hyperlink{classBamCacheIndex}{BamCacheIndex}}\ *new\_index)\ \{}
+\DoxyCodeLine{00474\ \ \ \textcolor{keywordflow}{if}\ (\_index\_stale\_since\ ==\ 0)\ \{}
+\DoxyCodeLine{00475\ \ \ \ \ \textcolor{comment}{//\ If\ our\ index\ isn't\ stale,\ just\ replace\ it.}}
+\DoxyCodeLine{00476\ \ \ \ \ \textcolor{keyword}{delete}\ \_index;}
+\DoxyCodeLine{00477\ \ \ \ \ \_index\ =\ new\_index;}
+\DoxyCodeLine{00478\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00479\ \ \ \}}
+\DoxyCodeLine{00480\ }
+\DoxyCodeLine{00481\ \ \ \mbox{\hyperlink{classBamCacheIndex}{BamCacheIndex}}\ *old\_index\ =\ \_index;}
+\DoxyCodeLine{00482\ \ \ old\_index-\/>release\_records();}
+\DoxyCodeLine{00483\ \ \ new\_index-\/>release\_records();}
+\DoxyCodeLine{00484\ \ \ \_index\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBamCacheIndex}{BamCacheIndex}};}
+\DoxyCodeLine{00485\ }
+\DoxyCodeLine{00486\ \ \ BamCacheIndex::Records::const\_iterator\ ai\ =\ old\_index-\/>\_records.begin();}
+\DoxyCodeLine{00487\ \ \ BamCacheIndex::Records::const\_iterator\ bi\ =\ new\_index-\/>\_records.begin();}
+\DoxyCodeLine{00488\ }
+\DoxyCodeLine{00489\ \ \ \textcolor{keywordflow}{while}\ (ai\ !=\ old\_index-\/>\_records.end()\ \&\&}
+\DoxyCodeLine{00490\ \ \ \ \ \ \ \ \ \ bi\ !=\ new\_index-\/>\_records.end())\ \{}
+\DoxyCodeLine{00491\ \ \ \ \ \textcolor{keywordflow}{if}\ ((*ai).first\ <\ (*bi).first)\ \{}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ an\ entry\ we\ have\ in\ our\ index,\ not\ present\ in\ the\ new\ index.}}
+\DoxyCodeLine{00493\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =\ (*ai).second;}
+\DoxyCodeLine{00494\ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ cache\_pathname(\_root,\ record-\/>get\_cache\_filename());}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cache\_pathname.\mbox{\hyperlink{classFilename_af8a2ef9ed26abbed32786e6d8025c2c7}{exists}}())\ \{}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ file\ exists;\ keep\ it.}}
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \ \ \_index-\/>\_records.insert(\_index-\/>\_records.end(),\ BamCacheIndex::Records::value\_type(record-\/>get\_source\_pathname(),\ record));}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ ++ai;}
+\DoxyCodeLine{00500\ }
+\DoxyCodeLine{00501\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((*bi).first\ <\ (*ai).first)\ \{}
+\DoxyCodeLine{00502\ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ an\ entry\ in\ the\ new\ index,\ not\ present\ in\ our\ index.}}
+\DoxyCodeLine{00503\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =\ (*bi).second;}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ cache\_pathname(\_root,\ record-\/>get\_cache\_filename());}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cache\_pathname.\mbox{\hyperlink{classFilename_af8a2ef9ed26abbed32786e6d8025c2c7}{exists}}())\ \{}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ file\ exists;\ keep\ it.}}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ \ \ \_index-\/>\_records.insert(\_index-\/>\_records.end(),\ BamCacheIndex::Records::value\_type(record-\/>get\_source\_pathname(),\ record));}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ ++bi;}
+\DoxyCodeLine{00510\ }
+\DoxyCodeLine{00511\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ is\ an\ entry\ we\ have\ in\ both.}}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ a\_record\ =\ (*ai).second;}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ b\_record\ =\ (*bi).second;}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (*a\_record\ ==\ *b\_record)\ \{}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ They're\ the\ same\ entry.\ \ It\ doesn't\ really\ matter\ which\ one\ we}}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ keep.}}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ \ \ \_index-\/>\_records.insert(\_index-\/>\_records.end(),\ BamCacheIndex::Records::value\_type(a\_record-\/>get\_source\_pathname(),\ a\_record));}
+\DoxyCodeLine{00519\ }
+\DoxyCodeLine{00520\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00521\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ They're\ different.\ \ Just\ throw\ them\ both\ away,\ and\ re-\/read\ the}}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ current\ data\ from\ the\ cache\ file.}}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ cache\_pathname(\_root,\ a\_record-\/>get\_cache\_filename());}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cache\_pathname.\mbox{\hyperlink{classFilename_af8a2ef9ed26abbed32786e6d8025c2c7}{exists}}())\ \{}
+\DoxyCodeLine{00527\ \ \ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =\ do\_read\_record(cache\_pathname,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00528\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (record\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ \ \ \ \ \ \ \_index-\/>\_records.insert(\_index-\/>\_records.end(),\ BamCacheIndex::Records::value\_type(record-\/>get\_source\_pathname(),\ record));}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00533\ }
+\DoxyCodeLine{00534\ \ \ \ \ \ \ ++ai;}
+\DoxyCodeLine{00535\ \ \ \ \ \ \ ++bi;}
+\DoxyCodeLine{00536\ \ \ \ \ \}}
+\DoxyCodeLine{00537\ \ \ \}}
+\DoxyCodeLine{00538\ }
+\DoxyCodeLine{00539\ \ \ \textcolor{keywordflow}{while}\ (ai\ !=\ old\_index-\/>\_records.end())\ \{}
+\DoxyCodeLine{00540\ \ \ \ \ \textcolor{comment}{//\ Here\ is\ an\ entry\ we\ have\ in\ our\ index,\ not\ present\ in\ the\ new\ index.}}
+\DoxyCodeLine{00541\ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =\ (*ai).second;}
+\DoxyCodeLine{00542\ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ cache\_pathname(\_root,\ record-\/>get\_cache\_filename());}
+\DoxyCodeLine{00543\ \ \ \ \ \textcolor{keywordflow}{if}\ (cache\_pathname.\mbox{\hyperlink{classFilename_af8a2ef9ed26abbed32786e6d8025c2c7}{exists}}())\ \{}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ file\ exists;\ keep\ it.}}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \_index-\/>\_records.insert(\_index-\/>\_records.end(),\ BamCacheIndex::Records::value\_type(record-\/>get\_source\_pathname(),\ record));}
+\DoxyCodeLine{00546\ \ \ \ \ \}}
+\DoxyCodeLine{00547\ \ \ \ \ ++ai;}
+\DoxyCodeLine{00548\ \ \ \}}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00550\ \ \ \textcolor{keywordflow}{while}\ (bi\ !=\ new\_index-\/>\_records.end())\ \{}
+\DoxyCodeLine{00551\ \ \ \ \ \textcolor{comment}{//\ Here\ is\ an\ entry\ in\ the\ new\ index,\ not\ present\ in\ our\ index.}}
+\DoxyCodeLine{00552\ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =\ (*bi).second;}
+\DoxyCodeLine{00553\ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ cache\_pathname(\_root,\ record-\/>get\_cache\_filename());}
+\DoxyCodeLine{00554\ \ \ \ \ \textcolor{keywordflow}{if}\ (cache\_pathname.\mbox{\hyperlink{classFilename_af8a2ef9ed26abbed32786e6d8025c2c7}{exists}}())\ \{}
+\DoxyCodeLine{00555\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ file\ exists;\ keep\ it.}}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ \_index-\/>\_records.insert(\_index-\/>\_records.end(),\ BamCacheIndex::Records::value\_type(record-\/>get\_source\_pathname(),\ record));}
+\DoxyCodeLine{00557\ \ \ \ \ \}}
+\DoxyCodeLine{00558\ \ \ \ \ ++bi;}
+\DoxyCodeLine{00559\ \ \ \}}
+\DoxyCodeLine{00560\ }
+\DoxyCodeLine{00561\ \ \ \_index-\/>process\_new\_records();}
+\DoxyCodeLine{00562\ \}}
+\DoxyCodeLine{00563\ }
+\DoxyCodeLine{00567\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00568\ rebuild\_index()\ \{}
+\DoxyCodeLine{00569\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00570\ }
+\DoxyCodeLine{00571\ \ \ PT(\mbox{\hyperlink{classVirtualFileList}{VirtualFileList}})\ contents\ =\ vfs-\/>scan\_directory(\_root);}
+\DoxyCodeLine{00572\ \ \ \textcolor{keywordflow}{if}\ (contents\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00573\ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ read\ directory\ "{}}\ <<\ \_root\ <<\ \textcolor{stringliteral}{"{},\ caching\ disabled.\(\backslash\)n"{}};}
+\DoxyCodeLine{00575\ \ \ \ \ set\_active(\textcolor{keyword}{false});}
+\DoxyCodeLine{00576\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00577\ \ \ \}}
+\DoxyCodeLine{00578\ }
+\DoxyCodeLine{00579\ \ \ \textcolor{keyword}{delete}\ \_index;}
+\DoxyCodeLine{00580\ \ \ \_index\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBamCacheIndex}{BamCacheIndex}};}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ \textcolor{keywordtype}{int}\ num\_files\ =\ contents-\/>get\_num\_files();}
+\DoxyCodeLine{00583\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ci\ =\ 0;\ ci\ <\ num\_files;\ ++ci)\ \{}
+\DoxyCodeLine{00584\ \ \ \ \ \mbox{\hyperlink{classVirtualFile}{VirtualFile}}\ *file\ =\ contents-\/>get\_file(ci);}
+\DoxyCodeLine{00585\ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ filename\ =\ file-\/>get\_filename();}
+\DoxyCodeLine{00586\ \ \ \ \ \textcolor{keywordflow}{if}\ (filename.get\_extension()\ ==\ \textcolor{stringliteral}{"{}bam"{}}\ ||}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \ \ filename.get\_extension()\ ==\ \textcolor{stringliteral}{"{}txo"{}})\ \{}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ pathname(\_root,\ filename);}
+\DoxyCodeLine{00589\ }
+\DoxyCodeLine{00590\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =\ do\_read\_record(pathname,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (record\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00592\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Well,\ it\ was\ invalid,\ so\ blow\ it\ away.}}
+\DoxyCodeLine{00593\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Deleting\ invalid\ "{}}\ <<\ pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ file-\/>\mbox{\hyperlink{classVirtualFile_a441f59b6c53724a52a508be12655843d}{delete\_file}}();}
+\DoxyCodeLine{00598\ }
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ record-\/>\_record\_access\_time\ =\ record-\/>\_recorded\_time;}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ inserted\ =\ \_index-\/>\_records.insert(BamCacheIndex::Records::value\_type(record-\/>get\_source\_pathname(),\ record)).second;}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!inserted)\ \{}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \ \ \ \ util\_cat.info()}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Multiple\ cache\ files\ defining\ "{}}\ <<\ record-\/>get\_source\_pathname()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \ \ \ \ file-\/>\mbox{\hyperlink{classVirtualFile_a441f59b6c53724a52a508be12655843d}{delete\_file}}();}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00609\ \ \ \ \ \}}
+\DoxyCodeLine{00610\ \ \ \}}
+\DoxyCodeLine{00611\ \ \ \_index-\/>process\_new\_records();}
+\DoxyCodeLine{00612\ }
+\DoxyCodeLine{00613\ \ \ \_index\_stale\_since\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00614\ \ \ check\_cache\_size();}
+\DoxyCodeLine{00615\ \ \ flush\_index();}
+\DoxyCodeLine{00616\ \}}
+\DoxyCodeLine{00617\ }
+\DoxyCodeLine{00622\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00623\ add\_to\_index(\textcolor{keyword}{const}\ \mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}}\ *record)\ \{}
+\DoxyCodeLine{00624\ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ new\_record\ =\ record-\/>make\_copy();}
+\DoxyCodeLine{00625\ }
+\DoxyCodeLine{00626\ \ \ \textcolor{keywordflow}{if}\ (\_index-\/>add\_record(new\_record))\ \{}
+\DoxyCodeLine{00627\ \ \ \ \ mark\_index\_stale();}
+\DoxyCodeLine{00628\ \ \ \ \ check\_cache\_size();}
+\DoxyCodeLine{00629\ \ \ \}}
+\DoxyCodeLine{00630\ \}}
+\DoxyCodeLine{00631\ }
+\DoxyCodeLine{00635\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00636\ remove\_from\_index(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&source\_pathname)\ \{}
+\DoxyCodeLine{00637\ \ \ \textcolor{keywordflow}{if}\ (\_index-\/>remove\_record(source\_pathname))\ \{}
+\DoxyCodeLine{00638\ \ \ \ \ mark\_index\_stale();}
+\DoxyCodeLine{00639\ \ \ \}}
+\DoxyCodeLine{00640\ \}}
+\DoxyCodeLine{00641\ }
+\DoxyCodeLine{00646\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00647\ check\_cache\_size()\ \{}
+\DoxyCodeLine{00648\ \ \ \textcolor{keywordflow}{if}\ (\_index-\/>\_cache\_size\ ==\ 0)\ \{}
+\DoxyCodeLine{00649\ \ \ \ \ \textcolor{comment}{//\ 0\ means\ no\ limit.}}
+\DoxyCodeLine{00650\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00651\ \ \ \}}
+\DoxyCodeLine{00652\ }
+\DoxyCodeLine{00653\ \ \ \textcolor{keywordflow}{if}\ (\_index-\/>\_cache\_size\ /\ 1024\ >\ \_max\_kbytes)\ \{}
+\DoxyCodeLine{00654\ \ \ \ \ \textcolor{keywordflow}{while}\ (\_index-\/>\_cache\_size\ /\ 1024\ >\ \_max\_kbytes)\ \{}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =\ \_index-\/>evict\_old\_file();}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (record\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Never\ mind;\ the\ cache\ is\ empty.}}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00659\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00660\ \ \ \ \ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00661\ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ cache\_pathname(\_root,\ record-\/>get\_cache\_filename());}
+\DoxyCodeLine{00662\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00663\ \ \ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00664\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Deleting\ "{}}\ <<\ cache\_pathname}
+\DoxyCodeLine{00665\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ to\ keep\ cache\ size\ below\ "{}}\ <<\ \_max\_kbytes\ <<\ \textcolor{stringliteral}{"{}K\(\backslash\)n"{}};}
+\DoxyCodeLine{00666\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00667\ \ \ \ \ \ \ vfs-\/>delete\_file(cache\_pathname);}
+\DoxyCodeLine{00668\ \ \ \ \ \}}
+\DoxyCodeLine{00669\ \ \ \ \ mark\_index\_stale();}
+\DoxyCodeLine{00670\ \ \ \}}
+\DoxyCodeLine{00671\ \}}
+\DoxyCodeLine{00672\ }
+\DoxyCodeLine{00677\ \mbox{\hyperlink{classBamCacheIndex}{BamCacheIndex}}\ *BamCache::}
+\DoxyCodeLine{00678\ do\_read\_index(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&index\_pathname)\ \{}
+\DoxyCodeLine{00679\ \ \ \textcolor{keywordflow}{if}\ (index\_pathname.empty())\ \{}
+\DoxyCodeLine{00680\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00681\ \ \ \}}
+\DoxyCodeLine{00682\ }
+\DoxyCodeLine{00683\ \ \ \mbox{\hyperlink{classDatagramInputFile}{DatagramInputFile}}\ din;}
+\DoxyCodeLine{00684\ \ \ \textcolor{keywordflow}{if}\ (!din.open(index\_pathname))\ \{}
+\DoxyCodeLine{00685\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00686\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00687\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ index\ file:\ "{}}\ <<\ index\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00688\ \ \ \ \ \}}
+\DoxyCodeLine{00689\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00690\ \ \ \}}
+\DoxyCodeLine{00691\ }
+\DoxyCodeLine{00692\ \ \ \textcolor{keywordtype}{string}\ head;}
+\DoxyCodeLine{00693\ \ \ \textcolor{keywordflow}{if}\ (!din.read\_header(head,\ \_bam\_header.size()))\ \{}
+\DoxyCodeLine{00694\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ \ \ <<\ index\_pathname\ <<\ \textcolor{stringliteral}{"{}\ is\ not\ an\ index\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00697\ \ \ \ \ \}}
+\DoxyCodeLine{00698\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00699\ \ \ \}}
+\DoxyCodeLine{00700\ }
+\DoxyCodeLine{00701\ \ \ \textcolor{keywordflow}{if}\ (head\ !=\ \_bam\_header)\ \{}
+\DoxyCodeLine{00702\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00703\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00704\ \ \ \ \ \ \ \ \ <<\ index\_pathname\ <<\ \textcolor{stringliteral}{"{}\ is\ not\ an\ index\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00705\ \ \ \ \ \}}
+\DoxyCodeLine{00706\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00707\ \ \ \}}
+\DoxyCodeLine{00708\ }
+\DoxyCodeLine{00709\ \ \ \mbox{\hyperlink{classBamReader}{BamReader}}\ reader(\&din);}
+\DoxyCodeLine{00710\ \ \ \textcolor{keywordflow}{if}\ (!reader.init())\ \{}
+\DoxyCodeLine{00711\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00712\ \ \ \}}
+\DoxyCodeLine{00713\ }
+\DoxyCodeLine{00714\ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\textcolor{keywordtype}{object}\ =\ reader.read\_object();}
+\DoxyCodeLine{00715\ }
+\DoxyCodeLine{00716\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{object}\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00717\ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00718\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cache\ index\ "{}}\ <<\ index\_pathname\ <<\ \textcolor{stringliteral}{"{}\ is\ empty.\(\backslash\)n"{}};}
+\DoxyCodeLine{00719\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00720\ }
+\DoxyCodeLine{00721\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!object-\/>is\_of\_type(BamCacheIndex::get\_class\_type()))\ \{}
+\DoxyCodeLine{00722\ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00723\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cache\ index\ "{}}\ <<\ index\_pathname\ <<\ \textcolor{stringliteral}{"{}\ contains\ a\ "{}}}
+\DoxyCodeLine{00724\ \ \ \ \ \ \ <<\ \textcolor{keywordtype}{object}-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{},\ not\ a\ BamCacheIndex.\(\backslash\)n"{}};}
+\DoxyCodeLine{00725\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00726\ \ \ \}}
+\DoxyCodeLine{00727\ }
+\DoxyCodeLine{00728\ \ \ \mbox{\hyperlink{classBamCacheIndex}{BamCacheIndex}}\ *index\ =\ DCAST(\mbox{\hyperlink{classBamCacheIndex}{BamCacheIndex}},\ \textcolor{keywordtype}{object});}
+\DoxyCodeLine{00729\ \ \ \textcolor{keywordflow}{if}\ (!reader.resolve())\ \{}
+\DoxyCodeLine{00730\ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00731\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ fully\ resolve\ cache\ index\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00732\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00733\ \ \ \}}
+\DoxyCodeLine{00734\ }
+\DoxyCodeLine{00735\ \ \ \textcolor{keywordflow}{return}\ index;}
+\DoxyCodeLine{00736\ \}}
+\DoxyCodeLine{00737\ }
+\DoxyCodeLine{00741\ \textcolor{keywordtype}{bool}\ BamCache::}
+\DoxyCodeLine{00742\ do\_write\_index(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&index\_pathname,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classBamCacheIndex}{BamCacheIndex}}\ *index)\ \{}
+\DoxyCodeLine{00743\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00744\ \ \ \mbox{\hyperlink{classDatagramOutputFile}{DatagramOutputFile}}\ dout;}
+\DoxyCodeLine{00745\ \ \ \textcolor{keywordflow}{if}\ (!dout.open(index\_pathname))\ \{}
+\DoxyCodeLine{00746\ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ write\ index\ file:\ "{}}\ <<\ index\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00748\ \ \ \ \ vfs-\/>delete\_file(index\_pathname);}
+\DoxyCodeLine{00749\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00750\ \ \ \}}
+\DoxyCodeLine{00751\ }
+\DoxyCodeLine{00752\ \ \ \textcolor{keywordflow}{if}\ (!dout.write\_header(\_bam\_header))\ \{}
+\DoxyCodeLine{00753\ \ \ \ \ util\_cat.error()}
+\DoxyCodeLine{00754\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ to\ "{}}\ <<\ index\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00755\ \ \ \ \ vfs-\/>delete\_file(index\_pathname);}
+\DoxyCodeLine{00756\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00757\ \ \ \}}
+\DoxyCodeLine{00758\ }
+\DoxyCodeLine{00759\ \ \ \{}
+\DoxyCodeLine{00760\ \ \ \ \ \mbox{\hyperlink{classBamWriter}{BamWriter}}\ writer(\&dout);}
+\DoxyCodeLine{00761\ \ \ \ \ \textcolor{keywordflow}{if}\ (!writer.init())\ \{}
+\DoxyCodeLine{00762\ \ \ \ \ \ \ vfs-\/>delete\_file(index\_pathname);}
+\DoxyCodeLine{00763\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00764\ \ \ \ \ \}}
+\DoxyCodeLine{00765\ }
+\DoxyCodeLine{00766\ \ \ \ \ \textcolor{keywordflow}{if}\ (!writer.write\_object(index))\ \{}
+\DoxyCodeLine{00767\ \ \ \ \ \ \ vfs-\/>delete\_file(index\_pathname);}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00769\ \ \ \ \ \}}
+\DoxyCodeLine{00770\ \ \ \}}
+\DoxyCodeLine{00771\ }
+\DoxyCodeLine{00772\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00773\ \}}
+\DoxyCodeLine{00774\ }
+\DoxyCodeLine{00780\ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ BamCache::}
+\DoxyCodeLine{00781\ find\_and\_read\_record(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&source\_pathname,}
+\DoxyCodeLine{00782\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&cache\_filename)\ \{}
+\DoxyCodeLine{00783\ \ \ \textcolor{keywordtype}{int}\ pass\ =\ 0;}
+\DoxyCodeLine{00784\ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00785\ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =}
+\DoxyCodeLine{00786\ \ \ \ \ \ \ read\_record(source\_pathname,\ cache\_filename,\ pass);}
+\DoxyCodeLine{00787\ \ \ \ \ \textcolor{keywordflow}{if}\ (record\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00788\ \ \ \ \ \ \ add\_to\_index(record);}
+\DoxyCodeLine{00789\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ record;}
+\DoxyCodeLine{00790\ \ \ \ \ \}}
+\DoxyCodeLine{00791\ \ \ \ \ ++pass;}
+\DoxyCodeLine{00792\ \ \ \}}
+\DoxyCodeLine{00793\ \}}
+\DoxyCodeLine{00794\ }
+\DoxyCodeLine{00799\ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ BamCache::}
+\DoxyCodeLine{00800\ read\_record(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&source\_pathname,}
+\DoxyCodeLine{00801\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&cache\_filename,}
+\DoxyCodeLine{00802\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ pass)\ \{}
+\DoxyCodeLine{00803\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00804\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ cache\_pathname(\_root,\ cache\_filename);}
+\DoxyCodeLine{00805\ \ \ \textcolor{keywordflow}{if}\ (pass\ !=\ 0)\ \{}
+\DoxyCodeLine{00806\ \ \ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{ostringstream}}\ strm;}
+\DoxyCodeLine{00807\ \ \ \ \ strm\ <<\ cache\_pathname.get\_basename\_wo\_extension()\ <<\ \textcolor{stringliteral}{"{}\_"{}}\ <<\ pass;}
+\DoxyCodeLine{00808\ \ \ \ \ cache\_pathname.\mbox{\hyperlink{classFilename_a885b73eb309e81a29f2a93540a6f84b7}{set\_basename\_wo\_extension}}(strm.str());}
+\DoxyCodeLine{00809\ \ \ \}}
+\DoxyCodeLine{00810\ }
+\DoxyCodeLine{00811\ \ \ \textcolor{keywordflow}{if}\ (!cache\_pathname.\mbox{\hyperlink{classFilename_af8a2ef9ed26abbed32786e6d8025c2c7}{exists}}())\ \{}
+\DoxyCodeLine{00812\ \ \ \ \ \textcolor{comment}{//\ There\ is\ no\ such\ cache\ file\ already.\ \ Declare\ it.}}
+\DoxyCodeLine{00813\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00814\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00815\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Declaring\ new\ cache\ file\ "{}}\ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\ for\ "{}}\ <<\ source\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00816\ \ \ \ \ \}}
+\DoxyCodeLine{00817\ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =}
+\DoxyCodeLine{00818\ \ \ \ \ \ \ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}}(source\_pathname,\ cache\_filename);}
+\DoxyCodeLine{00819\ \ \ \ \ record-\/>\_cache\_pathname\ =\ cache\_pathname;}
+\DoxyCodeLine{00820\ \ \ \ \ \textcolor{keywordflow}{return}\ record;}
+\DoxyCodeLine{00821\ \ \ \}}
+\DoxyCodeLine{00822\ }
+\DoxyCodeLine{00823\ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00824\ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00825\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reading\ cache\ file\ "{}}\ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\ for\ "{}}\ <<\ source\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00826\ \ \ \}}
+\DoxyCodeLine{00827\ }
+\DoxyCodeLine{00828\ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =\ do\_read\_record(cache\_pathname,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00829\ \ \ \textcolor{keywordflow}{if}\ (record\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00830\ \ \ \ \ \textcolor{comment}{//\ Well,\ it\ was\ invalid,\ so\ blow\ it\ away,\ and\ make\ a\ new\ one.}}
+\DoxyCodeLine{00831\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00832\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00833\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Deleting\ invalid\ cache\ file\ "{}}\ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00834\ \ \ \ \ \}}
+\DoxyCodeLine{00835\ \ \ \ \ vfs-\/>delete\_file(cache\_pathname);}
+\DoxyCodeLine{00836\ \ \ \ \ remove\_from\_index(source\_pathname);}
+\DoxyCodeLine{00837\ }
+\DoxyCodeLine{00838\ \ \ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =}
+\DoxyCodeLine{00839\ \ \ \ \ \ \ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}}(source\_pathname,\ cache\_filename);}
+\DoxyCodeLine{00840\ \ \ \ \ record-\/>\_cache\_pathname\ =\ cache\_pathname;}
+\DoxyCodeLine{00841\ \ \ \ \ \textcolor{keywordflow}{return}\ record;}
+\DoxyCodeLine{00842\ \ \ \}}
+\DoxyCodeLine{00843\ }
+\DoxyCodeLine{00844\ \ \ \textcolor{keywordflow}{if}\ (record-\/>get\_source\_pathname()\ !=\ source\_pathname)\ \{}
+\DoxyCodeLine{00845\ \ \ \ \ \textcolor{comment}{//\ This\ might\ be\ just\ a\ hash\ conflict.}}
+\DoxyCodeLine{00846\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00847\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00848\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cache\ file\ "{}}\ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\ references\ "{}}}
+\DoxyCodeLine{00849\ \ \ \ \ \ \ \ \ <<\ record-\/>get\_source\_pathname()\ <<\ \textcolor{stringliteral}{"{},\ not\ "{}}}
+\DoxyCodeLine{00850\ \ \ \ \ \ \ \ \ <<\ source\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00851\ \ \ \ \ \}}
+\DoxyCodeLine{00852\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00853\ \ \ \}}
+\DoxyCodeLine{00854\ }
+\DoxyCodeLine{00855\ \ \ \textcolor{keywordflow}{if}\ (!record-\/>has\_data())\ \{}
+\DoxyCodeLine{00856\ \ \ \ \ \textcolor{comment}{//\ If\ we\ didn't\ find\ any\ data,\ the\ caller\ will\ have\ to\ reload\ it.}}
+\DoxyCodeLine{00857\ \ \ \ \ record-\/>clear\_dependent\_files();}
+\DoxyCodeLine{00858\ \ \ \}}
+\DoxyCodeLine{00859\ }
+\DoxyCodeLine{00860\ \ \ record-\/>\_cache\_pathname\ =\ cache\_pathname;}
+\DoxyCodeLine{00861\ \ \ \textcolor{keywordflow}{return}\ record;}
+\DoxyCodeLine{00862\ \}}
+\DoxyCodeLine{00863\ }
+\DoxyCodeLine{00867\ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ BamCache::}
+\DoxyCodeLine{00868\ do\_read\_record(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&cache\_pathname,\ \textcolor{keywordtype}{bool}\ read\_data)\ \{}
+\DoxyCodeLine{00869\ \ \ \mbox{\hyperlink{classDatagramInputFile}{DatagramInputFile}}\ din;}
+\DoxyCodeLine{00870\ \ \ \textcolor{keywordflow}{if}\ (!din.open(cache\_pathname))\ \{}
+\DoxyCodeLine{00871\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00872\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00873\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ cache\ file:\ "{}}\ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00874\ \ \ \ \ \}}
+\DoxyCodeLine{00875\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00876\ \ \ \}}
+\DoxyCodeLine{00877\ }
+\DoxyCodeLine{00878\ \ \ \textcolor{keywordtype}{string}\ head;}
+\DoxyCodeLine{00879\ \ \ \textcolor{keywordflow}{if}\ (!din.read\_header(head,\ \_bam\_header.size()))\ \{}
+\DoxyCodeLine{00880\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00881\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00882\ \ \ \ \ \ \ \ \ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\ is\ not\ a\ cache\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00883\ \ \ \ \ \}}
+\DoxyCodeLine{00884\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00885\ \ \ \}}
+\DoxyCodeLine{00886\ }
+\DoxyCodeLine{00887\ \ \ \textcolor{keywordflow}{if}\ (head\ !=\ \_bam\_header)\ \{}
+\DoxyCodeLine{00888\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00889\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00890\ \ \ \ \ \ \ \ \ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\ is\ not\ a\ cache\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00891\ \ \ \ \ \}}
+\DoxyCodeLine{00892\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00893\ \ \ \}}
+\DoxyCodeLine{00894\ }
+\DoxyCodeLine{00895\ \ \ \mbox{\hyperlink{classBamReader}{BamReader}}\ reader(\&din);}
+\DoxyCodeLine{00896\ \ \ \textcolor{keywordflow}{if}\ (!reader.init())\ \{}
+\DoxyCodeLine{00897\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00898\ \ \ \}}
+\DoxyCodeLine{00899\ }
+\DoxyCodeLine{00900\ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\textcolor{keywordtype}{object}\ =\ reader.read\_object();}
+\DoxyCodeLine{00901\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keywordtype}{object}\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00902\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00903\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00904\ \ \ \ \ \ \ \ \ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\ is\ empty.\(\backslash\)n"{}};}
+\DoxyCodeLine{00905\ \ \ \ \ \}}
+\DoxyCodeLine{00906\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00907\ }
+\DoxyCodeLine{00908\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!object-\/>is\_of\_type(BamCacheRecord::get\_class\_type()))\ \{}
+\DoxyCodeLine{00909\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00910\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00911\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cache\ file\ "{}}\ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\ contains\ a\ "{}}}
+\DoxyCodeLine{00912\ \ \ \ \ \ \ \ \ <<\ \textcolor{keywordtype}{object}-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{},\ not\ a\ BamCacheRecord.\(\backslash\)n"{}};}
+\DoxyCodeLine{00913\ \ \ \ \ \}}
+\DoxyCodeLine{00914\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00915\ \ \ \}}
+\DoxyCodeLine{00916\ }
+\DoxyCodeLine{00917\ \ \ PT(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}})\ record\ =\ DCAST(\mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}},\ \textcolor{keywordtype}{object});}
+\DoxyCodeLine{00918\ \ \ \textcolor{keywordflow}{if}\ (!reader.resolve())\ \{}
+\DoxyCodeLine{00919\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00920\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00921\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ fully\ resolve\ cache\ record\ in\ "{}}\ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00922\ \ \ \ \ \}}
+\DoxyCodeLine{00923\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00924\ \ \ \}}
+\DoxyCodeLine{00925\ }
+\DoxyCodeLine{00926\ \ \ \textcolor{comment}{//\ From\ this\ point\ below,\ we\ have\ validated\ that\ the\ selected\ filename\ is}}
+\DoxyCodeLine{00927\ \ \ \textcolor{comment}{//\ indeed\ a\ cache\ record\ for\ the\ indicated\ source\ file,\ and\ therefore\ the}}
+\DoxyCodeLine{00928\ \ \ \textcolor{comment}{//\ cache\ record\ will\ be\ returned.}}
+\DoxyCodeLine{00929\ }
+\DoxyCodeLine{00930\ \ \ \textcolor{comment}{//\ We\ still\ need\ to\ decide\ whether\ the\ cache\ record\ is\ stale.}}
+\DoxyCodeLine{00931\ \ \ \textcolor{keywordflow}{if}\ (read\_data\ \&\&\ record-\/>dependents\_unchanged())\ \{}
+\DoxyCodeLine{00932\ \ \ \ \ \textcolor{comment}{//\ The\ cache\ record\ doesn't\ appear\ to\ be\ stale.\ \ Load\ the\ cached\ object.}}
+\DoxyCodeLine{00933\ \ \ \ \ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *ptr;}
+\DoxyCodeLine{00934\ \ \ \ \ \mbox{\hyperlink{classReferenceCount}{ReferenceCount}}\ *ref\_ptr;}
+\DoxyCodeLine{00935\ }
+\DoxyCodeLine{00936\ \ \ \ \ \textcolor{keywordflow}{if}\ (reader.read\_object(ptr,\ ref\_ptr))\ \{}
+\DoxyCodeLine{00937\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!reader.resolve())\ \{}
+\DoxyCodeLine{00938\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00939\ \ \ \ \ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00940\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ fully\ resolve\ cached\ object\ in\ "{}}\ <<\ cache\_pathname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00941\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00942\ \ \ \ \ \ \ \ \ \textcolor{keyword}{delete}\ object;}
+\DoxyCodeLine{00943\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00944\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ object\ is\ valid.\ \ Store\ it\ in\ the\ record.}}
+\DoxyCodeLine{00945\ \ \ \ \ \ \ \ \ record-\/>set\_data(ptr,\ ref\_ptr);}
+\DoxyCodeLine{00946\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00947\ \ \ \ \ \}}
+\DoxyCodeLine{00948\ \ \ \}}
+\DoxyCodeLine{00949\ }
+\DoxyCodeLine{00950\ \ \ \textcolor{comment}{//\ Also\ get\ the\ total\ file\ size.}}
+\DoxyCodeLine{00951\ \ \ PT(\mbox{\hyperlink{classVirtualFile}{VirtualFile}})\ vfile\ =\ din.get\_vfile();}
+\DoxyCodeLine{00952\ \ \ istream\ \&in\ =\ din.get\_stream();}
+\DoxyCodeLine{00953\ \ \ in.clear();}
+\DoxyCodeLine{00954\ \ \ record-\/>\_record\_size\ =\ vfile-\/>get\_file\_size(\&in);}
+\DoxyCodeLine{00955\ }
+\DoxyCodeLine{00956\ \ \ \textcolor{comment}{//\ And\ the\ last\ access\ time\ is\ now,\ duh.}}
+\DoxyCodeLine{00957\ \ \ record-\/>\_record\_access\_time\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00958\ }
+\DoxyCodeLine{00959\ \ \ \textcolor{keywordflow}{return}\ record;}
+\DoxyCodeLine{00960\ \}}
+\DoxyCodeLine{00961\ }
+\DoxyCodeLine{00966\ \textcolor{keywordtype}{string}\ BamCache::}
+\DoxyCodeLine{00967\ hash\_filename(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&filename)\ \{}
+\DoxyCodeLine{00968\ \ \ \textcolor{comment}{//\ Use\ the\ MD5\ hash\ of\ the\ filename.}}
+\DoxyCodeLine{00969\ \ \ \mbox{\hyperlink{classHashVal}{HashVal}}\ hv;}
+\DoxyCodeLine{00970\ \ \ hv.hash\_string(filename);}
+\DoxyCodeLine{00971\ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{ostringstream}}\ strm;}
+\DoxyCodeLine{00972\ \ \ hv.output\_hex(strm);}
+\DoxyCodeLine{00973\ \ \ \textcolor{keywordflow}{return}\ strm.str();}
+\DoxyCodeLine{00974\ \}}
+\DoxyCodeLine{00975\ }
+\DoxyCodeLine{00979\ \textcolor{keywordtype}{void}\ BamCache::}
+\DoxyCodeLine{00980\ make\_global()\ \{}
+\DoxyCodeLine{00981\ \ \ \_global\_ptr\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBamCache}{BamCache}};}
+\DoxyCodeLine{00982\ }
+\DoxyCodeLine{00983\ \ \ \textcolor{keywordflow}{if}\ (\_global\_ptr-\/>\_root.empty())\ \{}
+\DoxyCodeLine{00984\ \ \ \ \ \_global\_ptr-\/>set\_active(\textcolor{keyword}{false});}
+\DoxyCodeLine{00985\ \ \ \}}
+\DoxyCodeLine{00986\ \}}
+
+\end{DoxyCode}

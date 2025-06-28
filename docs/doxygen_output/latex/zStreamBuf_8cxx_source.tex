@@ -1,0 +1,401 @@
+\doxysection{z\+Stream\+Buf.\+cxx}
+\hypertarget{zStreamBuf_8cxx_source}{}\label{zStreamBuf_8cxx_source}\index{panda/src/express/zStreamBuf.cxx@{panda/src/express/zStreamBuf.cxx}}
+\mbox{\hyperlink{zStreamBuf_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{zStreamBuf_8h}{zStreamBuf.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ HAVE\_ZLIB}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnotify_8h}{pnotify.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__express_8h}{config\_express.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{keyword}{using\ }std::ios;}
+\DoxyCodeLine{00022\ \textcolor{keyword}{using\ }std::streamoff;}
+\DoxyCodeLine{00023\ \textcolor{keyword}{using\ }std::streampos;}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#if\ !defined(USE\_MEMORY\_NOWRAPPERS)\ \&\&\ !defined(CPPPARSER)}}
+\DoxyCodeLine{00026\ \textcolor{comment}{//\ Define\ functions\ that\ hook\ zlib\ into\ panda's\ memory\ allocation\ system.}}
+\DoxyCodeLine{00027\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ *}
+\DoxyCodeLine{00028\ do\_zlib\_alloc(voidpf\ opaque,\ uInt\ items,\ uInt\ size)\ \{}
+\DoxyCodeLine{00029\ \ \ \textcolor{keywordflow}{return}\ PANDA\_MALLOC\_ARRAY(items\ *\ size);}
+\DoxyCodeLine{00030\ \}}
+\DoxyCodeLine{00031\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00032\ do\_zlib\_free(voidpf\ opaque,\ voidpf\ address)\ \{}
+\DoxyCodeLine{00033\ \ \ PANDA\_FREE\_ARRAY(address);}
+\DoxyCodeLine{00034\ \}}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \ !USE\_MEMORY\_NOWRAPPERS}}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00040\ ZStreamBuf::}
+\DoxyCodeLine{00041\ ZStreamBuf()\ \{}
+\DoxyCodeLine{00042\ \ \ \_source\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00043\ \ \ \_owns\_source\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00044\ \ \ \_dest\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00045\ \ \ \_owns\_dest\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00047\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_IOSTREAM}}
+\DoxyCodeLine{00048\ \ \ \_buffer\ =\ (\textcolor{keywordtype}{char}\ *)PANDA\_MALLOC\_ARRAY(4096);}
+\DoxyCodeLine{00049\ \ \ \textcolor{keywordtype}{char}\ *ebuf\ =\ \_buffer\ +\ 4096;}
+\DoxyCodeLine{00050\ \ \ setg(\_buffer,\ ebuf,\ ebuf);}
+\DoxyCodeLine{00051\ \ \ setp(\_buffer,\ ebuf);}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00054\ \ \ allocate();}
+\DoxyCodeLine{00055\ \ \ setg(base(),\ ebuf(),\ ebuf());}
+\DoxyCodeLine{00056\ \ \ setp(base(),\ ebuf());}
+\DoxyCodeLine{00057\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00058\ \}}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00063\ ZStreamBuf::}
+\DoxyCodeLine{00064\ \string~ZStreamBuf()\ \{}
+\DoxyCodeLine{00065\ \ \ close\_read();}
+\DoxyCodeLine{00066\ \ \ close\_write();}
+\DoxyCodeLine{00067\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_IOSTREAM}}
+\DoxyCodeLine{00068\ \ \ PANDA\_FREE\_ARRAY(\_buffer);}
+\DoxyCodeLine{00069\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00070\ \}}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00075\ \textcolor{keywordtype}{void}\ ZStreamBuf::}
+\DoxyCodeLine{00076\ open\_read(std::istream\ *source,\ \textcolor{keywordtype}{bool}\ owns\_source,\ std::streamsize\ source\_length,\ \textcolor{keywordtype}{bool}\ header)\ \{}
+\DoxyCodeLine{00077\ \ \ \_source\ =\ source;}
+\DoxyCodeLine{00078\ \ \ \_source\_bytes\_left\ =\ source\_length;}
+\DoxyCodeLine{00079\ \ \ \_owns\_source\ =\ owns\_source;}
+\DoxyCodeLine{00080\ }
+\DoxyCodeLine{00081\ \ \ \_z\_source.next\_in\ =\ Z\_NULL;}
+\DoxyCodeLine{00082\ \ \ \_z\_source.avail\_in\ =\ 0;}
+\DoxyCodeLine{00083\ \ \ \_z\_source.next\_out\ =\ Z\_NULL;}
+\DoxyCodeLine{00084\ \ \ \_z\_source.avail\_out\ =\ 0;}
+\DoxyCodeLine{00085\ \textcolor{preprocessor}{\#ifdef\ USE\_MEMORY\_NOWRAPPERS}}
+\DoxyCodeLine{00086\ \ \ \_z\_source.zalloc\ =\ Z\_NULL;}
+\DoxyCodeLine{00087\ \ \ \_z\_source.zfree\ =\ Z\_NULL;}
+\DoxyCodeLine{00088\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00089\ \ \ \_z\_source.zalloc\ =\ (alloc\_func)\&do\_zlib\_alloc;}
+\DoxyCodeLine{00090\ \ \ \_z\_source.zfree\ =\ (free\_func)\&do\_zlib\_free;}
+\DoxyCodeLine{00091\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00092\ \ \ \_z\_source.opaque\ =\ Z\_NULL;}
+\DoxyCodeLine{00093\ \ \ \_z\_source.msg\ =\ (\textcolor{keywordtype}{char}\ *)\textcolor{stringliteral}{"{}no\ error\ message"{}};}
+\DoxyCodeLine{00094\ }
+\DoxyCodeLine{00095\ \ \ \textcolor{keywordtype}{int}\ result\ =\ inflateInit2(\&\_z\_source,\ header\ ?\ 32\ +\ 15\ :\ -\/15);}
+\DoxyCodeLine{00096\ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00097\ \ \ \ \ show\_zlib\_error(\textcolor{stringliteral}{"{}inflateInit2"{}},\ result,\ \_z\_source);}
+\DoxyCodeLine{00098\ \ \ \ \ close\_read();}
+\DoxyCodeLine{00099\ \ \ \}}
+\DoxyCodeLine{00100\ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00101\ \}}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00106\ \textcolor{keywordtype}{void}\ ZStreamBuf::}
+\DoxyCodeLine{00107\ close\_read()\ \{}
+\DoxyCodeLine{00108\ \ \ \_source\_bytes\_left\ =\ 0;}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ \textcolor{keywordflow}{if}\ (\_source\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ inflateEnd(\&\_z\_source);}
+\DoxyCodeLine{00113\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ show\_zlib\_error(\textcolor{stringliteral}{"{}inflateEnd"{}},\ result,\ \_z\_source);}
+\DoxyCodeLine{00115\ \ \ \ \ \}}
+\DoxyCodeLine{00116\ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_owns\_source)\ \{}
+\DoxyCodeLine{00119\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_source;}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \_owns\_source\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00121\ \ \ \ \ \}}
+\DoxyCodeLine{00122\ \ \ \ \ \_source\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00123\ \ \ \}}
+\DoxyCodeLine{00124\ \}}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00129\ \textcolor{keywordtype}{void}\ ZStreamBuf::}
+\DoxyCodeLine{00130\ open\_write(std::ostream\ *dest,\ \textcolor{keywordtype}{bool}\ owns\_dest,\ \textcolor{keywordtype}{int}\ compression\_level,\ \textcolor{keywordtype}{bool}\ header)\ \{}
+\DoxyCodeLine{00131\ \ \ \_dest\ =\ dest;}
+\DoxyCodeLine{00132\ \ \ \_owns\_dest\ =\ owns\_dest;}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \ \ \_z\_dest.next\_in\ =\ Z\_NULL;}
+\DoxyCodeLine{00135\ \ \ \_z\_dest.avail\_in\ =\ 0;}
+\DoxyCodeLine{00136\ \ \ \_z\_dest.next\_out\ =\ Z\_NULL;}
+\DoxyCodeLine{00137\ \ \ \_z\_dest.avail\_out\ =\ 0;}
+\DoxyCodeLine{00138\ \textcolor{preprocessor}{\#ifdef\ USE\_MEMORY\_NOWRAPPERS}}
+\DoxyCodeLine{00139\ \ \ \_z\_dest.zalloc\ =\ Z\_NULL;}
+\DoxyCodeLine{00140\ \ \ \_z\_dest.zfree\ =\ Z\_NULL;}
+\DoxyCodeLine{00141\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00142\ \ \ \_z\_dest.zalloc\ =\ (alloc\_func)\&do\_zlib\_alloc;}
+\DoxyCodeLine{00143\ \ \ \_z\_dest.zfree\ =\ (free\_func)\&do\_zlib\_free;}
+\DoxyCodeLine{00144\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00145\ \ \ \_z\_dest.opaque\ =\ Z\_NULL;}
+\DoxyCodeLine{00146\ \ \ \_z\_dest.msg\ =\ (\textcolor{keywordtype}{char}\ *)\textcolor{stringliteral}{"{}no\ error\ message"{}};}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \ \ \textcolor{keywordtype}{int}\ result\ =\ deflateInit2(\&\_z\_dest,\ compression\_level,\ Z\_DEFLATED,}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ header\ ?\ 15\ :\ -\/15,\ 8,\ Z\_DEFAULT\_STRATEGY);}
+\DoxyCodeLine{00150\ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ show\_zlib\_error(\textcolor{stringliteral}{"{}deflateInit2"{}},\ result,\ \_z\_dest);}
+\DoxyCodeLine{00152\ \ \ \ \ close\_write();}
+\DoxyCodeLine{00153\ \ \ \}}
+\DoxyCodeLine{00154\ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00155\ \}}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00160\ \textcolor{keywordtype}{void}\ ZStreamBuf::}
+\DoxyCodeLine{00161\ close\_write()\ \{}
+\DoxyCodeLine{00162\ \ \ \textcolor{keywordflow}{if}\ (\_dest\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00163\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ pptr()\ -\/\ pbase();}
+\DoxyCodeLine{00164\ \ \ \ \ write\_chars(pbase(),\ n,\ Z\_FINISH);}
+\DoxyCodeLine{00165\ \ \ \ \ pbump(-\/(\textcolor{keywordtype}{int})n);}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00167\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ deflateEnd(\&\_z\_dest);}
+\DoxyCodeLine{00168\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ show\_zlib\_error(\textcolor{stringliteral}{"{}deflateEnd"{}},\ result,\ \_z\_dest);}
+\DoxyCodeLine{00170\ \ \ \ \ \}}
+\DoxyCodeLine{00171\ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00172\ }
+\DoxyCodeLine{00173\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_owns\_dest)\ \{}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_dest;}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \_owns\_dest\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00176\ \ \ \ \ \}}
+\DoxyCodeLine{00177\ \ \ \ \ \_dest\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00178\ \ \ \}}
+\DoxyCodeLine{00179\ \}}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00185\ streampos\ ZStreamBuf::}
+\DoxyCodeLine{00186\ seekoff(streamoff\ off,\ ios\_seekdir\ dir,\ ios\_openmode\ which)\ \{}
+\DoxyCodeLine{00187\ \ \ \textcolor{keywordflow}{if}\ (which\ !=\ ios::in)\ \{}
+\DoxyCodeLine{00188\ \ \ \ \ \textcolor{comment}{//\ We\ can\ only\ do\ this\ with\ the\ input\ stream.}}
+\DoxyCodeLine{00189\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00190\ \ \ \}}
+\DoxyCodeLine{00191\ }
+\DoxyCodeLine{00192\ \ \ \textcolor{comment}{//\ Determine\ the\ current\ position.}}
+\DoxyCodeLine{00193\ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ egptr()\ -\/\ gptr();}
+\DoxyCodeLine{00194\ \ \ streampos\ gpos\ =\ \_z\_source.total\_out\ -\/\ n;}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ \textcolor{comment}{//\ Implement\ tellg()\ and\ seeks\ to\ current\ position.}}
+\DoxyCodeLine{00197\ \ \ \textcolor{keywordflow}{if}\ ((dir\ ==\ ios::cur\ \&\&\ off\ ==\ 0)\ ||}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ (dir\ ==\ ios::beg\ \&\&\ off\ ==\ gpos))\ \{}
+\DoxyCodeLine{00199\ \ \ \ \ \textcolor{keywordflow}{return}\ gpos;}
+\DoxyCodeLine{00200\ \ \ \}}
+\DoxyCodeLine{00201\ }
+\DoxyCodeLine{00202\ \ \ \textcolor{keywordflow}{if}\ (off\ !=\ 0\ ||\ dir\ !=\ ios::beg)\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \textcolor{comment}{//\ We\ only\ know\ how\ to\ reposition\ to\ the\ beginning.}}
+\DoxyCodeLine{00204\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00205\ \ \ \}}
+\DoxyCodeLine{00206\ }
+\DoxyCodeLine{00207\ \ \ gbump(n);}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00209\ \ \ \textcolor{keywordflow}{if}\ (\_source-\/>rdbuf()-\/>pubseekpos(0,\ ios::in)\ ==\ (streampos)0)\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \_source-\/>clear();}
+\DoxyCodeLine{00211\ \ \ \ \ \_z\_source.next\_in\ =\ Z\_NULL;}
+\DoxyCodeLine{00212\ \ \ \ \ \_z\_source.avail\_in\ =\ 0;}
+\DoxyCodeLine{00213\ \ \ \ \ \_z\_source.next\_out\ =\ Z\_NULL;}
+\DoxyCodeLine{00214\ \ \ \ \ \_z\_source.avail\_out\ =\ 0;}
+\DoxyCodeLine{00215\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ inflateReset(\&\_z\_source);}
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ show\_zlib\_error(\textcolor{stringliteral}{"{}inflateReset"{}},\ result,\ \_z\_source);}
+\DoxyCodeLine{00218\ \ \ \ \ \}}
+\DoxyCodeLine{00219\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00220\ \ \ \}}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00223\ \}}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00229\ streampos\ ZStreamBuf::}
+\DoxyCodeLine{00230\ seekpos(streampos\ pos,\ ios\_openmode\ which)\ \{}
+\DoxyCodeLine{00231\ \ \ \textcolor{keywordflow}{return}\ seekoff(pos,\ ios::beg,\ which);}
+\DoxyCodeLine{00232\ \}}
+\DoxyCodeLine{00233\ }
+\DoxyCodeLine{00238\ \textcolor{keywordtype}{int}\ ZStreamBuf::}
+\DoxyCodeLine{00239\ overflow(\textcolor{keywordtype}{int}\ ch)\ \{}
+\DoxyCodeLine{00240\ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ pptr()\ -\/\ pbase();}
+\DoxyCodeLine{00241\ \ \ \textcolor{keywordflow}{if}\ (n\ !=\ 0)\ \{}
+\DoxyCodeLine{00242\ \ \ \ \ write\_chars(pbase(),\ n,\ 0);}
+\DoxyCodeLine{00243\ \ \ \ \ pbump(-\/(\textcolor{keywordtype}{int})n);}
+\DoxyCodeLine{00244\ \ \ \}}
+\DoxyCodeLine{00245\ }
+\DoxyCodeLine{00246\ \ \ \textcolor{keywordflow}{if}\ (ch\ !=\ EOF)\ \{}
+\DoxyCodeLine{00247\ \ \ \ \ \textcolor{comment}{//\ Write\ one\ more\ character.}}
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{keywordtype}{char}\ c\ =\ ch;}
+\DoxyCodeLine{00249\ \ \ \ \ write\_chars(\&c,\ 1,\ 0);}
+\DoxyCodeLine{00250\ \ \ \}}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00253\ \}}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00259\ \textcolor{keywordtype}{int}\ ZStreamBuf::}
+\DoxyCodeLine{00260\ sync()\ \{}
+\DoxyCodeLine{00261\ \ \ \textcolor{keywordflow}{if}\ (\_source\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00262\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ egptr()\ -\/\ gptr();}
+\DoxyCodeLine{00263\ \ \ \ \ gbump(n);}
+\DoxyCodeLine{00264\ \ \ \}}
+\DoxyCodeLine{00265\ }
+\DoxyCodeLine{00266\ \ \ \textcolor{keywordflow}{if}\ (\_dest\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00267\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ pptr()\ -\/\ pbase();}
+\DoxyCodeLine{00268\ \ \ \ \ write\_chars(pbase(),\ n,\ Z\_SYNC\_FLUSH);}
+\DoxyCodeLine{00269\ \ \ \ \ pbump(-\/(\textcolor{keywordtype}{int})n);}
+\DoxyCodeLine{00270\ \ \ \ \ \_dest-\/>flush();}
+\DoxyCodeLine{00271\ \ \ \}}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00273\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00274\ \}}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00280\ \textcolor{keywordtype}{int}\ ZStreamBuf::}
+\DoxyCodeLine{00281\ underflow()\ \{}
+\DoxyCodeLine{00282\ \ \ \textcolor{comment}{//\ Sometimes\ underflow()\ is\ called\ even\ if\ the\ buffer\ is\ not\ empty.}}
+\DoxyCodeLine{00283\ \ \ \textcolor{keywordflow}{if}\ (gptr()\ >=\ egptr())\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ egptr()\ -\/\ eback();}
+\DoxyCodeLine{00285\ \ \ \ \ gbump(-\/(\textcolor{keywordtype}{int})buffer\_size);}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ num\_bytes\ =\ buffer\_size;}
+\DoxyCodeLine{00288\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ read\_count\ =\ read\_chars(gptr(),\ buffer\_size);}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00290\ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_count\ !=\ num\_bytes)\ \{}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \textcolor{comment}{//\ Oops,\ we\ didn't\ read\ what\ we\ thought\ we\ would.}}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ \ \ gbump(num\_bytes);}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EOF;}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \textcolor{comment}{//\ Slide\ what\ we\ did\ read\ to\ the\ top\ of\ the\ buffer.}}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ nassertr(read\_count\ <\ num\_bytes,\ EOF);}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ delta\ =\ num\_bytes\ -\/\ read\_count;}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ memmove(gptr()\ +\ delta,\ gptr(),\ read\_count);}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ gbump(delta);}
+\DoxyCodeLine{00302\ \ \ \ \ \}}
+\DoxyCodeLine{00303\ \ \ \}}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})*gptr();}
+\DoxyCodeLine{00306\ \}}
+\DoxyCodeLine{00307\ }
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00312\ \textcolor{keywordtype}{size\_t}\ ZStreamBuf::}
+\DoxyCodeLine{00313\ read\_chars(\textcolor{keywordtype}{char}\ *start,\ \textcolor{keywordtype}{size\_t}\ length)\ \{}
+\DoxyCodeLine{00314\ \ \ \_z\_source.next\_out\ =\ (Bytef\ *)start;}
+\DoxyCodeLine{00315\ \ \ \_z\_source.avail\_out\ =\ length;}
+\DoxyCodeLine{00316\ }
+\DoxyCodeLine{00317\ \ \ \textcolor{keywordtype}{bool}\ eof\ =\ (\_source\_bytes\_left\ ==\ 0\ ||\ \_source-\/>eof()\ ||\ \_source-\/>fail());}
+\DoxyCodeLine{00318\ \ \ \textcolor{keywordtype}{int}\ flush\ =\ 0;}
+\DoxyCodeLine{00319\ }
+\DoxyCodeLine{00320\ \ \ \textcolor{keywordflow}{while}\ (\_z\_source.avail\_out\ >\ 0)\ \{}
+\DoxyCodeLine{00321\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_z\_source.avail\_in\ ==\ 0\ \&\&\ !eof)\ \{}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ read\_count\ =\ 0;}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_source\_bytes\_left\ >=\ 0)\ \{}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Don't\ read\ more\ than\ the\ specified\ limit.}}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \_source-\/>read(decompress\_buffer,}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ \ \ std::min(\_source\_bytes\_left,\ (std::streamsize)decompress\_buffer\_size));}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \ \ read\_count\ =\ \_source-\/>gcount();}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \ \ \_source\_bytes\_left\ -\/=\ read\_count;}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ \_source-\/>read(decompress\_buffer,\ decompress\_buffer\_size);}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ read\_count\ =\ \_source-\/>gcount();}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ eof\ =\ (read\_count\ ==\ 0\ ||\ \_source-\/>eof()\ ||\ \_source-\/>fail());}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \_z\_source.next\_in\ =\ (Bytef\ *)decompress\_buffer;}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \_z\_source.avail\_in\ =\ read\_count;}
+\DoxyCodeLine{00337\ \ \ \ \ \}}
+\DoxyCodeLine{00338\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ inflate(\&\_z\_source,\ flush);}
+\DoxyCodeLine{00339\ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00340\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ bytes\_read\ =\ length\ -\/\ \_z\_source.avail\_out;}
+\DoxyCodeLine{00341\ }
+\DoxyCodeLine{00342\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ ==\ Z\_STREAM\_END)\ \{}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \textcolor{comment}{//\ Here's\ the\ end\ of\ the\ file.}}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ bytes\_read;}
+\DoxyCodeLine{00345\ }
+\DoxyCodeLine{00346\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (result\ ==\ Z\_BUF\_ERROR\ \&\&\ flush\ ==\ 0)\ \{}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ might\ get\ this\ if\ no\ progress\ is\ possible,\ for\ instance\ if\ the}}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \textcolor{comment}{//\ input\ stream\ is\ truncated.\ \ In\ this\ case,\ tell\ zlib\ to\ dump}}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \textcolor{comment}{//\ everything\ it's\ got.}}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ flush\ =\ Z\_FINISH;}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ show\_zlib\_error(\textcolor{stringliteral}{"{}inflate"{}},\ result,\ \_z\_source);}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ bytes\_read;}
+\DoxyCodeLine{00355\ \ \ \ \ \}}
+\DoxyCodeLine{00356\ \ \ \}}
+\DoxyCodeLine{00357\ }
+\DoxyCodeLine{00358\ \ \ \textcolor{keywordflow}{return}\ length;}
+\DoxyCodeLine{00359\ \}}
+\DoxyCodeLine{00360\ }
+\DoxyCodeLine{00365\ \textcolor{keywordtype}{void}\ ZStreamBuf::}
+\DoxyCodeLine{00366\ write\_chars(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *start,\ \textcolor{keywordtype}{size\_t}\ length,\ \textcolor{keywordtype}{int}\ flush)\ \{}
+\DoxyCodeLine{00367\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ compress\_buffer\_size\ =\ 4096;}
+\DoxyCodeLine{00368\ \ \ \textcolor{keywordtype}{char}\ compress\_buffer[compress\_buffer\_size];}
+\DoxyCodeLine{00369\ }
+\DoxyCodeLine{00370\ \ \ \_z\_dest.next\_in\ =\ (Bytef\ *)(\textcolor{keywordtype}{char}\ *)start;}
+\DoxyCodeLine{00371\ \ \ \_z\_dest.avail\_in\ =\ length;}
+\DoxyCodeLine{00372\ }
+\DoxyCodeLine{00373\ \ \ \_z\_dest.next\_out\ =\ (Bytef\ *)compress\_buffer;}
+\DoxyCodeLine{00374\ \ \ \_z\_dest.avail\_out\ =\ compress\_buffer\_size;}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00376\ \ \ \textcolor{keywordtype}{int}\ result\ =\ deflate(\&\_z\_dest,\ flush);}
+\DoxyCodeLine{00377\ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0\ \&\&\ result\ !=\ Z\_BUF\_ERROR)\ \{}
+\DoxyCodeLine{00378\ \ \ \ \ show\_zlib\_error(\textcolor{stringliteral}{"{}deflate"{}},\ result,\ \_z\_dest);}
+\DoxyCodeLine{00379\ \ \ \}}
+\DoxyCodeLine{00380\ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00381\ }
+\DoxyCodeLine{00382\ \ \ \textcolor{keywordflow}{while}\ (\_z\_dest.avail\_in\ !=\ 0)\ \{}
+\DoxyCodeLine{00383\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_z\_dest.avail\_out\ !=\ compress\_buffer\_size)\ \{}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \_dest-\/>write(compress\_buffer,\ compress\_buffer\_size\ -\/\ \_z\_dest.avail\_out);}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \_z\_dest.next\_out\ =\ (Bytef\ *)compress\_buffer;}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \_z\_dest.avail\_out\ =\ compress\_buffer\_size;}
+\DoxyCodeLine{00387\ \ \ \ \ \}}
+\DoxyCodeLine{00388\ \ \ \ \ result\ =\ deflate(\&\_z\_dest,\ flush);}
+\DoxyCodeLine{00389\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ show\_zlib\_error(\textcolor{stringliteral}{"{}deflate"{}},\ result,\ \_z\_dest);}
+\DoxyCodeLine{00391\ \ \ \ \ \}}
+\DoxyCodeLine{00392\ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00393\ \ \ \}}
+\DoxyCodeLine{00394\ }
+\DoxyCodeLine{00395\ \ \ \textcolor{keywordflow}{while}\ (\_z\_dest.avail\_out\ !=\ compress\_buffer\_size)\ \{}
+\DoxyCodeLine{00396\ \ \ \ \ \_dest-\/>write(compress\_buffer,\ compress\_buffer\_size\ -\/\ \_z\_dest.avail\_out);}
+\DoxyCodeLine{00397\ \ \ \ \ \_z\_dest.next\_out\ =\ (Bytef\ *)compress\_buffer;}
+\DoxyCodeLine{00398\ \ \ \ \ \_z\_dest.avail\_out\ =\ compress\_buffer\_size;}
+\DoxyCodeLine{00399\ \ \ \ \ result\ =\ deflate(\&\_z\_dest,\ flush);}
+\DoxyCodeLine{00400\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0\ \&\&\ result\ !=\ Z\_BUF\_ERROR)\ \{}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ show\_zlib\_error(\textcolor{stringliteral}{"{}deflate"{}},\ result,\ \_z\_dest);}
+\DoxyCodeLine{00402\ \ \ \ \ \}}
+\DoxyCodeLine{00403\ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00404\ \ \ \}}
+\DoxyCodeLine{00405\ \}}
+\DoxyCodeLine{00406\ }
+\DoxyCodeLine{00410\ \textcolor{keywordtype}{void}\ ZStreamBuf::}
+\DoxyCodeLine{00411\ show\_zlib\_error(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *function,\ \textcolor{keywordtype}{int}\ error\_code,\ z\_stream\ \&z)\ \{}
+\DoxyCodeLine{00412\ \ \ std::stringstream\ error\_line;}
+\DoxyCodeLine{00413\ }
+\DoxyCodeLine{00414\ \ \ error\_line}
+\DoxyCodeLine{00415\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}zlib\ error\ in\ "{}}\ <<\ function\ <<\ \textcolor{stringliteral}{"{}:\ "{}};}
+\DoxyCodeLine{00416\ \ \ \textcolor{keywordflow}{switch}\ (error\_code)\ \{}
+\DoxyCodeLine{00417\ \ \ \textcolor{keywordflow}{case}\ Z\_OK:}
+\DoxyCodeLine{00418\ \ \ \ \ error\_line\ <<\ \textcolor{stringliteral}{"{}Z\_OK"{}};}
+\DoxyCodeLine{00419\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00420\ \ \ \textcolor{keywordflow}{case}\ Z\_STREAM\_END:}
+\DoxyCodeLine{00421\ \ \ \ \ error\_line\ <<\ \textcolor{stringliteral}{"{}Z\_STREAM\_END"{}};}
+\DoxyCodeLine{00422\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00423\ \ \ \textcolor{keywordflow}{case}\ Z\_NEED\_DICT:}
+\DoxyCodeLine{00424\ \ \ \ \ error\_line\ <<\ \textcolor{stringliteral}{"{}Z\_NEED\_DICT"{}};}
+\DoxyCodeLine{00425\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00426\ \ \ \textcolor{keywordflow}{case}\ Z\_ERRNO:}
+\DoxyCodeLine{00427\ \ \ \ \ error\_line\ <<\ \textcolor{stringliteral}{"{}Z\_ERRNO"{}};}
+\DoxyCodeLine{00428\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00429\ \ \ \textcolor{keywordflow}{case}\ Z\_STREAM\_ERROR:}
+\DoxyCodeLine{00430\ \ \ \ \ error\_line\ <<\ \textcolor{stringliteral}{"{}Z\_STREAM\_ERROR"{}};}
+\DoxyCodeLine{00431\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00432\ \ \ \textcolor{keywordflow}{case}\ Z\_DATA\_ERROR:}
+\DoxyCodeLine{00433\ \ \ \ \ error\_line\ <<\ \textcolor{stringliteral}{"{}Z\_DATA\_ERROR"{}};}
+\DoxyCodeLine{00434\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00435\ \ \ \textcolor{keywordflow}{case}\ Z\_MEM\_ERROR:}
+\DoxyCodeLine{00436\ \ \ \ \ error\_line\ <<\ \textcolor{stringliteral}{"{}Z\_MEM\_ERROR"{}};}
+\DoxyCodeLine{00437\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00438\ \ \ \textcolor{keywordflow}{case}\ Z\_BUF\_ERROR:}
+\DoxyCodeLine{00439\ \ \ \ \ error\_line\ <<\ \textcolor{stringliteral}{"{}Z\_BUF\_ERROR"{}};}
+\DoxyCodeLine{00440\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00441\ \ \ \textcolor{keywordflow}{case}\ Z\_VERSION\_ERROR:}
+\DoxyCodeLine{00442\ \ \ \ \ error\_line\ <<\ \textcolor{stringliteral}{"{}Z\_VERSION\_ERROR"{}};}
+\DoxyCodeLine{00443\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00444\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00445\ \ \ \ \ error\_line\ <<\ error\_code;}
+\DoxyCodeLine{00446\ \ \ \}}
+\DoxyCodeLine{00447\ \ \ \textcolor{keywordflow}{if}\ (z.msg\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00448\ \ \ \ \ error\_line}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ =\ "{}}\ <<\ z.msg;}
+\DoxyCodeLine{00450\ \ \ \}}
+\DoxyCodeLine{00451\ }
+\DoxyCodeLine{00452\ \ \ express\_cat.warning()\ <<\ error\_line.str()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00453\ \}}
+\DoxyCodeLine{00454\ }
+\DoxyCodeLine{00455\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+
+\end{DoxyCode}

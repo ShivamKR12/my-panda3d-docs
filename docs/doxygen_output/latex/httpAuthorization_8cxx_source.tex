@@ -1,0 +1,283 @@
+\doxysection{http\+Authorization.\+cxx}
+\hypertarget{httpAuthorization_8cxx_source}{}\label{httpAuthorization_8cxx_source}\index{panda/src/downloader/httpAuthorization.cxx@{panda/src/downloader/httpAuthorization.cxx}}
+\mbox{\hyperlink{httpAuthorization_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{httpAuthorization_8h}{httpAuthorization.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{httpChannel_8h}{httpChannel.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{urlSpec_8h}{urlSpec.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{string__utils_8h}{string\_utils.h}}"{}}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#if\ defined(HAVE\_OPENSSL)\ ||\ defined(\_\_EMSCRIPTEN\_\_)}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ base64\_table[64]\ =\ \{}
+\DoxyCodeLine{00024\ \ \ \textcolor{charliteral}{'A'},\ \textcolor{charliteral}{'B'},\ \textcolor{charliteral}{'C'},\ \textcolor{charliteral}{'D'},\ \textcolor{charliteral}{'E'},\ \textcolor{charliteral}{'F'},\ \textcolor{charliteral}{'G'},\ \textcolor{charliteral}{'H'},}
+\DoxyCodeLine{00025\ \ \ \textcolor{charliteral}{'I'},\ \textcolor{charliteral}{'J'},\ \textcolor{charliteral}{'K'},\ \textcolor{charliteral}{'L'},\ \textcolor{charliteral}{'M'},\ \textcolor{charliteral}{'N'},\ \textcolor{charliteral}{'O'},\ \textcolor{charliteral}{'P'},}
+\DoxyCodeLine{00026\ \ \ \textcolor{charliteral}{'Q'},\ \textcolor{charliteral}{'R'},\ \textcolor{charliteral}{'S'},\ \textcolor{charliteral}{'T'},\ \textcolor{charliteral}{'U'},\ \textcolor{charliteral}{'V'},\ \textcolor{charliteral}{'W'},\ \textcolor{charliteral}{'X'},}
+\DoxyCodeLine{00027\ \ \ \textcolor{charliteral}{'Y'},\ \textcolor{charliteral}{'Z'},\ \textcolor{charliteral}{'a'},\ \textcolor{charliteral}{'b'},\ \textcolor{charliteral}{'c'},\ \textcolor{charliteral}{'d'},\ \textcolor{charliteral}{'e'},\ \textcolor{charliteral}{'f'},}
+\DoxyCodeLine{00028\ \ \ \textcolor{charliteral}{'g'},\ \textcolor{charliteral}{'h'},\ \textcolor{charliteral}{'i'},\ \textcolor{charliteral}{'j'},\ \textcolor{charliteral}{'k'},\ \textcolor{charliteral}{'l'},\ \textcolor{charliteral}{'m'},\ \textcolor{charliteral}{'n'},}
+\DoxyCodeLine{00029\ \ \ \textcolor{charliteral}{'o'},\ \textcolor{charliteral}{'p'},\ \textcolor{charliteral}{'q'},\ \textcolor{charliteral}{'r'},\ \textcolor{charliteral}{'s'},\ \textcolor{charliteral}{'t'},\ \textcolor{charliteral}{'u'},\ \textcolor{charliteral}{'v'},}
+\DoxyCodeLine{00030\ \ \ \textcolor{charliteral}{'w'},\ \textcolor{charliteral}{'x'},\ \textcolor{charliteral}{'y'},\ \textcolor{charliteral}{'z'},\ \textcolor{charliteral}{'0'},\ \textcolor{charliteral}{'1'},\ \textcolor{charliteral}{'2'},\ \textcolor{charliteral}{'3'},}
+\DoxyCodeLine{00031\ \ \ \textcolor{charliteral}{'4'},\ \textcolor{charliteral}{'5'},\ \textcolor{charliteral}{'6'},\ \textcolor{charliteral}{'7'},\ \textcolor{charliteral}{'8'},\ \textcolor{charliteral}{'9'},\ \textcolor{charliteral}{'+'},\ \textcolor{charliteral}{'/'},}
+\DoxyCodeLine{00032\ \};}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ base64\_invert[128];}
+\DoxyCodeLine{00035\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}\ got\_base64\_invert\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00040\ HTTPAuthorization::}
+\DoxyCodeLine{00041\ HTTPAuthorization(\textcolor{keyword}{const}\ HTTPAuthorization::Tokens\ \&tokens,}
+\DoxyCodeLine{00042\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url,\ \textcolor{keywordtype}{bool}\ is\_proxy)\ \{}
+\DoxyCodeLine{00043\ \ \ Tokens::const\_iterator\ ti;}
+\DoxyCodeLine{00044\ \ \ ti\ =\ tokens.find(\textcolor{stringliteral}{"{}realm"{}});}
+\DoxyCodeLine{00045\ \ \ \textcolor{keywordflow}{if}\ (ti\ !=\ tokens.end())\ \{}
+\DoxyCodeLine{00046\ \ \ \ \ \_realm\ =\ (*ti).second;}
+\DoxyCodeLine{00047\ \ \ \}}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \ \ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ canon\ =\ get\_canonical\_url(url);}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \ \ ti\ =\ tokens.find(\textcolor{stringliteral}{"{}domain"{}});}
+\DoxyCodeLine{00052\ \ \ \textcolor{keywordflow}{if}\ (ti\ !=\ tokens.end()\ \&\&\ !is\_proxy)\ \{}
+\DoxyCodeLine{00053\ \ \ \ \ \textcolor{comment}{//\ Now\ the\ domain\ consists\ of\ a\ series\ of\ space-\/separated\ URL\ prefixes.}}
+\DoxyCodeLine{00054\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&domain\ =\ (*ti).second;}
+\DoxyCodeLine{00055\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ p\ =\ 0;}
+\DoxyCodeLine{00056\ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ <\ domain.length())\ \{}
+\DoxyCodeLine{00057\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ <\ domain.length()\ \&\&\ isspace(domain[p]))\ \{}
+\DoxyCodeLine{00058\ \ \ \ \ \ \ \ \ ++p;}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ q\ =\ p;}
+\DoxyCodeLine{00061\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (q\ <\ domain.length()\ \&\&\ !isspace(domain[q]))\ \{}
+\DoxyCodeLine{00062\ \ \ \ \ \ \ \ \ ++q;}
+\DoxyCodeLine{00063\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00064\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (q\ >\ p)\ \{}
+\DoxyCodeLine{00065\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ domain\_str\ =\ domain.substr(p,\ q\ -\/\ p);}
+\DoxyCodeLine{00066\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ domain\_url(domain\_str);}
+\DoxyCodeLine{00067\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (domain\_url.has\_server())\ \{}
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ A\ fully-\/qualified\ URL.}}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ \ \ \ \ \_domain.push\_back(get\_canonical\_url(domain\_url).get\_url());}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ A\ relative\ URL;\ relative\ to\ this\ path.}}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \ \ \ \ domain\_url\ =\ canon;}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ \ \ \ \ domain\_url.set\_path(domain\_str);}
+\DoxyCodeLine{00074\ \ \ \ \ \ \ \ \ \ \ \_domain.push\_back(domain\_url.get\_url());}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ p\ =\ q;}
+\DoxyCodeLine{00078\ \ \ \ \ \}}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00081\ \ \ \ \ \textcolor{comment}{//\ If\ no\ domain\ is\ defined\ by\ the\ server,\ use\ the\ supplied\ URL.\ Truncate}}
+\DoxyCodeLine{00082\ \ \ \ \ \textcolor{comment}{//\ it\ to\ the\ rightmost\ slash.}}
+\DoxyCodeLine{00083\ \ \ \ \ \textcolor{keywordtype}{string}\ canon\_str\ =\ canon.get\_url();}
+\DoxyCodeLine{00084\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ slash\ =\ canon\_str.rfind(\textcolor{charliteral}{'/'});}
+\DoxyCodeLine{00085\ \ \ \ \ nassertv(slash\ !=\ string::npos);}
+\DoxyCodeLine{00086\ \ \ \ \ \_domain.push\_back(canon\_str.substr(0,\ slash\ +\ 1));}
+\DoxyCodeLine{00087\ \ \ \}}
+\DoxyCodeLine{00088\ \}}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00093\ HTTPAuthorization::}
+\DoxyCodeLine{00094\ \string~HTTPAuthorization()\ \{}
+\DoxyCodeLine{00095\ \}}
+\DoxyCodeLine{00096\ }
+\DoxyCodeLine{00102\ \textcolor{keywordtype}{bool}\ HTTPAuthorization::}
+\DoxyCodeLine{00103\ is\_valid()\ \{}
+\DoxyCodeLine{00104\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00105\ \}}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00111\ \textcolor{keywordtype}{void}\ HTTPAuthorization::}
+\DoxyCodeLine{00112\ parse\_authentication\_schemes(HTTPAuthorization::AuthenticationSchemes\ \&schemes,}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&field\_value)\ \{}
+\DoxyCodeLine{00114\ \ \ \textcolor{comment}{//\ This\ string\ will\ consist\ of\ one\ or\ more\ records\ of\ the\ form:\ scheme}}
+\DoxyCodeLine{00115\ \ \ \textcolor{comment}{//\ token=value[,token=value[,...]]\ If\ there\ are\ multiple\ records,\ they\ will}}
+\DoxyCodeLine{00116\ \ \ \textcolor{comment}{//\ be\ comma-\/delimited,\ which\ makes\ parsing\ just\ a\ bit\ tricky.}}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \ \ \textcolor{comment}{//\ Start\ by\ skipping\ initial\ whitespace.}}
+\DoxyCodeLine{00119\ \ \ \textcolor{keywordtype}{size\_t}\ p\ =\ 0;}
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ field\_value.length()\ \&\&\ isspace(field\_value[p]))\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ ++p;}
+\DoxyCodeLine{00122\ \ \ \}}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \ \ \textcolor{keywordflow}{if}\ (p\ <\ field\_value.length())\ \{}
+\DoxyCodeLine{00125\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ q\ =\ p;}
+\DoxyCodeLine{00126\ \ \ \ \ \textcolor{keywordflow}{while}\ (q\ <\ field\_value.length()\ \&\&\ !isspace(field\_value[q]))\ \{}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ ++q;}
+\DoxyCodeLine{00128\ \ \ \ \ \}}
+\DoxyCodeLine{00129\ \ \ \ \ \textcolor{comment}{//\ Here's\ our\ first\ scheme.}}
+\DoxyCodeLine{00130\ \ \ \ \ \textcolor{keywordtype}{string}\ scheme\ =\ \mbox{\hyperlink{string__utils_8cxx_a8436b3aed06d4a4e245ab303cdf9637e}{downcase}}(field\_value.substr(p,\ q\ -\/\ p));}
+\DoxyCodeLine{00131\ \ \ \ \ Tokens\ *tokens\ =\ \&(schemes[scheme]);}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{comment}{//\ Now\ pull\ off\ the\ tokens,\ one\ at\ a\ time.}}
+\DoxyCodeLine{00134\ \ \ \ \ p\ =\ q\ +\ 1;}
+\DoxyCodeLine{00135\ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ <\ field\_value.length())\ \{}
+\DoxyCodeLine{00136\ \ \ \ \ \ \ q\ =\ p;}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (q\ <\ field\_value.length()\ \&\&\ field\_value[q]\ !=\ \textcolor{charliteral}{'='}\ \&\&}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \ \ \ \ \ \ \ field\_value[q]\ !=\ \textcolor{charliteral}{','}\ \&\&\ !isspace(field\_value[q]))\ \{}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ ++q;}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (field\_value[q]\ ==\ \textcolor{charliteral}{'='})\ \{}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ a\ token.}}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ token\ =\ \mbox{\hyperlink{string__utils_8cxx_a8436b3aed06d4a4e245ab303cdf9637e}{downcase}}(field\_value.substr(p,\ q\ -\/\ p));}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ value;}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ p\ =\ scan\_quoted\_or\_unquoted\_string(value,\ field\_value,\ q\ +\ 1);}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ (*tokens)[token]\ =\ value;}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Skip\ trailing\ whitespace\ and\ extra\ commas.}}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ <\ field\_value.length()\ \&\&}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (field\_value[p]\ ==\ \textcolor{charliteral}{','}\ ||\ isspace(field\_value[p])))\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \ \ ++p;}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ not\ a\ token;\ it\ must\ be\ the\ start\ of\ a\ new\ scheme.}}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \ \ scheme\ =\ \mbox{\hyperlink{string__utils_8cxx_a8436b3aed06d4a4e245ab303cdf9637e}{downcase}}(field\_value.substr(p,\ q\ -\/\ p));}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ tokens\ =\ \&(schemes[scheme]);}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ p\ =\ q\ +\ 1;}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00160\ \ \ \ \ \}}
+\DoxyCodeLine{00161\ \ \ \}}
+\DoxyCodeLine{00162\ \}}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00169\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ HTTPAuthorization::}
+\DoxyCodeLine{00170\ get\_canonical\_url(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url)\ \{}
+\DoxyCodeLine{00171\ \ \ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ canon\ =\ url;}
+\DoxyCodeLine{00172\ \ \ canon.set\_scheme(canon.get\_scheme());}
+\DoxyCodeLine{00173\ \ \ canon.set\_username(\textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00174\ \ \ canon.set\_port(canon.get\_port());}
+\DoxyCodeLine{00175\ \ \ canon.set\_path(canon.get\_path());}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00177\ \ \ \textcolor{keywordflow}{return}\ canon;}
+\DoxyCodeLine{00178\ \}}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00184\ \textcolor{keywordtype}{string}\ HTTPAuthorization::}
+\DoxyCodeLine{00185\ base64\_encode(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&s)\ \{}
+\DoxyCodeLine{00186\ \ \ \textcolor{comment}{//\ Collect\ the\ string\ 3\ bytes\ at\ a\ time\ into\ 24-\/bit\ words,\ then\ output\ each}}
+\DoxyCodeLine{00187\ \ \ \textcolor{comment}{//\ word\ using\ 4\ bytes.}}
+\DoxyCodeLine{00188\ \ \ \textcolor{keywordtype}{size\_t}\ num\_words\ =\ (s.size()\ +\ 2)\ /\ 3;}
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordtype}{string}\ result;}
+\DoxyCodeLine{00190\ \ \ result.reserve(num\_words\ *\ 4);}
+\DoxyCodeLine{00191\ \ \ \textcolor{keywordtype}{size\_t}\ p;}
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordflow}{for}\ (p\ =\ 0;\ p\ +\ 2\ <\ s.size();\ p\ +=\ 3)\ \{}
+\DoxyCodeLine{00193\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ word\ =}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ ((unsigned)s[p]\ <<\ 16)\ |}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ ((unsigned)s[p\ +\ 1]\ <<\ 8)\ |}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ ((unsigned)s[p\ +\ 2]);}
+\DoxyCodeLine{00197\ \ \ \ \ result\ +=\ base64\_table[(word\ >>\ 18)\ \&\ 0x3f];}
+\DoxyCodeLine{00198\ \ \ \ \ result\ +=\ base64\_table[(word\ >>\ 12)\ \&\ 0x3f];}
+\DoxyCodeLine{00199\ \ \ \ \ result\ +=\ base64\_table[(word\ >>\ 6)\ \&\ 0x3f];}
+\DoxyCodeLine{00200\ \ \ \ \ result\ +=\ base64\_table[(word)\ \&\ 0x3f];}
+\DoxyCodeLine{00201\ \ \ \}}
+\DoxyCodeLine{00202\ \ \ \textcolor{comment}{//\ What's\ left\ over?}}
+\DoxyCodeLine{00203\ \ \ \textcolor{keywordflow}{if}\ (p\ <\ s.size())\ \{}
+\DoxyCodeLine{00204\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ word\ =\ ((unsigned)s[p]\ <<\ 16);}
+\DoxyCodeLine{00205\ \ \ \ \ p++;}
+\DoxyCodeLine{00206\ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ <\ s.size())\ \{}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ word\ |=\ ((unsigned)s[p]\ <<\ 8);}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ p++;}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ nassertr(p\ ==\ s.size(),\ result);}
+\DoxyCodeLine{00210\ }
+\DoxyCodeLine{00211\ \ \ \ \ \ \ result\ +=\ base64\_table[(word\ >>\ 18)\ \&\ 0x3f];}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ result\ +=\ base64\_table[(word\ >>\ 12)\ \&\ 0x3f];}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ result\ +=\ base64\_table[(word\ >>\ 6)\ \&\ 0x3f];}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ result\ +=\ \textcolor{charliteral}{'='};}
+\DoxyCodeLine{00215\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ result\ +=\ base64\_table[(word\ >>\ 18)\ \&\ 0x3f];}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ result\ +=\ base64\_table[(word\ >>\ 12)\ \&\ 0x3f];}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ result\ +=\ \textcolor{charliteral}{'='};}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ result\ +=\ \textcolor{charliteral}{'='};}
+\DoxyCodeLine{00220\ \ \ \ \ \}}
+\DoxyCodeLine{00221\ \ \ \}}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00223\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00224\ \}}
+\DoxyCodeLine{00225\ }
+\DoxyCodeLine{00229\ \textcolor{keywordtype}{string}\ HTTPAuthorization::}
+\DoxyCodeLine{00230\ base64\_decode(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&s)\ \{}
+\DoxyCodeLine{00231\ \ \ \textcolor{comment}{//\ Build\ up\ the\ invert\ table\ if\ this\ is\ the\ first\ time.}}
+\DoxyCodeLine{00232\ \ \ \textcolor{keywordflow}{if}\ (!got\_base64\_invert)\ \{}
+\DoxyCodeLine{00233\ \ \ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00234\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ 128;\ i++)\ \{}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ base64\_invert[i]\ =\ 0xff;}
+\DoxyCodeLine{00236\ \ \ \ \ \}}
+\DoxyCodeLine{00237\ }
+\DoxyCodeLine{00238\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ 64;\ i++)\ \{}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ base64\_invert[(int)base64\_table[i]]\ =\ i;}
+\DoxyCodeLine{00240\ \ \ \ \ \}}
+\DoxyCodeLine{00241\ }
+\DoxyCodeLine{00242\ \ \ \ \ base64\_invert[(int)\textcolor{charliteral}{'='}]\ =\ 0;}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00244\ \ \ \ \ got\_base64\_invert\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00245\ \ \ \}}
+\DoxyCodeLine{00246\ }
+\DoxyCodeLine{00247\ \ \ \textcolor{comment}{//\ Collect\ the\ string\ 4\ bytes\ at\ a\ time;\ decode\ this\ back\ into\ a\ 24-\/bit\ word}}
+\DoxyCodeLine{00248\ \ \ \textcolor{comment}{//\ and\ output\ the\ 3\ corresponding\ bytes.}}
+\DoxyCodeLine{00249\ \ \ \textcolor{keywordtype}{size\_t}\ num\_words\ =\ s.size()\ /\ 4;}
+\DoxyCodeLine{00250\ \ \ \textcolor{keywordtype}{string}\ result;}
+\DoxyCodeLine{00251\ \ \ result.reserve(num\_words\ *\ 3);}
+\DoxyCodeLine{00252\ \ \ \textcolor{keywordtype}{size\_t}\ p;}
+\DoxyCodeLine{00253\ \ \ \textcolor{keywordflow}{for}\ (p\ =\ 0;\ p\ <\ s.size();\ p\ +=\ 4)\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ c0\ =\ base64\_invert[s[p]\ \&\ 0x7f];}
+\DoxyCodeLine{00255\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ c1\ =\ base64\_invert[s[p\ +\ 1]\ \&\ 0x7f];}
+\DoxyCodeLine{00256\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ c2\ =\ base64\_invert[s[p\ +\ 2]\ \&\ 0x7f];}
+\DoxyCodeLine{00257\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ c3\ =\ base64\_invert[s[p\ +\ 3]\ \&\ 0x7f];}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ word\ =}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ (c0\ <<\ 18)\ |\ (c1\ <<\ 12)\ |\ (c2\ <<\ 6)\ |\ c3;}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \ \ \ \ result\ +=\ (char)((word\ >>\ 16)\ \&\ 0xff);}
+\DoxyCodeLine{00263\ \ \ \ \ \textcolor{keywordflow}{if}\ (s[p\ +\ 2]\ !=\ \textcolor{charliteral}{'='})\ \{}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ result\ +=\ (char)((word\ >>\ 8)\ \&\ 0xff);}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (s[p\ +\ 3]\ !=\ \textcolor{charliteral}{'='})\ \{}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ result\ +=\ (char)(word\ \&\ 0xff);}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00268\ \ \ \ \ \}}
+\DoxyCodeLine{00269\ \ \ \}}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00272\ \}}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00281\ \textcolor{keywordtype}{size\_t}\ HTTPAuthorization::}
+\DoxyCodeLine{00282\ scan\_quoted\_or\_unquoted\_string(\textcolor{keywordtype}{string}\ \&result,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&source,}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ start)\ \{}
+\DoxyCodeLine{00284\ \ \ result\ =\ string();}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \textcolor{keywordflow}{if}\ (start\ <\ source.length())\ \{}
+\DoxyCodeLine{00287\ \ \ \ \ \textcolor{keywordflow}{if}\ (source[start]\ ==\ \textcolor{charliteral}{'"{}'})\ \{}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \textcolor{comment}{//\ Quoted\ string.}}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ p\ =\ start\ +\ 1;}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ <\ source.length()\ \&\&\ source[p]\ !=\ \textcolor{charliteral}{'"{}'})\ \{}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (source[p]\ ==\ \textcolor{charliteral}{'\(\backslash\)\(\backslash\)'})\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Backslash\ escapes.}}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ \ \ \ \ ++p;}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ <\ source.length())\ \{}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ \ \ \ \ \ \ result\ +=\ source[p];}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \ \ \ \ \ \ ++p;}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \ \ \ \ result\ +=\ source[p];}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \ \ \ \ ++p;}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ <\ source.length())\ \{}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \ \ ++p;}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ p;}
+\DoxyCodeLine{00307\ \ \ \ \ \}}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{comment}{//\ Unquoted\ string.}}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ p\ =\ start;}
+\DoxyCodeLine{00311\ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ <\ source.length()\ \&\&\ source[p]\ !=\ \textcolor{charliteral}{','}\ \&\&\ !isspace(source[p]))\ \{}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ result\ +=\ source[p];}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ ++p;}
+\DoxyCodeLine{00314\ \ \ \ \ \}}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \ \ \ \ \textcolor{keywordflow}{return}\ p;}
+\DoxyCodeLine{00317\ \ \ \}}
+\DoxyCodeLine{00318\ }
+\DoxyCodeLine{00319\ \ \ \textcolor{comment}{//\ Empty\ string.}}
+\DoxyCodeLine{00320\ \ \ \textcolor{keywordflow}{return}\ start;}
+\DoxyCodeLine{00321\ \}}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00323\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+
+\end{DoxyCode}

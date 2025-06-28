@@ -1,0 +1,528 @@
+\doxysection{open\+CVTexture.\+cxx}
+\hypertarget{openCVTexture_8cxx_source}{}\label{openCVTexture_8cxx_source}\index{panda/src/vision/openCVTexture.cxx@{panda/src/vision/openCVTexture.cxx}}
+\mbox{\hyperlink{openCVTexture_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pandabase_8h}{pandabase.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENCV}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{openCVTexture_8h}{openCVTexture.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{clockObject_8h}{clockObject.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__gobj_8h}{config\_gobj.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__vision_8h}{config\_vision.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamReader_8h}{bamReader.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamCacheRecord_8h}{bamCacheRecord.h}}"{}}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{comment}{//\ This\ symbol\ is\ predefined\ by\ the\ Panda3D\ build\ system\ to\ select\ whether\ we}}
+\DoxyCodeLine{00025\ \textcolor{comment}{//\ are\ using\ the\ OpenCV\ 3.x\ or\ later\ interface.}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#if\ defined(OPENCV\_VER\_3)}}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ <opencv2/core.hpp>}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ <opencv2/videoio/videoio\_c.h>}}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \textcolor{comment}{//\ This\ checks\ for\ 2.3\ or\ later.}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#elif\ defined(OPENCV\_VER\_23)}}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#include\ <opencv2/core/core.hpp>}}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#include\ <opencv2/highgui/highgui.hpp>}}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \textcolor{comment}{//\ If\ neither\ of\ those\ are\ predefined,\ assume\ 1.x.}}
+\DoxyCodeLine{00038\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\#include\ <cv.h>}}
+\DoxyCodeLine{00041\ \textcolor{preprocessor}{\#include\ <cxcore.h>}}
+\DoxyCodeLine{00042\ \textcolor{preprocessor}{\#include\ <highgui.h>}}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00044\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ OPENCV\_VER\_3}}
+\DoxyCodeLine{00045\ }
+\DoxyCodeLine{00046\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ OpenCVTexture::\_type\_handle;}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00051\ OpenCVTexture::}
+\DoxyCodeLine{00052\ OpenCVTexture(\textcolor{keyword}{const}\ std::string\ \&name)\ :}
+\DoxyCodeLine{00053\ \ \ \mbox{\hyperlink{classVideoTexture}{VideoTexture}}(name)}
+\DoxyCodeLine{00054\ \{}
+\DoxyCodeLine{00055\ \}}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00060\ OpenCVTexture::}
+\DoxyCodeLine{00061\ \string~OpenCVTexture()\ \{}
+\DoxyCodeLine{00062\ \}}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00067\ \textcolor{keywordtype}{void}\ OpenCVTexture::}
+\DoxyCodeLine{00068\ consider\_update()\ \{}
+\DoxyCodeLine{00069\ \ \ \textcolor{keywordtype}{int}\ this\_frame\ =\ ClockObject::get\_global\_clock()-\/>get\_frame\_count();}
+\DoxyCodeLine{00070\ \ \ \textcolor{keywordflow}{if}\ (this\_frame\ !=\ \_last\_frame\_update)\ \{}
+\DoxyCodeLine{00071\ \ \ \ \ \textcolor{keywordtype}{int}\ frame\ =\ get\_frame();}
+\DoxyCodeLine{00072\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_current\_frame\ !=\ frame)\ \{}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ \mbox{\hyperlink{classCycleDataWriter}{Texture::CDWriter}}\ cdata(Texture::\_cycler,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00074\ \ \ \ \ \ \ do\_update\_frame(cdata,\ frame);}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ \_current\_frame\ =\ frame;}
+\DoxyCodeLine{00076\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \textcolor{comment}{//\ Loop\ through\ the\ pages\ to\ see\ if\ there's\ any\ camera\ stream\ to\ update.}}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \mbox{\hyperlink{classCycleDataWriter}{Texture::CDWriter}}\ cdata(Texture::\_cycler,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ max\_z\ =\ std::max(cdata-\/>\_z\_size,\ (\textcolor{keywordtype}{int})\_pages.size());}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ z\ =\ 0;\ z\ <\ max\_z;\ ++z)\ \{}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \ \ VideoPage\ \&page\ =\ \_pages[z];}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!page.\_color.is\_from\_file()\ ||\ !page.\_alpha.is\_from\_file())\ \{}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \ \ \ \ do\_update\_frame(cdata,\ frame,\ z);}
+\DoxyCodeLine{00084\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00085\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00086\ \ \ \ \ \}}
+\DoxyCodeLine{00087\ \ \ \ \ \_last\_frame\_update\ =\ this\_frame;}
+\DoxyCodeLine{00088\ \ \ \}}
+\DoxyCodeLine{00089\ \}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00100\ PT(\mbox{\hyperlink{classTexture}{Texture}})\ OpenCVTexture::}
+\DoxyCodeLine{00101\ make\_copy\_impl()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00102\ \ \ \mbox{\hyperlink{classCycleDataReader}{Texture::CDReader}}\ cdata\_tex(Texture::\_cycler);}
+\DoxyCodeLine{00103\ \ \ PT(OpenCVTexture)\ copy\ =\ \textcolor{keyword}{new}\ OpenCVTexture(get\_name());}
+\DoxyCodeLine{00104\ \ \ \mbox{\hyperlink{classCycleDataWriter}{Texture::CDWriter}}\ cdata\_copy\_tex(copy-\/>Texture::\_cycler,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00105\ \ \ copy-\/>do\_assign(cdata\_copy\_tex,\ \textcolor{keyword}{this},\ cdata\_tex);}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \ \ \textcolor{keywordflow}{return}\ copy;}
+\DoxyCodeLine{00108\ \}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00113\ \textcolor{keywordtype}{void}\ OpenCVTexture::}
+\DoxyCodeLine{00114\ do\_assign(\mbox{\hyperlink{classTexture_1_1CData}{Texture::CData}}\ *cdata\_tex,\ \textcolor{keyword}{const}\ OpenCVTexture\ *copy,}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTexture_1_1CData}{Texture::CData}}\ *cdata\_copy\_tex)\ \{}
+\DoxyCodeLine{00116\ \ \ VideoTexture::do\_assign(cdata\_tex,\ copy,\ cdata\_copy\_tex);}
+\DoxyCodeLine{00117\ \ \ \_pages\ =\ copy-\/>\_pages;}
+\DoxyCodeLine{00118\ \}}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00129\ \textcolor{keywordtype}{bool}\ OpenCVTexture::}
+\DoxyCodeLine{00130\ from\_camera(\textcolor{keywordtype}{int}\ camera\_index,\ \textcolor{keywordtype}{int}\ z,\ \textcolor{keywordtype}{int}\ alpha\_file\_channel,}
+\DoxyCodeLine{00131\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ \&options)\ \{}
+\DoxyCodeLine{00132\ \ \ \mbox{\hyperlink{classCycleDataWriter}{Texture::CDWriter}}\ cdata(Texture::\_cycler,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00133\ \ \ \textcolor{keywordflow}{if}\ (!do\_reconsider\_z\_size(cdata,\ z,\ options))\ \{}
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00135\ \ \ \}}
+\DoxyCodeLine{00136\ \ \ nassertr(z\ >=\ 0\ \&\&\ z\ <\ cdata-\/>\_z\_size,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ cdata-\/>\_alpha\_file\_channel\ =\ alpha\_file\_channel;}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ \ \ VideoPage\ \&page\ =\ do\_modify\_page(cdata,\ z);}
+\DoxyCodeLine{00141\ \ \ \textcolor{keywordflow}{if}\ (alpha\_file\_channel\ ==\ 0)\ \{}
+\DoxyCodeLine{00142\ \ \ \ \ \textcolor{comment}{//\ A\ normal\ RGB\ texture.}}
+\DoxyCodeLine{00143\ \ \ \ \ page.\_alpha.clear();}
+\DoxyCodeLine{00144\ \ \ \ \ \textcolor{keywordflow}{if}\ (!page.\_color.from\_camera(camera\_index))\ \{}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00146\ \ \ \ \ \}}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \ \ \ \ \textcolor{keywordflow}{if}\ (!do\_reconsider\_video\_properties(cdata,\ page.\_color,\ 3,\ z,\ options))\ \{}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ page.\_color.clear();}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00151\ \ \ \ \ \}}
+\DoxyCodeLine{00152\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00153\ \ \ \ \ \textcolor{comment}{//\ An\ alpha\ texture.}}
+\DoxyCodeLine{00154\ \ \ \ \ page.\_color.clear();}
+\DoxyCodeLine{00155\ \ \ \ \ \textcolor{keywordflow}{if}\ (!page.\_alpha.from\_camera(camera\_index))\ \{}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00157\ \ \ \ \ \}}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00159\ \ \ \ \ \textcolor{keywordflow}{if}\ (!do\_reconsider\_video\_properties(cdata,\ page.\_alpha,\ 1,\ z,\ options))\ \{}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ page.\_alpha.clear();}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00162\ \ \ \ \ \}}
+\DoxyCodeLine{00163\ \ \ \ \ do\_set\_format(cdata,\ F\_alpha);}
+\DoxyCodeLine{00164\ \ \ \}}
+\DoxyCodeLine{00165\ }
+\DoxyCodeLine{00166\ \ \ cdata-\/>\_loaded\_from\_image\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00167\ \ \ clear\_current\_frame();}
+\DoxyCodeLine{00168\ \ \ do\_update\_frame(cdata,\ 0);}
+\DoxyCodeLine{00169\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00170\ \}}
+\DoxyCodeLine{00171\ }
+\DoxyCodeLine{00177\ OpenCVTexture::VideoPage\ \&OpenCVTexture::}
+\DoxyCodeLine{00178\ do\_modify\_page(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTexture_1_1CData}{Texture::CData}}\ *cdata,\ \textcolor{keywordtype}{int}\ z)\ \{}
+\DoxyCodeLine{00179\ \ \ nassertr(z\ <\ cdata-\/>\_z\_size,\ \_pages[0]);}
+\DoxyCodeLine{00180\ \ \ \textcolor{keywordflow}{while}\ (z\ >=\ (\textcolor{keywordtype}{int})\_pages.size())\ \{}
+\DoxyCodeLine{00181\ \ \ \ \ \_pages.push\_back(VideoPage());}
+\DoxyCodeLine{00182\ \ \ \}}
+\DoxyCodeLine{00183\ \ \ \textcolor{keywordflow}{return}\ \_pages[z];}
+\DoxyCodeLine{00184\ \}}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00190\ \textcolor{keywordtype}{bool}\ OpenCVTexture::}
+\DoxyCodeLine{00191\ do\_reconsider\_video\_properties(\mbox{\hyperlink{classTexture_1_1CData}{Texture::CData}}\ *cdata,}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ OpenCVTexture::VideoStream\ \&stream,}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_components,\ \textcolor{keywordtype}{int}\ z,}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ \&options)\ \{}
+\DoxyCodeLine{00195\ \ \ \textcolor{keywordtype}{double}\ frame\_rate\ =\ 0.0f;}
+\DoxyCodeLine{00196\ \ \ \textcolor{keywordtype}{int}\ num\_frames\ =\ 0;}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00198\ \ \ \textcolor{keywordflow}{if}\ (stream.is\_from\_file())\ \{}
+\DoxyCodeLine{00199\ \ \ \ \ frame\_rate\ =\ cvGetCaptureProperty(stream.\_capture,\ CV\_CAP\_PROP\_FPS);}
+\DoxyCodeLine{00200\ \ \ \ \ num\_frames\ =\ (int)cvGetCaptureProperty(stream.\_capture,\ CV\_CAP\_PROP\_FRAME\_COUNT);}
+\DoxyCodeLine{00201\ \ \ \ \ \textcolor{keywordflow}{if}\ (vision\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ vision\_cat.debug()}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Loaded\ "{}}\ <<\ stream.\_filename\ <<\ \textcolor{stringliteral}{"{},\ "{}}\ <<\ num\_frames\ <<\ \textcolor{stringliteral}{"{}\ frames\ at\ "{}}}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ <<\ frame\_rate\ <<\ \textcolor{stringliteral}{"{}\ fps\(\backslash\)n"{}};}
+\DoxyCodeLine{00205\ \ \ \ \ \}}
+\DoxyCodeLine{00206\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00207\ \ \ \ \ \textcolor{comment}{//\ In\ this\ case,\ we\ don't\ have\ a\ specific\ frame\ rate\ or\ number\ of\ frames.}}
+\DoxyCodeLine{00208\ \ \ \ \ \textcolor{comment}{//\ Let\ both\ values\ remain\ at\ 0.}}
+\DoxyCodeLine{00209\ \ \ \ \ \textcolor{keywordflow}{if}\ (vision\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ vision\_cat.debug()}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Loaded\ camera\ stream\(\backslash\)n"{}};}
+\DoxyCodeLine{00212\ \ \ \ \ \}}
+\DoxyCodeLine{00213\ \ \ \}}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordtype}{int}\ width\ =\ (int)cvGetCaptureProperty(stream.\_capture,\ CV\_CAP\_PROP\_FRAME\_WIDTH);}
+\DoxyCodeLine{00216\ \ \ \textcolor{keywordtype}{int}\ height\ =\ (int)cvGetCaptureProperty(stream.\_capture,\ CV\_CAP\_PROP\_FRAME\_HEIGHT);}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00218\ \ \ \textcolor{keywordtype}{int}\ x\_size\ =\ width;}
+\DoxyCodeLine{00219\ \ \ \textcolor{keywordtype}{int}\ y\_size\ =\ height;}
+\DoxyCodeLine{00220\ \ \ do\_adjust\_this\_size(cdata,\ x\_size,\ y\_size,\ get\_name(),\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \ \ \textcolor{keywordflow}{if}\ (vision\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00223\ \ \ \ \ vision\_cat.debug()}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Video\ stream\ is\ "{}}\ <<\ width\ <<\ \textcolor{stringliteral}{"{}\ by\ "{}}\ <<\ height}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ pixels;\ fitting\ in\ texture\ "{}}\ <<\ x\_size\ <<\ \textcolor{stringliteral}{"{}\ by\ "{}}}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ <<\ y\_size\ <<\ \textcolor{stringliteral}{"{}\ texels.\(\backslash\)n"{}};}
+\DoxyCodeLine{00227\ \ \ \}}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00229\ \ \ \textcolor{keywordflow}{if}\ (!do\_reconsider\_image\_properties(cdata,\ x\_size,\ y\_size,\ num\_components,}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ T\_unsigned\_byte,\ z,\ options))\ \{}
+\DoxyCodeLine{00231\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00232\ \ \ \}}
+\DoxyCodeLine{00233\ }
+\DoxyCodeLine{00234\ \ \ \textcolor{keywordflow}{if}\ (cdata-\/>\_loaded\_from\_image\ \&\&}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ (get\_video\_width()\ !=\ width\ ||\ get\_video\_height()\ !=\ height\ ||}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ get\_num\_frames()\ !=\ num\_frames\ ||\ get\_frame\_rate()\ !=\ frame\_rate))\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ vision\_cat.error()}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Video\ properties\ have\ changed\ for\ texture\ "{}}\ <<\ get\_name()}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ level\ "{}}\ <<\ z\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00240\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00241\ \ \ \}}
+\DoxyCodeLine{00242\ }
+\DoxyCodeLine{00243\ \ \ set\_frame\_rate(frame\_rate);}
+\DoxyCodeLine{00244\ \ \ set\_num\_frames(num\_frames);}
+\DoxyCodeLine{00245\ \ \ set\_video\_size(width,\ height);}
+\DoxyCodeLine{00246\ }
+\DoxyCodeLine{00247\ \ \ \textcolor{comment}{//\ By\ default,\ the\ newly-\/loaded\ video\ stream\ will\ immediately\ start\ looping.}}
+\DoxyCodeLine{00248\ \ \ loop(\textcolor{keyword}{true});}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00250\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00251\ \}}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00257\ PT(\mbox{\hyperlink{classTexture}{Texture}})\ OpenCVTexture::}
+\DoxyCodeLine{00258\ make\_texture()\ \{}
+\DoxyCodeLine{00259\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ OpenCVTexture;}
+\DoxyCodeLine{00260\ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00265\ \textcolor{keywordtype}{void}\ OpenCVTexture::}
+\DoxyCodeLine{00266\ do\_update\_frame(\mbox{\hyperlink{classTexture_1_1CData}{Texture::CData}}\ *cdata,\ \textcolor{keywordtype}{int}\ frame)\ \{}
+\DoxyCodeLine{00267\ \ \ \textcolor{keywordtype}{int}\ max\_z\ =\ std::max(cdata-\/>\_z\_size,\ (\textcolor{keywordtype}{int})\_pages.size());}
+\DoxyCodeLine{00268\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ z\ =\ 0;\ z\ <\ max\_z;\ ++z)\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ do\_update\_frame(cdata,\ frame,\ z);}
+\DoxyCodeLine{00270\ \ \ \}}
+\DoxyCodeLine{00271\ \}}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00276\ \textcolor{keywordtype}{void}\ OpenCVTexture::}
+\DoxyCodeLine{00277\ do\_update\_frame(\mbox{\hyperlink{classTexture_1_1CData}{Texture::CData}}\ *cdata,\ \textcolor{keywordtype}{int}\ frame,\ \textcolor{keywordtype}{int}\ z)\ \{}
+\DoxyCodeLine{00278\ \ \ \textcolor{keywordflow}{if}\ (vision\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00279\ \ \ \ \ vision\_cat.spam()}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Updating\ OpenCVTexture\ page\ "{}}\ <<\ z\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00281\ \ \ \}}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00283\ \ \ VideoPage\ \&page\ =\ \_pages[z];}
+\DoxyCodeLine{00284\ \ \ \textcolor{keywordflow}{if}\ (page.\_color.is\_valid()\ ||\ page.\_alpha.is\_valid())\ \{}
+\DoxyCodeLine{00285\ \ \ \ \ do\_modify\_ram\_image(cdata);}
+\DoxyCodeLine{00286\ \ \ \ \ ++(cdata-\/>\_image\_modified);}
+\DoxyCodeLine{00287\ \ \ \}}
+\DoxyCodeLine{00288\ \ \ \textcolor{keywordtype}{int}\ dest\_x\_pitch\ =\ cdata-\/>\_num\_components\ *\ cdata-\/>\_component\_width;}
+\DoxyCodeLine{00289\ \ \ \textcolor{keywordtype}{int}\ dest\_y\_pitch\ =\ cdata-\/>\_x\_size\ *\ dest\_x\_pitch;}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00291\ \ \ \textcolor{keywordflow}{if}\ (page.\_color.is\_valid())\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ nassertv(get\_num\_components()\ >=\ 3\ \&\&\ get\_component\_width()\ ==\ 1);}
+\DoxyCodeLine{00293\ }
+\DoxyCodeLine{00294\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *r,\ *g,\ *b;}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordtype}{int}\ x\_pitch,\ y\_pitch;}
+\DoxyCodeLine{00296\ \ \ \ \ \textcolor{keywordflow}{if}\ (page.\_color.get\_frame\_data(frame,\ r,\ g,\ b,\ x\_pitch,\ y\_pitch))\ \{}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ nassertv(get\_video\_width()\ <=\ cdata-\/>\_x\_size\ \&\&\ get\_video\_height()\ <=\ cdata-\/>\_y\_size);}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ nassertv(!cdata-\/>\_ram\_images.empty())}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ unsigned\ \textcolor{keywordtype}{char}\ *dest\ =\ cdata-\/>\_ram\_images[0].\_image.p()\ +\ do\_get\_expected\_ram\_page\_size(cdata)\ *\ z;}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00301\ \ \ \ \ \ \ if\ (cdata-\/>\_num\_components\ ==\ 3\ \&\&\ x\_pitch\ ==\ 3)\ \{}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ easy\ case-\/-\/copy\ the\ whole\ thing\ in,\ row\ by\ row.}}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ copy\_bytes\ =\ get\_video\_width()\ *\ dest\_x\_pitch;}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \ \ nassertv(copy\_bytes\ <=\ dest\_y\_pitch\ \&\&\ copy\_bytes\ <=\ abs(y\_pitch));}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_video\_height();\ ++y)\ \{}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \ \ \ \ memcpy(dest,\ r,\ copy\_bytes);}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \ \ \ \ dest\ +=\ dest\_y\_pitch;}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \ \ \ \ r\ +=\ y\_pitch;}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ harder\ case-\/-\/interleave\ in\ the\ color\ channels,\ pixel\ by\ pixel,}}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ possibly\ leaving\ room\ for\ alpha.}}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_video\_height();\ ++y)\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ dx\ =\ 0;}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ sx\ =\ 0;}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_video\_width();\ ++x)\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ \ \ \ \ dest[dx]\ =\ r[sx];}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \ \ \ \ dest[dx\ +\ 1]\ =\ g[sx];}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ \ \ \ \ dest[dx\ +\ 2]\ =\ b[sx];}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ \ \ \ \ dx\ +=\ dest\_x\_pitch;}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ \ \ \ \ sx\ +=\ x\_pitch;}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ \ \ dest\ +=\ dest\_y\_pitch;}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \ \ \ \ r\ +=\ y\_pitch;}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \ \ \ \ g\ +=\ y\_pitch;}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \ \ \ \ b\ +=\ y\_pitch;}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00332\ \ \ \ \ \}}
+\DoxyCodeLine{00333\ \ \ \}}
+\DoxyCodeLine{00334\ \ \ \textcolor{keywordflow}{if}\ (page.\_alpha.is\_valid())\ \{}
+\DoxyCodeLine{00335\ \ \ \ \ nassertv(get\_component\_width()\ ==\ 1);}
+\DoxyCodeLine{00336\ }
+\DoxyCodeLine{00337\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *source[3];}
+\DoxyCodeLine{00338\ \ \ \ \ \textcolor{keywordtype}{int}\ x\_pitch,\ y\_pitch;}
+\DoxyCodeLine{00339\ \ \ \ \ \textcolor{keywordflow}{if}\ (page.\_alpha.get\_frame\_data(frame,\ source[0],\ source[1],\ source[2],}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ x\_pitch,\ y\_pitch))\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ nassertv(get\_video\_width()\ <=\ cdata-\/>\_x\_size\ \&\&\ get\_video\_height()\ <=\ cdata-\/>\_y\_size);}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ nassertv(!cdata-\/>\_ram\_images.empty())}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ unsigned\ \textcolor{keywordtype}{char}\ *dest\ =\ cdata-\/>\_ram\_images[0].\_image.p()\ +\ do\_get\_expected\_ram\_page\_size(cdata)\ *\ z;}
+\DoxyCodeLine{00344\ }
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \textcolor{comment}{//\ Interleave\ the\ alpha\ in\ with\ the\ color,\ pixel\ by\ pixel.\ \ Even\ though}}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \textcolor{comment}{//\ the\ alpha\ will\ probably\ be\ a\ grayscale\ video,\ the\ OpenCV\ library}}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \textcolor{comment}{//\ presents\ it\ as\ RGB.}}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ const\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *sch\ =\ source[0];}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ if\ (cdata-\/>\_alpha\_file\_channel\ >=\ 1\ \&\&\ cdata-\/>\_alpha\_file\_channel\ <=\ 3)\ \{}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ sch\ =\ source[cdata-\/>\_alpha\_file\_channel\ -\/\ 1];}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00352\ }
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ get\_video\_height();\ ++y)\ \{}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Start\ dx\ at\ \_num\_components\ -\/\ 1,\ which\ writes\ to\ the\ last\ channel,}}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ i.e.\ \ the\ alpha\ channel.}}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ dx\ =\ (cdata-\/>\_num\_components\ -\/\ 1)\ *\ cdata-\/>\_component\_width;}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ sx\ =\ 0;}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ get\_video\_width();\ ++x)\ \{}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \ \ \ \ dest[dx]\ =\ sch[sx];}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ \ \ dx\ +=\ dest\_x\_pitch;}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \ \ sx\ +=\ x\_pitch;}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \ \ dest\ +=\ dest\_y\_pitch;}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ sch\ +=\ y\_pitch;}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00366\ \ \ \ \ \}}
+\DoxyCodeLine{00367\ \ \ \}}
+\DoxyCodeLine{00368\ \}}
+\DoxyCodeLine{00369\ }
+\DoxyCodeLine{00374\ \textcolor{keywordtype}{bool}\ OpenCVTexture::}
+\DoxyCodeLine{00375\ do\_read\_one(\mbox{\hyperlink{classTexture_1_1CData}{Texture::CData}}\ *cdata,}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&fullpath,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&alpha\_fullpath,}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ z,\ \textcolor{keywordtype}{int}\ n,\ \textcolor{keywordtype}{int}\ primary\_file\_num\_channels,\ \textcolor{keywordtype}{int}\ alpha\_file\_channel,}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ \&options,}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ header\_only,\ \mbox{\hyperlink{classBamCacheRecord}{BamCacheRecord}}\ *record)\ \{}
+\DoxyCodeLine{00380\ \ \ \textcolor{keywordflow}{if}\ (record\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00381\ \ \ \ \ record-\/>add\_dependent\_file(fullpath);}
+\DoxyCodeLine{00382\ \ \ \}}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00384\ \ \ nassertr(n\ ==\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00385\ \ \ nassertr(z\ >=\ 0\ \&\&\ z\ <\ cdata-\/>\_z\_size,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00386\ }
+\DoxyCodeLine{00387\ \ \ VideoPage\ \&page\ =\ do\_modify\_page(cdata,\ z);}
+\DoxyCodeLine{00388\ \ \ \textcolor{keywordflow}{if}\ (!page.\_color.read(fullpath))\ \{}
+\DoxyCodeLine{00389\ \ \ \ \ vision\_cat.error()}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}OpenCV\ couldn't\ read\ "{}}\ <<\ fullpath\ <<\ \textcolor{stringliteral}{"{}\ as\ video.\(\backslash\)n"{}};}
+\DoxyCodeLine{00391\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00392\ \ \ \}}
+\DoxyCodeLine{00393\ \ \ \textcolor{keywordflow}{if}\ (!alpha\_fullpath.empty())\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \textcolor{keywordflow}{if}\ (!page.\_alpha.read(alpha\_fullpath))\ \{}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ vision\_cat.error()}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}OpenCV\ couldn't\ read\ "{}}\ <<\ alpha\_fullpath\ <<\ \textcolor{stringliteral}{"{}\ as\ video.\(\backslash\)n"{}};}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ page.\_color.clear();}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00399\ \ \ \ \ \}}
+\DoxyCodeLine{00400\ \ \ \}}
+\DoxyCodeLine{00401\ }
+\DoxyCodeLine{00402\ \ \ \textcolor{keywordflow}{if}\ (z\ ==\ 0)\ \{}
+\DoxyCodeLine{00403\ \ \ \ \ \textcolor{keywordflow}{if}\ (!has\_name())\ \{}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ set\_name(fullpath.get\_basename\_wo\_extension());}
+\DoxyCodeLine{00405\ \ \ \ \ \}}
+\DoxyCodeLine{00406\ \ \ \ \ \textcolor{comment}{//\ Don't\ use\ has\_filename()\ here,\ it\ will\ cause\ a\ deadlock}}
+\DoxyCodeLine{00407\ \ \ \ \ \textcolor{keywordflow}{if}\ (cdata-\/>\_filename.empty())\ \{}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ cdata-\/>\_filename\ =\ fullpath;}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ cdata-\/>\_alpha\_filename\ =\ alpha\_fullpath;}
+\DoxyCodeLine{00410\ \ \ \ \ \}}
+\DoxyCodeLine{00411\ }
+\DoxyCodeLine{00412\ \ \ \ \ cdata-\/>\_fullpath\ =\ fullpath;}
+\DoxyCodeLine{00413\ \ \ \ \ cdata-\/>\_alpha\_fullpath\ =\ alpha\_fullpath;}
+\DoxyCodeLine{00414\ \ \ \}}
+\DoxyCodeLine{00415\ }
+\DoxyCodeLine{00416\ \ \ cdata-\/>\_primary\_file\_num\_channels\ =\ 3;}
+\DoxyCodeLine{00417\ \ \ cdata-\/>\_alpha\_file\_channel\ =\ 0;}
+\DoxyCodeLine{00418\ }
+\DoxyCodeLine{00419\ \ \ \textcolor{keywordflow}{if}\ (alpha\_fullpath.empty())\ \{}
+\DoxyCodeLine{00420\ \ \ \ \ \textcolor{comment}{//\ Only\ one\ RGB\ movie.}}
+\DoxyCodeLine{00421\ \ \ \ \ \textcolor{keywordflow}{if}\ (!do\_reconsider\_video\_properties(cdata,\ page.\_color,\ 3,\ z,\ options))\ \{}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ page.\_color.clear();}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00424\ \ \ \ \ \}}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00427\ \ \ \ \ \textcolor{comment}{//\ An\ RGB\ movie\ combined\ with\ an\ alpha\ movie.}}
+\DoxyCodeLine{00428\ \ \ \ \ cdata-\/>\_alpha\_file\_channel\ =\ alpha\_file\_channel;}
+\DoxyCodeLine{00429\ }
+\DoxyCodeLine{00430\ \ \ \ \ \textcolor{keywordflow}{if}\ (!do\_reconsider\_video\_properties(cdata,\ page.\_color,\ 4,\ z,\ options))\ \{}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ page.\_color.clear();}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ page.\_alpha.clear();}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00434\ \ \ \ \ \}}
+\DoxyCodeLine{00435\ }
+\DoxyCodeLine{00436\ \ \ \ \ \textcolor{keywordflow}{if}\ (!do\_reconsider\_video\_properties(cdata,\ page.\_alpha,\ 4,\ z,\ options))\ \{}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ page.\_color.clear();}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ page.\_alpha.clear();}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00440\ \ \ \ \ \}}
+\DoxyCodeLine{00441\ \ \ \}}
+\DoxyCodeLine{00442\ }
+\DoxyCodeLine{00443\ \ \ set\_loaded\_from\_image();}
+\DoxyCodeLine{00444\ \ \ clear\_current\_frame();}
+\DoxyCodeLine{00445\ \ \ do\_update\_frame(cdata,\ 0);}
+\DoxyCodeLine{00446\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00447\ \}}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00453\ \textcolor{keywordtype}{bool}\ OpenCVTexture::}
+\DoxyCodeLine{00454\ do\_load\_one(\mbox{\hyperlink{classTexture_1_1CData}{Texture::CData}}\ *cdata,}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&pnmimage,\ \textcolor{keyword}{const}\ std::string\ \&name,}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ z,\ \textcolor{keywordtype}{int}\ n,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLoaderOptions}{LoaderOptions}}\ \&options)\ \{}
+\DoxyCodeLine{00457\ \ \ \textcolor{keywordflow}{if}\ (z\ <=\ (\textcolor{keywordtype}{int})\_pages.size())\ \{}
+\DoxyCodeLine{00458\ \ \ \ \ VideoPage\ \&page\ =\ do\_modify\_page(cdata,\ z);}
+\DoxyCodeLine{00459\ \ \ \ \ page.\_color.clear();}
+\DoxyCodeLine{00460\ \ \ \ \ page.\_alpha.clear();}
+\DoxyCodeLine{00461\ \ \ \}}
+\DoxyCodeLine{00462\ }
+\DoxyCodeLine{00463\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classTexture_a095a372175469faf3c3cadd96d33a5cf}{Texture::do\_load\_one}}(cdata,\ pnmimage,\ name,\ z,\ n,\ options);}
+\DoxyCodeLine{00464\ \}}
+\DoxyCodeLine{00465\ }
+\DoxyCodeLine{00469\ \textcolor{keywordtype}{void}\ OpenCVTexture::}
+\DoxyCodeLine{00470\ register\_with\_read\_factory()\ \{}
+\DoxyCodeLine{00471\ \ \ \textcolor{comment}{//\ Since\ Texture\ is\ such\ a\ funny\ object\ that\ is\ reloaded\ from\ the}}
+\DoxyCodeLine{00472\ \ \ \textcolor{comment}{//\ TexturePool\ each\ time,\ instead\ of\ actually\ being\ read\ fully\ from\ the\ bam}}
+\DoxyCodeLine{00473\ \ \ \textcolor{comment}{//\ file,\ and\ since\ the\ VideoTexture\ and\ OpenCVTexture\ classes\ don't\ really}}
+\DoxyCodeLine{00474\ \ \ \textcolor{comment}{//\ add\ any\ useful\ data\ to\ the\ bam\ record,\ we\ don't\ need\ to\ define}}
+\DoxyCodeLine{00475\ \ \ \textcolor{comment}{//\ make\_from\_bam(),\ fillin(),\ or\ write\_datagram()\ in\ this\ class-\/-\/we\ just}}
+\DoxyCodeLine{00476\ \ \ \textcolor{comment}{//\ inherit\ the\ same\ functions\ from\ Texture.}}
+\DoxyCodeLine{00477\ }
+\DoxyCodeLine{00478\ \ \ \textcolor{comment}{//\ We\ do,\ however,\ have\ to\ register\ this\ class\ with\ the\ BamReader,\ to\ avoid}}
+\DoxyCodeLine{00479\ \ \ \textcolor{comment}{//\ warnings\ about\ creating\ the\ wrong\ kind\ of\ object\ from\ the\ bam\ file.}}
+\DoxyCodeLine{00480\ \ \ BamReader::get\_factory()-\/>register\_factory(get\_class\_type(),\ make\_from\_bam);}
+\DoxyCodeLine{00481\ \}}
+\DoxyCodeLine{00482\ }
+\DoxyCodeLine{00486\ OpenCVTexture::VideoStream::}
+\DoxyCodeLine{00487\ VideoStream()\ :}
+\DoxyCodeLine{00488\ \ \ \_capture(nullptr),}
+\DoxyCodeLine{00489\ \ \ \_camera\_index(-\/1),}
+\DoxyCodeLine{00490\ \ \ \_next\_frame(0)}
+\DoxyCodeLine{00491\ \{}
+\DoxyCodeLine{00492\ \}}
+\DoxyCodeLine{00493\ }
+\DoxyCodeLine{00497\ OpenCVTexture::VideoStream::}
+\DoxyCodeLine{00498\ VideoStream(\textcolor{keyword}{const}\ OpenCVTexture::VideoStream\ \&copy)\ :}
+\DoxyCodeLine{00499\ \ \ \_capture(nullptr),}
+\DoxyCodeLine{00500\ \ \ \_camera\_index(-\/1)}
+\DoxyCodeLine{00501\ \{}
+\DoxyCodeLine{00502\ \ \ \textcolor{comment}{//\ Rather\ than\ copying\ the\ \_capture\ pointer,\ we\ must\ open\ a\ new\ stream\ that}}
+\DoxyCodeLine{00503\ \ \ \textcolor{comment}{//\ references\ the\ same\ file.}}
+\DoxyCodeLine{00504\ \ \ \textcolor{keywordflow}{if}\ (copy.is\_valid())\ \{}
+\DoxyCodeLine{00505\ \ \ \ \ \textcolor{keywordflow}{if}\ (copy.is\_from\_file())\ \{}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ read(copy.\_filename);}
+\DoxyCodeLine{00507\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ from\_camera(copy.\_camera\_index);}
+\DoxyCodeLine{00509\ \ \ \ \ \}}
+\DoxyCodeLine{00510\ \ \ \}}
+\DoxyCodeLine{00511\ \}}
+\DoxyCodeLine{00512\ }
+\DoxyCodeLine{00516\ OpenCVTexture::VideoStream::}
+\DoxyCodeLine{00517\ \string~VideoStream()\ \{}
+\DoxyCodeLine{00518\ \ \ clear();}
+\DoxyCodeLine{00519\ \}}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00536\ \textcolor{keywordtype}{bool}\ OpenCVTexture::VideoStream::}
+\DoxyCodeLine{00537\ get\_frame\_data(\textcolor{keywordtype}{int}\ frame,}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *\&r,}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *\&g,}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *\&b,}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \&x\_pitch,\ \textcolor{keywordtype}{int}\ \&y\_pitch)\ \{}
+\DoxyCodeLine{00542\ \ \ nassertr(is\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00543\ }
+\DoxyCodeLine{00544\ \ \ \textcolor{keywordflow}{if}\ (is\_from\_file()\ \&\&\ \_next\_frame\ !=\ frame)\ \{}
+\DoxyCodeLine{00545\ \ \ \ \ cvSetCaptureProperty(\_capture,\ CV\_CAP\_PROP\_POS\_FRAMES,\ frame);}
+\DoxyCodeLine{00546\ \ \ \}}
+\DoxyCodeLine{00547\ }
+\DoxyCodeLine{00548\ \ \ \_next\_frame\ =\ frame\ +\ 1;}
+\DoxyCodeLine{00549\ \ \ \mbox{\hyperlink{structIplImage}{IplImage}}\ *image\ =\ cvQueryFrame(\_capture);}
+\DoxyCodeLine{00550\ \ \ \textcolor{keywordflow}{if}\ (image\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00551\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00552\ \ \ \}}
+\DoxyCodeLine{00553\ }
+\DoxyCodeLine{00554\ \ \ r\ =\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)image-\/>imageData;}
+\DoxyCodeLine{00555\ \ \ g\ =\ r\ +\ 1;}
+\DoxyCodeLine{00556\ \ \ b\ =\ g\ +\ 1;}
+\DoxyCodeLine{00557\ \ \ x\_pitch\ =\ 3;}
+\DoxyCodeLine{00558\ \ \ y\_pitch\ =\ image-\/>widthStep;}
+\DoxyCodeLine{00559\ }
+\DoxyCodeLine{00560\ \ \ \textcolor{keywordflow}{if}\ (image-\/>dataOrder\ ==\ 1)\ \{}
+\DoxyCodeLine{00561\ \ \ \ \ \textcolor{comment}{//\ Separate\ channel\ images.\ \ That\ means\ a\ block\ of\ r,\ followed\ by\ a\ block}}
+\DoxyCodeLine{00562\ \ \ \ \ \textcolor{comment}{//\ of\ g,\ followed\ by\ a\ block\ of\ b.}}
+\DoxyCodeLine{00563\ \ \ \ \ x\_pitch\ =\ 1;}
+\DoxyCodeLine{00564\ \ \ \ \ g\ =\ r\ +\ image-\/>height\ *\ y\_pitch;}
+\DoxyCodeLine{00565\ \ \ \ \ b\ =\ g\ +\ image-\/>height\ *\ y\_pitch;}
+\DoxyCodeLine{00566\ \ \ \}}
+\DoxyCodeLine{00567\ }
+\DoxyCodeLine{00568\ \ \ \textcolor{keywordflow}{if}\ (image-\/>origin\ ==\ 0)\ \{}
+\DoxyCodeLine{00569\ \ \ \ \ \textcolor{comment}{//\ The\ image\ data\ starts\ with\ the\ top\ row\ and\ ends\ with\ the\ bottom\ row-\/-\/}}
+\DoxyCodeLine{00570\ \ \ \ \ \textcolor{comment}{//\ the\ opposite\ of\ Texture::\_ram\_data's\ storage\ convention.\ \ Therefore,\ we}}
+\DoxyCodeLine{00571\ \ \ \ \ \textcolor{comment}{//\ must\ increment\ the\ initial\ pointers\ to\ the\ last\ row,\ and\ count}}
+\DoxyCodeLine{00572\ \ \ \ \ \textcolor{comment}{//\ backwards.}}
+\DoxyCodeLine{00573\ \ \ \ \ r\ +=\ (image-\/>height\ -\/\ 1)\ *\ y\_pitch;}
+\DoxyCodeLine{00574\ \ \ \ \ g\ +=\ (image-\/>height\ -\/\ 1)\ *\ y\_pitch;}
+\DoxyCodeLine{00575\ \ \ \ \ b\ +=\ (image-\/>height\ -\/\ 1)\ *\ y\_pitch;}
+\DoxyCodeLine{00576\ \ \ \ \ y\_pitch\ =\ -\/y\_pitch;}
+\DoxyCodeLine{00577\ \ \ \}}
+\DoxyCodeLine{00578\ }
+\DoxyCodeLine{00579\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00580\ \}}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00586\ \textcolor{keywordtype}{bool}\ OpenCVTexture::VideoStream::}
+\DoxyCodeLine{00587\ read(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{00588\ \ \ clear();}
+\DoxyCodeLine{00589\ }
+\DoxyCodeLine{00590\ \ \ std::string\ os\_specific\ =\ filename.\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}();}
+\DoxyCodeLine{00591\ \ \ \_capture\ =\ cvCaptureFromFile(os\_specific.c\_str());}
+\DoxyCodeLine{00592\ \ \ \textcolor{keywordflow}{if}\ (\_capture\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00593\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00594\ \ \ \}}
+\DoxyCodeLine{00595\ \ \ \_filename\ =\ filename;}
+\DoxyCodeLine{00596\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00597\ \}}
+\DoxyCodeLine{00598\ }
+\DoxyCodeLine{00603\ \textcolor{keywordtype}{bool}\ OpenCVTexture::VideoStream::}
+\DoxyCodeLine{00604\ from\_camera(\textcolor{keywordtype}{int}\ camera\_index)\ \{}
+\DoxyCodeLine{00605\ \ \ clear();}
+\DoxyCodeLine{00606\ }
+\DoxyCodeLine{00607\ \ \ \_capture\ =\ cvCaptureFromCAM(camera\_index);}
+\DoxyCodeLine{00608\ \ \ \textcolor{keywordflow}{if}\ (\_capture\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00609\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00610\ \ \ \}}
+\DoxyCodeLine{00611\ \ \ \_camera\_index\ =\ camera\_index;}
+\DoxyCodeLine{00612\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00613\ \}}
+\DoxyCodeLine{00614\ }
+\DoxyCodeLine{00618\ \textcolor{keywordtype}{void}\ OpenCVTexture::VideoStream::}
+\DoxyCodeLine{00619\ clear()\ \{}
+\DoxyCodeLine{00620\ \ \ \textcolor{keywordflow}{if}\ (\_capture\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00621\ \ \ \ \ cvReleaseCapture(\&\_capture);}
+\DoxyCodeLine{00622\ \ \ \ \ \_capture\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00623\ \ \ \}}
+\DoxyCodeLine{00624\ \ \ \_filename\ =\ \mbox{\hyperlink{classFilename}{Filename}}();}
+\DoxyCodeLine{00625\ \ \ \_camera\_index\ =\ -\/1;}
+\DoxyCodeLine{00626\ \ \ \_next\_frame\ =\ 0;}
+\DoxyCodeLine{00627\ \}}
+\DoxyCodeLine{00628\ }
+\DoxyCodeLine{00629\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENCV}}
+
+\end{DoxyCode}

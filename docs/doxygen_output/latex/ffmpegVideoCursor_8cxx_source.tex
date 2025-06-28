@@ -1,0 +1,1112 @@
+\doxysection{ffmpeg\+Video\+Cursor.\+cxx}
+\hypertarget{ffmpegVideoCursor_8cxx_source}{}\label{ffmpegVideoCursor_8cxx_source}\index{panda/src/ffmpeg/ffmpegVideoCursor.cxx@{panda/src/ffmpeg/ffmpegVideoCursor.cxx}}
+\mbox{\hyperlink{ffmpegVideoCursor_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{ffmpegVideoCursor_8h}{ffmpegVideoCursor.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__ffmpeg_8h}{config\_ffmpeg.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatCollector_8h}{pStatCollector.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimer_8h}{pStatTimer.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{mutexHolder_8h}{mutexHolder.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{reMutexHolder_8h}{reMutexHolder.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{ffmpegVideo_8h}{ffmpegVideo.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bamReader_8h}{bamReader.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \{}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\ \ \#include\ <libavcodec/avcodec.h>}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\ \ \#include\ <libavformat/avformat.h>}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\ \ \#include\ <libavutil/pixdesc.h>}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#ifdef\ HAVE\_SWSCALE}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\ \ \#include\ <libswscale/swscale.h>}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00029\ \}}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \mbox{\hyperlink{classReMutex}{ReMutex}}\ FfmpegVideoCursor::\_av\_lock;}
+\DoxyCodeLine{00032\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ FfmpegVideoCursor::\_type\_handle;}
+\DoxyCodeLine{00033\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ FfmpegVideoCursor::FfmpegBuffer::\_type\_handle;}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00035\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ FfmpegVideoCursor::\_fetch\_buffer\_pcollector(\textcolor{stringliteral}{"{}*:FFMPEG\ Video\ Decoding:Fetch"{}});}
+\DoxyCodeLine{00036\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ FfmpegVideoCursor::\_seek\_pcollector(\textcolor{stringliteral}{"{}*:FFMPEG\ Video\ Decoding:Seek"{}});}
+\DoxyCodeLine{00037\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ FfmpegVideoCursor::\_export\_frame\_pcollector(\textcolor{stringliteral}{"{}*:FFMPEG\ Convert\ Video\ to\ BGR"{}});}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \textcolor{preprocessor}{\#if\ LIBAVUTIL\_VERSION\_INT\ <\ AV\_VERSION\_INT(52,\ 32,\ 100)}}
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\ \ \#define\ AV\_PIX\_FMT\_FLAG\_ALPHA\ PIX\_FMT\_ALPHA}}
+\DoxyCodeLine{00041\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00046\ FfmpegVideoCursor::}
+\DoxyCodeLine{00047\ FfmpegVideoCursor()\ :}
+\DoxyCodeLine{00048\ \ \ \_max\_readahead\_frames(0),}
+\DoxyCodeLine{00049\ \ \ \_thread\_priority(ffmpeg\_thread\_priority),}
+\DoxyCodeLine{00050\ \ \ \_pixel\_format((int)AV\_PIX\_FMT\_NONE),}
+\DoxyCodeLine{00051\ \ \ \_lock(\textcolor{stringliteral}{"{}FfmpegVideoCursor::\_lock"{}}),}
+\DoxyCodeLine{00052\ \ \ \_action\_cvar(\_lock),}
+\DoxyCodeLine{00053\ \ \ \_thread\_status(TS\_stopped),}
+\DoxyCodeLine{00054\ \ \ \_seek\_frame(0),}
+\DoxyCodeLine{00055\ \ \ \_packet(nullptr),}
+\DoxyCodeLine{00056\ \ \ \_format\_ctx(nullptr),}
+\DoxyCodeLine{00057\ \ \ \_video\_ctx(nullptr),}
+\DoxyCodeLine{00058\ \ \ \_convert\_ctx(nullptr),}
+\DoxyCodeLine{00059\ \ \ \_video\_index(-\/1),}
+\DoxyCodeLine{00060\ \ \ \_frame(nullptr),}
+\DoxyCodeLine{00061\ \ \ \_frame\_out(nullptr),}
+\DoxyCodeLine{00062\ \ \ \_eof\_known(false)}
+\DoxyCodeLine{00063\ \{}
+\DoxyCodeLine{00064\ \}}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00070\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00071\ init\_from(\mbox{\hyperlink{classFfmpegVideo}{FfmpegVideo}}\ *source)\ \{}
+\DoxyCodeLine{00072\ \ \ nassertv(\_thread\ ==\ \textcolor{keyword}{nullptr}\ \&\&\ \_thread\_status\ ==\ TS\_stopped);}
+\DoxyCodeLine{00073\ \ \ nassertv(source\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00074\ \ \ \_source\ =\ source;}
+\DoxyCodeLine{00075\ \ \ \_filename\ =\ \_source-\/>get\_filename();}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00077\ \ \ \textcolor{keywordflow}{if}\ (!open\_stream())\ \{}
+\DoxyCodeLine{00078\ \ \ \ \ cleanup();}
+\DoxyCodeLine{00079\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00080\ \ \ \}}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00082\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(55,\ 45,\ 101)}}
+\DoxyCodeLine{00083\ \ \ \_frame\ =\ av\_frame\_alloc();}
+\DoxyCodeLine{00084\ \ \ \_frame\_out\ =\ av\_frame\_alloc();}
+\DoxyCodeLine{00085\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00086\ \ \ \_frame\ =\ avcodec\_alloc\_frame();}
+\DoxyCodeLine{00087\ \ \ \_frame\_out\ =\ avcodec\_alloc\_frame();}
+\DoxyCodeLine{00088\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00090\ \ \ \textcolor{keywordflow}{if}\ ((\_frame\ ==\ \textcolor{keyword}{nullptr})||(\_frame\_out\ ==\ \textcolor{keyword}{nullptr}))\ \{}
+\DoxyCodeLine{00091\ \ \ \ \ cleanup();}
+\DoxyCodeLine{00092\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00093\ \ \ \}}
+\DoxyCodeLine{00094\ }
+\DoxyCodeLine{00095\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 12,\ 100)}}
+\DoxyCodeLine{00096\ \ \ \_packet\ =\ av\_packet\_alloc();}
+\DoxyCodeLine{00097\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00098\ \ \ \_packet\ =\ \textcolor{keyword}{new}\ AVPacket;}
+\DoxyCodeLine{00099\ \ \ av\_init\_packet(\_packet);}
+\DoxyCodeLine{00100\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \ \ fetch\_packet(0);}
+\DoxyCodeLine{00103\ \ \ fetch\_frame(-\/1);}
+\DoxyCodeLine{00104\ \ \ \_initial\_dts\ =\ \_begin\_frame;}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00106\ \ \ \_current\_frame\ =\ -\/1;}
+\DoxyCodeLine{00107\ \ \ \_eof\_known\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00108\ \ \ \_eof\_frame\ =\ 0;}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ av\_holder(\_av\_lock);}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \textcolor{comment}{//\ Check\ if\ we\ got\ an\ alpha\ format.\ \ Please\ note\ that\ some\ video\ codecs}}
+\DoxyCodeLine{00113\ \ \ \textcolor{comment}{//\ (eg.\ libvpx)\ change\ the\ pix\_fmt\ after\ decoding\ the\ first\ frame,\ which\ is}}
+\DoxyCodeLine{00114\ \ \ \textcolor{comment}{//\ why\ we\ didn't\ do\ this\ earlier.}}
+\DoxyCodeLine{00115\ \ \ \textcolor{keywordflow}{switch}\ (\_video\_ctx-\/>pix\_fmt)\ \{}
+\DoxyCodeLine{00116\ \ \ \textcolor{keywordflow}{case}\ AV\_PIX\_FMT\_GRAY8:}
+\DoxyCodeLine{00117\ \ \ \ \ \_num\_components\ =\ 1;}
+\DoxyCodeLine{00118\ \ \ \ \ \_pixel\_format\ =\ (int)AV\_PIX\_FMT\_GRAY8;}
+\DoxyCodeLine{00119\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{case}\ AV\_PIX\_FMT\_Y400A:\ \textcolor{comment}{//\ aka\ AV\_PIX\_FMT\_YA8}}
+\DoxyCodeLine{00121\ \ \ \ \ \_num\_components\ =\ 2;}
+\DoxyCodeLine{00122\ \ \ \ \ \_pixel\_format\ =\ (int)AV\_PIX\_FMT\_Y400A;}
+\DoxyCodeLine{00123\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00124\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00125\ \ \ \ \ \textcolor{keyword}{const}\ AVPixFmtDescriptor\ *desc\ =\ av\_pix\_fmt\_desc\_get(\_video\_ctx-\/>pix\_fmt);}
+\DoxyCodeLine{00126\ \ \ \ \ \textcolor{keywordflow}{if}\ (desc\ \&\&\ (desc-\/>flags\ \&\ AV\_PIX\_FMT\_FLAG\_ALPHA)\ !=\ 0)\ \{}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \_num\_components\ =\ 4;}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ \_pixel\_format\ =\ (int)AV\_PIX\_FMT\_BGRA;}
+\DoxyCodeLine{00129\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \_num\_components\ =\ 3;}
+\DoxyCodeLine{00131\ \ \ \ \ \ \ \_pixel\_format\ =\ (int)AV\_PIX\_FMT\_BGR24;}
+\DoxyCodeLine{00132\ \ \ \ \ \}}
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00134\ \ \ \}}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00136\ \textcolor{preprocessor}{\#ifdef\ HAVE\_SWSCALE}}
+\DoxyCodeLine{00137\ \ \ nassertv(\_convert\_ctx\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00138\ \ \ \_convert\_ctx\ =\ sws\_getContext(\_size\_x,\ \_size\_y,\ \_video\_ctx-\/>pix\_fmt,}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_size\_x,\ \_size\_y,\ (AVPixelFormat)\_pixel\_format,}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ SWS\_BILINEAR\ |\ SWS\_PRINT\_INFO,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00141\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00142\ \ \ \textcolor{keywordflow}{if}\ (\_video\_ctx-\/>pix\_fmt\ !=\ \_pixel\_format)\ \{}
+\DoxyCodeLine{00143\ \ \ \ \ \textcolor{keyword}{const}\ AVPixFmtDescriptor\ *desc\ =\ av\_pix\_fmt\_desc\_get(\_video\_ctx-\/>pix\_fmt);}
+\DoxyCodeLine{00144\ \ \ \ \ ffmpeg\_cat.error()}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Video\ with\ pixel\ format\ "{}}\ <<\ (desc\ ?\ desc-\/>name\ :\ \textcolor{stringliteral}{"{}?"{}})}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ needs\ conversion,\ but\ libswscale\ support\ is\ not\ enabled.\(\backslash\)n"{}};}
+\DoxyCodeLine{00147\ \ \ \ \ cleanup();}
+\DoxyCodeLine{00148\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00149\ \ \ \}}
+\DoxyCodeLine{00150\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_SWSCALE}}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00152\ \textcolor{preprocessor}{\#ifdef\ HAVE\_THREADS}}
+\DoxyCodeLine{00153\ \ \ set\_max\_readahead\_frames(ffmpeg\_max\_readahead\_frames);}
+\DoxyCodeLine{00154\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_THREADS}}
+\DoxyCodeLine{00155\ \}}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00160\ FfmpegVideoCursor::}
+\DoxyCodeLine{00161\ FfmpegVideoCursor(\mbox{\hyperlink{classFfmpegVideo}{FfmpegVideo}}\ *src)\ :}
+\DoxyCodeLine{00162\ \ \ \_max\_readahead\_frames(0),}
+\DoxyCodeLine{00163\ \ \ \_thread\_priority(ffmpeg\_thread\_priority),}
+\DoxyCodeLine{00164\ \ \ \_lock(\textcolor{stringliteral}{"{}FfmpegVideoCursor::\_lock"{}}),}
+\DoxyCodeLine{00165\ \ \ \_action\_cvar(\_lock),}
+\DoxyCodeLine{00166\ \ \ \_thread\_status(TS\_stopped),}
+\DoxyCodeLine{00167\ \ \ \_seek\_frame(0),}
+\DoxyCodeLine{00168\ \ \ \_packet(nullptr),}
+\DoxyCodeLine{00169\ \ \ \_format\_ctx(nullptr),}
+\DoxyCodeLine{00170\ \ \ \_video\_ctx(nullptr),}
+\DoxyCodeLine{00171\ \ \ \_convert\_ctx(nullptr),}
+\DoxyCodeLine{00172\ \ \ \_video\_index(-\/1),}
+\DoxyCodeLine{00173\ \ \ \_frame(nullptr),}
+\DoxyCodeLine{00174\ \ \ \_frame\_out(nullptr),}
+\DoxyCodeLine{00175\ \ \ \_eof\_known(false)}
+\DoxyCodeLine{00176\ \{}
+\DoxyCodeLine{00177\ \ \ init\_from(src);}
+\DoxyCodeLine{00178\ \}}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00183\ FfmpegVideoCursor::}
+\DoxyCodeLine{00184\ \string~FfmpegVideoCursor()\ \{}
+\DoxyCodeLine{00185\ \ \ cleanup();}
+\DoxyCodeLine{00186\ \}}
+\DoxyCodeLine{00187\ }
+\DoxyCodeLine{00199\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00200\ set\_max\_readahead\_frames(\textcolor{keywordtype}{int}\ max\_readahead\_frames)\ \{}
+\DoxyCodeLine{00201\ \textcolor{preprocessor}{\#ifndef\ HAVE\_THREADS}}
+\DoxyCodeLine{00202\ \ \ \textcolor{keywordflow}{if}\ (max\_readahead\_frames\ >\ 0)\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ ffmpeg\_cat.warning()}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ set\ max\_readahead\_frames\ to\ "{}}\ <<\ max\_readahead\_frames}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}:\ threading\ not\ available.\(\backslash\)n"{}};}
+\DoxyCodeLine{00206\ \ \ \ \ max\_readahead\_frames\ =\ 0;}
+\DoxyCodeLine{00207\ \ \ \}}
+\DoxyCodeLine{00208\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_THREADS}}
+\DoxyCodeLine{00209\ }
+\DoxyCodeLine{00210\ \ \ \_max\_readahead\_frames\ =\ max\_readahead\_frames;}
+\DoxyCodeLine{00211\ \ \ \textcolor{keywordflow}{if}\ (\_max\_readahead\_frames\ >\ 0)\ \{}
+\DoxyCodeLine{00212\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_thread\_status\ ==\ TS\_stopped)\ \{}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ start\_thread();}
+\DoxyCodeLine{00214\ \ \ \ \ \}}
+\DoxyCodeLine{00215\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_thread\_status\ !=\ TS\_stopped)\ \{}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ stop\_thread();}
+\DoxyCodeLine{00218\ \ \ \ \ \}}
+\DoxyCodeLine{00219\ \ \ \}}
+\DoxyCodeLine{00220\ \}}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00226\ \textcolor{keywordtype}{int}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00227\ get\_max\_readahead\_frames()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordflow}{return}\ \_max\_readahead\_frames;}
+\DoxyCodeLine{00229\ \}}
+\DoxyCodeLine{00230\ }
+\DoxyCodeLine{00238\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00239\ set\_thread\_priority(ThreadPriority\ thread\_priority)\ \{}
+\DoxyCodeLine{00240\ \ \ \textcolor{keywordflow}{if}\ (\_thread\_priority\ !=\ thread\_priority)\ \{}
+\DoxyCodeLine{00241\ \ \ \ \ \_thread\_priority\ =\ thread\_priority;}
+\DoxyCodeLine{00242\ \ \ \ \ \textcolor{keywordflow}{if}\ (is\_thread\_started())\ \{}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ stop\_thread();}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ start\_thread();}
+\DoxyCodeLine{00245\ \ \ \ \ \}}
+\DoxyCodeLine{00246\ \ \ \}}
+\DoxyCodeLine{00247\ \}}
+\DoxyCodeLine{00248\ }
+\DoxyCodeLine{00254\ ThreadPriority\ FfmpegVideoCursor::}
+\DoxyCodeLine{00255\ get\_thread\_priority()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00256\ \ \ \textcolor{keywordflow}{return}\ \_thread\_priority;}
+\DoxyCodeLine{00257\ \}}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00265\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00266\ start\_thread()\ \{}
+\DoxyCodeLine{00267\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ \textcolor{keywordflow}{if}\ (\_thread\_status\ ==\ TS\_stopped\ \&\&\ \_max\_readahead\_frames\ >\ 0)\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \textcolor{comment}{//\ Get\ a\ unique\ name\ for\ the\ thread's\ sync\ name.}}
+\DoxyCodeLine{00271\ \ \ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ strm;}
+\DoxyCodeLine{00272\ \ \ \ \ strm\ <<\ (\textcolor{keywordtype}{void}\ *)\textcolor{keyword}{this};}
+\DoxyCodeLine{00273\ \ \ \ \ \_sync\_name\ =\ strm.str();}
+\DoxyCodeLine{00274\ }
+\DoxyCodeLine{00275\ \ \ \ \ \textcolor{comment}{//\ Create\ and\ start\ the\ thread\ object.}}
+\DoxyCodeLine{00276\ \ \ \ \ \_thread\_status\ =\ TS\_wait;}
+\DoxyCodeLine{00277\ \ \ \ \ \_thread\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGenericThread}{GenericThread}}(\_filename.get\_basename(),\ \_sync\_name,\ [\textcolor{keyword}{this}]\{}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ thread\_main();}
+\DoxyCodeLine{00279\ \ \ \ \ \});}
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_thread-\/>start(\_thread\_priority,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \textcolor{comment}{//\ Couldn't\ start\ the\ thread.}}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \_thread\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \_thread\_status\ =\ TS\_stopped;}
+\DoxyCodeLine{00284\ \ \ \ \ \}}
+\DoxyCodeLine{00285\ \ \ \}}
+\DoxyCodeLine{00286\ \}}
+\DoxyCodeLine{00287\ }
+\DoxyCodeLine{00295\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00296\ stop\_thread()\ \{}
+\DoxyCodeLine{00297\ \ \ \textcolor{keywordflow}{if}\ (\_thread\_status\ !=\ TS\_stopped)\ \{}
+\DoxyCodeLine{00298\ \ \ \ \ PT(\mbox{\hyperlink{classGenericThread}{GenericThread}})\ thread\ =\ \_thread;}
+\DoxyCodeLine{00299\ \ \ \ \ \{}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_thread\_status\ !=\ TS\_stopped)\ \{}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \ \ \_thread\_status\ =\ TS\_shutdown;}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \_action\_cvar.notify();}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \_thread\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00306\ \ \ \ \ \}}
+\DoxyCodeLine{00307\ }
+\DoxyCodeLine{00308\ \ \ \ \ \textcolor{comment}{//\ Now\ that\ we've\ released\ the\ lock,\ we\ can\ join\ the\ thread.}}
+\DoxyCodeLine{00309\ \ \ \ \ thread-\/>join();}
+\DoxyCodeLine{00310\ \ \ \}}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \textcolor{comment}{//\ This\ is\ a\ good\ time\ to\ clean\ up\ all\ of\ the\ allocated\ frame\ objects.\ \ It's}}
+\DoxyCodeLine{00313\ \ \ \textcolor{comment}{//\ not\ really\ necessary\ to\ be\ holding\ the\ lock,\ since\ the\ thread\ is\ gone,}}
+\DoxyCodeLine{00314\ \ \ \textcolor{comment}{//\ but\ we'll\ grab\ it\ anyway\ just\ in\ case\ someone\ else\ starts\ the\ thread\ up}}
+\DoxyCodeLine{00315\ \ \ \textcolor{comment}{//\ again.}}
+\DoxyCodeLine{00316\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00318\ \ \ \_readahead\_frames.clear();}
+\DoxyCodeLine{00319\ \}}
+\DoxyCodeLine{00320\ }
+\DoxyCodeLine{00325\ \textcolor{keywordtype}{bool}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00326\ is\_thread\_started()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00327\ \ \ \textcolor{keywordflow}{return}\ (\_thread\_status\ !=\ TS\_stopped);}
+\DoxyCodeLine{00328\ \}}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00333\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFfmpegVideoCursor_a234f377201846bf460f9500f8a49ad28}{FfmpegVideoCursor::}}}
+\DoxyCodeLine{00334\ \mbox{\hyperlink{classFfmpegVideoCursor_a234f377201846bf460f9500f8a49ad28}{set\_time}}(\textcolor{keywordtype}{double}\ timestamp,\ \textcolor{keywordtype}{int}\ loop\_count)\ \{}
+\DoxyCodeLine{00335\ \ \ \textcolor{keywordtype}{int}\ frame\ =\ (int)(timestamp\ /\ \_video\_timebase\ +\ 0.5);}
+\DoxyCodeLine{00336\ }
+\DoxyCodeLine{00337\ \ \ \textcolor{keywordflow}{if}\ (\_eof\_known)\ \{}
+\DoxyCodeLine{00338\ \ \ \ \ \textcolor{keywordflow}{if}\ (loop\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ frame\ =\ frame\ \%\ (\_eof\_frame\ +\ 1);}
+\DoxyCodeLine{00340\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ last\_frame\ =\ (\_eof\_frame\ +\ 1)\ *\ loop\_count;}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (frame\ <\ last\_frame)\ \{}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ frame\ =\ frame\ \%\ (\_eof\_frame\ +\ 1);}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ frame\ =\ \_eof\_frame;}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00347\ \ \ \ \ \}}
+\DoxyCodeLine{00348\ \ \ \}}
+\DoxyCodeLine{00349\ }
+\DoxyCodeLine{00350\ \ \ \textcolor{comment}{//\ No\ point\ in\ trying\ to\ position\ before\ the\ first\ frame.}}
+\DoxyCodeLine{00351\ \ \ frame\ =\ std::max(frame,\ \_initial\_dts);}
+\DoxyCodeLine{00352\ }
+\DoxyCodeLine{00353\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam()\ \&\&\ frame\ !=\ \_current\_frame)\ \{}
+\DoxyCodeLine{00354\ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}set\_time("{}}\ <<\ timestamp\ <<\ \textcolor{stringliteral}{"{}):\ "{}}\ <<\ frame}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ loop\_count\ =\ "{}}\ <<\ loop\_count\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00357\ \ \ \}}
+\DoxyCodeLine{00358\ }
+\DoxyCodeLine{00359\ \ \ \_current\_frame\ =\ frame;}
+\DoxyCodeLine{00360\ \ \ \textcolor{keywordflow}{if}\ (\_current\_frame\_buffer\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00361\ \ \ \ \ \textcolor{comment}{//\ If\ we've\ previously\ returned\ a\ frame,\ don't\ bother\ asking\ for\ a\ next}}
+\DoxyCodeLine{00362\ \ \ \ \ \textcolor{comment}{//\ one\ if\ that\ frame\ is\ still\ valid.}}
+\DoxyCodeLine{00363\ \ \ \ \ \textcolor{keywordflow}{return}\ (\_current\_frame\ >=\ \_current\_frame\_buffer-\/>\_end\_frame\ ||}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ \ \ \ \ \_current\_frame\ <\ \_current\_frame\_buffer-\/>\_begin\_frame);}
+\DoxyCodeLine{00365\ \ \ \}}
+\DoxyCodeLine{00366\ }
+\DoxyCodeLine{00367\ \ \ \textcolor{comment}{//\ If\ our\ last\ request\ didn't\ return\ a\ frame,\ try\ again.}}
+\DoxyCodeLine{00368\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00369\ \}}
+\DoxyCodeLine{00370\ }
+\DoxyCodeLine{00374\ PT(\mbox{\hyperlink{classMovieVideoCursor_1_1Buffer}{MovieVideoCursor::Buffer}})\ FfmpegVideoCursor::}
+\DoxyCodeLine{00375\ fetch\_buffer()\ \{}
+\DoxyCodeLine{00376\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00377\ }
+\DoxyCodeLine{00378\ \ \ \textcolor{comment}{//\ If\ there\ was\ an\ error\ at\ any\ point,\ just\ return\ NULL.}}
+\DoxyCodeLine{00379\ \ \ \textcolor{keywordflow}{if}\ (\_format\_ctx\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00380\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00381\ \ \ \}}
+\DoxyCodeLine{00382\ }
+\DoxyCodeLine{00383\ \ \ PT(FfmpegBuffer)\ frame;}
+\DoxyCodeLine{00384\ \ \ \textcolor{keywordflow}{if}\ (\_thread\_status\ ==\ TS\_stopped)\ \{}
+\DoxyCodeLine{00385\ \ \ \ \ \textcolor{comment}{//\ Non-\/threaded\ case.\ \ Just\ get\ the\ next\ frame\ directly.}}
+\DoxyCodeLine{00386\ \ \ \ \ advance\_to\_frame(\_current\_frame);}
+\DoxyCodeLine{00387\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_frame\_ready)\ \{}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ frame\ =\ do\_alloc\_frame();}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ export\_frame(frame);}
+\DoxyCodeLine{00390\ \ \ \ \ \}}
+\DoxyCodeLine{00391\ }
+\DoxyCodeLine{00392\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00393\ \ \ \ \ \textcolor{comment}{//\ Threaded\ case.\ \ Wait\ for\ the\ thread\ to\ serve\ up\ the\ required\ frames.}}
+\DoxyCodeLine{00394\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_readahead\_frames.empty())\ \{}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ frame\ =\ \_readahead\_frames.front();}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \_readahead\_frames.pop\_front();}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \_action\_cvar.notify();}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (frame-\/>\_end\_frame\ <\ \_current\_frame\ \&\&\ !\_readahead\_frames.empty())\ \{}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ frame\ is\ too\ old.\ \ Discard\ it.}}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \ \ \ \ ffmpeg\_cat.debug()}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ffmpeg\ for\ "{}}\ <<\ \_filename.get\_basename()}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ at\ frame\ "{}}\ <<\ \_current\_frame\ <<\ \textcolor{stringliteral}{"{},\ discarding\ frame\ at\ "{}}}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ frame-\/>\_begin\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ frame\ =\ \_readahead\_frames.front();}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \ \ \_readahead\_frames.pop\_front();}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (frame-\/>\_begin\_frame\ >\ \_current\_frame)\ \{}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ frame\ is\ too\ new.\ \ Empty\ all\ remaining\ frames\ and\ seek}}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ backwards.}}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \ \ \ \ ffmpeg\_cat.debug()}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ffmpeg\ for\ "{}}\ <<\ \_filename.get\_basename()}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ at\ frame\ "{}}\ <<\ \_current\_frame\ <<\ \textcolor{stringliteral}{"{},\ encountered\ too-\/new\ frame\ at\ "{}}}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ frame-\/>\_begin\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ do\_clear\_all\_frames();}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_thread\_status\ ==\ TS\_wait\ ||\ \_thread\_status\ ==\ TS\_seek\ ||\ \_thread\_status\ ==\ TS\_readahead)\ \{}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \ \ \ \ \_thread\_status\ =\ TS\_seek;}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \ \ \ \ \_seek\_frame\ =\ \_current\_frame;}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \ \ \ \ \_action\_cvar.notify();}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00425\ \ \ \ \ \}}
+\DoxyCodeLine{00426\ \ \ \ \ \textcolor{keywordflow}{if}\ (frame\ ==\ \textcolor{keyword}{nullptr}\ ||\ frame-\/>\_end\_frame\ <\ \_current\_frame)\ \{}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \textcolor{comment}{//\ No\ frame\ available,\ or\ the\ frame\ is\ too\ old.\ \ Seek.}}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_thread\_status\ ==\ TS\_wait\ ||\ \_thread\_status\ ==\ TS\_seek\ ||\ \_thread\_status\ ==\ TS\_readahead)\ \{}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \ \ \_thread\_status\ =\ TS\_seek;}
+\DoxyCodeLine{00430\ \ \ \ \ \ \ \ \ \_seek\_frame\ =\ \_current\_frame;}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ \ \ \_action\_cvar.notify();}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00433\ \ \ \ \ \}}
+\DoxyCodeLine{00434\ \ \ \}}
+\DoxyCodeLine{00435\ }
+\DoxyCodeLine{00436\ \ \ \textcolor{keywordflow}{if}\ (frame\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00437\ \ \ \ \ \textcolor{keywordtype}{bool}\ too\_old\ =\ (frame-\/>\_end\_frame\ <\ \_current\_frame\ \&\&\ !ffmpeg\_show\_seek\_frames);}
+\DoxyCodeLine{00438\ \ \ \ \ \textcolor{keywordtype}{bool}\ too\_new\ =\ frame-\/>\_begin\_frame\ >\ \_current\_frame;}
+\DoxyCodeLine{00439\ \ \ \ \ \textcolor{keywordflow}{if}\ (too\_old\ ||\ too\_new)\ \{}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ frame\ is\ too\ old\ or\ too\ new.\ \ Just\ recycle\ it.}}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ frame\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00442\ \ \ \ \ \}}
+\DoxyCodeLine{00443\ \ \ \}}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \ \ \textcolor{keywordflow}{if}\ (frame\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00446\ \ \ \ \ \_current\_frame\_buffer\ =\ frame;}
+\DoxyCodeLine{00447\ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ ffmpeg\_cat.debug()}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ffmpeg\ for\ "{}}\ <<\ \_filename.get\_basename()}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ at\ frame\ "{}}\ <<\ \_current\_frame\ <<\ \textcolor{stringliteral}{"{},\ returning\ frame\ at\ "{}}}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \ \ <<\ frame-\/>\_begin\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00452\ \ \ \ \ \}}
+\DoxyCodeLine{00453\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00454\ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ ffmpeg\_cat.debug()}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ffmpeg\ for\ "{}}\ <<\ \_filename.get\_basename()}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ at\ frame\ "{}}\ <<\ \_current\_frame\ <<\ \textcolor{stringliteral}{"{},\ returning\ NULL\(\backslash\)n"{}};}
+\DoxyCodeLine{00458\ \ \ \ \ \}}
+\DoxyCodeLine{00459\ \ \ \}}
+\DoxyCodeLine{00460\ \ \ \textcolor{keywordflow}{return}\ frame;}
+\DoxyCodeLine{00461\ \}}
+\DoxyCodeLine{00462\ }
+\DoxyCodeLine{00466\ PT(\mbox{\hyperlink{classMovieVideoCursor_1_1Buffer}{MovieVideoCursor::Buffer}})\ FfmpegVideoCursor::}
+\DoxyCodeLine{00467\ make\_new\_buffer()\ \{}
+\DoxyCodeLine{00468\ \ \ PT(FfmpegBuffer)\ frame\ =\ \textcolor{keyword}{new}\ FfmpegBuffer(size\_x()\ *\ size\_y()\ *\ get\_num\_components(),\ \_video\_timebase);}
+\DoxyCodeLine{00469\ \ \ \textcolor{keywordflow}{return}\ frame;}
+\DoxyCodeLine{00470\ \}}
+\DoxyCodeLine{00471\ }
+\DoxyCodeLine{00475\ \textcolor{keywordtype}{bool}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00476\ open\_stream()\ \{}
+\DoxyCodeLine{00477\ \ \ nassertr(!\_ffvfile.is\_open(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00478\ }
+\DoxyCodeLine{00479\ \ \ \textcolor{comment}{//\ Hold\ the\ global\ lock\ while\ we\ open\ the\ file\ and\ create\ avcodec\ objects.}}
+\DoxyCodeLine{00480\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ av\_holder(\_av\_lock);}
+\DoxyCodeLine{00481\ }
+\DoxyCodeLine{00482\ \ \ \textcolor{keywordflow}{if}\ (!\_source-\/>get\_subfile\_info().is\_empty())\ \{}
+\DoxyCodeLine{00483\ \ \ \ \ \textcolor{comment}{//\ Read\ a\ subfile.}}
+\DoxyCodeLine{00484\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_ffvfile.\mbox{\hyperlink{classFfmpegVirtualFile_aa42e2de75f3f1894e3f5c1324cfa49c5}{open\_subfile}}(\_source-\/>get\_subfile\_info()))\ \{}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ ffmpeg\_cat.info()}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ open\ "{}}\ <<\ \_source-\/>get\_subfile\_info()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00487\ \ \ \ \ \ \ close\_stream();}
+\DoxyCodeLine{00488\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00489\ \ \ \ \ \}}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00491\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00492\ \ \ \ \ \textcolor{comment}{//\ Read\ a\ filename.}}
+\DoxyCodeLine{00493\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_ffvfile.\mbox{\hyperlink{classFfmpegVirtualFile_a198e39e670d12c667b8366c286572d7d}{open\_vfs}}(\_filename))\ \{}
+\DoxyCodeLine{00494\ \ \ \ \ \ \ ffmpeg\_cat.info()}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ open\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ close\_stream();}
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00498\ \ \ \ \ \}}
+\DoxyCodeLine{00499\ \ \ \}}
+\DoxyCodeLine{00500\ }
+\DoxyCodeLine{00501\ \ \ nassertr(\_format\_ctx\ ==\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00502\ \ \ \_format\_ctx\ =\ \_ffvfile.get\_format\_context();}
+\DoxyCodeLine{00503\ \ \ nassertr(\_format\_ctx\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00504\ }
+\DoxyCodeLine{00505\ \ \ \textcolor{keywordflow}{if}\ (avformat\_find\_stream\_info(\_format\_ctx,\ \textcolor{keyword}{nullptr})\ <\ 0)\ \{}
+\DoxyCodeLine{00506\ \ \ \ \ ffmpeg\_cat.info()}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ find\ stream\ info\(\backslash\)n"{}};}
+\DoxyCodeLine{00508\ \ \ \ \ close\_stream();}
+\DoxyCodeLine{00509\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00510\ \ \ \}}
+\DoxyCodeLine{00511\ }
+\DoxyCodeLine{00512\ \ \ nassertr(\_video\_ctx\ ==\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00513\ }
+\DoxyCodeLine{00514\ \ \ \textcolor{comment}{//\ As\ of\ libavformat\ version\ 57.41.100,\ AVStream.codec\ is\ deprecated\ in\ favor}}
+\DoxyCodeLine{00515\ \ \ \textcolor{comment}{//\ of\ AVStream.codecpar.\ \ Fortunately,\ the\ two\ structures\ have}}
+\DoxyCodeLine{00516\ \ \ \textcolor{comment}{//\ similarly-\/named\ members,\ so\ we\ can\ just\ switch\ out\ the\ declaration.}}
+\DoxyCodeLine{00517\ \textcolor{preprocessor}{\#if\ LIBAVFORMAT\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 41,\ 100)}}
+\DoxyCodeLine{00518\ \ \ AVCodecParameters\ *codecpar;}
+\DoxyCodeLine{00519\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00520\ \ \ AVCodecContext\ *codecpar;}
+\DoxyCodeLine{00521\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00523\ \ \ \textcolor{comment}{//\ Find\ the\ video\ stream}}
+\DoxyCodeLine{00524\ \ \ AVStream\ *stream\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00525\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (int)\_format\_ctx-\/>nb\_streams;\ ++i)\ \{}
+\DoxyCodeLine{00526\ \textcolor{preprocessor}{\#if\ LIBAVFORMAT\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 41,\ 100)}}
+\DoxyCodeLine{00527\ \ \ \ \ codecpar\ =\ \_format\_ctx-\/>streams[i]-\/>codecpar;}
+\DoxyCodeLine{00528\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00529\ \ \ \ \ codecpar\ =\ \_format\_ctx-\/>streams[i]-\/>codec;}
+\DoxyCodeLine{00530\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00531\ \ \ \ \ \textcolor{keywordflow}{if}\ (codecpar-\/>codec\_type\ ==\ AVMEDIA\_TYPE\_VIDEO)\ \{}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ \_video\_index\ =\ i;}
+\DoxyCodeLine{00533\ \ \ \ \ \ \ stream\ =\ \_format\_ctx-\/>streams[i];}
+\DoxyCodeLine{00534\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00535\ \ \ \ \ \}}
+\DoxyCodeLine{00536\ \ \ \}}
+\DoxyCodeLine{00537\ }
+\DoxyCodeLine{00538\ \ \ \textcolor{keywordflow}{if}\ (stream\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00539\ \ \ \ \ ffmpeg\_cat.info()}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ find\ stream\(\backslash\)n"{}};}
+\DoxyCodeLine{00541\ \ \ \ \ close\_stream();}
+\DoxyCodeLine{00542\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00543\ \ \ \}}
+\DoxyCodeLine{00544\ }
+\DoxyCodeLine{00545\ \ \ \_video\_timebase\ =\ av\_q2d(stream-\/>time\_base);}
+\DoxyCodeLine{00546\ \ \ \_min\_fseek\ =\ (int)(3.0\ /\ \_video\_timebase);}
+\DoxyCodeLine{00547\ }
+\DoxyCodeLine{00548\ \ \ \textcolor{keyword}{const}\ AVCodec\ *pVideoCodec\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00549\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_prefer\_libvpx)\ \{}
+\DoxyCodeLine{00550\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(55,\ 0,\ 0)}}
+\DoxyCodeLine{00551\ \ \ \ \ \textcolor{keywordflow}{if}\ (codecpar-\/>codec\_id\ ==\ AV\_CODEC\_ID\_VP9)\ \{}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ pVideoCodec\ =\ avcodec\_find\_decoder\_by\_name(\textcolor{stringliteral}{"{}libvpx-\/vp9"{}});}
+\DoxyCodeLine{00553\ \ \ \ \ \}\ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00554\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00555\ \ \ \ \ \textcolor{keywordflow}{if}\ (codecpar-\/>codec\_id\ ==\ AV\_CODEC\_ID\_VP8)\ \{}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ pVideoCodec\ =\ avcodec\_find\_decoder\_by\_name(\textcolor{stringliteral}{"{}libvpx"{}});}
+\DoxyCodeLine{00557\ \ \ \ \ \}}
+\DoxyCodeLine{00558\ \ \ \}}
+\DoxyCodeLine{00559\ \ \ \textcolor{keywordflow}{if}\ (pVideoCodec\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00560\ \ \ \ \ pVideoCodec\ =\ avcodec\_find\_decoder(codecpar-\/>codec\_id);}
+\DoxyCodeLine{00561\ \ \ \}}
+\DoxyCodeLine{00562\ \ \ \textcolor{keywordflow}{if}\ (pVideoCodec\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ ffmpeg\_cat.info()}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ find\ codec\(\backslash\)n"{}};}
+\DoxyCodeLine{00565\ \ \ \ \ close\_stream();}
+\DoxyCodeLine{00566\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00567\ \ \ \}}
+\DoxyCodeLine{00568\ }
+\DoxyCodeLine{00569\ \ \ \_video\_ctx\ =\ avcodec\_alloc\_context3(pVideoCodec);}
+\DoxyCodeLine{00570\ }
+\DoxyCodeLine{00571\ \ \ \textcolor{keywordflow}{if}\ (\_video\_ctx\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00572\ \ \ \ \ ffmpeg\_cat.info()}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ allocate\ \_video\_ctx\(\backslash\)n"{}};}
+\DoxyCodeLine{00574\ \ \ \ \ close\_stream();}
+\DoxyCodeLine{00575\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00576\ \ \ \}}
+\DoxyCodeLine{00577\ }
+\DoxyCodeLine{00578\ \textcolor{preprocessor}{\#if\ LIBAVFORMAT\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 41,\ 100)}}
+\DoxyCodeLine{00579\ \ \ avcodec\_parameters\_to\_context(\_video\_ctx,\ codecpar);}
+\DoxyCodeLine{00580\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00581\ \ \ avcodec\_copy\_context(\_video\_ctx,\ codecpar);}
+\DoxyCodeLine{00582\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00583\ }
+\DoxyCodeLine{00584\ \ \ \textcolor{keywordflow}{if}\ (avcodec\_open2(\_video\_ctx,\ pVideoCodec,\ \textcolor{keyword}{nullptr})\ <\ 0)\ \{}
+\DoxyCodeLine{00585\ \ \ \ \ ffmpeg\_cat.info()}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ open\ codec\(\backslash\)n"{}};}
+\DoxyCodeLine{00587\ \ \ \ \ close\_stream();}
+\DoxyCodeLine{00588\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00589\ \ \ \}}
+\DoxyCodeLine{00590\ }
+\DoxyCodeLine{00591\ \ \ \_size\_x\ =\ \_video\_ctx-\/>width;}
+\DoxyCodeLine{00592\ \ \ \_size\_y\ =\ \_video\_ctx-\/>height;}
+\DoxyCodeLine{00593\ \ \ \_num\_components\ =\ 3;}
+\DoxyCodeLine{00594\ \ \ \_length\ =\ (double)\_format\_ctx-\/>duration\ /\ (\textcolor{keywordtype}{double})AV\_TIME\_BASE;}
+\DoxyCodeLine{00595\ \ \ \_can\_seek\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00596\ \ \ \_can\_seek\_fast\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00597\ }
+\DoxyCodeLine{00598\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00599\ \}}
+\DoxyCodeLine{00600\ }
+\DoxyCodeLine{00604\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00605\ close\_stream()\ \{}
+\DoxyCodeLine{00606\ \ \ \textcolor{comment}{//\ Hold\ the\ global\ lock\ while\ we\ free\ avcodec\ objects.}}
+\DoxyCodeLine{00607\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ av\_holder(\_av\_lock);}
+\DoxyCodeLine{00608\ }
+\DoxyCodeLine{00609\ \ \ \textcolor{keywordflow}{if}\ (\_video\_ctx\ \&\&\ \_video\_ctx-\/>codec)\ \{}
+\DoxyCodeLine{00610\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 37,\ 100)}}
+\DoxyCodeLine{00611\ \ \ \ \ \textcolor{comment}{//\ We\ need\ to\ drain\ the\ codec\ to\ prevent\ a\ memory\ leak.}}
+\DoxyCodeLine{00612\ \ \ \ \ avcodec\_send\_packet(\_video\_ctx,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00613\ \ \ \ \ \textcolor{keywordflow}{while}\ (avcodec\_receive\_frame(\_video\_ctx,\ \_frame)\ ==\ 0)\ \{\}}
+\DoxyCodeLine{00614\ \ \ \ \ avcodec\_flush\_buffers(\_video\_ctx);}
+\DoxyCodeLine{00615\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00616\ }
+\DoxyCodeLine{00617\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(55,\ 52,\ 0)}}
+\DoxyCodeLine{00618\ \ \ \ \ avcodec\_free\_context(\&\_video\_ctx);}
+\DoxyCodeLine{00619\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00620\ \ \ \ \ avcodec\_close(\_video\_ctx);}
+\DoxyCodeLine{00621\ \ \ \ \ av\_free(\_video\_ctx);}
+\DoxyCodeLine{00622\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00623\ \ \ \}}
+\DoxyCodeLine{00624\ \ \ \_video\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00625\ }
+\DoxyCodeLine{00626\ \ \ \_ffvfile.\mbox{\hyperlink{classFfmpegVirtualFile_aef80bdfd1568eaa67c5732b116db3334}{close}}();}
+\DoxyCodeLine{00627\ \ \ \_format\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00628\ }
+\DoxyCodeLine{00629\ \ \ \_video\_index\ =\ -\/1;}
+\DoxyCodeLine{00630\ \}}
+\DoxyCodeLine{00631\ }
+\DoxyCodeLine{00635\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00636\ cleanup()\ \{}
+\DoxyCodeLine{00637\ \ \ stop\_thread();}
+\DoxyCodeLine{00638\ \ \ close\_stream();}
+\DoxyCodeLine{00639\ }
+\DoxyCodeLine{00640\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ av\_holder(\_av\_lock);}
+\DoxyCodeLine{00641\ }
+\DoxyCodeLine{00642\ \textcolor{preprocessor}{\#ifdef\ HAVE\_SWSCALE}}
+\DoxyCodeLine{00643\ \ \ \textcolor{keywordflow}{if}\ (\_convert\_ctx\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00644\ \ \ \ \ sws\_freeContext(\_convert\_ctx);}
+\DoxyCodeLine{00645\ \ \ \}}
+\DoxyCodeLine{00646\ \ \ \_convert\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00647\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_SWSCALE}}
+\DoxyCodeLine{00648\ }
+\DoxyCodeLine{00649\ \ \ \textcolor{keywordflow}{if}\ (\_frame)\ \{}
+\DoxyCodeLine{00650\ \ \ \ \ av\_free(\_frame);}
+\DoxyCodeLine{00651\ \ \ \ \ \_frame\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00652\ \ \ \}}
+\DoxyCodeLine{00653\ }
+\DoxyCodeLine{00654\ \ \ \textcolor{keywordflow}{if}\ (\_frame\_out)\ \{}
+\DoxyCodeLine{00655\ \ \ \ \ \_frame\_out-\/>data[0]\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00656\ \ \ \ \ av\_free(\_frame\_out);}
+\DoxyCodeLine{00657\ \ \ \ \ \_frame\_out\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00658\ \ \ \}}
+\DoxyCodeLine{00659\ }
+\DoxyCodeLine{00660\ \ \ \textcolor{keywordflow}{if}\ (\_packet)\ \{}
+\DoxyCodeLine{00661\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 12,\ 100)}}
+\DoxyCodeLine{00662\ \ \ \ \ av\_packet\_free(\&\_packet);}
+\DoxyCodeLine{00663\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00664\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_packet-\/>data)\ \{}
+\DoxyCodeLine{00665\ \ \ \ \ \ \ av\_free\_packet(\_packet);}
+\DoxyCodeLine{00666\ \ \ \ \ \}}
+\DoxyCodeLine{00667\ \ \ \ \ \textcolor{keyword}{delete}\ \_packet;}
+\DoxyCodeLine{00668\ \ \ \ \ \_packet\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00669\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00670\ \ \ \}}
+\DoxyCodeLine{00671\ \}}
+\DoxyCodeLine{00672\ }
+\DoxyCodeLine{00676\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00677\ thread\_main()\ \{}
+\DoxyCodeLine{00678\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00679\ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{00680\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ffmpeg\ thread\ for\ "{}}\ <<\ \_filename.get\_basename()\ <<\ \textcolor{stringliteral}{"{}\ starting.\(\backslash\)n"{}};}
+\DoxyCodeLine{00681\ \ \ \}}
+\DoxyCodeLine{00682\ }
+\DoxyCodeLine{00683\ \ \ \textcolor{comment}{//\ First,\ push\ the\ first\ frame\ onto\ the\ readahead\ queue.}}
+\DoxyCodeLine{00684\ \ \ \textcolor{keywordflow}{if}\ (\_frame\_ready)\ \{}
+\DoxyCodeLine{00685\ \ \ \ \ PT(FfmpegBuffer)\ frame\ =\ do\_alloc\_frame();}
+\DoxyCodeLine{00686\ \ \ \ \ export\_frame(frame);}
+\DoxyCodeLine{00687\ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00688\ \ \ \ \ \_readahead\_frames.push\_back(frame);}
+\DoxyCodeLine{00689\ \ \ \}}
+\DoxyCodeLine{00690\ }
+\DoxyCodeLine{00691\ \ \ \textcolor{comment}{//\ Now\ repeatedly\ wait\ for\ something\ interesting\ to\ do,\ until\ we're\ told\ to}}
+\DoxyCodeLine{00692\ \ \ \textcolor{comment}{//\ shut\ down.}}
+\DoxyCodeLine{00693\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00694\ \ \ \textcolor{keywordflow}{while}\ (\_thread\_status\ !=\ TS\_shutdown)\ \{}
+\DoxyCodeLine{00695\ \ \ \ \ nassertv(\_thread\_status\ !=\ TS\_stopped);}
+\DoxyCodeLine{00696\ \ \ \ \ \_action\_cvar.wait();}
+\DoxyCodeLine{00697\ }
+\DoxyCodeLine{00698\ \ \ \ \ \textcolor{keywordflow}{while}\ (do\_poll())\ \{}
+\DoxyCodeLine{00699\ \ \ \ \ \ \ \textcolor{comment}{//\ Keep\ doing\ stuff\ as\ long\ as\ there's\ something\ to\ do.}}
+\DoxyCodeLine{00700\ \ \ \ \ \ \ \_lock.release();}
+\DoxyCodeLine{00701\ \ \ \ \ \ \ PStatClient::thread\_tick();}
+\DoxyCodeLine{00702\ \ \ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00703\ \ \ \ \ \ \ \_lock.acquire();}
+\DoxyCodeLine{00704\ \ \ \ \ \}}
+\DoxyCodeLine{00705\ \ \ \}}
+\DoxyCodeLine{00706\ }
+\DoxyCodeLine{00707\ \ \ \_thread\_status\ =\ TS\_stopped;}
+\DoxyCodeLine{00708\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00709\ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{00710\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ffmpeg\ thread\ for\ "{}}\ <<\ \_filename.get\_basename()\ <<\ \textcolor{stringliteral}{"{}\ stopped.\(\backslash\)n"{}};}
+\DoxyCodeLine{00711\ \ \ \}}
+\DoxyCodeLine{00712\ \}}
+\DoxyCodeLine{00713\ }
+\DoxyCodeLine{00719\ \textcolor{keywordtype}{bool}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00720\ do\_poll()\ \{}
+\DoxyCodeLine{00721\ \ \ \textcolor{keywordflow}{switch}\ (\_thread\_status)\ \{}
+\DoxyCodeLine{00722\ \ \ \textcolor{keywordflow}{case}\ TS\_stopped:}
+\DoxyCodeLine{00723\ \ \ \textcolor{keywordflow}{case}\ TS\_seeking:}
+\DoxyCodeLine{00724\ \ \ \ \ \textcolor{comment}{//\ This\ shouldn't\ be\ possible\ while\ the\ thread\ is\ running.}}
+\DoxyCodeLine{00725\ \ \ \ \ nassertr(\textcolor{keyword}{false},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00726\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00727\ }
+\DoxyCodeLine{00728\ \ \ \textcolor{keywordflow}{case}\ TS\_wait:}
+\DoxyCodeLine{00729\ \ \ \ \ \textcolor{comment}{//\ The\ video\ hasn't\ started\ playing\ yet.}}
+\DoxyCodeLine{00730\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00731\ }
+\DoxyCodeLine{00732\ \ \ \textcolor{keywordflow}{case}\ TS\_readahead:}
+\DoxyCodeLine{00733\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{int})\_readahead\_frames.size()\ <\ \_max\_readahead\_frames)\ \{}
+\DoxyCodeLine{00734\ \ \ \ \ \ \ \textcolor{comment}{//\ Time\ to\ read\ the\ next\ frame.}}
+\DoxyCodeLine{00735\ \ \ \ \ \ \ PT(FfmpegBuffer)\ frame\ =\ do\_alloc\_frame();}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ nassertr(frame\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00737\ \ \ \ \ \ \ \_lock.release();}
+\DoxyCodeLine{00738\ \ \ \ \ \ \ fetch\_frame(-\/1);}
+\DoxyCodeLine{00739\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_frame\_ready)\ \{}
+\DoxyCodeLine{00740\ \ \ \ \ \ \ \ \ export\_frame(frame);}
+\DoxyCodeLine{00741\ \ \ \ \ \ \ \ \ \_lock.acquire();}
+\DoxyCodeLine{00742\ \ \ \ \ \ \ \ \ \_readahead\_frames.push\_back(frame);}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ No\ frame.}}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \ \ \_lock.acquire();}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00748\ \ \ \ \ \}}
+\DoxyCodeLine{00749\ }
+\DoxyCodeLine{00750\ \ \ \ \ \textcolor{comment}{//\ No\ room\ for\ the\ next\ frame\ yet.\ \ Wait\ for\ more.}}
+\DoxyCodeLine{00751\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00752\ }
+\DoxyCodeLine{00753\ \ \ \textcolor{keywordflow}{case}\ TS\_seek:}
+\DoxyCodeLine{00754\ \ \ \ \ \textcolor{comment}{//\ Seek\ to\ a\ specific\ frame.}}
+\DoxyCodeLine{00755\ \ \ \ \ \{}
+\DoxyCodeLine{00756\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ seek\_frame\ =\ \_seek\_frame;}
+\DoxyCodeLine{00757\ \ \ \ \ \ \ \_thread\_status\ =\ TS\_seeking;}
+\DoxyCodeLine{00758\ \ \ \ \ \ \ PT(FfmpegBuffer)\ frame\ =\ do\_alloc\_frame();}
+\DoxyCodeLine{00759\ \ \ \ \ \ \ nassertr(frame\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00760\ \ \ \ \ \ \ \_lock.release();}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (seek\_frame\ !=\ \_begin\_frame)\ \{}
+\DoxyCodeLine{00762\ \ \ \ \ \ \ \ \ advance\_to\_frame(seek\_frame);}
+\DoxyCodeLine{00763\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00764\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_frame\_ready)\ \{}
+\DoxyCodeLine{00765\ \ \ \ \ \ \ \ \ export\_frame(frame);}
+\DoxyCodeLine{00766\ \ \ \ \ \ \ \ \ \_lock.acquire();}
+\DoxyCodeLine{00767\ \ \ \ \ \ \ \ \ do\_clear\_all\_frames();}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ \ \ \_readahead\_frames.push\_back(frame);}
+\DoxyCodeLine{00769\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00770\ \ \ \ \ \ \ \ \ \_lock.acquire();}
+\DoxyCodeLine{00771\ \ \ \ \ \ \ \ \ do\_clear\_all\_frames();}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00773\ }
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_thread\_status\ ==\ TS\_seeking)\ \{}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ After\ seeking,\ we\ automatically\ transition\ to\ readahead.}}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ \ \ \_thread\_status\ =\ TS\_readahead;}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00778\ \ \ \ \ \}}
+\DoxyCodeLine{00779\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00780\ }
+\DoxyCodeLine{00781\ \ \ \textcolor{keywordflow}{case}\ TS\_shutdown:}
+\DoxyCodeLine{00782\ \ \ \ \ \textcolor{comment}{//\ Time\ to\ stop\ the\ thread.}}
+\DoxyCodeLine{00783\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00784\ \ \ \}}
+\DoxyCodeLine{00785\ }
+\DoxyCodeLine{00786\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00787\ \}}
+\DoxyCodeLine{00788\ }
+\DoxyCodeLine{00792\ PT(\mbox{\hyperlink{classFfmpegVideoCursor_1_1FfmpegBuffer}{FfmpegVideoCursor::FfmpegBuffer}})\ FfmpegVideoCursor::}
+\DoxyCodeLine{00793\ do\_alloc\_frame()\ \{}
+\DoxyCodeLine{00794\ \ \ PT(\mbox{\hyperlink{classBuffer}{Buffer}})\ buffer\ =\ make\_new\_buffer();}
+\DoxyCodeLine{00795\ \ \ \textcolor{keywordflow}{return}\ (FfmpegBuffer\ *)buffer.p();}
+\DoxyCodeLine{00796\ \}}
+\DoxyCodeLine{00797\ }
+\DoxyCodeLine{00801\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00802\ do\_clear\_all\_frames()\ \{}
+\DoxyCodeLine{00803\ \ \ \_readahead\_frames.clear();}
+\DoxyCodeLine{00804\ \}}
+\DoxyCodeLine{00805\ }
+\DoxyCodeLine{00813\ \textcolor{keywordtype}{bool}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00814\ fetch\_packet(\textcolor{keywordtype}{int}\ default\_frame)\ \{}
+\DoxyCodeLine{00815\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_global\_lock)\ \{}
+\DoxyCodeLine{00816\ \ \ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ av\_holder(\_av\_lock);}
+\DoxyCodeLine{00817\ \ \ \ \ \textcolor{keywordflow}{return}\ do\_fetch\_packet(default\_frame);}
+\DoxyCodeLine{00818\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00819\ \ \ \ \ \textcolor{keywordflow}{return}\ do\_fetch\_packet(default\_frame);}
+\DoxyCodeLine{00820\ \ \ \}}
+\DoxyCodeLine{00821\ \}}
+\DoxyCodeLine{00822\ }
+\DoxyCodeLine{00826\ \textcolor{keywordtype}{bool}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00827\ do\_fetch\_packet(\textcolor{keywordtype}{int}\ default\_frame)\ \{}
+\DoxyCodeLine{00828\ \ \ \textcolor{keywordflow}{if}\ (\_packet-\/>data)\ \{}
+\DoxyCodeLine{00829\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 12,\ 100)}}
+\DoxyCodeLine{00830\ \ \ \ \ av\_packet\_unref(\_packet);}
+\DoxyCodeLine{00831\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00832\ \ \ \ \ av\_free\_packet(\_packet);}
+\DoxyCodeLine{00833\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00834\ \ \ \}}
+\DoxyCodeLine{00835\ \ \ \textcolor{keywordflow}{while}\ (av\_read\_frame(\_format\_ctx,\ \_packet)\ >=\ 0)\ \{}
+\DoxyCodeLine{00836\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_packet-\/>stream\_index\ ==\ \_video\_index)\ \{}
+\DoxyCodeLine{00837\ \ \ \ \ \ \ \_packet\_frame\ =\ \_packet-\/>dts;}
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00839\ \ \ \ \ \}}
+\DoxyCodeLine{00840\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 12,\ 100)}}
+\DoxyCodeLine{00841\ \ \ \ \ av\_packet\_unref(\_packet);}
+\DoxyCodeLine{00842\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00843\ \ \ \ \ av\_free\_packet(\_packet);}
+\DoxyCodeLine{00844\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00845\ \ \ \}}
+\DoxyCodeLine{00846\ \ \ \_packet-\/>data\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00847\ }
+\DoxyCodeLine{00848\ \ \ \textcolor{keywordflow}{if}\ (!\_eof\_known\ \&\&\ default\_frame\ !=\ 0)\ \{}
+\DoxyCodeLine{00849\ \ \ \ \ \_eof\_frame\ =\ \_packet\_frame;}
+\DoxyCodeLine{00850\ \ \ \ \ \_eof\_known\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00851\ \ \ \}}
+\DoxyCodeLine{00852\ }
+\DoxyCodeLine{00853\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00854\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_eof\_known)\ \{}
+\DoxyCodeLine{00855\ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{00856\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}end\ of\ video\ at\ frame\ "{}}\ <<\ \_eof\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00857\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00858\ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{00859\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}end\ of\ video\(\backslash\)n"{}};}
+\DoxyCodeLine{00860\ \ \ \ \ \}}
+\DoxyCodeLine{00861\ \ \ \}}
+\DoxyCodeLine{00862\ \ \ \_packet\_frame\ =\ default\_frame;}
+\DoxyCodeLine{00863\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00864\ \}}
+\DoxyCodeLine{00865\ }
+\DoxyCodeLine{00873\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00874\ fetch\_frame(\textcolor{keywordtype}{int}\ frame)\ \{}
+\DoxyCodeLine{00875\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_fetch\_buffer\_pcollector);}
+\DoxyCodeLine{00876\ }
+\DoxyCodeLine{00877\ \ \ \textcolor{keywordtype}{int}\ finished\ =\ 0;}
+\DoxyCodeLine{00878\ }
+\DoxyCodeLine{00879\ \ \ \textcolor{keywordflow}{if}\ (\_packet\_frame\ <=\ frame)\ \{}
+\DoxyCodeLine{00880\ \ \ \ \ finished\ =\ 0;}
+\DoxyCodeLine{00881\ }
+\DoxyCodeLine{00882\ \ \ \ \ \textcolor{comment}{//\ Get\ the\ next\ packet.\ \ The\ first\ packet\ beyond\ the\ frame\ we're\ looking}}
+\DoxyCodeLine{00883\ \ \ \ \ \textcolor{comment}{//\ for\ marks\ the\ point\ to\ stop.}}
+\DoxyCodeLine{00884\ \ \ \ \ \textcolor{keywordflow}{while}\ (\_packet\_frame\ <=\ frame)\ \{}
+\DoxyCodeLine{00885\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_seek\_pcollector);}
+\DoxyCodeLine{00886\ }
+\DoxyCodeLine{00887\ \ \ \ \ \ \ \textcolor{comment}{//\ Decode\ the\ previous\ packet,\ and\ get\ the\ next\ one.}}
+\DoxyCodeLine{00888\ \ \ \ \ \ \ decode\_frame(finished);}
+\DoxyCodeLine{00889\ \ \ \ \ \ \ \_begin\_frame\ =\ \_packet\_frame;}
+\DoxyCodeLine{00890\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (fetch\_packet(frame))\ \{}
+\DoxyCodeLine{00891\ \ \ \ \ \ \ \ \ \_end\_frame\ =\ \_packet\_frame;}
+\DoxyCodeLine{00892\ \ \ \ \ \ \ \ \ \_frame\_ready\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00893\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00894\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00895\ \ \ \ \ \}}
+\DoxyCodeLine{00896\ }
+\DoxyCodeLine{00897\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00898\ \ \ \ \ \textcolor{comment}{//\ Just\ get\ the\ next\ frame.}}
+\DoxyCodeLine{00899\ \ \ \ \ finished\ =\ 0;}
+\DoxyCodeLine{00900\ \ \ \ \ \textcolor{keywordflow}{while}\ (!finished\ \&\&\ \_packet-\/>data)\ \{}
+\DoxyCodeLine{00901\ \ \ \ \ \ \ decode\_frame(finished);}
+\DoxyCodeLine{00902\ \ \ \ \ \ \ \_begin\_frame\ =\ \_packet\_frame;}
+\DoxyCodeLine{00903\ \ \ \ \ \ \ fetch\_packet(\_begin\_frame\ +\ 1);}
+\DoxyCodeLine{00904\ \ \ \ \ \}}
+\DoxyCodeLine{00905\ \ \ \}}
+\DoxyCodeLine{00906\ }
+\DoxyCodeLine{00907\ \ \ \_end\_frame\ =\ \_packet\_frame;}
+\DoxyCodeLine{00908\ \ \ \_frame\_ready\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00909\ \}}
+\DoxyCodeLine{00910\ }
+\DoxyCodeLine{00915\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00916\ decode\_frame(\textcolor{keywordtype}{int}\ \&finished)\ \{}
+\DoxyCodeLine{00917\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_global\_lock)\ \{}
+\DoxyCodeLine{00918\ \ \ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ av\_holder(\_av\_lock);}
+\DoxyCodeLine{00919\ \ \ \ \ do\_decode\_frame(finished);}
+\DoxyCodeLine{00920\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00921\ \ \ \ \ do\_decode\_frame(finished);}
+\DoxyCodeLine{00922\ \ \ \}}
+\DoxyCodeLine{00923\ \}}
+\DoxyCodeLine{00924\ }
+\DoxyCodeLine{00928\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00929\ do\_decode\_frame(\textcolor{keywordtype}{int}\ \&finished)\ \{}
+\DoxyCodeLine{00930\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 37,\ 100)}}
+\DoxyCodeLine{00931\ \ \ \textcolor{comment}{//\ While\ the\ audio\ cursor\ has\ a\ really\ nice\ async\ loop\ for\ decoding,\ we}}
+\DoxyCodeLine{00932\ \ \ \textcolor{comment}{//\ don't\ really\ do\ that\ much\ with\ video\ since\ we're\ already\ delegated\ to}}
+\DoxyCodeLine{00933\ \ \ \textcolor{comment}{//\ another\ thread\ here.\ \ This\ is\ just\ to\ silence\ the\ deprecation\ warning}}
+\DoxyCodeLine{00934\ \ \ \textcolor{comment}{//\ on\ avcodec\_decode\_video2.}}
+\DoxyCodeLine{00935\ \ \ avcodec\_send\_packet(\_video\_ctx,\ \_packet);}
+\DoxyCodeLine{00936\ }
+\DoxyCodeLine{00937\ \ \ \textcolor{keywordtype}{int}\ ret\ =\ avcodec\_receive\_frame(\_video\_ctx,\ \_frame);}
+\DoxyCodeLine{00938\ \ \ finished\ =\ (ret\ ==\ 0);}
+\DoxyCodeLine{00939\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00940\ \ \ avcodec\_decode\_video2(\_video\_ctx,\ \_frame,\ \&finished,\ \_packet);}
+\DoxyCodeLine{00941\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00942\ \}}
+\DoxyCodeLine{00943\ }
+\DoxyCodeLine{00948\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00949\ seek(\textcolor{keywordtype}{int}\ frame,\ \textcolor{keywordtype}{bool}\ backward)\ \{}
+\DoxyCodeLine{00950\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_seek\_pcollector);}
+\DoxyCodeLine{00951\ }
+\DoxyCodeLine{00952\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_support\_seek)\ \{}
+\DoxyCodeLine{00953\ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_global\_lock)\ \{}
+\DoxyCodeLine{00954\ \ \ \ \ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ av\_holder(\_av\_lock);}
+\DoxyCodeLine{00955\ \ \ \ \ \ \ do\_seek(frame,\ backward);}
+\DoxyCodeLine{00956\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00957\ \ \ \ \ \ \ do\_seek(frame,\ backward);}
+\DoxyCodeLine{00958\ \ \ \ \ \}}
+\DoxyCodeLine{00959\ }
+\DoxyCodeLine{00960\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00961\ \ \ \ \ \textcolor{comment}{//\ If\ seeking\ isn't\ supported,\ close-\/and-\/reopen.}}
+\DoxyCodeLine{00962\ \ \ \ \ \textcolor{keywordflow}{if}\ (backward)\ \{}
+\DoxyCodeLine{00963\ \ \ \ \ \ \ reset\_stream();}
+\DoxyCodeLine{00964\ \ \ \ \ \}}
+\DoxyCodeLine{00965\ \ \ \}}
+\DoxyCodeLine{00966\ \}}
+\DoxyCodeLine{00967\ }
+\DoxyCodeLine{00972\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{00973\ do\_seek(\textcolor{keywordtype}{int}\ frame,\ \textcolor{keywordtype}{bool}\ backward)\ \{}
+\DoxyCodeLine{00974\ \ \ int64\_t\ target\_ts\ =\ (int64\_t)frame;}
+\DoxyCodeLine{00975\ \ \ \textcolor{keywordflow}{if}\ (target\_ts\ <\ (int64\_t)(\_initial\_dts))\ \{}
+\DoxyCodeLine{00976\ \ \ \ \ \textcolor{comment}{//\ Attempts\ to\ seek\ before\ the\ first\ packet\ will\ fail.}}
+\DoxyCodeLine{00977\ \ \ \ \ target\_ts\ =\ \_initial\_dts;}
+\DoxyCodeLine{00978\ \ \ \}}
+\DoxyCodeLine{00979\ \ \ \textcolor{keywordtype}{int}\ flags\ =\ 0;}
+\DoxyCodeLine{00980\ \ \ \textcolor{keywordflow}{if}\ (backward)\ \{}
+\DoxyCodeLine{00981\ \ \ \ \ flags\ =\ AVSEEK\_FLAG\_BACKWARD;}
+\DoxyCodeLine{00982\ \ \ \}}
+\DoxyCodeLine{00983\ }
+\DoxyCodeLine{00984\ \ \ \textcolor{keywordflow}{if}\ (av\_seek\_frame(\_format\_ctx,\ \_video\_index,\ target\_ts,\ flags)\ <\ 0)\ \{}
+\DoxyCodeLine{00985\ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00986\ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{00987\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Seek\ failure.\(\backslash\)n"{}};}
+\DoxyCodeLine{00988\ \ \ \ \ \}}
+\DoxyCodeLine{00989\ }
+\DoxyCodeLine{00990\ \ \ \ \ \textcolor{keywordflow}{if}\ (backward)\ \{}
+\DoxyCodeLine{00991\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ try\ to\ seek\ forward.}}
+\DoxyCodeLine{00992\ \ \ \ \ \ \ reset\_stream();}
+\DoxyCodeLine{00993\ \ \ \ \ \ \ seek(frame,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00994\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00995\ \ \ \ \ \}}
+\DoxyCodeLine{00996\ }
+\DoxyCodeLine{00997\ \ \ \ \ \textcolor{comment}{//\ Try\ a\ binary\ search\ to\ get\ a\ little\ closer.}}
+\DoxyCodeLine{00998\ \ \ \ \ \textcolor{keywordflow}{if}\ (binary\_seek(\_initial\_dts,\ frame,\ frame,\ 1)\ <\ 0)\ \{}
+\DoxyCodeLine{00999\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01000\ \ \ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01001\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Seek\ double\ failure.\(\backslash\)n"{}};}
+\DoxyCodeLine{01002\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01003\ \ \ \ \ \ \ reset\_stream();}
+\DoxyCodeLine{01004\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01005\ \ \ \ \ \}}
+\DoxyCodeLine{01006\ \ \ \}}
+\DoxyCodeLine{01007\ }
+\DoxyCodeLine{01008\ \ \ fetch\_packet(0);}
+\DoxyCodeLine{01009\ \ \ fetch\_frame(-\/1);}
+\DoxyCodeLine{01010\ \}}
+\DoxyCodeLine{01011\ }
+\DoxyCodeLine{01016\ \textcolor{keywordtype}{int}\ FfmpegVideoCursor::}
+\DoxyCodeLine{01017\ binary\_seek(\textcolor{keywordtype}{int}\ min\_frame,\ \textcolor{keywordtype}{int}\ max\_frame,\ \textcolor{keywordtype}{int}\ target\_frame,\ \textcolor{keywordtype}{int}\ num\_iterations)\ \{}
+\DoxyCodeLine{01018\ \ \ \textcolor{keywordtype}{int}\ try\_frame\ =\ (min\_frame\ +\ max\_frame)\ /\ 2;}
+\DoxyCodeLine{01019\ \ \ \textcolor{keywordflow}{if}\ (num\_iterations\ >\ 5\ ||\ try\_frame\ >=\ max\_frame)\ \{}
+\DoxyCodeLine{01020\ \ \ \ \ \textcolor{comment}{//\ Success.}}
+\DoxyCodeLine{01021\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{01022\ \ \ \}}
+\DoxyCodeLine{01023\ }
+\DoxyCodeLine{01024\ \ \ \textcolor{keywordflow}{if}\ (av\_seek\_frame(\_format\_ctx,\ \_video\_index,\ try\_frame,\ AVSEEK\_FLAG\_BACKWARD)\ <\ 0)\ \{}
+\DoxyCodeLine{01025\ \ \ \ \ \textcolor{comment}{//\ Failure.\ \ Try\ lower.}}
+\DoxyCodeLine{01026\ \ \ \ \ \textcolor{keywordflow}{if}\ (binary\_seek(min\_frame,\ try\_frame\ -\/\ 1,\ target\_frame,\ num\_iterations\ +\ 1)\ <\ 0)\ \{}
+\DoxyCodeLine{01027\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{01028\ \ \ \ \ \}}
+\DoxyCodeLine{01029\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01030\ \ \ \ \ \textcolor{comment}{//\ Success.\ \ Try\ higher.}}
+\DoxyCodeLine{01031\ \ \ \ \ \textcolor{keywordflow}{if}\ (binary\_seek(try\_frame\ +\ 1,\ max\_frame,\ target\_frame,\ num\_iterations\ +\ 1)\ <\ 0)\ \{}
+\DoxyCodeLine{01032\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{01033\ \ \ \ \ \}}
+\DoxyCodeLine{01034\ \ \ \}}
+\DoxyCodeLine{01035\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{01036\ \}}
+\DoxyCodeLine{01037\ }
+\DoxyCodeLine{01042\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{01043\ reset\_stream()\ \{}
+\DoxyCodeLine{01044\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01045\ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01046\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Resetting\ ffmpeg\ stream.\(\backslash\)n"{}};}
+\DoxyCodeLine{01047\ \ \ \}}
+\DoxyCodeLine{01048\ }
+\DoxyCodeLine{01049\ \ \ close\_stream();}
+\DoxyCodeLine{01050\ \ \ \textcolor{keywordflow}{if}\ (!open\_stream())\ \{}
+\DoxyCodeLine{01051\ \ \ \ \ ffmpeg\_cat.error()}
+\DoxyCodeLine{01052\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Stream\ error,\ invalidating\ movie.\(\backslash\)n"{}};}
+\DoxyCodeLine{01053\ \ \ \ \ cleanup();}
+\DoxyCodeLine{01054\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01055\ \ \ \}}
+\DoxyCodeLine{01056\ }
+\DoxyCodeLine{01057\ \ \ fetch\_packet(0);}
+\DoxyCodeLine{01058\ \ \ fetch\_frame(-\/1);}
+\DoxyCodeLine{01059\ \}}
+\DoxyCodeLine{01060\ }
+\DoxyCodeLine{01065\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{01066\ advance\_to\_frame(\textcolor{keywordtype}{int}\ frame)\ \{}
+\DoxyCodeLine{01067\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_fetch\_buffer\_pcollector);}
+\DoxyCodeLine{01068\ }
+\DoxyCodeLine{01069\ \ \ \textcolor{keywordflow}{if}\ (frame\ <\ \_begin\_frame)\ \{}
+\DoxyCodeLine{01070\ \ \ \ \ \textcolor{comment}{//\ Frame\ is\ in\ the\ past.}}
+\DoxyCodeLine{01071\ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01072\ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01073\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Seeking\ backward\ to\ "{}}\ <<\ frame\ <<\ \textcolor{stringliteral}{"{}\ from\ "{}}\ <<\ \_begin\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01074\ \ \ \ \ \}}
+\DoxyCodeLine{01075\ \ \ \ \ seek(frame,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{01076\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_begin\_frame\ >\ frame)\ \{}
+\DoxyCodeLine{01077\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01078\ \ \ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01079\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Ended\ up\ at\ "{}}\ <<\ \_begin\_frame\ <<\ \textcolor{stringliteral}{"{},\ not\ far\ enough\ back!\(\backslash\)n"{}};}
+\DoxyCodeLine{01080\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01081\ \ \ \ \ \ \ reset\_stream();}
+\DoxyCodeLine{01082\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01083\ \ \ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01084\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reseek\ to\ 0,\ got\ "{}}\ <<\ \_begin\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01085\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01086\ \ \ \ \ \}}
+\DoxyCodeLine{01087\ \ \ \ \ \textcolor{keywordflow}{if}\ (frame\ >\ \_end\_frame)\ \{}
+\DoxyCodeLine{01088\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01089\ \ \ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01090\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Now\ sliding\ forward\ to\ "{}}\ <<\ frame\ <<\ \textcolor{stringliteral}{"{}\ from\ "{}}\ <<\ \_begin\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01091\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01092\ \ \ \ \ \ \ fetch\_frame(frame);}
+\DoxyCodeLine{01093\ \ \ \ \ \}}
+\DoxyCodeLine{01094\ }
+\DoxyCodeLine{01095\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (frame\ <\ \_end\_frame)\ \{}
+\DoxyCodeLine{01096\ \ \ \ \ \textcolor{comment}{//\ Frame\ is\ in\ the\ present:\ already\ have\ the\ frame.}}
+\DoxyCodeLine{01097\ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01098\ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01099\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Currently\ have\ "{}}\ <<\ frame\ <<\ \textcolor{stringliteral}{"{}\ within\ "{}}\ <<\ \_begin\_frame\ <<\ \textcolor{stringliteral}{"{}\ ..\ "{}}\ <<\ \_end\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01100\ \ \ \ \ \}}
+\DoxyCodeLine{01101\ }
+\DoxyCodeLine{01102\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (frame\ <\ \_end\_frame\ +\ \_min\_fseek)\ \{}
+\DoxyCodeLine{01103\ \ \ \ \ \textcolor{comment}{//\ Frame\ is\ in\ the\ near\ future.}}
+\DoxyCodeLine{01104\ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01105\ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01106\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Sliding\ forward\ to\ "{}}\ <<\ frame\ <<\ \textcolor{stringliteral}{"{}\ from\ "{}}\ <<\ \_begin\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01107\ \ \ \ \ \}}
+\DoxyCodeLine{01108\ \ \ \ \ fetch\_frame(frame);}
+\DoxyCodeLine{01109\ }
+\DoxyCodeLine{01110\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01111\ \ \ \ \ \textcolor{comment}{//\ Frame\ is\ in\ the\ far\ future.\ \ Seek\ forward,\ then\ read.\ \ There's\ a\ danger}}
+\DoxyCodeLine{01112\ \ \ \ \ \textcolor{comment}{//\ here:\ because\ keyframes\ are\ spaced\ unpredictably,\ trying\ to\ seek}}
+\DoxyCodeLine{01113\ \ \ \ \ \textcolor{comment}{//\ forward\ could\ actually\ move\ us\ backward\ in\ the\ stream!\ \ This\ must\ be}}
+\DoxyCodeLine{01114\ \ \ \ \ \textcolor{comment}{//\ avoided.\ \ So\ the\ rule\ is,\ try\ the\ seek.\ \ If\ it\ hurts\ us\ by\ moving\ us}}
+\DoxyCodeLine{01115\ \ \ \ \ \textcolor{comment}{//\ backward,\ we\ increase\ the\ minimum\ threshold\ distance\ for\ forward-\/}}
+\DoxyCodeLine{01116\ \ \ \ \ \textcolor{comment}{//\ seeking\ in\ the\ future.}}
+\DoxyCodeLine{01117\ }
+\DoxyCodeLine{01118\ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01119\ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01120\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Jumping\ forward\ to\ "{}}\ <<\ frame\ <<\ \textcolor{stringliteral}{"{}\ from\ "{}}\ <<\ \_begin\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01121\ \ \ \ \ \}}
+\DoxyCodeLine{01122\ \ \ \ \ \textcolor{keywordtype}{int}\ base\ =\ \_begin\_frame;}
+\DoxyCodeLine{01123\ \ \ \ \ seek(frame,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01124\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_begin\_frame\ <\ base)\ \{}
+\DoxyCodeLine{01125\ \ \ \ \ \ \ \_min\_fseek\ +=\ (base\ -\/\ \_begin\_frame);}
+\DoxyCodeLine{01126\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01127\ \ \ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01128\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Wrong\ way!\ \ Increasing\ \_min\_fseek\ to\ "{}}\ <<\ \_min\_fseek\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01129\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01130\ \ \ \ \ \}}
+\DoxyCodeLine{01131\ \ \ \ \ \textcolor{keywordflow}{if}\ (frame\ >\ \_end\_frame)\ \{}
+\DoxyCodeLine{01132\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01133\ \ \ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01134\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Correcting,\ sliding\ forward\ to\ "{}}\ <<\ frame\ <<\ \textcolor{stringliteral}{"{}\ from\ "{}}\ <<\ \_begin\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01135\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01136\ \ \ \ \ \ \ fetch\_frame(frame);}
+\DoxyCodeLine{01137\ \ \ \ \ \}}
+\DoxyCodeLine{01138\ \ \ \}}
+\DoxyCodeLine{01139\ }
+\DoxyCodeLine{01140\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01141\ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01142\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Wanted\ "{}}\ <<\ frame\ <<\ \textcolor{stringliteral}{"{},\ got\ "{}}\ <<\ \_begin\_frame\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01143\ \ \ \}}
+\DoxyCodeLine{01144\ \}}
+\DoxyCodeLine{01145\ }
+\DoxyCodeLine{01150\ \textcolor{keywordtype}{void}\ FfmpegVideoCursor::}
+\DoxyCodeLine{01151\ export\_frame(FfmpegBuffer\ *buffer)\ \{}
+\DoxyCodeLine{01152\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ timer(\_export\_frame\_pcollector);}
+\DoxyCodeLine{01153\ }
+\DoxyCodeLine{01154\ \ \ \textcolor{keywordflow}{if}\ (!\_frame\_ready)\ \{}
+\DoxyCodeLine{01155\ \ \ \ \ \textcolor{comment}{//\ No\ frame\ data\ ready,\ just\ fill\ with\ black.}}
+\DoxyCodeLine{01156\ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01157\ \ \ \ \ \ \ ffmpeg\_cat.spam()}
+\DoxyCodeLine{01158\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ffmpeg\ for\ "{}}\ <<\ \_filename.get\_basename()}
+\DoxyCodeLine{01159\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ no\ frame\ available.\(\backslash\)n"{}};}
+\DoxyCodeLine{01160\ \ \ \ \ \}}
+\DoxyCodeLine{01161\ \ \ \ \ memset(buffer-\/>\_block,\ 0,\ buffer-\/>\_block\_size);}
+\DoxyCodeLine{01162\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01163\ \ \ \}}
+\DoxyCodeLine{01164\ }
+\DoxyCodeLine{01165\ \ \ \_frame\_out-\/>data[0]\ =\ buffer-\/>\_block\ +\ ((\_size\_y\ -\/\ 1)\ *\ \_size\_x\ *\ \_num\_components);}
+\DoxyCodeLine{01166\ \ \ \_frame\_out-\/>linesize[0]\ =\ \_size\_x\ *\ -\/\_num\_components;}
+\DoxyCodeLine{01167\ \ \ buffer-\/>\_begin\_frame\ =\ \_begin\_frame;}
+\DoxyCodeLine{01168\ \ \ buffer-\/>\_end\_frame\ =\ \_end\_frame;}
+\DoxyCodeLine{01169\ }
+\DoxyCodeLine{01170\ \textcolor{preprocessor}{\#ifdef\ HAVE\_SWSCALE}}
+\DoxyCodeLine{01171\ \ \ nassertv(\_convert\_ctx\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ \_frame\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01172\ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_global\_lock)\ \{}
+\DoxyCodeLine{01173\ \ \ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ av\_holder(\_av\_lock);}
+\DoxyCodeLine{01174\ \ \ \ \ sws\_scale(\_convert\_ctx,\ \_frame-\/>data,\ \_frame-\/>linesize,\ 0,\ \_size\_y,\ \_frame\_out-\/>data,\ \_frame\_out-\/>linesize);}
+\DoxyCodeLine{01175\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01176\ \ \ \ \ sws\_scale(\_convert\_ctx,\ \_frame-\/>data,\ \_frame-\/>linesize,\ 0,\ \_size\_y,\ \_frame\_out-\/>data,\ \_frame\_out-\/>linesize);}
+\DoxyCodeLine{01177\ \ \ \}}
+\DoxyCodeLine{01178\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{01179\ \ \ nassertv(\_frame\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01180\ \ \ uint8\_t\ \textcolor{keyword}{const}\ *src\ =\ \_frame-\/>data[0];}
+\DoxyCodeLine{01181\ \ \ uint8\_t\ *dst\ =\ \_frame\_out-\/>data[0];}
+\DoxyCodeLine{01182\ \ \ \textcolor{keywordtype}{int}\ src\_stride\ =\ \_frame-\/>linesize[0];}
+\DoxyCodeLine{01183\ \ \ \textcolor{keywordtype}{int}\ dst\_stride\ =\ \_frame\_out-\/>linesize[0];}
+\DoxyCodeLine{01184\ \ \ \textcolor{keywordtype}{size\_t}\ copy\_size\ =\ \_size\_x\ *\ \_num\_components;}
+\DoxyCodeLine{01185\ \ \ nassertv(copy\_size\ <=\ (\textcolor{keywordtype}{size\_t})std::abs(src\_stride));}
+\DoxyCodeLine{01186\ }
+\DoxyCodeLine{01187\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_size\_y;\ ++y)\ \{}
+\DoxyCodeLine{01188\ \ \ \ \ memcpy(dst,\ src,\ copy\_size);}
+\DoxyCodeLine{01189\ \ \ \ \ src\ +=\ src\_stride;}
+\DoxyCodeLine{01190\ \ \ \ \ dst\ +=\ dst\_stride;}
+\DoxyCodeLine{01191\ \ \ \}}
+\DoxyCodeLine{01192\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01193\ \}}
+\DoxyCodeLine{01194\ }
+\DoxyCodeLine{01198\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFfmpegVideoCursor_a48e3fdd2f6cf5988a5493f527d379ab0}{FfmpegVideoCursor::}}}
+\DoxyCodeLine{01199\ \mbox{\hyperlink{classFfmpegVideoCursor_a48e3fdd2f6cf5988a5493f527d379ab0}{register\_with\_read\_factory}}()\ \{}
+\DoxyCodeLine{01200\ \ \ BamReader::get\_factory()-\/>register\_factory(get\_class\_type(),\ \mbox{\hyperlink{classFfmpegVideoCursor_af77ff8862bb012cb12d0caa30a0a304e}{make\_from\_bam}});}
+\DoxyCodeLine{01201\ \}}
+\DoxyCodeLine{01202\ }
+\DoxyCodeLine{01207\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFfmpegVideoCursor_acb0500673f9b5f1d1c5348f6b99e82ef}{FfmpegVideoCursor::}}}
+\DoxyCodeLine{01208\ \mbox{\hyperlink{classFfmpegVideoCursor_acb0500673f9b5f1d1c5348f6b99e82ef}{write\_datagram}}(\mbox{\hyperlink{classBamWriter}{BamWriter}}\ *manager,\ \mbox{\hyperlink{classDatagram}{Datagram}}\ \&dg)\ \{}
+\DoxyCodeLine{01209\ \ \ \mbox{\hyperlink{classMovieVideoCursor_a6c010b588cd3a67b0eb6a2409fa6cba7}{MovieVideoCursor::write\_datagram}}(manager,\ dg);}
+\DoxyCodeLine{01210\ }
+\DoxyCodeLine{01211\ \ \ \textcolor{comment}{//\ No\ need\ to\ write\ any\ additional\ data\ here-\/-\/all\ of\ it\ comes\ implicitly}}
+\DoxyCodeLine{01212\ \ \ \textcolor{comment}{//\ from\ the\ underlying\ MovieVideo,\ which\ we\ process\ in\ finalize().}}
+\DoxyCodeLine{01213\ \}}
+\DoxyCodeLine{01214\ }
+\DoxyCodeLine{01220\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFfmpegVideoCursor_ab9d1aaeeb1c4ab673ec72e71d9bd4df3}{FfmpegVideoCursor::}}}
+\DoxyCodeLine{01221\ \mbox{\hyperlink{classFfmpegVideoCursor_ab9d1aaeeb1c4ab673ec72e71d9bd4df3}{finalize}}(\mbox{\hyperlink{classBamReader}{BamReader}}\ *)\ \{}
+\DoxyCodeLine{01222\ \ \ \textcolor{keywordflow}{if}\ (\_source\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01223\ \ \ \ \ \mbox{\hyperlink{classFfmpegVideo}{FfmpegVideo}}\ *video;}
+\DoxyCodeLine{01224\ \ \ \ \ DCAST\_INTO\_V(video,\ \_source);}
+\DoxyCodeLine{01225\ \ \ \ \ init\_from(video);}
+\DoxyCodeLine{01226\ \ \ \}}
+\DoxyCodeLine{01227\ \}}
+\DoxyCodeLine{01228\ }
+\DoxyCodeLine{01234\ \mbox{\hyperlink{classTypedWritable}{TypedWritable}}\ *\mbox{\hyperlink{classFfmpegVideoCursor_af77ff8862bb012cb12d0caa30a0a304e}{FfmpegVideoCursor::}}}
+\DoxyCodeLine{01235\ \mbox{\hyperlink{classFfmpegVideoCursor_af77ff8862bb012cb12d0caa30a0a304e}{make\_from\_bam}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFactoryParams}{FactoryParams}}\ \&params)\ \{}
+\DoxyCodeLine{01236\ \ \ \mbox{\hyperlink{classFfmpegVideoCursor}{FfmpegVideoCursor}}\ *video\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classFfmpegVideoCursor}{FfmpegVideoCursor}};}
+\DoxyCodeLine{01237\ \ \ \mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ scan;}
+\DoxyCodeLine{01238\ \ \ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager;}
+\DoxyCodeLine{01239\ }
+\DoxyCodeLine{01240\ \ \ parse\_params(params,\ scan,\ manager);}
+\DoxyCodeLine{01241\ \ \ video-\/>\mbox{\hyperlink{classFfmpegVideoCursor_a9095c969a0751dd621563eafcbfef406}{fillin}}(scan,\ manager);}
+\DoxyCodeLine{01242\ }
+\DoxyCodeLine{01243\ \ \ \textcolor{keywordflow}{return}\ video;}
+\DoxyCodeLine{01244\ \}}
+\DoxyCodeLine{01245\ }
+\DoxyCodeLine{01250\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFfmpegVideoCursor_a9095c969a0751dd621563eafcbfef406}{FfmpegVideoCursor::}}}
+\DoxyCodeLine{01251\ \mbox{\hyperlink{classFfmpegVideoCursor_a9095c969a0751dd621563eafcbfef406}{fillin}}(\mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ \&scan,\ \mbox{\hyperlink{classBamReader}{BamReader}}\ *manager)\ \{}
+\DoxyCodeLine{01252\ \ \ \mbox{\hyperlink{classMovieVideoCursor_a155847b451a42a64b699db61272bb330}{MovieVideoCursor::fillin}}(scan,\ manager);}
+\DoxyCodeLine{01253\ }
+\DoxyCodeLine{01254\ \ \ \textcolor{comment}{//\ The\ MovieVideoCursor\ gets\ the\ underlying\ MovieVideo\ pointer.\ \ We\ need\ a}}
+\DoxyCodeLine{01255\ \ \ \textcolor{comment}{//\ finalize\ callback\ so\ we\ can\ initialize\ ourselves\ once\ that\ has\ been\ read}}
+\DoxyCodeLine{01256\ \ \ \textcolor{comment}{//\ completely.}}
+\DoxyCodeLine{01257\ \ \ manager-\/>\mbox{\hyperlink{classBamReader_a0c2e8dc5a794a4263139116b5b8dcb2d}{register\_finalize}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{01258\ \}}
+\DoxyCodeLine{01259\ }
+\DoxyCodeLine{01268\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classFfmpegVideoCursor_1_1FfmpegBuffer_a210bc49ffc51c63aa81a3bb7f4e7c346}{FfmpegVideoCursor::FfmpegBuffer::}}}
+\DoxyCodeLine{01269\ \mbox{\hyperlink{classFfmpegVideoCursor_1_1FfmpegBuffer_a210bc49ffc51c63aa81a3bb7f4e7c346}{compare\_timestamp}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classMovieVideoCursor_1_1Buffer}{Buffer}}\ *other)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01270\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFfmpegVideoCursor_1_1FfmpegBuffer}{FfmpegBuffer}}\ *fother;}
+\DoxyCodeLine{01271\ \ \ DCAST\_INTO\_R(fother,\ other,\ 0);}
+\DoxyCodeLine{01272\ \ \ \textcolor{keywordflow}{if}\ (\_end\_frame\ *\ \_video\_timebase\ <=\ fother-\/>\_begin\_frame\ *\ fother-\/>\_video\_timebase)\ \{}
+\DoxyCodeLine{01273\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{01274\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_begin\_frame\ *\ \_video\_timebase\ >=\ fother-\/>\_end\_frame\ *\ fother-\/>\_video\_timebase)\ \{}
+\DoxyCodeLine{01275\ \ \ \ \ \textcolor{keywordflow}{return}\ 1;}
+\DoxyCodeLine{01276\ \ \ \}}
+\DoxyCodeLine{01277\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{01278\ \}}
+\DoxyCodeLine{01279\ }
+\DoxyCodeLine{01285\ \textcolor{keywordtype}{double}\ \mbox{\hyperlink{classFfmpegVideoCursor_1_1FfmpegBuffer_aef3cdf3bacbe3189fb6a1a91de68054a}{FfmpegVideoCursor::FfmpegBuffer::}}}
+\DoxyCodeLine{01286\ \mbox{\hyperlink{classFfmpegVideoCursor_1_1FfmpegBuffer_aef3cdf3bacbe3189fb6a1a91de68054a}{get\_timestamp}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01287\ \ \ \textcolor{keywordtype}{int}\ mid\_frame\ =\ (\_begin\_frame\ +\ \_end\_frame\ -\/\ 1)\ /\ 2;}
+\DoxyCodeLine{01288\ \ \ \textcolor{keywordflow}{return}\ mid\_frame\ *\ \_video\_timebase;}
+\DoxyCodeLine{01289\ \}}
+
+\end{DoxyCode}

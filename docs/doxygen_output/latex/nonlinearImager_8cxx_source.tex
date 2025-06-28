@@ -1,0 +1,465 @@
+\doxysection{nonlinear\+Imager.\+cxx}
+\hypertarget{nonlinearImager_8cxx_source}{}\label{nonlinearImager_8cxx_source}\index{panda/src/distort/nonlinearImager.cxx@{panda/src/distort/nonlinearImager.cxx}}
+\mbox{\hyperlink{nonlinearImager_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{nonlinearImager_8h}{nonlinearImager.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__distort_8h}{config\_distort.h}}"{}}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{graphicsStateGuardian_8h}{graphicsStateGuardian.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{matrixLens_8h}{matrixLens.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{graphicsOutput_8h}{graphicsOutput.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{graphicsEngine_8h}{graphicsEngine.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{dcast_8h}{dcast.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cPointerCallbackObject_8h}{cPointerCallbackObject.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{asyncTaskManager_8h}{asyncTaskManager.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{genericAsyncTask_8h}{genericAsyncTask.h}}"{}}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00029\ NonlinearImager::}
+\DoxyCodeLine{00030\ NonlinearImager()\ \{}
+\DoxyCodeLine{00031\ \ \ \_engine\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00032\ \ \ \_stale\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00033\ \}}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00038\ NonlinearImager::}
+\DoxyCodeLine{00039\ \string~NonlinearImager()\ \{}
+\DoxyCodeLine{00040\ \ \ remove\_all\_screens();}
+\DoxyCodeLine{00041\ \ \ remove\_all\_viewers();}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \ \ \textcolor{keywordflow}{if}\ (\_recompute\_task\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00044\ \ \ \ \ \mbox{\hyperlink{classAsyncTaskManager}{AsyncTaskManager}}\ *task\_mgr\ =\ AsyncTaskManager::get\_global\_ptr();}
+\DoxyCodeLine{00045\ \ \ \ \ task\_mgr-\/>remove(\_recompute\_task);}
+\DoxyCodeLine{00046\ \ \ \}}
+\DoxyCodeLine{00047\ \}}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00055\ \textcolor{keywordtype}{int}\ NonlinearImager::}
+\DoxyCodeLine{00056\ add\_screen(\mbox{\hyperlink{classProjectionScreen}{ProjectionScreen}}\ *screen)\ \{}
+\DoxyCodeLine{00057\ \ \ \textcolor{keywordflow}{return}\ add\_screen(\mbox{\hyperlink{classNodePath}{NodePath}}(screen),\ screen-\/>get\_name());}
+\DoxyCodeLine{00058\ \}}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00075\ \textcolor{keywordtype}{int}\ NonlinearImager::}
+\DoxyCodeLine{00076\ add\_screen(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&screen,\ \textcolor{keyword}{const}\ std::string\ \&name)\ \{}
+\DoxyCodeLine{00077\ \ \ nassertr(!screen.is\_empty()\ \&\&}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \ \ \ \ \ screen.node()-\/>is\_of\_type(ProjectionScreen::get\_class\_type()),\ -\/1);}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \ \ \mbox{\hyperlink{classProjectionScreen}{ProjectionScreen}}\ *screen\_node\ =\ DCAST(\mbox{\hyperlink{classProjectionScreen}{ProjectionScreen}},\ screen.node());}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00082\ \ \ \_screens.push\_back(Screen());}
+\DoxyCodeLine{00083\ \ \ Screen\ \&new\_screen\ =\ \_screens.back();}
+\DoxyCodeLine{00084\ \ \ new\_screen.\_screen\ =\ screen;}
+\DoxyCodeLine{00085\ \ \ new\_screen.\_screen\_node\ =\ screen\_node;}
+\DoxyCodeLine{00086\ \ \ new\_screen.\_name\ =\ name;}
+\DoxyCodeLine{00087\ \ \ new\_screen.\_buffer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00088\ \ \ new\_screen.\_tex\_width\ =\ 256;}
+\DoxyCodeLine{00089\ \ \ new\_screen.\_tex\_height\ =\ 256;}
+\DoxyCodeLine{00090\ \ \ new\_screen.\_active\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00092\ \ \ \textcolor{comment}{//\ Slot\ a\ mesh\ for\ each\ viewer.}}
+\DoxyCodeLine{00093\ \ \ \textcolor{keywordtype}{size\_t}\ vi;}
+\DoxyCodeLine{00094\ \ \ \textcolor{keywordflow}{for}\ (vi\ =\ 0;\ vi\ <\ \_viewers.size();\ ++vi)\ \{}
+\DoxyCodeLine{00095\ \ \ \ \ new\_screen.\_meshes.push\_back(Mesh());}
+\DoxyCodeLine{00096\ \ \ \ \ new\_screen.\_meshes[vi].\_last\_screen\ =\ screen\_node-\/>get\_last\_screen();}
+\DoxyCodeLine{00097\ \ \ \}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \_stale\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \ \ \textcolor{keywordflow}{if}\ (\_dark\_room.is\_empty())\ \{}
+\DoxyCodeLine{00102\ \ \ \ \ \_dark\_room\ =\ screen.get\_top();}
+\DoxyCodeLine{00103\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00104\ \ \ \ \ nassertr(\_dark\_room.is\_same\_graph(screen),\ \_screens.size()\ -\/\ 1);}
+\DoxyCodeLine{00105\ \ \ \}}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \ \ \textcolor{keywordflow}{return}\ \_screens.size()\ -\/\ 1;}
+\DoxyCodeLine{00108\ \}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00114\ \textcolor{keywordtype}{int}\ NonlinearImager::}
+\DoxyCodeLine{00115\ find\_screen(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&screen)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00116\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ \_screens.size();\ i++)\ \{}
+\DoxyCodeLine{00117\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_screens[i].\_screen\ ==\ screen)\ \{}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ i;}
+\DoxyCodeLine{00119\ \ \ \ \ \}}
+\DoxyCodeLine{00120\ \ \ \}}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00122\ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00123\ \}}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00128\ \textcolor{keywordtype}{void}\ NonlinearImager::}
+\DoxyCodeLine{00129\ remove\_screen(\textcolor{keywordtype}{int}\ index)\ \{}
+\DoxyCodeLine{00130\ \ \ nassertv\_always(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_screens.size());}
+\DoxyCodeLine{00131\ \ \ Screen\ \&screen\ =\ \_screens[index];}
+\DoxyCodeLine{00132\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ vi\ =\ 0;\ vi\ <\ screen.\_meshes.size();\ vi++)\ \{}
+\DoxyCodeLine{00133\ \ \ \ \ screen.\_meshes[vi].\_mesh.remove\_node();}
+\DoxyCodeLine{00134\ \ \ \}}
+\DoxyCodeLine{00135\ \ \ \_screens.erase(\_screens.begin()\ +\ index);}
+\DoxyCodeLine{00136\ \}}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00141\ \textcolor{keywordtype}{void}\ NonlinearImager::}
+\DoxyCodeLine{00142\ remove\_all\_screens()\ \{}
+\DoxyCodeLine{00143\ \ \ \textcolor{keywordflow}{while}\ (!\_screens.empty())\ \{}
+\DoxyCodeLine{00144\ \ \ \ \ remove\_screen(\_screens.size()\ -\/\ 1);}
+\DoxyCodeLine{00145\ \ \ \}}
+\DoxyCodeLine{00146\ \}}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00151\ \textcolor{keywordtype}{int}\ NonlinearImager::}
+\DoxyCodeLine{00152\ get\_num\_screens()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00153\ \ \ \textcolor{keywordflow}{return}\ \_screens.size();}
+\DoxyCodeLine{00154\ \}}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00159\ \mbox{\hyperlink{classNodePath}{NodePath}}\ NonlinearImager::}
+\DoxyCodeLine{00160\ get\_screen(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00161\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_screens.size(),\ \mbox{\hyperlink{classNodePath}{NodePath}}());}
+\DoxyCodeLine{00162\ \ \ \textcolor{keywordflow}{return}\ \_screens[index].\_screen;}
+\DoxyCodeLine{00163\ \}}
+\DoxyCodeLine{00164\ }
+\DoxyCodeLine{00170\ \mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *NonlinearImager::}
+\DoxyCodeLine{00171\ get\_buffer(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00172\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_screens.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00173\ \ \ \textcolor{keywordflow}{return}\ \_screens[index].\_buffer;}
+\DoxyCodeLine{00174\ \}}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00184\ \textcolor{keywordtype}{void}\ NonlinearImager::}
+\DoxyCodeLine{00185\ set\_texture\_size(\textcolor{keywordtype}{int}\ index,\ \textcolor{keywordtype}{int}\ width,\ \textcolor{keywordtype}{int}\ height)\ \{}
+\DoxyCodeLine{00186\ \ \ nassertv(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_screens.size());}
+\DoxyCodeLine{00187\ }
+\DoxyCodeLine{00188\ \ \ Screen\ \&screen\ =\ \_screens[index];}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00190\ \ \ screen.\_tex\_width\ =\ width;}
+\DoxyCodeLine{00191\ \ \ screen.\_tex\_height\ =\ height;}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00193\ \ \ \textcolor{keywordflow}{if}\ (screen.\_buffer\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keywordtype}{bool}\ removed\ =\ \_engine-\/>remove\_window(screen.\_buffer);}
+\DoxyCodeLine{00195\ \ \ \ \ screen.\_buffer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00196\ \ \ \ \ nassertv(removed);}
+\DoxyCodeLine{00197\ \ \ \}}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00199\ \ \ \_stale\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00200\ \}}
+\DoxyCodeLine{00201\ }
+\DoxyCodeLine{00209\ \textcolor{keywordtype}{void}\ NonlinearImager::}
+\DoxyCodeLine{00210\ set\_source\_camera(\textcolor{keywordtype}{int}\ index,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&source\_camera)\ \{}
+\DoxyCodeLine{00211\ \ \ nassertv(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_screens.size());}
+\DoxyCodeLine{00212\ \ \ nassertv(!source\_camera.is\_empty()\ \&\&}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ \ \ \ source\_camera.node()-\/>is\_of\_type(Camera::get\_class\_type()));}
+\DoxyCodeLine{00214\ \ \ \_screens[index].\_source\_camera\ =\ source\_camera;}
+\DoxyCodeLine{00215\ \}}
+\DoxyCodeLine{00216\ }
+\DoxyCodeLine{00221\ \textcolor{keywordtype}{void}\ NonlinearImager::}
+\DoxyCodeLine{00222\ set\_screen\_active(\textcolor{keywordtype}{int}\ index,\ \textcolor{keywordtype}{bool}\ active)\ \{}
+\DoxyCodeLine{00223\ \ \ nassertv(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_screens.size());}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00225\ \ \ Screen\ \&screen\ =\ \_screens[index];}
+\DoxyCodeLine{00226\ \ \ screen.\_active\ =\ active;}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordflow}{if}\ (!active)\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ \textcolor{comment}{//\ If\ we've\ just\ made\ this\ screen\ inactive,\ remove\ its\ meshes.}}
+\DoxyCodeLine{00230\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ vi\ =\ 0;\ vi\ <\ screen.\_meshes.size();\ vi++)\ \{}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ screen.\_meshes[vi].\_mesh.remove\_node();}
+\DoxyCodeLine{00232\ \ \ \ \ \}}
+\DoxyCodeLine{00233\ }
+\DoxyCodeLine{00234\ \ \ \ \ \textcolor{comment}{//\ Also\ remove\ its\ buffer.}}
+\DoxyCodeLine{00235\ \ \ \ \ \textcolor{keywordflow}{if}\ (screen.\_buffer\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ removed\ =\ \_engine-\/>remove\_window(screen.\_buffer);}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ screen.\_buffer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ nassertv(removed);}
+\DoxyCodeLine{00239\ \ \ \ \ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ \ \ \textcolor{comment}{//\ Hide\ the\ screen\ in\ the\ dark\ room.\ \ This\ doesn't\ really\ matter,\ since}}
+\DoxyCodeLine{00242\ \ \ \ \ \textcolor{comment}{//\ the\ dark\ room\ isn't\ normally\ rendered,\ but\ hide\ it\ anyway\ in\ case\ the}}
+\DoxyCodeLine{00243\ \ \ \ \ \textcolor{comment}{//\ user\ stuck\ a\ camera\ in\ there\ for\ fun.}}
+\DoxyCodeLine{00244\ \ \ \ \ screen.\_screen.hide();}
+\DoxyCodeLine{00245\ }
+\DoxyCodeLine{00246\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00247\ \ \ \ \ \textcolor{comment}{//\ If\ we've\ just\ made\ it\ active,\ it\ needs\ to\ be\ recomputed.}}
+\DoxyCodeLine{00248\ \ \ \ \ \_stale\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00250\ \ \ \ \ screen.\_screen.show();}
+\DoxyCodeLine{00251\ \ \ \}}
+\DoxyCodeLine{00252\ \}}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00257\ \textcolor{keywordtype}{bool}\ NonlinearImager::}
+\DoxyCodeLine{00258\ get\_screen\_active(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00259\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_screens.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00260\ \ \ \textcolor{keywordflow}{return}\ \_screens[index].\_active;}
+\DoxyCodeLine{00261\ \}}
+\DoxyCodeLine{00262\ }
+\DoxyCodeLine{00263\ }
+\DoxyCodeLine{00278\ \textcolor{keywordtype}{int}\ NonlinearImager::}
+\DoxyCodeLine{00279\ add\_viewer(\mbox{\hyperlink{classDisplayRegion}{DisplayRegion}}\ *dr)\ \{}
+\DoxyCodeLine{00280\ \ \ \mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *window\ =\ dr-\/>get\_window();}
+\DoxyCodeLine{00281\ \ \ nassertr(window\ !=\ \textcolor{keyword}{nullptr},\ -\/1);}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00283\ \ \ \mbox{\hyperlink{classGraphicsStateGuardian}{GraphicsStateGuardian}}\ *gsg\ =\ window-\/>get\_gsg();}
+\DoxyCodeLine{00284\ \ \ nassertr(gsg\ !=\ \textcolor{keyword}{nullptr},\ -\/1);}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \mbox{\hyperlink{classGraphicsEngine}{GraphicsEngine}}\ *engine\ =\ gsg-\/>\mbox{\hyperlink{classGraphicsStateGuardian_a2b3e8a71b60c6a512f7f200655290150}{get\_engine}}();}
+\DoxyCodeLine{00287\ \ \ nassertr(engine\ !=\ \textcolor{keyword}{nullptr},\ -\/1);}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ nassertr(\_viewers.empty()\ ||\ (engine\ ==\ \_engine),\ -\/1);}
+\DoxyCodeLine{00290\ \ \ \textcolor{keywordflow}{if}\ (\_engine\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00291\ \ \ \ \ \_engine\ =\ engine;}
+\DoxyCodeLine{00292\ \ \ \}}
+\DoxyCodeLine{00293\ }
+\DoxyCodeLine{00294\ \ \ \textcolor{keywordflow}{if}\ (\_recompute\_task\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00295\ \ \ \ \ \_recompute\_task\ =}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGenericAsyncTask}{GenericAsyncTask}}(\textcolor{stringliteral}{"{}nli\_recompute"{}},\ \mbox{\hyperlink{classNonlinearImager_a330c230dbe270252d2d0de8816760fa5}{recompute\_callback}},\ (\textcolor{keywordtype}{void}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{00297\ \ \ \ \ \mbox{\hyperlink{classAsyncTaskManager}{AsyncTaskManager}}\ *task\_mgr\ =\ AsyncTaskManager::get\_global\_ptr();}
+\DoxyCodeLine{00298\ \ \ \ \ task\_mgr-\/>add(\_recompute\_task);}
+\DoxyCodeLine{00299\ \ \ \}}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00301\ \ \ \textcolor{keywordtype}{int}\ previous\_vi\ =\ find\_viewer(dr);}
+\DoxyCodeLine{00302\ \ \ \textcolor{keywordflow}{if}\ (previous\_vi\ >=\ 0)\ \{}
+\DoxyCodeLine{00303\ \ \ \ \ \textcolor{keywordflow}{return}\ previous\_vi;}
+\DoxyCodeLine{00304\ \ \ \}}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00306\ \ \ \textcolor{keywordtype}{size\_t}\ vi\ =\ \_viewers.size();}
+\DoxyCodeLine{00307\ \ \ \_viewers.push\_back(Viewer());}
+\DoxyCodeLine{00308\ \ \ Viewer\ \&viewer\ =\ \_viewers[vi];}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ viewer.\_dr\ =\ dr;}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \textcolor{comment}{//\ Get\ the\ current\ camera\ off\ of\ the\ DisplayRegion,\ if\ any.}}
+\DoxyCodeLine{00313\ \ \ viewer.\_viewer\ =\ dr-\/>get\_camera();}
+\DoxyCodeLine{00314\ \ \ \textcolor{keywordflow}{if}\ (viewer.\_viewer.is\_empty())\ \{}
+\DoxyCodeLine{00315\ \ \ \ \ viewer.\_viewer\_node\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00316\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ viewer.\_viewer\_node\ =\ DCAST(\mbox{\hyperlink{classLensNode}{LensNode}},\ viewer.\_viewer.node());}
+\DoxyCodeLine{00318\ \ \ \}}
+\DoxyCodeLine{00319\ }
+\DoxyCodeLine{00320\ \ \ \textcolor{comment}{//\ The\ internal\ camera\ is\ an\ identity-\/matrix\ camera\ that\ simply\ views\ the}}
+\DoxyCodeLine{00321\ \ \ \textcolor{comment}{//\ meshes\ that\ represent\ the\ user's\ specified\ camera.}}
+\DoxyCodeLine{00322\ \ \ viewer.\_internal\_camera\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classCamera}{Camera}}(\textcolor{stringliteral}{"{}internal\_camera"{}});}
+\DoxyCodeLine{00323\ \ \ viewer.\_internal\_camera-\/>set\_lens(\textcolor{keyword}{new}\ \mbox{\hyperlink{classMatrixLens}{MatrixLens}});}
+\DoxyCodeLine{00324\ \ \ viewer.\_internal\_scene\ =\ \mbox{\hyperlink{classNodePath}{NodePath}}(\textcolor{stringliteral}{"{}internal\_screens"{}});}
+\DoxyCodeLine{00325\ \ \ viewer.\_internal\_camera-\/>set\_scene(viewer.\_internal\_scene);}
+\DoxyCodeLine{00326\ }
+\DoxyCodeLine{00327\ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ camera\_np\ =\ viewer.\_internal\_scene.attach\_new\_node(viewer.\_internal\_camera);}
+\DoxyCodeLine{00328\ \ \ viewer.\_dr-\/>set\_camera(camera\_np);}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00330\ \ \ \textcolor{comment}{//\ Enable\ face\ culling\ on\ the\ wireframe\ mesh.\ \ This\ will\ help\ us\ to\ cull\ out}}
+\DoxyCodeLine{00331\ \ \ \textcolor{comment}{//\ invalid\ polygons\ that\ result\ from\ vertices\ crossing\ a\ singularity\ (for}}
+\DoxyCodeLine{00332\ \ \ \textcolor{comment}{//\ instance,\ at\ the\ back\ of\ a\ fisheye\ lens).}}
+\DoxyCodeLine{00333\ \ \ viewer.\_internal\_scene.\mbox{\hyperlink{classNodePath_ad5778817025e2547bf9864795d34e272}{set\_two\_sided}}(0);}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00335\ \ \ \textcolor{comment}{//\ Finally,\ slot\ a\ new\ mesh\ for\ each\ screen.}}
+\DoxyCodeLine{00336\ \ \ Screens::iterator\ si;}
+\DoxyCodeLine{00337\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_screens.begin();\ si\ !=\ \_screens.end();\ ++si)\ \{}
+\DoxyCodeLine{00338\ \ \ \ \ Screen\ \&screen\ =\ (*si);}
+\DoxyCodeLine{00339\ \ \ \ \ screen.\_meshes.push\_back(Mesh());}
+\DoxyCodeLine{00340\ \ \ \ \ nassertr(screen.\_meshes.size()\ ==\ \_viewers.size(),\ -\/1);}
+\DoxyCodeLine{00341\ \ \ \}}
+\DoxyCodeLine{00342\ }
+\DoxyCodeLine{00343\ \ \ \_stale\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00344\ }
+\DoxyCodeLine{00345\ \ \ \textcolor{keywordflow}{if}\ (\_dark\_room.is\_empty())\ \{}
+\DoxyCodeLine{00346\ \ \ \ \ \_dark\_room\ =\ viewer.\_viewer.get\_top();}
+\DoxyCodeLine{00347\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00348\ \ \ \ \ nassertr(\_dark\_room.is\_same\_graph(viewer.\_viewer),\ vi);}
+\DoxyCodeLine{00349\ \ \ \}}
+\DoxyCodeLine{00350\ }
+\DoxyCodeLine{00351\ \ \ \textcolor{keywordflow}{return}\ vi;}
+\DoxyCodeLine{00352\ \}}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00358\ \textcolor{keywordtype}{int}\ NonlinearImager::}
+\DoxyCodeLine{00359\ find\_viewer(\mbox{\hyperlink{classDisplayRegion}{DisplayRegion}}\ *dr)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00360\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ vi\ =\ 0;\ vi\ <\ \_viewers.size();\ vi++)\ \{}
+\DoxyCodeLine{00361\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_viewers[vi].\_dr\ ==\ dr)\ \{}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ vi;}
+\DoxyCodeLine{00363\ \ \ \ \ \}}
+\DoxyCodeLine{00364\ \ \ \}}
+\DoxyCodeLine{00365\ }
+\DoxyCodeLine{00366\ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00367\ \}}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00372\ \textcolor{keywordtype}{void}\ NonlinearImager::}
+\DoxyCodeLine{00373\ remove\_viewer(\textcolor{keywordtype}{int}\ index)\ \{}
+\DoxyCodeLine{00374\ \ \ nassertv\_always(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_viewers.size());}
+\DoxyCodeLine{00375\ \ \ Viewer\ \&viewer\ =\ \_viewers[index];}
+\DoxyCodeLine{00376\ \ \ viewer.\_internal\_camera-\/>set\_scene(\mbox{\hyperlink{classNodePath}{NodePath}}());}
+\DoxyCodeLine{00377\ \ \ viewer.\_dr-\/>set\_camera(viewer.\_viewer);}
+\DoxyCodeLine{00378\ }
+\DoxyCodeLine{00379\ \ \ \textcolor{comment}{//\ Also\ remove\ the\ corresponding\ mesh\ from\ each\ screen.}}
+\DoxyCodeLine{00380\ \ \ Screens::iterator\ si;}
+\DoxyCodeLine{00381\ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_screens.begin();\ si\ !=\ \_screens.end();\ ++si)\ \{}
+\DoxyCodeLine{00382\ \ \ \ \ Screen\ \&screen\ =\ (*si);}
+\DoxyCodeLine{00383\ \ \ \ \ nassertv(index\ <\ (\textcolor{keywordtype}{int})screen.\_meshes.size());}
+\DoxyCodeLine{00384\ \ \ \ \ screen.\_meshes[index].\_mesh.remove\_node();}
+\DoxyCodeLine{00385\ \ \ \ \ screen.\_meshes.erase(screen.\_meshes.begin()\ +\ index);}
+\DoxyCodeLine{00386\ \ \ \}}
+\DoxyCodeLine{00387\ }
+\DoxyCodeLine{00388\ \ \ \_viewers.erase(\_viewers.begin()\ +\ index);}
+\DoxyCodeLine{00389\ \}}
+\DoxyCodeLine{00390\ }
+\DoxyCodeLine{00394\ \textcolor{keywordtype}{void}\ NonlinearImager::}
+\DoxyCodeLine{00395\ remove\_all\_viewers()\ \{}
+\DoxyCodeLine{00396\ \ \ \textcolor{keywordflow}{while}\ (!\_viewers.empty())\ \{}
+\DoxyCodeLine{00397\ \ \ \ \ remove\_viewer(\_viewers.size()\ -\/\ 1);}
+\DoxyCodeLine{00398\ \ \ \}}
+\DoxyCodeLine{00399\ \}}
+\DoxyCodeLine{00400\ }
+\DoxyCodeLine{00413\ \textcolor{keywordtype}{void}\ NonlinearImager::}
+\DoxyCodeLine{00414\ set\_viewer\_camera(\textcolor{keywordtype}{int}\ index,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&viewer\_camera)\ \{}
+\DoxyCodeLine{00415\ \ \ nassertv(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_viewers.size());}
+\DoxyCodeLine{00416\ \ \ nassertv(!viewer\_camera.is\_empty()\ \&\&}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ \ \ \ viewer\_camera.node()-\/>is\_of\_type(LensNode::get\_class\_type()));}
+\DoxyCodeLine{00418\ \ \ Viewer\ \&viewer\ =\ \_viewers[index];}
+\DoxyCodeLine{00419\ \ \ viewer.\_viewer\ =\ viewer\_camera;}
+\DoxyCodeLine{00420\ \ \ viewer.\_viewer\_node\ =\ DCAST(\mbox{\hyperlink{classLensNode}{LensNode}},\ viewer\_camera.node());}
+\DoxyCodeLine{00421\ \ \ \_stale\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00422\ }
+\DoxyCodeLine{00423\ \ \ \textcolor{keywordflow}{if}\ (\_dark\_room.is\_empty())\ \{}
+\DoxyCodeLine{00424\ \ \ \ \ \_dark\_room\ =\ viewer.\_viewer.get\_top();}
+\DoxyCodeLine{00425\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00426\ \ \ \ \ nassertv(\_dark\_room.is\_same\_graph(viewer.\_viewer));}
+\DoxyCodeLine{00427\ \ \ \}}
+\DoxyCodeLine{00428\ \}}
+\DoxyCodeLine{00429\ }
+\DoxyCodeLine{00434\ \mbox{\hyperlink{classNodePath}{NodePath}}\ NonlinearImager::}
+\DoxyCodeLine{00435\ get\_viewer\_camera(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00436\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_viewers.size(),\ \mbox{\hyperlink{classNodePath}{NodePath}}());}
+\DoxyCodeLine{00437\ \ \ \textcolor{keywordflow}{return}\ \_viewers[index].\_viewer;}
+\DoxyCodeLine{00438\ \}}
+\DoxyCodeLine{00439\ }
+\DoxyCodeLine{00449\ \mbox{\hyperlink{classNodePath}{NodePath}}\ NonlinearImager::}
+\DoxyCodeLine{00450\ get\_viewer\_scene(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00451\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_viewers.size(),\ \mbox{\hyperlink{classNodePath}{NodePath}}());}
+\DoxyCodeLine{00452\ \ \ \textcolor{keywordflow}{return}\ \_viewers[index].\_internal\_scene;}
+\DoxyCodeLine{00453\ \}}
+\DoxyCodeLine{00454\ }
+\DoxyCodeLine{00458\ \textcolor{keywordtype}{int}\ NonlinearImager::}
+\DoxyCodeLine{00459\ get\_num\_viewers()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00460\ \ \ \textcolor{keywordflow}{return}\ \_viewers.size();}
+\DoxyCodeLine{00461\ \}}
+\DoxyCodeLine{00462\ }
+\DoxyCodeLine{00466\ \mbox{\hyperlink{classDisplayRegion}{DisplayRegion}}\ *NonlinearImager::}
+\DoxyCodeLine{00467\ get\_viewer(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00468\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_viewers.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00469\ \ \ \textcolor{keywordflow}{return}\ \_viewers[index].\_dr;}
+\DoxyCodeLine{00470\ \}}
+\DoxyCodeLine{00471\ }
+\DoxyCodeLine{00483\ \mbox{\hyperlink{classNodePath}{NodePath}}\ NonlinearImager::}
+\DoxyCodeLine{00484\ get\_dark\_room()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00485\ \ \ \textcolor{keywordflow}{return}\ \_dark\_room;}
+\DoxyCodeLine{00486\ \}}
+\DoxyCodeLine{00487\ }
+\DoxyCodeLine{00492\ \mbox{\hyperlink{classGraphicsEngine}{GraphicsEngine}}\ *NonlinearImager::}
+\DoxyCodeLine{00493\ get\_graphics\_engine()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00494\ \ \ \textcolor{keywordflow}{return}\ \_engine;}
+\DoxyCodeLine{00495\ \}}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00500\ \textcolor{keywordtype}{void}\ NonlinearImager::}
+\DoxyCodeLine{00501\ recompute()\ \{}
+\DoxyCodeLine{00502\ \ \ \textcolor{keywordtype}{size\_t}\ vi;}
+\DoxyCodeLine{00503\ \ \ \textcolor{keywordflow}{for}\ (vi\ =\ 0;\ vi\ <\ \_viewers.size();\ ++vi)\ \{}
+\DoxyCodeLine{00504\ \ \ \ \ Viewer\ \&viewer\ =\ \_viewers[vi];}
+\DoxyCodeLine{00505\ }
+\DoxyCodeLine{00506\ \ \ \ \ Screens::iterator\ si;}
+\DoxyCodeLine{00507\ \ \ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_screens.begin();\ si\ !=\ \_screens.end();\ ++si)\ \{}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ Screen\ \&screen\ =\ (*si);}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (screen.\_active)\ \{}
+\DoxyCodeLine{00510\ \ \ \ \ \ \ \ \ recompute\_screen(screen,\ vi);}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00512\ \ \ \ \ \}}
+\DoxyCodeLine{00513\ }
+\DoxyCodeLine{00514\ \ \ \ \ \textcolor{keywordflow}{if}\ (viewer.\_viewer\_node\ !=\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \ \ viewer.\_viewer\_node-\/>get\_lens()\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ viewer.\_viewer\_lens\_change\ =}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \ \ viewer.\_viewer\_node-\/>get\_lens()-\/>get\_last\_change();}
+\DoxyCodeLine{00518\ \ \ \ \ \}}
+\DoxyCodeLine{00519\ \ \ \}}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ \ \ \_stale\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00522\ \}}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00527\ AsyncTask::DoneStatus\ \mbox{\hyperlink{classNonlinearImager_a330c230dbe270252d2d0de8816760fa5}{NonlinearImager::}}}
+\DoxyCodeLine{00528\ \mbox{\hyperlink{classNonlinearImager_a330c230dbe270252d2d0de8816760fa5}{recompute\_callback}}(\mbox{\hyperlink{classGenericAsyncTask}{GenericAsyncTask}}\ *,\ \textcolor{keywordtype}{void}\ *data)\ \{}
+\DoxyCodeLine{00529\ \ \ \mbox{\hyperlink{classNonlinearImager}{NonlinearImager}}\ *self\ =\ (\mbox{\hyperlink{classNonlinearImager}{NonlinearImager}}\ *)data;}
+\DoxyCodeLine{00530\ \ \ self-\/>\mbox{\hyperlink{classNonlinearImager_a5dde1138fe505e081041f07cd4304093}{recompute\_if\_stale}}();}
+\DoxyCodeLine{00531\ \ \ \textcolor{keywordflow}{return}\ AsyncTask::DS\_cont;}
+\DoxyCodeLine{00532\ \}}
+\DoxyCodeLine{00533\ }
+\DoxyCodeLine{00537\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classNonlinearImager_a5dde1138fe505e081041f07cd4304093}{NonlinearImager::}}}
+\DoxyCodeLine{00538\ \mbox{\hyperlink{classNonlinearImager_a5dde1138fe505e081041f07cd4304093}{recompute\_if\_stale}}()\ \{}
+\DoxyCodeLine{00539\ \ \ \textcolor{keywordflow}{if}\ (\_stale)\ \{}
+\DoxyCodeLine{00540\ \ \ \ \ recompute();}
+\DoxyCodeLine{00541\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00542\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ vi;}
+\DoxyCodeLine{00543\ \ \ \ \ \textcolor{keywordflow}{for}\ (vi\ =\ 0;\ vi\ <\ \_viewers.size();\ ++vi)\ \{}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ Viewer\ \&viewer\ =\ \_viewers[vi];}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (viewer.\_viewer\_node\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classUpdateSeq}{UpdateSeq}}\ lens\_change\ =}
+\DoxyCodeLine{00547\ \ \ \ \ \ \ \ \ \ \ viewer.\_viewer\_node-\/>get\_lens()-\/>get\_last\_change();}
+\DoxyCodeLine{00548\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (lens\_change\ !=\ viewer.\_viewer\_lens\_change)\ \{}
+\DoxyCodeLine{00549\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ viewer\ has\ changed,\ so\ we\ need\ to\ recompute\ all\ screens\ on}}
+\DoxyCodeLine{00550\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ this\ viewer.}}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \ \ \ \ Screens::iterator\ si;}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_screens.begin();\ si\ !=\ \_screens.end();\ ++si)\ \{}
+\DoxyCodeLine{00553\ \ \ \ \ \ \ \ \ \ \ \ \ Screen\ \&screen\ =\ (*si);}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (screen.\_active)\ \{}
+\DoxyCodeLine{00555\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ recompute\_screen(screen,\ vi);}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00557\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00558\ }
+\DoxyCodeLine{00559\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00560\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ may\ not\ need\ to\ recompute\ all\ screens,\ but\ maybe\ some\ of\ them.}}
+\DoxyCodeLine{00561\ \ \ \ \ \ \ \ \ \ \ Screens::iterator\ si;}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (si\ =\ \_screens.begin();\ si\ !=\ \_screens.end();\ ++si)\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \ \ \ \ \ \ Screen\ \&screen\ =\ (*si);}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (screen.\_active\ \&\&}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ screen.\_meshes[vi].\_last\_screen\ !=\ screen.\_screen\_node-\/>get\_last\_screen())\ \{}
+\DoxyCodeLine{00566\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ recompute\_screen(screen,\ vi);}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ screen.\_screen\_node-\/>recompute\_if\_stale(screen.\_screen);}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00573\ \ \ \ \ \}}
+\DoxyCodeLine{00574\ \ \ \}}
+\DoxyCodeLine{00575\ \}}
+\DoxyCodeLine{00576\ }
+\DoxyCodeLine{00580\ \textcolor{keywordtype}{void}\ NonlinearImager::}
+\DoxyCodeLine{00581\ recompute\_screen(NonlinearImager::Screen\ \&screen,\ \textcolor{keywordtype}{size\_t}\ vi)\ \{}
+\DoxyCodeLine{00582\ \ \ nassertv(vi\ <\ screen.\_meshes.size());}
+\DoxyCodeLine{00583\ \ \ screen.\_meshes[vi].\_mesh.remove\_node();}
+\DoxyCodeLine{00584\ \ \ \textcolor{keywordflow}{if}\ (!screen.\_active)\ \{}
+\DoxyCodeLine{00585\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00586\ \ \ \}}
+\DoxyCodeLine{00587\ }
+\DoxyCodeLine{00588\ \ \ screen.\_screen\_node-\/>recompute\_if\_stale(screen.\_screen);}
+\DoxyCodeLine{00589\ }
+\DoxyCodeLine{00590\ \ \ Viewer\ \&viewer\ =\ \_viewers[vi];}
+\DoxyCodeLine{00591\ \ \ PT(\mbox{\hyperlink{classPandaNode}{PandaNode}})\ mesh\ =}
+\DoxyCodeLine{00592\ \ \ \ \ screen.\_screen\_node-\/>make\_flat\_mesh(screen.\_screen,\ viewer.\_viewer);}
+\DoxyCodeLine{00593\ \ \ \textcolor{keywordflow}{if}\ (mesh\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00594\ \ \ \ \ screen.\_meshes[vi].\_mesh\ =\ viewer.\_internal\_scene.attach\_new\_node(mesh);}
+\DoxyCodeLine{00595\ \ \ \}}
+\DoxyCodeLine{00596\ }
+\DoxyCodeLine{00597\ \ \ \textcolor{keywordflow}{if}\ (screen.\_buffer\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00598\ \ \ \ \ \mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *win\ =\ viewer.\_dr-\/>get\_window();}
+\DoxyCodeLine{00599\ \ \ \ \ \mbox{\hyperlink{classGraphicsOutput}{GraphicsOutput}}\ *buffer\ =\ win-\/>make\_texture\_buffer}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ (screen.\_name,\ screen.\_tex\_width,\ screen.\_tex\_height,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00602\ \ \ \ \ \textcolor{keywordflow}{if}\ (buffer\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ screen.\_buffer\ =\ buffer;}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \mbox{\hyperlink{classDisplayRegion}{DisplayRegion}}\ *dr\ =\ buffer-\/>make\_display\_region();}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ dr-\/>\mbox{\hyperlink{classDisplayRegion_ab6da947e00ed8c02c353bcabebcaa928}{set\_camera}}(screen.\_source\_camera);}
+\DoxyCodeLine{00606\ }
+\DoxyCodeLine{00607\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ screen.\_meshes[vi].\_mesh.clear\_texture();}
+\DoxyCodeLine{00609\ \ \ \ \ \}}
+\DoxyCodeLine{00610\ \ \ \}}
+\DoxyCodeLine{00611\ }
+\DoxyCodeLine{00612\ \ \ \textcolor{keywordflow}{if}\ (screen.\_buffer\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00613\ \ \ \ \ screen.\_meshes[vi].\_mesh.set\_texture(screen.\_buffer-\/>get\_texture());}
+\DoxyCodeLine{00614\ }
+\DoxyCodeLine{00615\ \ \ \ \ \textcolor{comment}{//\ We\ don't\ really\ need\ to\ set\ the\ texture\ on\ the\ dark\ room\ screen,\ since}}
+\DoxyCodeLine{00616\ \ \ \ \ \textcolor{comment}{//\ that's\ normally\ not\ rendered,\ but\ we\ do\ anyway\ just\ for\ debugging}}
+\DoxyCodeLine{00617\ \ \ \ \ \textcolor{comment}{//\ purposes\ (in\ case\ the\ user\ does\ try\ to\ render\ it,\ to\ see\ what's\ going}}
+\DoxyCodeLine{00618\ \ \ \ \ \textcolor{comment}{//\ on).}}
+\DoxyCodeLine{00619\ \ \ \ \ screen.\_screen.set\_texture(screen.\_buffer-\/>get\_texture());}
+\DoxyCodeLine{00620\ \ \ \}}
+\DoxyCodeLine{00621\ }
+\DoxyCodeLine{00622\ \ \ screen.\_meshes[vi].\_last\_screen\ =\ screen.\_screen\_node-\/>get\_last\_screen();}
+\DoxyCodeLine{00623\ \}}
+
+\end{DoxyCode}

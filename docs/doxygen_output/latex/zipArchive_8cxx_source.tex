@@ -1,0 +1,1900 @@
+\doxysection{zip\+Archive.\+cxx}
+\hypertarget{zipArchive_8cxx_source}{}\label{zipArchive_8cxx_source}\index{panda/src/express/zipArchive.cxx@{panda/src/express/zipArchive.cxx}}
+\mbox{\hyperlink{zipArchive_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{zipArchive_8h}{zipArchive.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__express_8h}{config\_express.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{streamWriter_8h}{streamWriter.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{streamReader_8h}{streamReader.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagram_8h}{datagram.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{zStream_8h}{zStream.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{encryptStream_8h}{encryptStream.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFileSystem_8h}{virtualFileSystem.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFile_8h}{virtualFile.h}}"{}}}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ <iterator>}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ <time.h>}}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{openSSLWrapper_8h}{openSSLWrapper.h}}"{}}}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \textcolor{keyword}{using\ }std::streamoff;}
+\DoxyCodeLine{00032\ \textcolor{keyword}{using\ }std::streampos;}
+\DoxyCodeLine{00033\ \textcolor{keyword}{using\ }std::streamsize;}
+\DoxyCodeLine{00034\ \textcolor{keyword}{using\ }std::stringstream;}
+\DoxyCodeLine{00035\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \textcolor{comment}{//\ 1980-\/01-\/01\ 00:00:00}}
+\DoxyCodeLine{00038\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ time\_t\ dos\_epoch\ =\ 315532800;}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00044\ \textcolor{keyword}{static}\ std::string\ base64\_encode(\textcolor{keyword}{const}\ \textcolor{keywordtype}{void}\ *buf,\ \textcolor{keywordtype}{int}\ len)\ \{}
+\DoxyCodeLine{00045\ \ \ BIO\ *b64\ =\ BIO\_new(BIO\_f\_base64());}
+\DoxyCodeLine{00046\ \ \ BIO\_set\_flags(b64,\ BIO\_FLAGS\_BASE64\_NO\_NL);}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00048\ \ \ BIO\ *sink\ =\ BIO\_new(BIO\_s\_mem());}
+\DoxyCodeLine{00049\ \ \ BIO\_push(b64,\ sink);}
+\DoxyCodeLine{00050\ \ \ BIO\_write(b64,\ buf,\ len);}
+\DoxyCodeLine{00051\ \ \ BIO\_flush(b64);}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *encoded;}
+\DoxyCodeLine{00054\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{long}\ encoded\_len\ =\ BIO\_get\_mem\_data(sink,\ \&encoded);}
+\DoxyCodeLine{00055\ \ \ std::string\ result(encoded,\ encoded\_len);}
+\DoxyCodeLine{00056\ \ \ BIO\_free\_all(b64);}
+\DoxyCodeLine{00057\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00058\ \}}
+\DoxyCodeLine{00059\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00064\ ZipArchive::}
+\DoxyCodeLine{00065\ ZipArchive()\ :}
+\DoxyCodeLine{00066\ \ \ \_read\_filew(\_read\_file),}
+\DoxyCodeLine{00067\ \ \ \_read\_write\_filew(\_read\_write\_file)}
+\DoxyCodeLine{00068\ \{}
+\DoxyCodeLine{00069\ \ \ \_read\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00070\ \ \ \_write\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00071\ \ \ \_owns\_stream\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00072\ \ \ \_index\_changed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00073\ \ \ \_needs\_repack\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00074\ \ \ \_record\_timestamp\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00075\ \}}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00080\ ZipArchive::}
+\DoxyCodeLine{00081\ \string~ZipArchive()\ \{}
+\DoxyCodeLine{00082\ \ \ close();}
+\DoxyCodeLine{00083\ \}}
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00093\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00094\ open\_read(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{00095\ \ \ close();}
+\DoxyCodeLine{00096\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ filename;}
+\DoxyCodeLine{00097\ \ \ fname.set\_binary();}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00100\ \ \ PT(\mbox{\hyperlink{classVirtualFile}{VirtualFile}})\ vfile\ =\ vfs-\/>get\_file(fname);}
+\DoxyCodeLine{00101\ \ \ \textcolor{keywordflow}{if}\ (vfile\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00102\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00103\ \ \ \}}
+\DoxyCodeLine{00104\ \ \ std::istream\ *stream\ =\ vfile-\/>open\_read\_file(\textcolor{keyword}{false});}
+\DoxyCodeLine{00105\ \ \ \textcolor{keywordflow}{if}\ (stream\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00107\ \ \ \}}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \ \ \_read\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classIStreamWrapper}{IStreamWrapper}}(stream,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00110\ \ \ \_owns\_stream\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00111\ \ \ \_filename\ =\ filename;}
+\DoxyCodeLine{00112\ \ \ \textcolor{keywordflow}{return}\ read\_index();}
+\DoxyCodeLine{00113\ \}}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00125\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00126\ open\_read(\mbox{\hyperlink{classIStreamWrapper}{IStreamWrapper}}\ *stream,\ \textcolor{keywordtype}{bool}\ owns\_pointer)\ \{}
+\DoxyCodeLine{00127\ \ \ close();}
+\DoxyCodeLine{00128\ \ \ \_read\ =\ stream;}
+\DoxyCodeLine{00129\ \ \ \_owns\_stream\ =\ owns\_pointer;}
+\DoxyCodeLine{00130\ \ \ \textcolor{keywordflow}{return}\ read\_index();}
+\DoxyCodeLine{00131\ \}}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00142\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00143\ open\_write(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{00144\ \ \ close();}
+\DoxyCodeLine{00145\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ filename;}
+\DoxyCodeLine{00146\ \ \ fname.set\_binary();}
+\DoxyCodeLine{00147\ \ \ \textcolor{keywordflow}{if}\ (!fname.open\_write(\_write\_file,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00148\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00149\ \ \ \}}
+\DoxyCodeLine{00150\ \ \ \_write\ =\ \&\_write\_file;}
+\DoxyCodeLine{00151\ \ \ \_filename\ =\ filename;}
+\DoxyCodeLine{00152\ \ \ \_index\_start\ =\ 0;}
+\DoxyCodeLine{00153\ \ \ \_file\_end\ =\ 0;}
+\DoxyCodeLine{00154\ \ \ \_index\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00155\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00156\ \}}
+\DoxyCodeLine{00157\ }
+\DoxyCodeLine{00165\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00166\ open\_write(std::ostream\ *stream,\ \textcolor{keywordtype}{bool}\ owns\_pointer)\ \{}
+\DoxyCodeLine{00167\ \ \ close();}
+\DoxyCodeLine{00168\ \ \ \_write\ =\ stream;}
+\DoxyCodeLine{00169\ \ \ \_owns\_stream\ =\ owns\_pointer;}
+\DoxyCodeLine{00170\ \ \ \_write-\/>seekp(0,\ std::ios::beg);}
+\DoxyCodeLine{00171\ \ \ \_index\_start\ =\ 0;}
+\DoxyCodeLine{00172\ \ \ \_file\_end\ =\ 0;}
+\DoxyCodeLine{00173\ \ \ \_index\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00174\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00175\ \}}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00186\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00187\ open\_read\_write(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{00188\ \ \ close();}
+\DoxyCodeLine{00189\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ filename;}
+\DoxyCodeLine{00190\ \ \ fname.set\_binary();}
+\DoxyCodeLine{00191\ \ \ \textcolor{keywordtype}{bool}\ exists\ =\ fname.exists();}
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordflow}{if}\ (!fname.open\_read\_write(\_read\_write\_file))\ \{}
+\DoxyCodeLine{00193\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00194\ \ \ \}}
+\DoxyCodeLine{00195\ \ \ \_read\ =\ \&\_read\_write\_filew;}
+\DoxyCodeLine{00196\ \ \ \_write\ =\ \&\_read\_write\_file;}
+\DoxyCodeLine{00197\ \ \ \_filename\ =\ filename;}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00199\ \ \ \textcolor{keywordflow}{if}\ (exists)\ \{}
+\DoxyCodeLine{00200\ \ \ \ \ \textcolor{keywordflow}{return}\ read\_index();}
+\DoxyCodeLine{00201\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00202\ \ \ \ \ \_index\_start\ =\ 0;}
+\DoxyCodeLine{00203\ \ \ \ \ \_file\_end\ =\ 0;}
+\DoxyCodeLine{00204\ \ \ \ \ \_index\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00205\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00206\ \ \ \}}
+\DoxyCodeLine{00207\ \}}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00218\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00219\ open\_read\_write(std::iostream\ *stream,\ \textcolor{keywordtype}{bool}\ owns\_pointer)\ \{}
+\DoxyCodeLine{00220\ \ \ close();}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \ \ \textcolor{comment}{//\ We\ don't\ support\ locking\ when\ opening\ a\ file\ in\ read-\/write\ mode,\ because}}
+\DoxyCodeLine{00223\ \ \ \textcolor{comment}{//\ we\ don't\ bother\ with\ locking\ on\ write.\ \ But\ we\ need\ to\ have\ an}}
+\DoxyCodeLine{00224\ \ \ \textcolor{comment}{//\ IStreamWrapper\ to\ assign\ to\ the\ \_read\ member,\ so\ we\ create\ one\ on-\/the-\/fly}}
+\DoxyCodeLine{00225\ \ \ \textcolor{comment}{//\ here.}}
+\DoxyCodeLine{00226\ \ \ \_read\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classStreamWrapper}{StreamWrapper}}(stream,\ owns\_pointer);}
+\DoxyCodeLine{00227\ \ \ \_write\ =\ stream;}
+\DoxyCodeLine{00228\ \ \ \_owns\_stream\ =\ \textcolor{keyword}{true};\ \ \textcolor{comment}{//\ Because\ we\ own\ the\ StreamWrapper,\ above.}}
+\DoxyCodeLine{00229\ \ \ \_write-\/>seekp(0,\ std::ios::beg);}
+\DoxyCodeLine{00230\ }
+\DoxyCodeLine{00231\ \ \ \textcolor{comment}{//\ Check\ whether\ the\ read\ stream\ is\ empty.}}
+\DoxyCodeLine{00232\ \ \ stream-\/>seekg(0,\ std::ios::end);}
+\DoxyCodeLine{00233\ \ \ \textcolor{keywordflow}{if}\ (stream-\/>tellg()\ ==\ (streampos)0)\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ \textcolor{comment}{//\ The\ read\ stream\ is\ empty,\ which\ is\ always\ valid.}}
+\DoxyCodeLine{00235\ \ \ \ \ \_index\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00236\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00237\ \ \ \}}
+\DoxyCodeLine{00238\ }
+\DoxyCodeLine{00239\ \ \ \textcolor{comment}{//\ The\ read\ stream\ is\ not\ empty,\ so\ we'd\ better\ have\ a\ valid\ ZipArchive.}}
+\DoxyCodeLine{00240\ \ \ \textcolor{keywordflow}{return}\ read\_index();}
+\DoxyCodeLine{00241\ \}}
+\DoxyCodeLine{00242\ }
+\DoxyCodeLine{00246\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00247\ verify()\ \{}
+\DoxyCodeLine{00248\ \ \ nassertr\_always(is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00250\ \ \ \_read-\/>acquire();}
+\DoxyCodeLine{00251\ \ \ std::istream\ *read\ =\ \_read-\/>get\_istream();}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ \textcolor{keywordtype}{bool}\ passes\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \ \ \textcolor{keywordflow}{for}\ (Subfile\ *subfile\ :\ \_subfiles)\ \{}
+\DoxyCodeLine{00256\ \ \ \ \ \textcolor{keywordflow}{if}\ (!subfile-\/>read\_header(*read)\ ||}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ !subfile-\/>verify\_data(*read))\ \{}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ passes\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00259\ \ \ \ \ \}}
+\DoxyCodeLine{00260\ \ \ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \ \ \_read-\/>release();}
+\DoxyCodeLine{00263\ \ \ \textcolor{keywordflow}{return}\ passes;}
+\DoxyCodeLine{00264\ \}}
+\DoxyCodeLine{00265\ }
+\DoxyCodeLine{00271\ \textcolor{keywordtype}{void}\ ZipArchive::}
+\DoxyCodeLine{00272\ close()\ \{}
+\DoxyCodeLine{00273\ \ \ flush();}
+\DoxyCodeLine{00274\ }
+\DoxyCodeLine{00275\ \ \ \textcolor{keywordflow}{if}\ (\_owns\_stream)\ \{}
+\DoxyCodeLine{00276\ \ \ \ \ \textcolor{comment}{//\ We\ prefer\ to\ delete\ the\ IStreamWrapper\ over\ the\ ostream,\ if\ possible.}}
+\DoxyCodeLine{00277\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_read\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \textcolor{comment}{//\ Only\ delete\ it\ if\ no\ SubStream\ is\ still\ referencing\ it.}}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_read-\/>unref())\ \{}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_read;}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00282\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_write\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_write;}
+\DoxyCodeLine{00284\ \ \ \ \ \}}
+\DoxyCodeLine{00285\ \ \ \}}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \ \ \_read\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00288\ \ \ \_write\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00289\ \ \ \_owns\_stream\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00290\ \ \ \_index\_start\ =\ 0;}
+\DoxyCodeLine{00291\ \ \ \_file\_end\ =\ 0;}
+\DoxyCodeLine{00292\ \ \ \_index\_changed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00293\ \ \ \_needs\_repack\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00294\ }
+\DoxyCodeLine{00295\ \ \ \_read\_file.close();}
+\DoxyCodeLine{00296\ \ \ \_write\_file.close();}
+\DoxyCodeLine{00297\ \ \ \_read\_write\_file.close();}
+\DoxyCodeLine{00298\ \ \ \_filename\ =\ \mbox{\hyperlink{classFilename}{Filename}}();}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00300\ \ \ clear\_subfiles();}
+\DoxyCodeLine{00301\ \}}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00313\ std::string\ ZipArchive::}
+\DoxyCodeLine{00314\ add\_subfile(\textcolor{keyword}{const}\ std::string\ \&subfile\_name,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ compression\_level)\ \{}
+\DoxyCodeLine{00316\ \ \ nassertr(is\_write\_valid(),\ std::string());}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00318\ \textcolor{preprocessor}{\#ifndef\ HAVE\_ZLIB}}
+\DoxyCodeLine{00319\ \ \ express\_cat.warning()}
+\DoxyCodeLine{00320\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}zlib\ not\ compiled\ in;\ unable\ to\ modify\ ZIP\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00321\ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{00322\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00323\ }
+\DoxyCodeLine{00324\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00325\ \ \ PT(\mbox{\hyperlink{classVirtualFile}{VirtualFile}})\ vfile\ =\ vfs-\/>get\_file(filename);}
+\DoxyCodeLine{00326\ \ \ \textcolor{keywordflow}{if}\ (vfile\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00327\ \ \ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{00328\ \ \ \}}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00330\ \ \ std::istream\ *in\ =\ vfs-\/>open\_read\_file(filename,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00331\ \ \ \textcolor{keywordflow}{if}\ (in\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00332\ \ \ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{00333\ \ \ \}}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00335\ \ \ std::string\ name\ =\ add\_subfile(subfile\_name,\ in,\ compression\_level);}
+\DoxyCodeLine{00336\ \ \ vfs-\/>close\_read\_file(in);}
+\DoxyCodeLine{00337\ \ \ \textcolor{keywordflow}{return}\ name;}
+\DoxyCodeLine{00338\ \}}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00352\ std::string\ ZipArchive::}
+\DoxyCodeLine{00353\ add\_subfile(\textcolor{keyword}{const}\ std::string\ \&subfile\_name,\ std::istream\ *subfile\_data,}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ compression\_level)\ \{}
+\DoxyCodeLine{00355\ \ \ nassertr(is\_write\_valid(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00356\ }
+\DoxyCodeLine{00357\ \textcolor{preprocessor}{\#ifndef\ HAVE\_ZLIB}}
+\DoxyCodeLine{00358\ \ \ express\_cat.warning()}
+\DoxyCodeLine{00359\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}zlib\ not\ compiled\ in;\ unable\ to\ modify\ ZIP\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00360\ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{00361\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00363\ \ \ std::string\ name\ =\ standardize\_subfile\_name(subfile\_name);}
+\DoxyCodeLine{00364\ \ \ \textcolor{keywordflow}{if}\ (!name.empty())\ \{}
+\DoxyCodeLine{00365\ \ \ \ \ Subfile\ *subfile\ =\ \textcolor{keyword}{new}\ Subfile(subfile\_name,\ compression\_level);}
+\DoxyCodeLine{00366\ }
+\DoxyCodeLine{00367\ \ \ \ \ \textcolor{comment}{//\ Write\ it\ straight\ away,\ overwriting\ the\ index\ at\ the\ end\ of\ the\ file.}}
+\DoxyCodeLine{00368\ \ \ \ \ \textcolor{comment}{//\ This\ index\ will\ be\ rewritten\ at\ the\ next\ call\ to\ flush()\ or\ close().}}
+\DoxyCodeLine{00369\ \ \ \ \ std::streampos\ fpos\ =\ \_index\_start;}
+\DoxyCodeLine{00370\ \ \ \ \ \_write-\/>seekp(fpos);}
+\DoxyCodeLine{00371\ }
+\DoxyCodeLine{00372\ \ \ \ \ \textcolor{keywordflow}{if}\ (!subfile-\/>write\_header(*\_write,\ fpos))\ \{}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00375\ \ \ \ \ \}}
+\DoxyCodeLine{00376\ }
+\DoxyCodeLine{00377\ \ \ \ \ \textcolor{keywordflow}{if}\ (!subfile-\/>write\_data(*\_write,\ subfile\_data,\ fpos,\ compression\_level))\ \{}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \textcolor{comment}{//\ Failed\ to\ write\ the\ data.}}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00381\ \ \ \ \ \}}
+\DoxyCodeLine{00382\ }
+\DoxyCodeLine{00383\ \ \ \ \ \textcolor{keywordflow}{if}\ (fpos\ >\ \_index\_start)\ \{}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \_index\_start\ =\ fpos;}
+\DoxyCodeLine{00385\ \ \ \ \ \}}
+\DoxyCodeLine{00386\ \ \ \ \ add\_new\_subfile(subfile,\ compression\_level);}
+\DoxyCodeLine{00387\ \ \ \}}
+\DoxyCodeLine{00388\ }
+\DoxyCodeLine{00389\ \ \ \textcolor{keywordflow}{return}\ name;}
+\DoxyCodeLine{00390\ \}}
+\DoxyCodeLine{00391\ }
+\DoxyCodeLine{00402\ \textcolor{keywordtype}{string}\ ZipArchive::}
+\DoxyCodeLine{00403\ update\_subfile(\textcolor{keyword}{const}\ std::string\ \&subfile\_name,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ compression\_level)\ \{}
+\DoxyCodeLine{00405\ \ \ nassertr(is\_write\_valid(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00406\ }
+\DoxyCodeLine{00407\ \textcolor{preprocessor}{\#ifndef\ HAVE\_ZLIB}}
+\DoxyCodeLine{00408\ \ \ express\_cat.warning()}
+\DoxyCodeLine{00409\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}zlib\ not\ compiled\ in;\ unable\ to\ modify\ ZIP\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00410\ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{00411\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00412\ }
+\DoxyCodeLine{00413\ \ \ \textcolor{keywordflow}{if}\ (!filename.\mbox{\hyperlink{classFilename_af8a2ef9ed26abbed32786e6d8025c2c7}{exists}}())\ \{}
+\DoxyCodeLine{00414\ \ \ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00415\ \ \ \}}
+\DoxyCodeLine{00416\ \ \ std::string\ name\ =\ standardize\_subfile\_name(subfile\_name);}
+\DoxyCodeLine{00417\ \ \ \textcolor{keywordflow}{if}\ (!name.empty())\ \{}
+\DoxyCodeLine{00418\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ find\_subfile(name);}
+\DoxyCodeLine{00419\ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ >=\ 0)\ \{}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ subfile\ already\ exists;\ compare\ it\ to\ the\ source\ file.}}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (compare\_subfile(index,\ filename))\ \{}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ files\ are\ identical;\ do\ nothing.}}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ name;}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00425\ \ \ \ \ \}}
+\DoxyCodeLine{00426\ }
+\DoxyCodeLine{00427\ \ \ \ \ \textcolor{comment}{//\ The\ subfile\ does\ not\ already\ exist\ or\ it\ is\ different\ from\ the\ source}}
+\DoxyCodeLine{00428\ \ \ \ \ \textcolor{comment}{//\ file.\ \ Add\ the\ new\ source\ file.}}
+\DoxyCodeLine{00429\ \ \ \ \ Subfile\ *subfile\ =\ \textcolor{keyword}{new}\ Subfile(name,\ compression\_level);}
+\DoxyCodeLine{00430\ \ \ \ \ add\_new\_subfile(subfile,\ compression\_level);}
+\DoxyCodeLine{00431\ \ \ \}}
+\DoxyCodeLine{00432\ }
+\DoxyCodeLine{00433\ \ \ \textcolor{keywordflow}{return}\ name;}
+\DoxyCodeLine{00434\ \}}
+\DoxyCodeLine{00435\ }
+\DoxyCodeLine{00436\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00456\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00457\ add\_jar\_signature(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&certificate,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&pkey,}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&password,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&alias)\ \{}
+\DoxyCodeLine{00459\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00461\ \ \ \textcolor{comment}{//\ Read\ the\ certificate\ file\ from\ VFS.\ \ First,\ read\ the\ complete\ file\ into}}
+\DoxyCodeLine{00462\ \ \ \textcolor{comment}{//\ memory.}}
+\DoxyCodeLine{00463\ \ \ \textcolor{keywordtype}{string}\ certificate\_data;}
+\DoxyCodeLine{00464\ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>read\_file(certificate,\ certificate\_data,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00465\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ "{}}\ <<\ certificate\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00467\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00468\ \ \ \}}
+\DoxyCodeLine{00469\ }
+\DoxyCodeLine{00470\ \ \ \textcolor{comment}{//\ Now\ do\ the\ same\ thing\ with\ the\ private\ key.\ \ This\ one\ may\ be\ password-\/}}
+\DoxyCodeLine{00471\ \ \ \textcolor{comment}{//\ encrypted\ on\ disk.}}
+\DoxyCodeLine{00472\ \ \ \textcolor{keywordtype}{string}\ pkey\_data;}
+\DoxyCodeLine{00473\ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>read\_file(pkey,\ pkey\_data,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00474\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ "{}}\ <<\ pkey\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00476\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00477\ \ \ \}}
+\DoxyCodeLine{00478\ }
+\DoxyCodeLine{00479\ \ \ \textcolor{comment}{//\ Create\ an\ in-\/memory\ BIO\ to\ read\ the\ "{}file"{}\ from\ the\ buffer.}}
+\DoxyCodeLine{00480\ \ \ BIO\ *certificate\_mbio\ =\ BIO\_new\_mem\_buf((\textcolor{keywordtype}{void}\ *)certificate\_data.data(),\ certificate\_data.size());}
+\DoxyCodeLine{00481\ \ \ X509\ *cert\ =\ PEM\_read\_bio\_X509(certificate\_mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ (\textcolor{keywordtype}{void}\ *)\textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00482\ \ \ BIO\_free(certificate\_mbio);}
+\DoxyCodeLine{00483\ \ \ \textcolor{keywordflow}{if}\ (cert\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00484\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ certificate\ in\ "{}}\ <<\ certificate\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00486\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00487\ \ \ \}}
+\DoxyCodeLine{00488\ }
+\DoxyCodeLine{00489\ \ \ \textcolor{comment}{//\ Same\ with\ private\ key.}}
+\DoxyCodeLine{00490\ \ \ BIO\ *pkey\_mbio\ =\ BIO\_new\_mem\_buf((\textcolor{keywordtype}{void}\ *)pkey\_data.data(),\ pkey\_data.size());}
+\DoxyCodeLine{00491\ \ \ EVP\_PKEY\ *evp\_pkey\ =\ PEM\_read\_bio\_PrivateKey(pkey\_mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{void}\ *)password.c\_str());}
+\DoxyCodeLine{00493\ \ \ BIO\_free(pkey\_mbio);}
+\DoxyCodeLine{00494\ \ \ \textcolor{keywordflow}{if}\ (evp\_pkey\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00495\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ private\ key\ in\ "{}}\ <<\ pkey\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00497\ }
+\DoxyCodeLine{00498\ \ \ \ \ X509\_free(cert);}
+\DoxyCodeLine{00499\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00500\ \ \ \}}
+\DoxyCodeLine{00501\ }
+\DoxyCodeLine{00502\ \ \ \textcolor{keywordtype}{bool}\ result\ =\ add\_jar\_signature(cert,\ evp\_pkey,\ alias);}
+\DoxyCodeLine{00503\ }
+\DoxyCodeLine{00504\ \ \ X509\_free(cert);}
+\DoxyCodeLine{00505\ \ \ EVP\_PKEY\_free(evp\_pkey);}
+\DoxyCodeLine{00506\ }
+\DoxyCodeLine{00507\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00508\ \}}
+\DoxyCodeLine{00509\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00510\ }
+\DoxyCodeLine{00511\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00525\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00526\ add\_jar\_signature(X509\ *cert,\ EVP\_PKEY\ *pkey,\ \textcolor{keyword}{const}\ std::string\ \&alias)\ \{}
+\DoxyCodeLine{00527\ \ \ nassertr(is\_write\_valid()\ \&\&\ is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00528\ \ \ nassertr(cert\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00529\ \ \ nassertr(pkey\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00530\ }
+\DoxyCodeLine{00531\ \ \ \textcolor{keywordflow}{if}\ (!X509\_check\_private\_key(cert,\ pkey))\ \{}
+\DoxyCodeLine{00532\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00533\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Private\ key\ does\ not\ match\ certificate.\(\backslash\)n"{}};}
+\DoxyCodeLine{00534\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00535\ \ \ \}}
+\DoxyCodeLine{00536\ }
+\DoxyCodeLine{00537\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *ext;}
+\DoxyCodeLine{00538\ \ \ \textcolor{keywordtype}{int}\ algo\ =\ EVP\_PKEY\_base\_id(pkey);}
+\DoxyCodeLine{00539\ \ \ \textcolor{keywordflow}{switch}\ (algo)\ \{}
+\DoxyCodeLine{00540\ \ \ \textcolor{keywordflow}{case}\ EVP\_PKEY\_RSA:}
+\DoxyCodeLine{00541\ \ \ \ \ ext\ =\ \textcolor{stringliteral}{"{}.RSA"{}};}
+\DoxyCodeLine{00542\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00543\ \ \ \textcolor{keywordflow}{case}\ EVP\_PKEY\_DSA:}
+\DoxyCodeLine{00544\ \ \ \ \ ext\ =\ \textcolor{stringliteral}{"{}.DSA"{}};}
+\DoxyCodeLine{00545\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00546\ \ \ \textcolor{keywordflow}{case}\ EVP\_PKEY\_EC:}
+\DoxyCodeLine{00547\ \ \ \ \ ext\ =\ \textcolor{stringliteral}{"{}.EC"{}};}
+\DoxyCodeLine{00548\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00549\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00550\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Private\ key\ has\ unsupported\ algorithm.\(\backslash\)n"{}};}
+\DoxyCodeLine{00552\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00553\ \ \ \}}
+\DoxyCodeLine{00554\ }
+\DoxyCodeLine{00555\ \ \ \textcolor{comment}{//\ Sanitize\ alias\ to\ be\ used\ in\ a\ filename.}}
+\DoxyCodeLine{00556\ \ \ std::string\ basename;}
+\DoxyCodeLine{00557\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{char}\ c\ :\ alias.substr(0,\ 8))\ \{}
+\DoxyCodeLine{00558\ \ \ \ \ \textcolor{keywordflow}{if}\ ((c\ >=\ \textcolor{charliteral}{'0'}\ \&\&\ c\ <=\ \textcolor{charliteral}{'9'})\ ||\ (c\ >=\ \textcolor{charliteral}{'A'}\ \&\&\ c\ <=\ \textcolor{charliteral}{'Z'})\ ||\ c\ ==\ \textcolor{charliteral}{'-\/'}\ ||\ c\ ==\ \textcolor{charliteral}{'\_'})\ \{}
+\DoxyCodeLine{00559\ \ \ \ \ \ \ basename\ +=\ c;}
+\DoxyCodeLine{00560\ \ \ \ \ \}}
+\DoxyCodeLine{00561\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (c\ >=\ \textcolor{charliteral}{'a'}\ \&\&\ c\ <=\ \textcolor{charliteral}{'z'})\ \{}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ basename\ +=\ (c\ -\/\ 0x20);}
+\DoxyCodeLine{00563\ \ \ \ \ \}}
+\DoxyCodeLine{00564\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (((uint8\_t)c\ \&\ 0xc0)\ !=\ 0x80)\ \{}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ basename\ +=\ \textcolor{charliteral}{'\_'};}
+\DoxyCodeLine{00566\ \ \ \ \ \}}
+\DoxyCodeLine{00567\ \ \ \}}
+\DoxyCodeLine{00568\ }
+\DoxyCodeLine{00569\ \ \ \textcolor{comment}{//\ Generate\ a\ MANIFEST.MF\ file.}}
+\DoxyCodeLine{00570\ \ \ \textcolor{keyword}{const}\ std::string\ header\ =\ \textcolor{stringliteral}{"{}Manifest-\/Version:\ 1.0\(\backslash\)r\(\backslash\)n\(\backslash\)r\(\backslash\)n"{}};}
+\DoxyCodeLine{00571\ \ \ \textcolor{keyword}{const}\ std::string\ header\_digest\ =\ \textcolor{stringliteral}{"{}VmrRqAIgAm0FCZViZFzpaP8OfDbN4iY0MyYFuzTMPv8="{}};}
+\DoxyCodeLine{00572\ }
+\DoxyCodeLine{00573\ \ \ std::stringstream\ manifest;}
+\DoxyCodeLine{00574\ \ \ SHA256\_CTX\ manifest\_ctx;}
+\DoxyCodeLine{00575\ \ \ SHA256\_Init(\&manifest\_ctx);}
+\DoxyCodeLine{00576\ }
+\DoxyCodeLine{00577\ \ \ manifest\ <<\ header;}
+\DoxyCodeLine{00578\ \ \ SHA256\_Update(\&manifest\_ctx,\ header.data(),\ header.size());}
+\DoxyCodeLine{00579\ }
+\DoxyCodeLine{00580\ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ sigfile\_body;}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ \textcolor{keywordflow}{for}\ (Subfile\ *subfile\ :\ \_subfiles)\ \{}
+\DoxyCodeLine{00583\ \ \ \ \ nassertr(subfile\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00584\ }
+\DoxyCodeLine{00585\ \ \ \ \ \textcolor{keywordflow}{if}\ (subfile-\/>\_name.compare(0,\ 9,\ \textcolor{stringliteral}{"{}META-\/INF/"{}})\ ==\ 0)\ \{}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00587\ \ \ \ \ \}}
+\DoxyCodeLine{00588\ }
+\DoxyCodeLine{00589\ \ \ \ \ std::string\ section\ =\ \textcolor{stringliteral}{"{}Name:\ "{}}\ +\ subfile-\/>\_name\ +\ \textcolor{stringliteral}{"{}\(\backslash\)r\(\backslash\)n"{}};}
+\DoxyCodeLine{00590\ \ \ \ \ sigfile\_body\ <<\ section;}
+\DoxyCodeLine{00591\ }
+\DoxyCodeLine{00592\ \ \ \ \ \textcolor{comment}{//\ Hash\ the\ subfile.}}
+\DoxyCodeLine{00593\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ digest[SHA256\_DIGEST\_LENGTH];}
+\DoxyCodeLine{00594\ \ \ \ \ \{}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ std::istream\ *stream\ =\ open\_read\_subfile(subfile);}
+\DoxyCodeLine{00596\ }
+\DoxyCodeLine{00597\ \ \ \ \ \ \ SHA256\_CTX\ subfile\_ctx;}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ SHA256\_Init(\&subfile\_ctx);}
+\DoxyCodeLine{00599\ }
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[4096];}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ stream-\/>read(buffer,\ \textcolor{keyword}{sizeof}(buffer));}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ count\ =\ stream-\/>gcount();}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (count\ >\ 0)\ \{}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \ \ SHA256\_Update(\&subfile\_ctx,\ buffer,\ count);}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \ \ stream-\/>read(buffer,\ \textcolor{keyword}{sizeof}(buffer));}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \ \ count\ =\ stream-\/>gcount();}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ stream;}
+\DoxyCodeLine{00609\ }
+\DoxyCodeLine{00610\ \ \ \ \ \ \ SHA256\_Final(digest,\ \&subfile\_ctx);}
+\DoxyCodeLine{00611\ \ \ \ \ \}}
+\DoxyCodeLine{00612\ }
+\DoxyCodeLine{00613\ \ \ \ \ \textcolor{comment}{//\ Encode\ to\ base64.}}
+\DoxyCodeLine{00614\ \ \ \ \ section\ +=\ \textcolor{stringliteral}{"{}SHA-\/256-\/Digest:\ "{}}\ +\ base64\_encode(digest,\ SHA256\_DIGEST\_LENGTH)\ +\ \textcolor{stringliteral}{"{}\(\backslash\)r\(\backslash\)n\(\backslash\)r\(\backslash\)n"{}};}
+\DoxyCodeLine{00615\ }
+\DoxyCodeLine{00616\ \ \ \ \ \textcolor{comment}{//\ Encode\ what\ we\ just\ wrote\ to\ the\ manifest\ file\ as\ well.}}
+\DoxyCodeLine{00617\ \ \ \ \ \{}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ digest[SHA256\_DIGEST\_LENGTH];}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00620\ \ \ \ \ \ \ SHA256\_CTX\ section\_ctx;}
+\DoxyCodeLine{00621\ \ \ \ \ \ \ SHA256\_Init(\&section\_ctx);}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ SHA256\_Update(\&section\_ctx,\ section.data(),\ section.size());}
+\DoxyCodeLine{00623\ \ \ \ \ \ \ SHA256\_Final(digest,\ \&section\_ctx);}
+\DoxyCodeLine{00624\ }
+\DoxyCodeLine{00625\ \ \ \ \ \ \ sigfile\_body\ <<\ \textcolor{stringliteral}{"{}SHA-\/256-\/Digest:\ "{}}\ <<\ base64\_encode(digest,\ SHA256\_DIGEST\_LENGTH)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)r\(\backslash\)n\(\backslash\)r\(\backslash\)n"{}};}
+\DoxyCodeLine{00626\ \ \ \ \ \}}
+\DoxyCodeLine{00627\ }
+\DoxyCodeLine{00628\ \ \ \ \ manifest\ <<\ section;}
+\DoxyCodeLine{00629\ \ \ \ \ SHA256\_Update(\&manifest\_ctx,\ section.data(),\ section.size());}
+\DoxyCodeLine{00630\ \ \ \}}
+\DoxyCodeLine{00631\ }
+\DoxyCodeLine{00632\ \ \ \textcolor{comment}{//\ The\ hash\ for\ the\ whole\ manifest\ file\ goes\ at\ the\ beginning\ of\ the\ .SF\ file.}}
+\DoxyCodeLine{00633\ \ \ std::stringstream\ sigfile;}
+\DoxyCodeLine{00634\ \ \ \{}
+\DoxyCodeLine{00635\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ digest[SHA256\_DIGEST\_LENGTH];}
+\DoxyCodeLine{00636\ \ \ \ \ SHA256\_Final(digest,\ \&manifest\_ctx);}
+\DoxyCodeLine{00637\ \ \ \ \ sigfile\ <<\ \textcolor{stringliteral}{"{}Signature-\/Version:\ 1.0\(\backslash\)r\(\backslash\)n"{}};}
+\DoxyCodeLine{00638\ \ \ \ \ sigfile\ <<\ \textcolor{stringliteral}{"{}SHA-\/256-\/Digest-\/Manifest-\/Main-\/Attributes:\ "{}}\ <<\ header\_digest\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)r\(\backslash\)n"{}};}
+\DoxyCodeLine{00639\ \ \ \ \ sigfile\ <<\ \textcolor{stringliteral}{"{}SHA-\/256-\/Digest-\/Manifest:\ "{}}\ <<\ base64\_encode(digest,\ SHA256\_DIGEST\_LENGTH)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)r\(\backslash\)n\(\backslash\)r\(\backslash\)n"{}};}
+\DoxyCodeLine{00640\ \ \ \ \ sigfile\ <<\ sigfile\_body.str();}
+\DoxyCodeLine{00641\ \ \ \}}
+\DoxyCodeLine{00642\ }
+\DoxyCodeLine{00643\ \ \ \textcolor{comment}{//\ Sign\ and\ convert\ to\ to\ DER\ format}}
+\DoxyCodeLine{00644\ \ \ std::string\ sigfile\_data\ =\ sigfile.str();}
+\DoxyCodeLine{00645\ \ \ BIO\ *sigfile\_mbio\ =\ BIO\_new\_mem\_buf((\textcolor{keywordtype}{void}\ *)sigfile\_data.data(),\ sigfile\_data.size());}
+\DoxyCodeLine{00646\ \ \ PKCS7\ *p7\ =\ PKCS7\_sign(cert,\ pkey,\ \textcolor{keyword}{nullptr},\ sigfile\_mbio,\ PKCS7\_DETACHED\ |\ PKCS7\_NOATTR);}
+\DoxyCodeLine{00647\ \ \ \textcolor{keywordtype}{int}\ der\_len\ =\ i2d\_PKCS7(p7,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00648\ \ \ std::string\ signature\_str(der\_len,\ \textcolor{charliteral}{'\(\backslash\)0'});}
+\DoxyCodeLine{00649\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *p\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)signature\_str.data();}
+\DoxyCodeLine{00650\ \ \ i2d\_PKCS7(p7,\ \&p);}
+\DoxyCodeLine{00651\ \ \ \mbox{\hyperlink{classstd_1_1istringstream}{std::istringstream}}\ signature(std::move(signature\_str));}
+\DoxyCodeLine{00652\ \ \ PKCS7\_free(p7);}
+\DoxyCodeLine{00653\ }
+\DoxyCodeLine{00654\ \ \ add\_subfile(\textcolor{stringliteral}{"{}META-\/INF/MANIFEST.MF"{}},\ \&manifest,\ 9);}
+\DoxyCodeLine{00655\ \ \ add\_subfile(\textcolor{stringliteral}{"{}META-\/INF/"{}}\ +\ basename\ +\ \textcolor{stringliteral}{"{}.SF"{}},\ \&sigfile,\ 9);}
+\DoxyCodeLine{00656\ \ \ add\_subfile(\textcolor{stringliteral}{"{}META-\/INF/"{}}\ +\ basename\ +\ ext,\ \&signature,\ 9);}
+\DoxyCodeLine{00657\ }
+\DoxyCodeLine{00658\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00659\ \}}
+\DoxyCodeLine{00660\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00661\ }
+\DoxyCodeLine{00676\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00677\ flush()\ \{}
+\DoxyCodeLine{00678\ \ \ \textcolor{keywordflow}{if}\ (!is\_write\_valid())\ \{}
+\DoxyCodeLine{00679\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00680\ \ \ \}}
+\DoxyCodeLine{00681\ }
+\DoxyCodeLine{00682\ \ \ nassertr(\_write\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00683\ }
+\DoxyCodeLine{00684\ \ \ \textcolor{comment}{//\ First,\ mark\ out\ all\ of\ the\ removed\ subfiles.}}
+\DoxyCodeLine{00685\ \ \ \textcolor{keywordflow}{for}\ (Subfile\ *subfile\ :\ \_removed\_subfiles)\ \{}
+\DoxyCodeLine{00686\ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{00687\ \ \ \}}
+\DoxyCodeLine{00688\ \ \ \_removed\_subfiles.clear();}
+\DoxyCodeLine{00689\ }
+\DoxyCodeLine{00690\ \ \ \textcolor{keywordflow}{if}\ (\_index\_changed)\ \{}
+\DoxyCodeLine{00691\ \ \ \ \ std::streampos\ fpos\ =\ \_index\_start;}
+\DoxyCodeLine{00692\ \ \ \ \ \_write-\/>seekp(fpos);}
+\DoxyCodeLine{00693\ \ \ \ \ \textcolor{keywordflow}{if}\ (!write\_index(*\_write,\ fpos))\ \{}
+\DoxyCodeLine{00694\ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ updated\ central\ directory\ to\ ZIP\ archive\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ close();}
+\DoxyCodeLine{00697\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00698\ \ \ \ \ \}}
+\DoxyCodeLine{00699\ \ \ \ \ \_index\_changed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00700\ \ \ \}}
+\DoxyCodeLine{00701\ }
+\DoxyCodeLine{00702\ \ \ \_write-\/>flush();}
+\DoxyCodeLine{00703\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00704\ \}}
+\DoxyCodeLine{00705\ }
+\DoxyCodeLine{00717\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00718\ repack()\ \{}
+\DoxyCodeLine{00719\ \ \ nassertr(is\_write\_valid()\ \&\&\ is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00720\ \ \ nassertr(!\_filename.empty(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00721\ }
+\DoxyCodeLine{00722\ \ \ \textcolor{comment}{//\ First,\ we\ open\ a\ temporary\ filename\ to\ copy\ the\ ZipArchive\ to.}}
+\DoxyCodeLine{00723\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ dirname\ =\ \_filename.get\_dirname();}
+\DoxyCodeLine{00724\ \ \ \textcolor{keywordflow}{if}\ (dirname.empty())\ \{}
+\DoxyCodeLine{00725\ \ \ \ \ dirname\ =\ \textcolor{stringliteral}{"{}."{}};}
+\DoxyCodeLine{00726\ \ \ \}}
+\DoxyCodeLine{00727\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ temp\_filename\ =\ \mbox{\hyperlink{classFilename_ab0650c0800c5af778d667c6b855e644a}{Filename::temporary}}(dirname,\ \textcolor{stringliteral}{"{}ziptemp"{}});}
+\DoxyCodeLine{00728\ \ \ temp\_filename.set\_binary();}
+\DoxyCodeLine{00729\ \ \ pofstream\ temp;}
+\DoxyCodeLine{00730\ \ \ \textcolor{keywordflow}{if}\ (!temp\_filename.\mbox{\hyperlink{classFilename_ad37a9d52c837218b01076de184dc5f4d}{open\_write}}(temp))\ \{}
+\DoxyCodeLine{00731\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00732\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ open\ temporary\ file\ "{}}\ <<\ temp\_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00733\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00734\ \ \ \}}
+\DoxyCodeLine{00735\ }
+\DoxyCodeLine{00736\ \ \ \textcolor{comment}{//\ Now\ we\ scrub\ our\ internal\ structures\ so\ it\ looks\ like\ we're\ a\ brand\ new}}
+\DoxyCodeLine{00737\ \ \ \textcolor{comment}{//\ ZipArchive.}}
+\DoxyCodeLine{00738\ \ \ \textcolor{keywordflow}{for}\ (Subfile\ *subfile\ :\ \_removed\_subfiles)\ \{}
+\DoxyCodeLine{00739\ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{00740\ \ \ \}}
+\DoxyCodeLine{00741\ \ \ \_removed\_subfiles.clear();}
+\DoxyCodeLine{00742\ }
+\DoxyCodeLine{00743\ \ \ \textcolor{comment}{//\ And\ we\ write\ our\ contents\ to\ our\ new\ temporary\ file.}}
+\DoxyCodeLine{00744\ \ \ \textcolor{comment}{//\_write\ =\ \&temp;}}
+\DoxyCodeLine{00745\ }
+\DoxyCodeLine{00746\ \ \ \textcolor{keywordtype}{bool}\ success\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00747\ }
+\DoxyCodeLine{00748\ \ \ \_read-\/>acquire();}
+\DoxyCodeLine{00749\ \ \ std::istream\ \&read\ =\ *\_read-\/>get\_istream();}
+\DoxyCodeLine{00750\ }
+\DoxyCodeLine{00751\ \ \ \textcolor{comment}{//\ Copy\ over\ all\ of\ the\ subfiles.}}
+\DoxyCodeLine{00752\ \ \ std::streampos\ fpos\ =\ 0;}
+\DoxyCodeLine{00753\ }
+\DoxyCodeLine{00754\ \ \ \textcolor{keywordflow}{for}\ (Subfile\ *subfile\ :\ \_subfiles)\ \{}
+\DoxyCodeLine{00755\ \ \ \ \ \textcolor{keywordflow}{if}\ (!subfile-\/>read\_header(read))\ \{}
+\DoxyCodeLine{00756\ \ \ \ \ \ \ success\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00757\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00758\ \ \ \ \ \}}
+\DoxyCodeLine{00759\ }
+\DoxyCodeLine{00760\ \ \ \ \ \textcolor{comment}{//\ We\ don't\ need\ to\ write\ a\ data\ descriptor,\ since\ at\ this\ point\ we\ know}}
+\DoxyCodeLine{00761\ \ \ \ \ \textcolor{comment}{//\ the\ checksum\ and\ sizes.}}
+\DoxyCodeLine{00762\ \ \ \ \ subfile-\/>\_flags\ \&=\ \string~SF\_data\_descriptor;}
+\DoxyCodeLine{00763\ }
+\DoxyCodeLine{00764\ \ \ \ \ \textcolor{keywordflow}{if}\ (!subfile-\/>write\_header(temp,\ fpos))\ \{}
+\DoxyCodeLine{00765\ \ \ \ \ \ \ success\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00766\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00767\ \ \ \ \ \}}
+\DoxyCodeLine{00768\ }
+\DoxyCodeLine{00769\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 4096;}
+\DoxyCodeLine{00770\ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{00771\ \ \ \ \ uint64\_t\ num\_bytes\ =\ subfile-\/>\_data\_length;}
+\DoxyCodeLine{00772\ \ \ \ \ fpos\ +=\ num\_bytes;}
+\DoxyCodeLine{00773\ }
+\DoxyCodeLine{00774\ \ \ \ \ \textcolor{keywordflow}{while}\ (num\_bytes\ >=\ buffer\_size)\ \{}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ read.read(buffer,\ buffer\_size);}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ temp.write(buffer,\ buffer\_size);}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ num\_bytes\ -\/=\ buffer\_size;}
+\DoxyCodeLine{00778\ \ \ \ \ \}}
+\DoxyCodeLine{00779\ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_bytes\ >\ 0)\ \{}
+\DoxyCodeLine{00780\ \ \ \ \ \ \ read.read(buffer,\ num\_bytes);}
+\DoxyCodeLine{00781\ \ \ \ \ \ \ temp.write(buffer,\ num\_bytes);}
+\DoxyCodeLine{00782\ \ \ \ \ \}}
+\DoxyCodeLine{00783\ \ \ \}}
+\DoxyCodeLine{00784\ \ \ \_read-\/>release();}
+\DoxyCodeLine{00785\ }
+\DoxyCodeLine{00786\ \ \ \textcolor{comment}{//\ Write\ the\ central\ directory\ at\ the\ end\ of\ the\ file.}}
+\DoxyCodeLine{00787\ \ \ success\ =\ success\ \&\&\ write\_index(temp,\ fpos);}
+\DoxyCodeLine{00788\ }
+\DoxyCodeLine{00789\ \ \ \textcolor{keywordflow}{if}\ (!success)\ \{}
+\DoxyCodeLine{00790\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00791\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ write\ repacked\ archive\ to\ "{}}\ <<\ temp\_filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00792\ \ \ \ \ temp.close();}
+\DoxyCodeLine{00793\ \ \ \ \ temp\_filename.\mbox{\hyperlink{classFilename_a722fac5764b2c91628bbbf4ddc8c6254}{unlink}}();}
+\DoxyCodeLine{00794\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00795\ \ \ \}}
+\DoxyCodeLine{00796\ }
+\DoxyCodeLine{00797\ \ \ \textcolor{comment}{//\ Now\ close\ everything,\ and\ move\ the\ temporary\ file\ back\ over\ our\ original}}
+\DoxyCodeLine{00798\ \ \ \textcolor{comment}{//\ file.}}
+\DoxyCodeLine{00799\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ orig\_name\ =\ \_filename;}
+\DoxyCodeLine{00800\ \ \ temp.close();}
+\DoxyCodeLine{00801\ \ \ close();}
+\DoxyCodeLine{00802\ \ \ orig\_name.\mbox{\hyperlink{classFilename_a722fac5764b2c91628bbbf4ddc8c6254}{unlink}}();}
+\DoxyCodeLine{00803\ \ \ \textcolor{keywordflow}{if}\ (!temp\_filename.\mbox{\hyperlink{classFilename_a6624cb0d69babb7da9c6c1af0551ecc4}{rename\_to}}(orig\_name))\ \{}
+\DoxyCodeLine{00804\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00805\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ rename\ temporary\ file\ "{}}\ <<\ temp\_filename\ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}}
+\DoxyCodeLine{00806\ \ \ \ \ \ \ <<\ orig\_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00807\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00808\ \ \ \}}
+\DoxyCodeLine{00809\ }
+\DoxyCodeLine{00810\ \ \ \textcolor{keywordflow}{if}\ (!open\_read\_write(orig\_name))\ \{}
+\DoxyCodeLine{00811\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ read\ newly\ repacked\ "{}}\ <<\ \_filename}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00814\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00815\ \ \ \}}
+\DoxyCodeLine{00816\ }
+\DoxyCodeLine{00817\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00818\ \}}
+\DoxyCodeLine{00819\ }
+\DoxyCodeLine{00825\ \textcolor{keywordtype}{int}\ ZipArchive::}
+\DoxyCodeLine{00826\ get\_num\_subfiles()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00827\ \ \ \textcolor{keywordflow}{return}\ \_subfiles.size();}
+\DoxyCodeLine{00828\ \}}
+\DoxyCodeLine{00829\ }
+\DoxyCodeLine{00834\ \textcolor{keywordtype}{int}\ ZipArchive::}
+\DoxyCodeLine{00835\ find\_subfile(\textcolor{keyword}{const}\ std::string\ \&subfile\_name)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00836\ \ \ Subfile\ find\_subfile;}
+\DoxyCodeLine{00837\ \ \ find\_subfile.\_name\ =\ standardize\_subfile\_name(subfile\_name);}
+\DoxyCodeLine{00838\ \ \ Subfiles::const\_iterator\ fi;}
+\DoxyCodeLine{00839\ \ \ fi\ =\ \_subfiles.find(\&find\_subfile);}
+\DoxyCodeLine{00840\ \ \ \textcolor{keywordflow}{if}\ (fi\ ==\ \_subfiles.end())\ \{}
+\DoxyCodeLine{00841\ \ \ \ \ \textcolor{comment}{//\ Not\ present.}}
+\DoxyCodeLine{00842\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00843\ \ \ \}}
+\DoxyCodeLine{00844\ \ \ \textcolor{keywordflow}{return}\ (fi\ -\/\ \_subfiles.begin());}
+\DoxyCodeLine{00845\ \}}
+\DoxyCodeLine{00846\ }
+\DoxyCodeLine{00852\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00853\ has\_directory(\textcolor{keyword}{const}\ std::string\ \&subfile\_name)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00854\ \ \ \textcolor{keywordtype}{string}\ prefix\ =\ subfile\_name;}
+\DoxyCodeLine{00855\ \ \ \textcolor{keywordflow}{if}\ (!prefix.empty())\ \{}
+\DoxyCodeLine{00856\ \ \ \ \ prefix\ +=\ \textcolor{charliteral}{'/'};}
+\DoxyCodeLine{00857\ \ \ \}}
+\DoxyCodeLine{00858\ \ \ Subfile\ find\_subfile;}
+\DoxyCodeLine{00859\ \ \ find\_subfile.\_name\ =\ prefix;}
+\DoxyCodeLine{00860\ \ \ Subfiles::const\_iterator\ fi;}
+\DoxyCodeLine{00861\ \ \ fi\ =\ \_subfiles.upper\_bound(\&find\_subfile);}
+\DoxyCodeLine{00862\ \ \ \textcolor{keywordflow}{if}\ (fi\ ==\ \_subfiles.end())\ \{}
+\DoxyCodeLine{00863\ \ \ \ \ \textcolor{comment}{//\ Not\ present.}}
+\DoxyCodeLine{00864\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00865\ \ \ \}}
+\DoxyCodeLine{00866\ }
+\DoxyCodeLine{00867\ \ \ \textcolor{comment}{//\ At\ least\ one\ subfile\ exists\ whose\ name\ sorts\ after\ prefix.\ \ If\ it}}
+\DoxyCodeLine{00868\ \ \ \textcolor{comment}{//\ contains\ prefix\ as\ the\ initial\ substring,\ then\ we\ have\ a\ match.}}
+\DoxyCodeLine{00869\ \ \ Subfile\ *subfile\ =\ (*fi);}
+\DoxyCodeLine{00870\ \ \ \textcolor{keywordflow}{return}\ (subfile-\/>\_name.length()\ >\ prefix.length()\ \&\&}
+\DoxyCodeLine{00871\ \ \ \ \ \ \ \ \ \ \ subfile-\/>\_name.substr(0,\ prefix.length())\ ==\ prefix);}
+\DoxyCodeLine{00872\ \}}
+\DoxyCodeLine{00873\ }
+\DoxyCodeLine{00884\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00885\ scan\_directory(vector\_string\ \&contents,\ \textcolor{keyword}{const}\ std::string\ \&subfile\_name)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00886\ \ \ \textcolor{keywordtype}{string}\ prefix\ =\ subfile\_name;}
+\DoxyCodeLine{00887\ \ \ \textcolor{keywordflow}{if}\ (!prefix.empty())\ \{}
+\DoxyCodeLine{00888\ \ \ \ \ prefix\ +=\ \textcolor{charliteral}{'/'};}
+\DoxyCodeLine{00889\ \ \ \}}
+\DoxyCodeLine{00890\ \ \ Subfile\ find\_subfile;}
+\DoxyCodeLine{00891\ \ \ find\_subfile.\_name\ =\ prefix;}
+\DoxyCodeLine{00892\ \ \ Subfiles::const\_iterator\ fi;}
+\DoxyCodeLine{00893\ \ \ fi\ =\ \_subfiles.upper\_bound(\&find\_subfile);}
+\DoxyCodeLine{00894\ }
+\DoxyCodeLine{00895\ \ \ \textcolor{keywordtype}{string}\ previous\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00896\ \ \ \textcolor{keywordflow}{while}\ (fi\ !=\ \_subfiles.end())\ \{}
+\DoxyCodeLine{00897\ \ \ \ \ Subfile\ *subfile\ =\ (*fi);}
+\DoxyCodeLine{00898\ \ \ \ \ \textcolor{keywordflow}{if}\ (!(subfile-\/>\_name.length()\ >\ prefix.length()\ \&\&}
+\DoxyCodeLine{00899\ \ \ \ \ \ \ \ \ \ \ subfile-\/>\_name.substr(0,\ prefix.length())\ ==\ prefix))\ \{}
+\DoxyCodeLine{00900\ \ \ \ \ \ \ \textcolor{comment}{//\ We've\ reached\ the\ end\ of\ the\ list\ of\ subfiles\ beneath\ the\ indicated}}
+\DoxyCodeLine{00901\ \ \ \ \ \ \ \textcolor{comment}{//\ directory\ prefix.}}
+\DoxyCodeLine{00902\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00903\ \ \ \ \ \}}
+\DoxyCodeLine{00904\ }
+\DoxyCodeLine{00905\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ slash\ =\ subfile-\/>\_name.find(\textcolor{charliteral}{'/'},\ prefix.length());}
+\DoxyCodeLine{00906\ \ \ \ \ \textcolor{keywordtype}{string}\ basename\ =\ subfile-\/>\_name.substr(prefix.length(),\ slash\ -\/\ prefix.length());}
+\DoxyCodeLine{00907\ \ \ \ \ \textcolor{keywordflow}{if}\ (basename\ !=\ previous)\ \{}
+\DoxyCodeLine{00908\ \ \ \ \ \ \ contents.push\_back(basename);}
+\DoxyCodeLine{00909\ \ \ \ \ \ \ previous\ =\ basename;}
+\DoxyCodeLine{00910\ \ \ \ \ \}}
+\DoxyCodeLine{00911\ \ \ \ \ ++fi;}
+\DoxyCodeLine{00912\ \ \ \}}
+\DoxyCodeLine{00913\ }
+\DoxyCodeLine{00914\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00915\ \}}
+\DoxyCodeLine{00916\ }
+\DoxyCodeLine{00926\ \textcolor{keywordtype}{void}\ ZipArchive::}
+\DoxyCodeLine{00927\ remove\_subfile(\textcolor{keywordtype}{int}\ index)\ \{}
+\DoxyCodeLine{00928\ \ \ nassertv(is\_write\_valid());}
+\DoxyCodeLine{00929\ \ \ nassertv(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size());}
+\DoxyCodeLine{00930\ \ \ Subfile\ *subfile\ =\ \_subfiles[index];}
+\DoxyCodeLine{00931\ \ \ \textcolor{comment}{//subfile-\/>\_flags\ |=\ SF\_deleted;}}
+\DoxyCodeLine{00932\ \ \ \_removed\_subfiles.push\_back(subfile);}
+\DoxyCodeLine{00933\ \ \ \_subfiles.erase(\_subfiles.begin()\ +\ index);}
+\DoxyCodeLine{00934\ }
+\DoxyCodeLine{00935\ \ \ \textcolor{comment}{//\ We'll\ need\ to\ rewrite\ the\ index\ to\ remove\ it.\ \ The\ packing\ is\ also}}
+\DoxyCodeLine{00936\ \ \ \textcolor{comment}{//\ suboptimal\ now,\ so\ a\ repack\ would\ be\ good.}}
+\DoxyCodeLine{00937\ \ \ \_index\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00938\ \ \ \_needs\_repack\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00939\ \}}
+\DoxyCodeLine{00940\ }
+\DoxyCodeLine{00944\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&ZipArchive::}
+\DoxyCodeLine{00945\ get\_subfile\_name(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00946\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00947\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{string}\ empty\_string;}
+\DoxyCodeLine{00948\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ empty\_string);}
+\DoxyCodeLine{00949\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00950\ \ \ \textcolor{keywordflow}{return}\ \_subfiles[index]-\/>\_name;}
+\DoxyCodeLine{00951\ \}}
+\DoxyCodeLine{00952\ }
+\DoxyCodeLine{00956\ \textcolor{keywordtype}{size\_t}\ ZipArchive::}
+\DoxyCodeLine{00957\ get\_subfile\_length(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00958\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ 0);}
+\DoxyCodeLine{00959\ \ \ \textcolor{keywordflow}{return}\ \_subfiles[index]-\/>\_uncompressed\_length;}
+\DoxyCodeLine{00960\ \}}
+\DoxyCodeLine{00961\ }
+\DoxyCodeLine{00968\ time\_t\ ZipArchive::}
+\DoxyCodeLine{00969\ get\_subfile\_timestamp(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00970\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ 0);}
+\DoxyCodeLine{00971\ \ \ \textcolor{keywordflow}{return}\ \_subfiles[index]-\/>\_timestamp;}
+\DoxyCodeLine{00972\ \}}
+\DoxyCodeLine{00973\ }
+\DoxyCodeLine{00978\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00979\ is\_subfile\_compressed(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00980\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00981\ \ \ \textcolor{keywordflow}{return}\ \_subfiles[index]-\/>is\_compressed();}
+\DoxyCodeLine{00982\ \}}
+\DoxyCodeLine{00983\ }
+\DoxyCodeLine{00988\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{00989\ is\_subfile\_encrypted(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00990\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00991\ \ \ \textcolor{keywordflow}{return}\ \_subfiles[index]-\/>is\_encrypted();}
+\DoxyCodeLine{00992\ \}}
+\DoxyCodeLine{00993\ }
+\DoxyCodeLine{01001\ streampos\ ZipArchive::}
+\DoxyCodeLine{01002\ get\_subfile\_internal\_start(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01003\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ 0);}
+\DoxyCodeLine{01004\ \ \ \_read-\/>acquire();}
+\DoxyCodeLine{01005\ \ \ \_subfiles[index]-\/>read\_header(*\_read-\/>get\_istream());}
+\DoxyCodeLine{01006\ \ \ std::streampos\ data\_start\ =\ \_read-\/>get\_istream()-\/>tellg();}
+\DoxyCodeLine{01007\ \ \ \_read-\/>release();}
+\DoxyCodeLine{01008\ \ \ \textcolor{keywordflow}{return}\ data\_start;}
+\DoxyCodeLine{01009\ \}}
+\DoxyCodeLine{01010\ }
+\DoxyCodeLine{01018\ \textcolor{keywordtype}{size\_t}\ ZipArchive::}
+\DoxyCodeLine{01019\ get\_subfile\_internal\_length(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01020\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ 0);}
+\DoxyCodeLine{01021\ \ \ \textcolor{keywordflow}{return}\ \_subfiles[index]-\/>\_data\_length;}
+\DoxyCodeLine{01022\ \}}
+\DoxyCodeLine{01023\ }
+\DoxyCodeLine{01041\ std::istream\ *ZipArchive::}
+\DoxyCodeLine{01042\ open\_read\_subfile(\textcolor{keywordtype}{int}\ index)\ \{}
+\DoxyCodeLine{01043\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01044\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01045\ \ \ Subfile\ *subfile\ =\ \_subfiles[index];}
+\DoxyCodeLine{01046\ }
+\DoxyCodeLine{01047\ \ \ \textcolor{keywordflow}{return}\ open\_read\_subfile(subfile);}
+\DoxyCodeLine{01048\ \}}
+\DoxyCodeLine{01049\ }
+\DoxyCodeLine{01056\ \textcolor{keywordtype}{void}\ ZipArchive::}
+\DoxyCodeLine{01057\ close\_read\_subfile(std::istream\ *stream)\ \{}
+\DoxyCodeLine{01058\ \ \ \textcolor{keywordflow}{if}\ (stream\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01059\ \ \ \ \ \textcolor{comment}{//\ For\ some\ reason-\/-\/compiler\ bug\ in\ gcc\ 3.2?-\/-\/explicitly\ deleting\ the}}
+\DoxyCodeLine{01060\ \ \ \ \ \textcolor{comment}{//\ stream\ pointer\ does\ not\ call\ the\ appropriate\ global\ delete\ function;}}
+\DoxyCodeLine{01061\ \ \ \ \ \textcolor{comment}{//\ instead\ apparently\ calling\ the\ system\ delete\ function.\ \ So\ we\ call\ the}}
+\DoxyCodeLine{01062\ \ \ \ \ \textcolor{comment}{//\ delete\ function\ by\ hand\ instead.}}
+\DoxyCodeLine{01063\ \textcolor{preprocessor}{\#if\ defined(\_\_GNUC\_\_)\ \&\&\ !defined(USE\_MEMORY\_NOWRAPPERS)\ \&\&\ defined(REDEFINE\_GLOBAL\_OPERATOR\_NEW)}}
+\DoxyCodeLine{01064\ \ \ \ \ stream-\/>\string~istream();}
+\DoxyCodeLine{01065\ \ \ \ \ (*global\_operator\_delete)(stream);}
+\DoxyCodeLine{01066\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{01067\ \ \ \ \ \textcolor{keyword}{delete}\ stream;}
+\DoxyCodeLine{01068\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01069\ \ \ \}}
+\DoxyCodeLine{01070\ \}}
+\DoxyCodeLine{01071\ }
+\DoxyCodeLine{01075\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{01076\ extract\_subfile(\textcolor{keywordtype}{int}\ index,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{01077\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01078\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01079\ }
+\DoxyCodeLine{01080\ \ \ filename.\mbox{\hyperlink{classFilename_aa3072a14bec6fccd0e7befca5863a35c}{make\_dir}}();}
+\DoxyCodeLine{01081\ }
+\DoxyCodeLine{01082\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ filename;}
+\DoxyCodeLine{01083\ \ \ \textcolor{keywordflow}{if}\ (!filename.is\_text())\ \{}
+\DoxyCodeLine{01084\ \ \ \ \ fname.set\_binary();}
+\DoxyCodeLine{01085\ \ \ \}}
+\DoxyCodeLine{01086\ }
+\DoxyCodeLine{01087\ \ \ pofstream\ out;}
+\DoxyCodeLine{01088\ \ \ \textcolor{keywordflow}{if}\ (!fname.open\_write(out,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{01089\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01090\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ to\ file\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01091\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01092\ \ \ \}}
+\DoxyCodeLine{01093\ }
+\DoxyCodeLine{01094\ \ \ \textcolor{keywordflow}{return}\ extract\_subfile\_to(index,\ out);}
+\DoxyCodeLine{01095\ \}}
+\DoxyCodeLine{01096\ }
+\DoxyCodeLine{01100\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{01101\ extract\_subfile\_to(\textcolor{keywordtype}{int}\ index,\ std::ostream\ \&out)\ \{}
+\DoxyCodeLine{01102\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01103\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01104\ }
+\DoxyCodeLine{01105\ \ \ std::istream\ *in\ =\ open\_read\_subfile(index);}
+\DoxyCodeLine{01106\ \ \ \textcolor{keywordflow}{if}\ (in\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01107\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01108\ \ \ \}}
+\DoxyCodeLine{01109\ }
+\DoxyCodeLine{01110\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 4096;}
+\DoxyCodeLine{01111\ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{01112\ }
+\DoxyCodeLine{01113\ \ \ in-\/>read(buffer,\ buffer\_size);}
+\DoxyCodeLine{01114\ \ \ \textcolor{keywordtype}{size\_t}\ count\ =\ in-\/>gcount();}
+\DoxyCodeLine{01115\ \ \ \textcolor{keywordflow}{while}\ (count\ !=\ 0)\ \{}
+\DoxyCodeLine{01116\ \ \ \ \ out.write(buffer,\ count);}
+\DoxyCodeLine{01117\ \ \ \ \ in-\/>read(buffer,\ buffer\_size);}
+\DoxyCodeLine{01118\ \ \ \ \ count\ =\ in-\/>gcount();}
+\DoxyCodeLine{01119\ \ \ \}}
+\DoxyCodeLine{01120\ }
+\DoxyCodeLine{01121\ \ \ \textcolor{keywordtype}{bool}\ failed\ =\ (in-\/>fail()\ \&\&\ !in-\/>eof());}
+\DoxyCodeLine{01122\ \ \ close\_read\_subfile(in);}
+\DoxyCodeLine{01123\ \ \ nassertr(!failed,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01124\ }
+\DoxyCodeLine{01125\ \ \ \textcolor{keywordflow}{return}\ (!out.fail());}
+\DoxyCodeLine{01126\ \}}
+\DoxyCodeLine{01127\ }
+\DoxyCodeLine{01138\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{01139\ compare\_subfile(\textcolor{keywordtype}{int}\ index,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{01140\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01141\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01142\ }
+\DoxyCodeLine{01143\ \ \ \textcolor{keywordflow}{if}\ (!filename.\mbox{\hyperlink{classFilename_af8a2ef9ed26abbed32786e6d8025c2c7}{exists}}())\ \{}
+\DoxyCodeLine{01144\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01145\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}File\ is\ missing:\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01146\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01147\ \ \ \}}
+\DoxyCodeLine{01148\ }
+\DoxyCodeLine{01149\ \ \ std::istream\ *in1\ =\ open\_read\_subfile(index);}
+\DoxyCodeLine{01150\ \ \ \textcolor{keywordflow}{if}\ (in1\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01151\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01152\ \ \ \}}
+\DoxyCodeLine{01153\ }
+\DoxyCodeLine{01154\ \ \ pifstream\ in2;}
+\DoxyCodeLine{01155\ }
+\DoxyCodeLine{01156\ \ \ \textcolor{keywordflow}{if}\ (!filename.\mbox{\hyperlink{classFilename_a5b46ff925e027d0949aa23afc20f55a9}{open\_read}}(in2))\ \{}
+\DoxyCodeLine{01157\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01158\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cannot\ read\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01159\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01160\ \ \ \}}
+\DoxyCodeLine{01161\ }
+\DoxyCodeLine{01162\ \ \ \textcolor{keywordflow}{if}\ (filename.is\_binary())\ \{}
+\DoxyCodeLine{01163\ \ \ \ \ \textcolor{comment}{//\ Check\ the\ file\ size.}}
+\DoxyCodeLine{01164\ \ \ \ \ in2.seekg(0,\ std::ios::end);}
+\DoxyCodeLine{01165\ \ \ \ \ streampos\ file\_size\ =\ in2.tellg();}
+\DoxyCodeLine{01166\ }
+\DoxyCodeLine{01167\ \ \ \ \ \textcolor{keywordflow}{if}\ (file\_size\ !=\ (streampos)get\_subfile\_length(index))\ \{}
+\DoxyCodeLine{01168\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ files\ have\ different\ sizes.}}
+\DoxyCodeLine{01169\ \ \ \ \ \ \ close\_read\_subfile(in1);}
+\DoxyCodeLine{01170\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01171\ \ \ \ \ \}}
+\DoxyCodeLine{01172\ \ \ \}}
+\DoxyCodeLine{01173\ }
+\DoxyCodeLine{01174\ \ \ \textcolor{comment}{//\ Check\ the\ file\ data,\ byte-\/for-\/byte.}}
+\DoxyCodeLine{01175\ \ \ in2.seekg(0);}
+\DoxyCodeLine{01176\ \ \ \textcolor{keywordtype}{int}\ byte1\ =\ in1-\/>get();}
+\DoxyCodeLine{01177\ \ \ \textcolor{keywordtype}{int}\ byte2\ =\ in2.get();}
+\DoxyCodeLine{01178\ \ \ \textcolor{keywordflow}{while}\ (!in1-\/>fail()\ \&\&\ !in2.fail())\ \{}
+\DoxyCodeLine{01179\ \ \ \ \ \textcolor{keywordflow}{if}\ (byte1\ !=\ byte2)\ \{}
+\DoxyCodeLine{01180\ \ \ \ \ \ \ close\_read\_subfile(in1);}
+\DoxyCodeLine{01181\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01182\ \ \ \ \ \}}
+\DoxyCodeLine{01183\ \ \ \ \ byte1\ =\ in1-\/>get();}
+\DoxyCodeLine{01184\ \ \ \ \ byte2\ =\ in2.get();}
+\DoxyCodeLine{01185\ \ \ \}}
+\DoxyCodeLine{01186\ }
+\DoxyCodeLine{01187\ \ \ \textcolor{keywordtype}{bool}\ failed\ =\ (in1-\/>fail()\ \&\&\ !in1-\/>eof())\ ||\ (in2.fail()\ \&\&\ !in2.eof());}
+\DoxyCodeLine{01188\ \ \ close\_read\_subfile(in1);}
+\DoxyCodeLine{01189\ }
+\DoxyCodeLine{01190\ \ \ nassertr(!failed,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01191\ }
+\DoxyCodeLine{01192\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01193\ \}}
+\DoxyCodeLine{01194\ }
+\DoxyCodeLine{01198\ \textcolor{keywordtype}{void}\ ZipArchive::}
+\DoxyCodeLine{01199\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01200\ \ \ out\ <<\ \textcolor{stringliteral}{"{}ZipArchive\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{},\ "{}}\ <<\ get\_num\_subfiles()}
+\DoxyCodeLine{01201\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ subfiles.\(\backslash\)n"{}};}
+\DoxyCodeLine{01202\ \}}
+\DoxyCodeLine{01203\ }
+\DoxyCodeLine{01207\ \textcolor{keywordtype}{void}\ ZipArchive::}
+\DoxyCodeLine{01208\ ls(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01209\ \ \ \textcolor{keywordtype}{int}\ num\_subfiles\ =\ get\_num\_subfiles();}
+\DoxyCodeLine{01210\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_subfiles;\ i++)\ \{}
+\DoxyCodeLine{01211\ \ \ \ \ \textcolor{keywordtype}{string}\ subfile\_name\ =\ get\_subfile\_name(i);}
+\DoxyCodeLine{01212\ \ \ \ \ out\ <<\ subfile\_name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01213\ \ \ \}}
+\DoxyCodeLine{01214\ \}}
+\DoxyCodeLine{01215\ }
+\DoxyCodeLine{01220\ \textcolor{keywordtype}{void}\ ZipArchive::}
+\DoxyCodeLine{01221\ set\_comment(\textcolor{keyword}{const}\ std::string\ \&comment)\ \{}
+\DoxyCodeLine{01222\ \ \ nassertv(comment.size()\ <=\ 65535);}
+\DoxyCodeLine{01223\ }
+\DoxyCodeLine{01224\ \ \ \textcolor{keywordflow}{if}\ (\_comment\ !=\ comment)\ \{}
+\DoxyCodeLine{01225\ \ \ \ \ \_comment\ =\ comment;}
+\DoxyCodeLine{01226\ \ \ \ \ \_index\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01227\ \ \ \}}
+\DoxyCodeLine{01228\ \}}
+\DoxyCodeLine{01229\ }
+\DoxyCodeLine{01233\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{01234\ read\_subfile(\textcolor{keywordtype}{int}\ index,\ \textcolor{keywordtype}{string}\ \&result)\ \{}
+\DoxyCodeLine{01235\ \ \ result\ =\ string();}
+\DoxyCodeLine{01236\ }
+\DoxyCodeLine{01237\ \ \ \textcolor{comment}{//\ We\ use\ a\ temporary\ pvector,\ because\ dynamic\ accumulation\ of\ a\ pvector}}
+\DoxyCodeLine{01238\ \ \ \textcolor{comment}{//\ seems\ to\ be\ many\ times\ faster\ than\ that\ of\ a\ string,\ at\ least\ on\ the}}
+\DoxyCodeLine{01239\ \ \ \textcolor{comment}{//\ Windows\ implementation\ of\ STL.}}
+\DoxyCodeLine{01240\ \ \ vector\_uchar\ pv;}
+\DoxyCodeLine{01241\ \ \ \textcolor{keywordflow}{if}\ (!read\_subfile(index,\ pv))\ \{}
+\DoxyCodeLine{01242\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01243\ \ \ \}}
+\DoxyCodeLine{01244\ }
+\DoxyCodeLine{01245\ \ \ \textcolor{keywordflow}{if}\ (!pv.empty())\ \{}
+\DoxyCodeLine{01246\ \ \ \ \ result.append((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)\&pv[0],\ pv.size());}
+\DoxyCodeLine{01247\ \ \ \}}
+\DoxyCodeLine{01248\ }
+\DoxyCodeLine{01249\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01250\ \}}
+\DoxyCodeLine{01251\ }
+\DoxyCodeLine{01255\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{01256\ read\_subfile(\textcolor{keywordtype}{int}\ index,\ vector\_uchar\ \&result)\ \{}
+\DoxyCodeLine{01257\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01258\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01259\ \ \ result.clear();}
+\DoxyCodeLine{01260\ }
+\DoxyCodeLine{01261\ \ \ \textcolor{comment}{//\ Now\ look\ up\ the\ particular\ Subfile\ we\ are\ reading.}}
+\DoxyCodeLine{01262\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01263\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01264\ \ \ Subfile\ *subfile\ =\ \_subfiles[index];}
+\DoxyCodeLine{01265\ }
+\DoxyCodeLine{01266\ \ \ result.reserve(subfile-\/>\_uncompressed\_length);}
+\DoxyCodeLine{01267\ }
+\DoxyCodeLine{01268\ \ \ \textcolor{keywordtype}{bool}\ success\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01269\ \ \ \textcolor{keywordflow}{if}\ (subfile-\/>is\_compressed()\ ||\ subfile-\/>is\_encrypted())\ \{}
+\DoxyCodeLine{01270\ \ \ \ \ \textcolor{comment}{//\ If\ the\ subfile\ is\ encrypted\ or\ compressed,\ we\ can't\ read\ it\ directly.}}
+\DoxyCodeLine{01271\ \ \ \ \ \textcolor{comment}{//\ Fall\ back\ to\ the\ generic\ implementation.}}
+\DoxyCodeLine{01272\ \ \ \ \ std::istream\ *in\ =\ open\_read\_subfile(index);}
+\DoxyCodeLine{01273\ \ \ \ \ \textcolor{keywordflow}{if}\ (in\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01274\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01275\ \ \ \ \ \}}
+\DoxyCodeLine{01276\ }
+\DoxyCodeLine{01277\ \ \ \ \ success\ =\ VirtualFile::simple\_read\_file(in,\ result);}
+\DoxyCodeLine{01278\ \ \ \ \ close\_read\_subfile(in);}
+\DoxyCodeLine{01279\ }
+\DoxyCodeLine{01280\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01281\ \ \ \ \ \textcolor{comment}{//\ But\ if\ the\ subfile\ is\ just\ a\ plain\ file,\ we\ can\ just\ read\ the\ data}}
+\DoxyCodeLine{01282\ \ \ \ \ \textcolor{comment}{//\ directly\ from\ the\ ZipArchive,\ without\ paying\ the\ cost\ of\ an\ ISubStream.}}
+\DoxyCodeLine{01283\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 4096;}
+\DoxyCodeLine{01284\ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{01285\ }
+\DoxyCodeLine{01286\ \ \ \ \ \_read-\/>acquire();}
+\DoxyCodeLine{01287\ \ \ \ \ \textcolor{keywordflow}{if}\ (!subfile-\/>read\_header(*\_read-\/>get\_istream()))\ \{}
+\DoxyCodeLine{01288\ \ \ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{01289\ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{01290\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ read\ local\ header\ of\ "{}}}
+\DoxyCodeLine{01291\ \ \ \ \ \ \ \ \ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}/"{}}\ <<\ subfile-\/>\_name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01292\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01293\ \ \ \ \ \}}
+\DoxyCodeLine{01294\ \ \ \ \ std::istream\ \&read\ =\ *\_read-\/>get\_istream();}
+\DoxyCodeLine{01295\ \ \ \ \ \textcolor{comment}{/*std::streampos\ data\_start\ =*/}\ read.tellg();}
+\DoxyCodeLine{01296\ }
+\DoxyCodeLine{01297\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ bytes\_to\_go\ =\ subfile-\/>\_uncompressed\_length;}
+\DoxyCodeLine{01298\ \ \ \ \ read.read(buffer,\ std::min(bytes\_to\_go,\ buffer\_size));}
+\DoxyCodeLine{01299\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ read\_bytes\ =\ read.gcount();}
+\DoxyCodeLine{01300\ }
+\DoxyCodeLine{01301\ \ \ \ \ \textcolor{keywordflow}{while}\ (read\_bytes\ >\ 0)\ \{}
+\DoxyCodeLine{01302\ \ \ \ \ \ \ result.insert(result.end(),\ buffer,\ buffer\ +\ read\_bytes);}
+\DoxyCodeLine{01303\ }
+\DoxyCodeLine{01304\ \ \ \ \ \ \ bytes\_to\_go\ -\/=\ read\_bytes;}
+\DoxyCodeLine{01305\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bytes\_to\_go\ ==\ 0)\ \{}
+\DoxyCodeLine{01306\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01307\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01308\ }
+\DoxyCodeLine{01309\ \ \ \ \ \ \ read.read(buffer,\ std::min(bytes\_to\_go,\ buffer\_size));}
+\DoxyCodeLine{01310\ \ \ \ \ \ \ read\_bytes\ =\ read.gcount();}
+\DoxyCodeLine{01311\ \ \ \ \ \}}
+\DoxyCodeLine{01312\ }
+\DoxyCodeLine{01313\ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{01314\ \ \ \ \ success\ =\ (bytes\_to\_go\ ==\ 0);}
+\DoxyCodeLine{01315\ \ \ \}}
+\DoxyCodeLine{01316\ }
+\DoxyCodeLine{01317\ \ \ \textcolor{keywordflow}{if}\ (!success)\ \{}
+\DoxyCodeLine{01318\ \ \ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ message;}
+\DoxyCodeLine{01319\ \ \ \ \ message\ <<\ \textcolor{stringliteral}{"{}I/O\ error\ reading\ from\ "{}}\ <<\ get\_filename()\ <<\ \textcolor{stringliteral}{"{}\ at\ "{}}}
+\DoxyCodeLine{01320\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ get\_subfile\_name(index);}
+\DoxyCodeLine{01321\ \ \ \ \ nassert\_raise(message.str());}
+\DoxyCodeLine{01322\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01323\ \ \ \}}
+\DoxyCodeLine{01324\ }
+\DoxyCodeLine{01325\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01326\ \}}
+\DoxyCodeLine{01327\ }
+\DoxyCodeLine{01331\ \textcolor{keywordtype}{void}\ ZipArchive::}
+\DoxyCodeLine{01332\ add\_new\_subfile(Subfile\ *subfile,\ \textcolor{keywordtype}{int}\ compression\_level)\ \{}
+\DoxyCodeLine{01333\ \ \ \textcolor{comment}{//\ We'll\ need\ to\ rewrite\ the\ index\ after\ this.}}
+\DoxyCodeLine{01334\ \ \ \_index\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01335\ }
+\DoxyCodeLine{01336\ \ \ std::pair<Subfiles::iterator,\ bool>\ insert\_result\ =\ \_subfiles.insert(subfile);}
+\DoxyCodeLine{01337\ \ \ \textcolor{keywordflow}{if}\ (!insert\_result.second)\ \{}
+\DoxyCodeLine{01338\ \ \ \ \ \textcolor{comment}{//\ Hmm,\ unable\ to\ insert.\ \ There\ must\ already\ be\ a\ subfile\ by\ that\ name.}}
+\DoxyCodeLine{01339\ \ \ \ \ \textcolor{comment}{//\ Add\ it\ to\ the\ \_removed\_subfiles\ list,\ so\ we\ can\ remove\ the\ old\ one.}}
+\DoxyCodeLine{01340\ \ \ \ \ std::swap(subfile,\ *insert\_result.first);}
+\DoxyCodeLine{01341\ \ \ \ \ \_removed\_subfiles.push\_back(subfile);}
+\DoxyCodeLine{01342\ }
+\DoxyCodeLine{01343\ \ \ \ \ \textcolor{comment}{//\ Since\ we're\ removing\ a\ subfile\ and\ adding\ the\ new\ one\ at\ the\ end,\ we've}}
+\DoxyCodeLine{01344\ \ \ \ \ \textcolor{comment}{//\ got\ empty\ space.\ \ A\ repack\ would\ be\ good.}}
+\DoxyCodeLine{01345\ \ \ \ \ \_needs\_repack\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01346\ \ \ \}}
+\DoxyCodeLine{01347\ \}}
+\DoxyCodeLine{01348\ }
+\DoxyCodeLine{01354\ std::istream\ *ZipArchive::}
+\DoxyCodeLine{01355\ open\_read\_subfile(Subfile\ *subfile)\ \{}
+\DoxyCodeLine{01356\ \ \ \textcolor{comment}{//\ Read\ the\ header\ first.}}
+\DoxyCodeLine{01357\ \ \ \_read-\/>acquire();}
+\DoxyCodeLine{01358\ \ \ \textcolor{keywordflow}{if}\ (!subfile-\/>read\_header(*\_read-\/>get\_istream()))\ \{}
+\DoxyCodeLine{01359\ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{01360\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{01361\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ read\ local\ header\ of\ "{}}}
+\DoxyCodeLine{01362\ \ \ \ \ \ \ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}/"{}}\ <<\ subfile-\/>\_name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01363\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01364\ \ \ \}}
+\DoxyCodeLine{01365\ \ \ std::streampos\ data\_start\ =\ \_read-\/>get\_istream()-\/>tellg();}
+\DoxyCodeLine{01366\ \ \ \_read-\/>release();}
+\DoxyCodeLine{01367\ }
+\DoxyCodeLine{01368\ \ \ \textcolor{comment}{//\ Return\ an\ ISubStream\ object\ that\ references\ into\ the\ open\ ZipArchive}}
+\DoxyCodeLine{01369\ \ \ \textcolor{comment}{//\ istream.}}
+\DoxyCodeLine{01370\ \ \ nassertr(data\_start\ !=\ (streampos)0,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01371\ \ \ std::istream\ *stream\ =}
+\DoxyCodeLine{01372\ \ \ \ \ \textcolor{keyword}{new}\ \mbox{\hyperlink{classISubStream}{ISubStream}}(\_read,\ data\_start,}
+\DoxyCodeLine{01373\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ data\_start\ +\ (streampos)subfile-\/>\_data\_length);}
+\DoxyCodeLine{01374\ }
+\DoxyCodeLine{01375\ \ \ \textcolor{keywordflow}{if}\ (subfile-\/>is\_compressed())\ \{}
+\DoxyCodeLine{01376\ \textcolor{preprocessor}{\#ifndef\ HAVE\_ZLIB}}
+\DoxyCodeLine{01377\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{01378\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}zlib\ not\ compiled\ in;\ cannot\ read\ compressed\ multifiles.\(\backslash\)n"{}};}
+\DoxyCodeLine{01379\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01380\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{01381\ \ \ \ \ \textcolor{comment}{//\ Oops,\ the\ subfile\ is\ compressed.\ \ So\ actually,\ return\ an}}
+\DoxyCodeLine{01382\ \ \ \ \ \textcolor{comment}{//\ IDecompressStream\ that\ wraps\ around\ the\ ISubStream.}}
+\DoxyCodeLine{01383\ \ \ \ \ IDecompressStream\ *wrapper\ =\ \textcolor{keyword}{new}\ IDecompressStream(stream,\ \textcolor{keyword}{true},\ -\/1,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01384\ \ \ \ \ stream\ =\ wrapper;}
+\DoxyCodeLine{01385\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{01386\ \ \ \}}
+\DoxyCodeLine{01387\ }
+\DoxyCodeLine{01388\ \ \ \textcolor{keywordflow}{if}\ (stream-\/>fail())\ \{}
+\DoxyCodeLine{01389\ \ \ \ \ \textcolor{comment}{//\ Hmm,\ some\ inexplicable\ problem.}}
+\DoxyCodeLine{01390\ \ \ \ \ \textcolor{keyword}{delete}\ stream;}
+\DoxyCodeLine{01391\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01392\ \ \ \}}
+\DoxyCodeLine{01393\ }
+\DoxyCodeLine{01394\ \ \ \textcolor{keywordflow}{return}\ stream;}
+\DoxyCodeLine{01395\ \}}
+\DoxyCodeLine{01396\ }
+\DoxyCodeLine{01400\ \textcolor{keywordtype}{string}\ ZipArchive::}
+\DoxyCodeLine{01401\ standardize\_subfile\_name(\textcolor{keyword}{const}\ std::string\ \&subfile\_name)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01402\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ name\ =\ subfile\_name;}
+\DoxyCodeLine{01403\ \ \ name.\mbox{\hyperlink{classFilename_a741ce752b93d24e2e87bff42f6a0b828}{standardize}}();}
+\DoxyCodeLine{01404\ \ \ \textcolor{keywordflow}{if}\ (name.empty()\ ||\ name\ ==\ \textcolor{stringliteral}{"{}/"{}})\ \{}
+\DoxyCodeLine{01405\ \ \ \ \ \textcolor{comment}{//\ Invalid\ empty\ name.}}
+\DoxyCodeLine{01406\ \ \ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{01407\ \ \ \}}
+\DoxyCodeLine{01408\ }
+\DoxyCodeLine{01409\ \ \ \textcolor{keywordflow}{if}\ (name[0]\ ==\ \textcolor{charliteral}{'/'})\ \{}
+\DoxyCodeLine{01410\ \ \ \ \ \textcolor{keywordflow}{return}\ name.get\_fullpath().substr(1);}
+\DoxyCodeLine{01411\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (name.length()\ >\ 2\ \&\&\ name[0]\ ==\ \textcolor{charliteral}{'.'}\ \&\&\ name[1]\ ==\ \textcolor{charliteral}{'/'})\ \{}
+\DoxyCodeLine{01412\ \ \ \ \ \textcolor{keywordflow}{return}\ name.get\_fullpath().substr(2);}
+\DoxyCodeLine{01413\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01414\ \ \ \ \ \textcolor{keywordflow}{return}\ name.get\_fullpath();}
+\DoxyCodeLine{01415\ \ \ \}}
+\DoxyCodeLine{01416\ \}}
+\DoxyCodeLine{01417\ }
+\DoxyCodeLine{01422\ \textcolor{keywordtype}{void}\ ZipArchive::}
+\DoxyCodeLine{01423\ clear\_subfiles()\ \{}
+\DoxyCodeLine{01424\ \ \ \textcolor{keywordflow}{for}\ (Subfile\ *subfile\ :\ \_removed\_subfiles)\ \{}
+\DoxyCodeLine{01425\ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{01426\ \ \ \}}
+\DoxyCodeLine{01427\ \ \ \_removed\_subfiles.clear();}
+\DoxyCodeLine{01428\ }
+\DoxyCodeLine{01429\ \ \ \textcolor{keywordflow}{for}\ (Subfile\ *subfile\ :\ \_subfiles)\ \{}
+\DoxyCodeLine{01430\ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{01431\ \ \ \}}
+\DoxyCodeLine{01432\ \ \ \_subfiles.clear();}
+\DoxyCodeLine{01433\ \}}
+\DoxyCodeLine{01434\ }
+\DoxyCodeLine{01441\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{01442\ read\_index()\ \{}
+\DoxyCodeLine{01443\ \ \ nassertr(\_read\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01444\ }
+\DoxyCodeLine{01445\ \ \ \textcolor{comment}{//\ We\ acquire\ the\ IStreamWrapper\ lock\ for\ the\ duration\ of\ this\ method.}}
+\DoxyCodeLine{01446\ \ \ \_read-\/>acquire();}
+\DoxyCodeLine{01447\ \ \ std::istream\ *read\ =\ \_read-\/>get\_istream();}
+\DoxyCodeLine{01448\ }
+\DoxyCodeLine{01449\ \ \ \textcolor{comment}{//\ ZIP\ files\ need\ to\ be\ read\ from\ the\ end.}}
+\DoxyCodeLine{01450\ \ \ read-\/>seekg(-\/2,\ std::ios::end);}
+\DoxyCodeLine{01451\ \ \ \textcolor{keywordflow}{if}\ (read-\/>fail())\ \{}
+\DoxyCodeLine{01452\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01453\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ seek\ ZIP\ archive\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01454\ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{01455\ \ \ \ \ close();}
+\DoxyCodeLine{01456\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01457\ \ \ \}}
+\DoxyCodeLine{01458\ }
+\DoxyCodeLine{01459\ \ \ std::streampos\ fpos\ =\ read-\/>tellg();}
+\DoxyCodeLine{01460\ \ \ \_file\_end\ =\ fpos\ +\ (std::streamoff)2;}
+\DoxyCodeLine{01461\ }
+\DoxyCodeLine{01462\ \ \ uint64\_t\ cdir\_entries\ =\ 0;}
+\DoxyCodeLine{01463\ \ \ uint64\_t\ cdir\_offset\ =\ 0;}
+\DoxyCodeLine{01464\ \ \ uint32\_t\ comment\_length\ =\ 0;}
+\DoxyCodeLine{01465\ \ \ std::streampos\ eocd\_offset\ =\ 0;}
+\DoxyCodeLine{01466\ \ \ \textcolor{keywordtype}{bool}\ found\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01467\ }
+\DoxyCodeLine{01468\ \ \ \textcolor{comment}{//\ Seek\ backwards\ until\ we\ have\ found\ the\ the\ end-\/of-\/directory\ record.}}
+\DoxyCodeLine{01469\ \ \ \mbox{\hyperlink{classStreamReader}{StreamReader}}\ reader(read,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01470\ \ \ \textcolor{keywordflow}{while}\ (comment\_length\ <=\ 0xffff\ \&\&\ fpos\ >=\ 20)\ \{}
+\DoxyCodeLine{01471\ \ \ \ \ \textcolor{comment}{//nassertr(fpos\ ==\ read-\/>tellg(),\ false);}}
+\DoxyCodeLine{01472\ }
+\DoxyCodeLine{01473\ \ \ \ \ \textcolor{keywordflow}{if}\ (reader.get\_uint16()\ ==\ comment\_length)\ \{}
+\DoxyCodeLine{01474\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ field\ references\ the\ distance\ to\ the\ end\ of\ the\ .zip\ file,\ so\ it}}
+\DoxyCodeLine{01475\ \ \ \ \ \ \ \textcolor{comment}{//\ could\ be\ the\ comment\ length\ field\ at\ the\ end\ of\ the\ record.\ \ Skip\ to\ the}}
+\DoxyCodeLine{01476\ \ \ \ \ \ \ \textcolor{comment}{//\ beginning\ of\ the\ record\ to\ see\ if\ the\ signature\ matches.}}
+\DoxyCodeLine{01477\ \ \ \ \ \ \ read-\/>seekg(-\/22,\ std::ios::cur);}
+\DoxyCodeLine{01478\ }
+\DoxyCodeLine{01479\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (reader.get\_uint32()\ ==\ 0x06054b50)\ \{}
+\DoxyCodeLine{01480\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Yes,\ got\ it.}}
+\DoxyCodeLine{01481\ \ \ \ \ \ \ \ \ eocd\_offset\ =\ read-\/>tellg()\ -\/\ (std::streamoff)4;}
+\DoxyCodeLine{01482\ \ \ \ \ \ \ \ \ reader.skip\_bytes(6);}
+\DoxyCodeLine{01483\ \ \ \ \ \ \ \ \ cdir\_entries\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01484\ \ \ \ \ \ \ \ \ \textcolor{comment}{/*cdir\_size\ =\ */}reader.get\_uint32();}
+\DoxyCodeLine{01485\ \ \ \ \ \ \ \ \ cdir\_offset\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01486\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (comment\_length\ >\ 0)\ \{}
+\DoxyCodeLine{01487\ \ \ \ \ \ \ \ \ \ \ \_comment\ =\ reader.get\_fixed\_string(comment\_length);}
+\DoxyCodeLine{01488\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01489\ \ \ \ \ \ \ \ \ \ \ \_comment.clear();}
+\DoxyCodeLine{01490\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01491\ \ \ \ \ \ \ \ \ found\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01492\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01493\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01494\ }
+\DoxyCodeLine{01495\ \ \ \ \ \ \ \textcolor{comment}{//\ No,\ skip\ back\ to\ where\ we\ were\ and\ continue\ scanning\ for\ comments.}}
+\DoxyCodeLine{01496\ \ \ \ \ \ \ comment\_length\ +=\ 2;}
+\DoxyCodeLine{01497\ \ \ \ \ \ \ read-\/>seekg(22\ -\/\ 4\ -\/\ 4,\ std::ios::cur);}
+\DoxyCodeLine{01498\ \ \ \ \ \ \ fpos\ -\/=\ 2;}
+\DoxyCodeLine{01499\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{01500\ \ \ \ \ \}}
+\DoxyCodeLine{01501\ }
+\DoxyCodeLine{01502\ \ \ \ \ comment\_length\ +=\ 2;}
+\DoxyCodeLine{01503\ \ \ \ \ read-\/>seekg(-\/4,\ std::ios::cur);}
+\DoxyCodeLine{01504\ \ \ \ \ fpos\ -\/=\ 2;}
+\DoxyCodeLine{01505\ \ \ \}}
+\DoxyCodeLine{01506\ }
+\DoxyCodeLine{01507\ \ \ \textcolor{keywordflow}{if}\ (!found)\ \{}
+\DoxyCodeLine{01508\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01509\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ find\ end-\/of-\/directory\ record\ in\ ZIP\ archive\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01510\ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{01511\ \ \ \ \ close();}
+\DoxyCodeLine{01512\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01513\ \ \ \}}
+\DoxyCodeLine{01514\ }
+\DoxyCodeLine{01515\ \ \ \textcolor{comment}{//\ Now\ look\ for\ a\ ZIP64\ end-\/of-\/central-\/directory\ locator.}}
+\DoxyCodeLine{01516\ \ \ \textcolor{keywordflow}{if}\ (eocd\_offset\ >=\ 20)\ \{}
+\DoxyCodeLine{01517\ \ \ \ \ uint64\_t\ eocd64\_offset\ =\ 0;}
+\DoxyCodeLine{01518\ \ \ \ \ read-\/>seekg(eocd\_offset\ -\/\ (std::streamoff)20);}
+\DoxyCodeLine{01519\ \ \ \ \ \textcolor{keywordflow}{if}\ (reader.get\_uint32()\ ==\ 0x07064b50)\ \{}
+\DoxyCodeLine{01520\ \ \ \ \ \ \ reader.skip\_bytes(4);\ \textcolor{comment}{//\ disk\ no}}
+\DoxyCodeLine{01521\ \ \ \ \ \ \ eocd64\_offset\ =\ reader.get\_uint64();}
+\DoxyCodeLine{01522\ \ \ \ \ \ \ reader.skip\_bytes(4);\ \textcolor{comment}{//\ disk\ count}}
+\DoxyCodeLine{01523\ }
+\DoxyCodeLine{01524\ \ \ \ \ \ \ read-\/>seekg(eocd64\_offset);}
+\DoxyCodeLine{01525\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (reader.get\_uint32()\ ==\ 0x06064b50)\ \{}
+\DoxyCodeLine{01526\ \ \ \ \ \ \ \ \ reader.skip\_bytes(20);}
+\DoxyCodeLine{01527\ \ \ \ \ \ \ \ \ cdir\_entries\ =\ reader.get\_uint64();}
+\DoxyCodeLine{01528\ \ \ \ \ \ \ \ \ \textcolor{comment}{/*cdir\_size\ =\ */}reader.get\_uint64();}
+\DoxyCodeLine{01529\ \ \ \ \ \ \ \ \ cdir\_offset\ =\ reader.get\_uint64();}
+\DoxyCodeLine{01530\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01531\ \ \ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01532\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ read\ ZIP64\ end-\/of-\/directory\ record\ in\ ZIP\ archive\ "{}}}
+\DoxyCodeLine{01533\ \ \ \ \ \ \ \ \ \ \ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01534\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01535\ \ \ \ \ \}}
+\DoxyCodeLine{01536\ \ \ \}}
+\DoxyCodeLine{01537\ }
+\DoxyCodeLine{01538\ \ \ \_index\_start\ =\ cdir\_offset;}
+\DoxyCodeLine{01539\ }
+\DoxyCodeLine{01540\ \ \ \textcolor{comment}{//\ Find\ the\ central\ directory.}}
+\DoxyCodeLine{01541\ \ \ read-\/>seekg((std::streampos)cdir\_offset);}
+\DoxyCodeLine{01542\ \ \ \textcolor{keywordflow}{if}\ (read-\/>fail())\ \{}
+\DoxyCodeLine{01543\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01544\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ locate\ central\ directory\ in\ ZIP\ archive\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01545\ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{01546\ \ \ \ \ close();}
+\DoxyCodeLine{01547\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01548\ \ \ \}}
+\DoxyCodeLine{01549\ }
+\DoxyCodeLine{01550\ \ \ \_record\_timestamp\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01551\ }
+\DoxyCodeLine{01552\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ cdir\_entries;\ ++i)\ \{}
+\DoxyCodeLine{01553\ \ \ \ \ Subfile\ *subfile\ =\ \textcolor{keyword}{new}\ Subfile;}
+\DoxyCodeLine{01554\ \ \ \ \ \textcolor{keywordflow}{if}\ (!subfile-\/>read\_index(*read))\ \{}
+\DoxyCodeLine{01555\ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01556\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ read\ central\ directory\ for\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01557\ \ \ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{01558\ \ \ \ \ \ \ close();}
+\DoxyCodeLine{01559\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01560\ \ \ \ \ \}}
+\DoxyCodeLine{01561\ }
+\DoxyCodeLine{01562\ \ \ \ \ \textcolor{keywordflow}{if}\ (subfile-\/>\_timestamp\ !=\ dos\_epoch)\ \{}
+\DoxyCodeLine{01563\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ all\ subfiles\ have\ the\ timestamp\ set\ to\ the\ DOS\ epoch,\ we\ apparently}}
+\DoxyCodeLine{01564\ \ \ \ \ \ \ \textcolor{comment}{//\ don't\ care\ about\ preserving\ timestamps.}}
+\DoxyCodeLine{01565\ \ \ \ \ \ \ \_record\_timestamp\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01566\ \ \ \ \ \}}
+\DoxyCodeLine{01567\ \ \ \ \ \_subfiles.push\_back(subfile);}
+\DoxyCodeLine{01568\ \ \ \}}
+\DoxyCodeLine{01569\ }
+\DoxyCodeLine{01570\ \ \ \textcolor{comment}{//\ Sort\ the\ subfiles.}}
+\DoxyCodeLine{01571\ \ \ \textcolor{keywordtype}{size\_t}\ before\_size\ =\ \_subfiles.size();}
+\DoxyCodeLine{01572\ \ \ \_subfiles.sort();}
+\DoxyCodeLine{01573\ \ \ \textcolor{keywordtype}{size\_t}\ after\_size\ =\ \_subfiles.size();}
+\DoxyCodeLine{01574\ }
+\DoxyCodeLine{01575\ \ \ \textcolor{comment}{//\ If\ these\ don't\ match,\ the\ same\ filename\ appeared\ twice\ in\ the\ index,}}
+\DoxyCodeLine{01576\ \ \ \textcolor{comment}{//\ which\ shouldn't\ be\ possible.}}
+\DoxyCodeLine{01577\ \ \ nassertr(before\_size\ ==\ after\_size,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01578\ }
+\DoxyCodeLine{01579\ \ \ \_read-\/>release();}
+\DoxyCodeLine{01580\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01581\ \}}
+\DoxyCodeLine{01582\ }
+\DoxyCodeLine{01586\ \textcolor{keywordtype}{bool}\ ZipArchive::}
+\DoxyCodeLine{01587\ write\_index(std::ostream\ \&write,\ std::streampos\ \&fpos)\ \{}
+\DoxyCodeLine{01588\ \ \ nassertr(write.tellp()\ ==\ fpos,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01589\ }
+\DoxyCodeLine{01590\ \ \ \_index\_start\ =\ fpos;}
+\DoxyCodeLine{01591\ }
+\DoxyCodeLine{01592\ \ \ \textcolor{keywordflow}{for}\ (Subfile\ *subfile\ :\ \_subfiles)\ \{}
+\DoxyCodeLine{01593\ \ \ \ \ \textcolor{keywordflow}{if}\ (!subfile-\/>write\_index(write,\ fpos))\ \{}
+\DoxyCodeLine{01594\ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01595\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ write\ central\ directory\ entry\ for\ "{}}}
+\DoxyCodeLine{01596\ \ \ \ \ \ \ \ \ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}/"{}}\ <<\ subfile-\/>\_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01597\ \ \ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{01598\ \ \ \ \ \ \ close();}
+\DoxyCodeLine{01599\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01600\ \ \ \ \ \}}
+\DoxyCodeLine{01601\ \ \ \}}
+\DoxyCodeLine{01602\ }
+\DoxyCodeLine{01603\ \ \ \textcolor{keywordtype}{size\_t}\ cdir\_entries\ =\ \_subfiles.size();}
+\DoxyCodeLine{01604\ \ \ std::streamoff\ cdir\_size\ =\ fpos\ -\/\ \_index\_start;}
+\DoxyCodeLine{01605\ }
+\DoxyCodeLine{01606\ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ writer(write);}
+\DoxyCodeLine{01607\ }
+\DoxyCodeLine{01608\ \ \ \textcolor{keywordflow}{if}\ (\_index\_start\ >=\ 0xffffffff\ ||}
+\DoxyCodeLine{01609\ \ \ \ \ \ \ cdir\_size\ >=\ 0xffffffff\ ||}
+\DoxyCodeLine{01610\ \ \ \ \ \ \ cdir\_entries\ >=\ 0xffff)\ \{}
+\DoxyCodeLine{01611\ \ \ \ \ \textcolor{comment}{//\ Write\ a\ ZIP64\ end-\/of-\/central-\/directory\ record.}}
+\DoxyCodeLine{01612\ \ \ \ \ writer.add\_uint32(0x06064b50);}
+\DoxyCodeLine{01613\ \ \ \ \ writer.add\_uint64(44);\ \textcolor{comment}{//\ size\ of\ the\ rest\ of\ the\ record\ (w/o\ first\ 12\ bytes)}}
+\DoxyCodeLine{01614\ \ \ \ \ writer.add\_uint16(45);\ \textcolor{comment}{//\ version\ number\ that\ produced\ this\ file}}
+\DoxyCodeLine{01615\ \ \ \ \ writer.add\_uint16(45);\ \textcolor{comment}{//\ version\ number\ needed\ to\ read\ this\ file}}
+\DoxyCodeLine{01616\ \ \ \ \ writer.add\_uint32(0);}
+\DoxyCodeLine{01617\ \ \ \ \ writer.add\_uint32(0);}
+\DoxyCodeLine{01618\ \ \ \ \ writer.add\_uint64(cdir\_entries);}
+\DoxyCodeLine{01619\ \ \ \ \ writer.add\_uint64(cdir\_entries);}
+\DoxyCodeLine{01620\ \ \ \ \ writer.add\_uint64(cdir\_size);}
+\DoxyCodeLine{01621\ \ \ \ \ writer.add\_uint64(\_index\_start);}
+\DoxyCodeLine{01622\ \ \ \ \ nassertr(write.tellp()\ ==\ fpos\ +\ std::streamoff(12\ +\ 44),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01623\ }
+\DoxyCodeLine{01624\ \ \ \ \ \textcolor{comment}{//\ And\ write\ the\ ZIP64\ end-\/of-\/central-\/directory-\/record\ locator.}}
+\DoxyCodeLine{01625\ \ \ \ \ writer.add\_uint32(0x07064b50);}
+\DoxyCodeLine{01626\ \ \ \ \ writer.add\_uint32(0);}
+\DoxyCodeLine{01627\ \ \ \ \ writer.add\_uint64(fpos);}
+\DoxyCodeLine{01628\ \ \ \ \ writer.add\_uint32(1);\ \textcolor{comment}{//\ number\ of\ disks}}
+\DoxyCodeLine{01629\ \ \ \}}
+\DoxyCodeLine{01630\ }
+\DoxyCodeLine{01631\ \ \ \textcolor{comment}{//\ Write\ the\ end\ of\ central\ directory\ record.}}
+\DoxyCodeLine{01632\ \ \ writer.add\_uint32(0x06054b50);}
+\DoxyCodeLine{01633\ \ \ writer.add\_uint16(0);}
+\DoxyCodeLine{01634\ \ \ writer.add\_uint16(0);}
+\DoxyCodeLine{01635\ \ \ writer.add\_uint16(std::min((\textcolor{keywordtype}{size\_t})0xffffu,\ cdir\_entries));}
+\DoxyCodeLine{01636\ \ \ writer.add\_uint16(std::min((\textcolor{keywordtype}{size\_t})0xffffu,\ cdir\_entries));}
+\DoxyCodeLine{01637\ \ \ writer.add\_uint32(std::min((std::streamoff)0xffffffffu,\ cdir\_size));}
+\DoxyCodeLine{01638\ \ \ writer.add\_uint32(std::min((std::streampos)0xffffffffu,\ \_index\_start));}
+\DoxyCodeLine{01639\ \ \ writer.add\_uint16(\_comment.size());}
+\DoxyCodeLine{01640\ \ \ writer.append\_data(\_comment);}
+\DoxyCodeLine{01641\ }
+\DoxyCodeLine{01642\ \ \ \textcolor{keywordflow}{if}\ (write.fail())\ \{}
+\DoxyCodeLine{01643\ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01644\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ central\ directory\ for\ "{}}\ <<\ \_filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01645\ \ \ \ \ close();}
+\DoxyCodeLine{01646\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01647\ \ \ \}}
+\DoxyCodeLine{01648\ }
+\DoxyCodeLine{01649\ \ \ fpos\ =\ write.tellp();}
+\DoxyCodeLine{01650\ \ \ \textcolor{keywordflow}{if}\ (fpos\ <\ \_file\_end)\ \{}
+\DoxyCodeLine{01651\ \ \ \ \ \textcolor{comment}{//\ We\ didn't\ hit\ the\ end\ of\ the\ file\ writing\ the\ index.\ \ This\ is\ a\ problem}}
+\DoxyCodeLine{01652\ \ \ \ \ \textcolor{comment}{//\ because\ readers\ start\ looking\ for\ the\ EOCD\ record\ at\ the\ end\ of\ the\ file.}}
+\DoxyCodeLine{01653\ \ \ \ \ \textcolor{comment}{//\ We'll\ have\ to\ shift\ the\ whole\ index\ forwards.\ \ Unfortunately\ it's\ hard\ to}}
+\DoxyCodeLine{01654\ \ \ \ \ \textcolor{comment}{//\ anticipate\ having\ to\ do\ this\ ahead\ of\ time.}}
+\DoxyCodeLine{01655\ \ \ \ \ fpos\ =\ \_index\_start\ +\ (\_file\_end\ -\/\ fpos);}
+\DoxyCodeLine{01656\ \ \ \ \ \_needs\_repack\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01657\ \ \ \ \ write.seekp(fpos);}
+\DoxyCodeLine{01658\ \ \ \ \ \textcolor{keywordflow}{return}\ write\_index(write,\ fpos);}
+\DoxyCodeLine{01659\ \ \ \}}
+\DoxyCodeLine{01660\ }
+\DoxyCodeLine{01661\ \ \ \_file\_end\ =\ fpos;}
+\DoxyCodeLine{01662\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01663\ \}}
+\DoxyCodeLine{01664\ }
+\DoxyCodeLine{01668\ ZipArchive::Subfile::}
+\DoxyCodeLine{01669\ Subfile(\textcolor{keyword}{const}\ std::string\ \&name,\ \textcolor{keywordtype}{int}\ compression\_level)\ :}
+\DoxyCodeLine{01670\ \ \ \_name(name),}
+\DoxyCodeLine{01671\ \ \ \_timestamp(dos\_epoch),}
+\DoxyCodeLine{01672\ \ \ \_compression\_method((compression\_level\ >\ 0)\ ?\ CM\_deflate\ :\ CM\_store)}
+\DoxyCodeLine{01673\ \{}
+\DoxyCodeLine{01674\ \ \ \textcolor{comment}{//\ If\ the\ name\ contains\ any\ non-\/ASCII\ characters,\ we\ set\ the\ UTF-\/8\ flag.}}
+\DoxyCodeLine{01675\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{char}\ c\ :\ name)\ \{}
+\DoxyCodeLine{01676\ \ \ \ \ \textcolor{keywordflow}{if}\ (c\ \&\ \string~0x7f)\ \{}
+\DoxyCodeLine{01677\ \ \ \ \ \ \ \_flags\ |=\ SF\_utf8\_encoding;}
+\DoxyCodeLine{01678\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01679\ \ \ \ \ \}}
+\DoxyCodeLine{01680\ \ \ \}}
+\DoxyCodeLine{01681\ }
+\DoxyCodeLine{01682\ \ \ \textcolor{keywordflow}{if}\ (compression\_level\ >\ 6)\ \{}
+\DoxyCodeLine{01683\ \ \ \ \ \_flags\ |=\ SF\_deflate\_best;}
+\DoxyCodeLine{01684\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (compression\_level\ >\ 1\ \&\&\ compression\_level\ <\ 6)\ \{}
+\DoxyCodeLine{01685\ \ \ \ \ \_flags\ |=\ SF\_deflate\_fast;}
+\DoxyCodeLine{01686\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (compression\_level\ ==\ 1)\ \{}
+\DoxyCodeLine{01687\ \ \ \ \ \_flags\ |=\ SF\_deflate\_fastest;}
+\DoxyCodeLine{01688\ \ \ \}}
+\DoxyCodeLine{01689\ \}}
+\DoxyCodeLine{01690\ }
+\DoxyCodeLine{01696\ \textcolor{keywordtype}{bool}\ ZipArchive::Subfile::}
+\DoxyCodeLine{01697\ read\_index(std::istream\ \&read)\ \{}
+\DoxyCodeLine{01698\ \ \ \mbox{\hyperlink{classStreamReader}{StreamReader}}\ reader(read);}
+\DoxyCodeLine{01699\ }
+\DoxyCodeLine{01700\ \ \ \textcolor{keywordflow}{if}\ (reader.get\_uint32()\ !=\ 0x02014b50)\ \{}
+\DoxyCodeLine{01701\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01702\ \ \ \}}
+\DoxyCodeLine{01703\ }
+\DoxyCodeLine{01704\ \ \ \textcolor{comment}{/*uint16\_t\ version\ =\ */}reader.get\_uint8();}
+\DoxyCodeLine{01705\ \ \ \_system\ =\ reader.get\_uint8();}
+\DoxyCodeLine{01706\ \ \ \textcolor{comment}{/*uint16\_t\ min\_version\ =\ */}reader.get\_uint16();}
+\DoxyCodeLine{01707\ \ \ \_flags\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01708\ \ \ \_compression\_method\ =\ (CompressionMethod)reader.get\_uint16();}
+\DoxyCodeLine{01709\ \ \ \{}
+\DoxyCodeLine{01710\ \ \ \ \ \textcolor{comment}{//\ Convert\ from\ DOS/FAT\ timestamp\ to\ UNIX\ timestamp.}}
+\DoxyCodeLine{01711\ \ \ \ \ uint16\_t\ mtime\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01712\ \ \ \ \ uint16\_t\ mdate\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01713\ }
+\DoxyCodeLine{01714\ \ \ \ \ \textcolor{keyword}{struct\ }tm\ time\ =\ \{\};}
+\DoxyCodeLine{01715\ \ \ \ \ time.tm\_sec\ \ =\ \ (mtime\ \&\ 0b0000000000011111u)\ <<\ 1;}
+\DoxyCodeLine{01716\ \ \ \ \ time.tm\_min\ \ =\ \ (mtime\ \&\ 0b0000011111100000u)\ >>\ 5;}
+\DoxyCodeLine{01717\ \ \ \ \ time.tm\_hour\ =\ \ (mtime\ \&\ 0b1111100000000000u)\ >>\ 11;}
+\DoxyCodeLine{01718\ \ \ \ \ time.tm\_mday\ =\ \ (mdate\ \&\ 0b0000000000011111u);}
+\DoxyCodeLine{01719\ \ \ \ \ time.tm\_mon\ \ =\ ((mdate\ \&\ 0b0000000111100000u)\ >>\ 5)\ -\/\ 1;}
+\DoxyCodeLine{01720\ \ \ \ \ time.tm\_year\ =\ ((mdate\ \&\ 0b1111111000000000u)\ >>\ 9)\ +\ 80;}
+\DoxyCodeLine{01721\ \ \ \ \ time.tm\_isdst\ =\ -\/1;}
+\DoxyCodeLine{01722\ \ \ \ \ \_timestamp\ =\ mktime(\&time);}
+\DoxyCodeLine{01723\ \ \ \}}
+\DoxyCodeLine{01724\ \ \ \_checksum\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01725\ \ \ \_data\_length\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01726\ \ \ \_uncompressed\_length\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01727\ \ \ \textcolor{keywordtype}{size\_t}\ name\_length\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01728\ \ \ \textcolor{keywordtype}{size\_t}\ extra\_length\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01729\ \ \ \textcolor{keywordtype}{size\_t}\ comment\_length\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01730\ \ \ \textcolor{comment}{/*size\_t\ disk\_number\ =*/}\ reader.get\_uint16();}
+\DoxyCodeLine{01731\ \ \ \_internal\_attribs\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01732\ \ \ \_external\_attribs\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01733\ \ \ \_header\_start\ =\ (std::streampos)reader.get\_uint32();}
+\DoxyCodeLine{01734\ }
+\DoxyCodeLine{01735\ \ \ std::string\ name\ =\ reader.get\_fixed\_string(name\_length);}
+\DoxyCodeLine{01736\ }
+\DoxyCodeLine{01737\ \ \ \textcolor{comment}{//\ Read\ the\ extra\ fields,\ which\ may\ include\ a\ UNIX\ timestamp,\ which\ can\ be}}
+\DoxyCodeLine{01738\ \ \ \textcolor{comment}{//\ specified\ with\ greater\ precision\ than\ a\ DOS\ timestamp.}}
+\DoxyCodeLine{01739\ \ \ \textcolor{keywordflow}{while}\ (extra\_length\ >=\ 4)\ \{}
+\DoxyCodeLine{01740\ \ \ \ \ uint16\_t\ \textcolor{keyword}{const}\ tag\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01741\ \ \ \ \ uint16\_t\ \textcolor{keyword}{const}\ size\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01742\ \ \ \ \ \textcolor{keywordflow}{if}\ (tag\ ==\ 0x0001)\ \{}
+\DoxyCodeLine{01743\ \ \ \ \ \ \ \textcolor{comment}{//\ ZIP64\ extended\ info.}}
+\DoxyCodeLine{01744\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ size\_left\ =\ size;}
+\DoxyCodeLine{01745\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_uncompressed\_length\ ==\ 0xffffffffu\ \&\&\ size\_left\ >=\ 8)\ \{}
+\DoxyCodeLine{01746\ \ \ \ \ \ \ \ \ \_uncompressed\_length\ =\ reader.get\_uint64();}
+\DoxyCodeLine{01747\ \ \ \ \ \ \ \ \ size\_left\ -\/=\ 8;}
+\DoxyCodeLine{01748\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01749\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_data\_length\ ==\ 0xffffffffu\ \&\&\ size\_left\ >=\ 8)\ \{}
+\DoxyCodeLine{01750\ \ \ \ \ \ \ \ \ \_data\_length\ =\ reader.get\_uint64();}
+\DoxyCodeLine{01751\ \ \ \ \ \ \ \ \ size\_left\ -\/=\ 8;}
+\DoxyCodeLine{01752\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01753\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((uint64\_t)\_header\_start\ ==\ 0xffffffffu\ \&\&\ size\_left\ >=\ 8)\ \{}
+\DoxyCodeLine{01754\ \ \ \ \ \ \ \ \ \_header\_start\ =\ reader.get\_uint64();}
+\DoxyCodeLine{01755\ \ \ \ \ \ \ \ \ size\_left\ -\/=\ 8;}
+\DoxyCodeLine{01756\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01757\ \ \ \ \ \ \ reader.skip\_bytes(size\_left);}
+\DoxyCodeLine{01758\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (tag\ ==\ 0x5455\ \&\&\ size\ ==\ 5)\ \{}
+\DoxyCodeLine{01759\ \ \ \ \ \ \ reader.skip\_bytes(1);}
+\DoxyCodeLine{01760\ \ \ \ \ \ \ \_timestamp\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01761\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01762\ \ \ \ \ \ \ reader.skip\_bytes(size);}
+\DoxyCodeLine{01763\ \ \ \ \ \}}
+\DoxyCodeLine{01764\ \ \ \ \ extra\_length\ -\/=\ 4\ +\ size;}
+\DoxyCodeLine{01765\ \ \ \}}
+\DoxyCodeLine{01766\ \ \ \textcolor{comment}{//\ Skip\ leftover\ bytes\ in\ the\ extra\ field\ not\ large\ enough\ to\ contain\ a\ proper}}
+\DoxyCodeLine{01767\ \ \ \textcolor{comment}{//\ extra\ tag.\ \ This\ may\ be\ the\ case\ for\ Android\ .apk\ files\ processed\ with}}
+\DoxyCodeLine{01768\ \ \ \textcolor{comment}{//\ zipalign,\ which\ uses\ this\ for\ alignment.}}
+\DoxyCodeLine{01769\ \ \ reader.skip\_bytes(extra\_length);}
+\DoxyCodeLine{01770\ }
+\DoxyCodeLine{01771\ \ \ std::string\ comment\ =\ reader.get\_fixed\_string(comment\_length);}
+\DoxyCodeLine{01772\ }
+\DoxyCodeLine{01773\ \ \ \textcolor{keywordflow}{if}\ (\_flags\ \&\ SF\_utf8\_encoding)\ \{}
+\DoxyCodeLine{01774\ \ \ \ \ \_name\ =\ std::move(name);}
+\DoxyCodeLine{01775\ \ \ \ \ \_comment\ =\ std::move(comment);}
+\DoxyCodeLine{01776\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01777\ \ \ \ \ \_name\ =\ TextEncoder::reencode\_text(name,\ TextEncoder::E\_cp437,\ TextEncoder::E\_utf8);}
+\DoxyCodeLine{01778\ \ \ \ \ \_comment\ =\ TextEncoder::reencode\_text(comment,\ TextEncoder::E\_cp437,\ TextEncoder::E\_utf8);}
+\DoxyCodeLine{01779\ \ \ \}}
+\DoxyCodeLine{01780\ }
+\DoxyCodeLine{01781\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01782\ \}}
+\DoxyCodeLine{01783\ }
+\DoxyCodeLine{01787\ \textcolor{keywordtype}{bool}\ ZipArchive::Subfile::}
+\DoxyCodeLine{01788\ read\_header(std::istream\ \&read)\ \{}
+\DoxyCodeLine{01789\ \ \ read.seekg(\_header\_start);}
+\DoxyCodeLine{01790\ \ \ \textcolor{keywordflow}{if}\ (read.fail())\ \{}
+\DoxyCodeLine{01791\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01792\ \ \ \}}
+\DoxyCodeLine{01793\ }
+\DoxyCodeLine{01794\ \ \ \textcolor{comment}{//\ First,\ get\ the\ next\ stream\ position.\ \ We\ do\ this\ separately,\ because\ if}}
+\DoxyCodeLine{01795\ \ \ \textcolor{comment}{//\ it\ is\ zero,\ we\ don't\ get\ anything\ else.}}
+\DoxyCodeLine{01796\ \ \ \mbox{\hyperlink{classStreamReader}{StreamReader}}\ reader(read);}
+\DoxyCodeLine{01797\ }
+\DoxyCodeLine{01798\ \ \ uint32\_t\ signature\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01799\ \ \ \textcolor{keywordflow}{if}\ (signature\ !=\ 0x04034b50)\ \{}
+\DoxyCodeLine{01800\ \ \ \ \ \textcolor{comment}{//0x02014b50}}
+\DoxyCodeLine{01801\ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01802\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ZIP\ subfile\ "{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}\ header\ does\ not\ contain\ expected\ signature\(\backslash\)n"{}};}
+\DoxyCodeLine{01803\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01804\ \ \ \}}
+\DoxyCodeLine{01805\ }
+\DoxyCodeLine{01806\ \ \ \textcolor{comment}{//\ We\ skip\ most\ of\ the\ stuff\ in\ the\ local\ file\ header,\ since\ most\ of\ this\ is}}
+\DoxyCodeLine{01807\ \ \ \textcolor{comment}{//\ duplicated\ in\ the\ central\ directory.}}
+\DoxyCodeLine{01808\ \ \ reader.get\_uint16();}
+\DoxyCodeLine{01809\ \ \ \textcolor{keywordtype}{int}\ flags\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01810\ }
+\DoxyCodeLine{01811\ \ \ \textcolor{keywordflow}{if}\ (flags\ !=\ \_flags)\ \{}
+\DoxyCodeLine{01812\ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01813\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ZIP\ subfile\ "{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}\ flags\ mismatch\ between\ file\ header\ and\ index\ record\(\backslash\)n"{}};}
+\DoxyCodeLine{01814\ \ \ \}}
+\DoxyCodeLine{01815\ \ \ \_flags\ =\ flags;}
+\DoxyCodeLine{01816\ }
+\DoxyCodeLine{01817\ \ \ \textcolor{keywordflow}{if}\ (reader.get\_uint16()\ !=\ (uint16\_t)\_compression\_method)\ \{}
+\DoxyCodeLine{01818\ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01819\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ZIP\ subfile\ "{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}\ compression\ method\ mismatch\ between\ file\ header\ and\ index\ record\(\backslash\)n"{}};}
+\DoxyCodeLine{01820\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01821\ \ \ \}}
+\DoxyCodeLine{01822\ }
+\DoxyCodeLine{01823\ \ \ reader.get\_uint32();}
+\DoxyCodeLine{01824\ }
+\DoxyCodeLine{01825\ \ \ \textcolor{keywordflow}{if}\ (flags\ \&\ SF\_data\_descriptor)\ \{}
+\DoxyCodeLine{01826\ \ \ \ \ \textcolor{comment}{//\ Ignore\ these\ fields,\ the\ real\ values\ will\ follow\ the\ file.}}
+\DoxyCodeLine{01827\ \ \ \ \ reader.skip\_bytes(4\ *\ 3);}
+\DoxyCodeLine{01828\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01829\ \ \ \ \ \textcolor{keywordflow}{if}\ (reader.get\_uint32()\ !=\ \_checksum)\ \{}
+\DoxyCodeLine{01830\ \ \ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01831\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ZIP\ subfile\ "{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}\ CRC32\ mismatch\ between\ file\ header\ and\ index\ record\(\backslash\)n"{}};}
+\DoxyCodeLine{01832\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01833\ \ \ \ \ \}}
+\DoxyCodeLine{01834\ }
+\DoxyCodeLine{01835\ \ \ \ \ \textcolor{comment}{//\ Compressed\ and\ uncompressed\ size}}
+\DoxyCodeLine{01836\ \ \ \ \ uint32\_t\ data\_length\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01837\ \ \ \ \ uint32\_t\ uncompressed\_length\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01838\ }
+\DoxyCodeLine{01839\ \ \ \ \ \textcolor{keywordflow}{if}\ ((data\_length\ !=\ 0xffffffffu\ \&\&\ data\_length\ !=\ \_data\_length)\ ||}
+\DoxyCodeLine{01840\ \ \ \ \ \ \ \ \ (uncompressed\_length\ !=\ 0xffffffffu\ \&\&\ uncompressed\_length\ !=\ \_uncompressed\_length))\ \{}
+\DoxyCodeLine{01841\ \ \ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01842\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ZIP\ subfile\ "{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}\ length\ mismatch\ between\ file\ header\ and\ index\ record\(\backslash\)n"{}};}
+\DoxyCodeLine{01843\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01844\ \ \ \ \ \}}
+\DoxyCodeLine{01845\ \ \ \}}
+\DoxyCodeLine{01846\ }
+\DoxyCodeLine{01847\ \ \ \textcolor{keywordtype}{size\_t}\ name\_length\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01848\ \ \ \textcolor{keywordtype}{size\_t}\ extra\_length\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01849\ }
+\DoxyCodeLine{01850\ \ \ std::string\ name\ =\ reader.get\_fixed\_string(name\_length);}
+\DoxyCodeLine{01851\ \ \ \textcolor{keywordflow}{if}\ ((flags\ \&\ SF\_utf8\_encoding)\ ==\ 0)\ \{}
+\DoxyCodeLine{01852\ \ \ \ \ name\ =\ TextEncoder::reencode\_text(name,\ TextEncoder::E\_cp437,\ TextEncoder::E\_utf8);}
+\DoxyCodeLine{01853\ \ \ \}}
+\DoxyCodeLine{01854\ }
+\DoxyCodeLine{01855\ \ \ \textcolor{keywordflow}{if}\ (extra\_length\ <\ 4)\ \{}
+\DoxyCodeLine{01856\ \ \ \ \ reader.skip\_bytes(extra\_length);}
+\DoxyCodeLine{01857\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (extra\_length\ >\ 0)\ \{}
+\DoxyCodeLine{01858\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ extra\_length;)\ \{}
+\DoxyCodeLine{01859\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ length\ =\ reader.get\_uint16();}
+\DoxyCodeLine{01860\ \ \ \ \ \ \ i\ +=\ 4;}
+\DoxyCodeLine{01861\ \ \ \ \ \ \ reader.skip\_bytes(length);}
+\DoxyCodeLine{01862\ \ \ \ \ \ \ i\ +=\ length;}
+\DoxyCodeLine{01863\ \ \ \ \ \}}
+\DoxyCodeLine{01864\ \ \ \}}
+\DoxyCodeLine{01865\ }
+\DoxyCodeLine{01866\ \ \ \textcolor{keywordflow}{if}\ (name\ !=\ \_name)\ \{}
+\DoxyCodeLine{01867\ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01868\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Name\ of\ ZIP\ subfile\ \(\backslash\)"{}"{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{}\ in\ index\ record\ does\ not\ match\ "{}}}
+\DoxyCodeLine{01869\ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}name\ in\ file\ header\ \(\backslash\)"{}"{}}\ <<\ name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01870\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01871\ \ \ \}}
+\DoxyCodeLine{01872\ }
+\DoxyCodeLine{01873\ \ \ \textcolor{comment}{//\_data\_start\ =\ read.tellg();}}
+\DoxyCodeLine{01874\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01875\ \}}
+\DoxyCodeLine{01876\ }
+\DoxyCodeLine{01882\ \textcolor{keywordtype}{bool}\ ZipArchive::Subfile::}
+\DoxyCodeLine{01883\ verify\_data(std::istream\ \&read)\ \{}
+\DoxyCodeLine{01884\ \ \ \textcolor{comment}{//nassertr(read.tellg()\ ==\ \_data\_start,\ false);}}
+\DoxyCodeLine{01885\ }
+\DoxyCodeLine{01886\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 4096;}
+\DoxyCodeLine{01887\ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{01888\ }
+\DoxyCodeLine{01889\ \textcolor{preprocessor}{\#ifdef\ HAVE\_ZLIB}}
+\DoxyCodeLine{01890\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ crc\ =\ crc32(0L,\ Z\_NULL,\ 0);}
+\DoxyCodeLine{01891\ \ \ IDecompressStream\ wrapper;}
+\DoxyCodeLine{01892\ }
+\DoxyCodeLine{01893\ \ \ std::istream\ *data\_stream;}
+\DoxyCodeLine{01894\ \ \ \textcolor{keywordflow}{if}\ (\_compression\_method\ ==\ CM\_store)\ \{}
+\DoxyCodeLine{01895\ \ \ \ \ data\_stream\ =\ \&read;}
+\DoxyCodeLine{01896\ \ \ \}}
+\DoxyCodeLine{01897\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_compression\_method\ ==\ CM\_deflate)\ \{}
+\DoxyCodeLine{01898\ \ \ \ \ wrapper.open(\&read,\ \textcolor{keyword}{false},\ \_data\_length,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01899\ \ \ \ \ data\_stream\ =\ \&wrapper;}
+\DoxyCodeLine{01900\ \ \ \}}
+\DoxyCodeLine{01901\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01902\ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01903\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ verify\ ZIP\ subfile\ \(\backslash\)"{}"{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{}:\ compression\ method\ "{}}}
+\DoxyCodeLine{01904\ \ \ \ \ \ \ <<\ (int)\_compression\_method\ <<\ \textcolor{stringliteral}{"{}\ not\ supported.\(\backslash\)n"{}};}
+\DoxyCodeLine{01905\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01906\ \ \ \}}
+\DoxyCodeLine{01907\ }
+\DoxyCodeLine{01908\ \ \ \textcolor{keywordtype}{size\_t}\ bytes\_to\_go\ =\ \_uncompressed\_length;}
+\DoxyCodeLine{01909\ \ \ data\_stream-\/>read(buffer,\ std::min(bytes\_to\_go,\ buffer\_size));}
+\DoxyCodeLine{01910\ \ \ \textcolor{keywordtype}{size\_t}\ read\_bytes\ =\ data\_stream-\/>gcount();}
+\DoxyCodeLine{01911\ }
+\DoxyCodeLine{01912\ \ \ \textcolor{keywordflow}{while}\ (read\_bytes\ >\ 0)\ \{}
+\DoxyCodeLine{01913\ \ \ \ \ crc\ =\ crc32(crc,\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)buffer,\ read\_bytes);}
+\DoxyCodeLine{01914\ }
+\DoxyCodeLine{01915\ \ \ \ \ bytes\_to\_go\ -\/=\ read\_bytes;}
+\DoxyCodeLine{01916\ \ \ \ \ \textcolor{keywordflow}{if}\ (bytes\_to\_go\ ==\ 0)\ \{}
+\DoxyCodeLine{01917\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{01918\ \ \ \ \ \}}
+\DoxyCodeLine{01919\ }
+\DoxyCodeLine{01920\ \ \ \ \ data\_stream-\/>read(buffer,\ std::min(bytes\_to\_go,\ buffer\_size));}
+\DoxyCodeLine{01921\ \ \ \ \ read\_bytes\ =\ data\_stream-\/>gcount();}
+\DoxyCodeLine{01922\ \ \ \}}
+\DoxyCodeLine{01923\ }
+\DoxyCodeLine{01924\ \ \ \textcolor{keywordflow}{if}\ (data\_stream\ ==\ \&wrapper)\ \{}
+\DoxyCodeLine{01925\ \ \ \ \ wrapper.close();}
+\DoxyCodeLine{01926\ \ \ \}}
+\DoxyCodeLine{01927\ }
+\DoxyCodeLine{01928\ \ \ \textcolor{keywordflow}{if}\ (bytes\_to\_go\ >\ 0)\ \{}
+\DoxyCodeLine{01929\ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01930\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reached\ end\ of\ compressed\ data\ verifying\ ZIP\ subfile\ "{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01931\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01932\ \ \ \}}
+\DoxyCodeLine{01933\ }
+\DoxyCodeLine{01934\ \ \ \textcolor{keywordflow}{if}\ (crc\ !=\ \_checksum)\ \{}
+\DoxyCodeLine{01935\ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01936\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ZIP\ file\ member\ "{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}\ is\ corrupted.\(\backslash\)n"{}};}
+\DoxyCodeLine{01937\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01938\ \ \ \}}
+\DoxyCodeLine{01939\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{01940\ \ \ read.ignore(\_data\_length);}
+\DoxyCodeLine{01941\ }
+\DoxyCodeLine{01942\ \ \ \textcolor{keywordflow}{if}\ (read.eof())\ \{}
+\DoxyCodeLine{01943\ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01944\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reached\ EOF\ verifying\ ZIP\ subfile\ "{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01945\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01946\ \ \ \}}
+\DoxyCodeLine{01947\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01948\ }
+\DoxyCodeLine{01949\ \ \ \textcolor{comment}{//\ If\ we\ are\ expecting\ a\ data\ descriptor,\ verify\ that\ it\ matches\ what\ is\ in}}
+\DoxyCodeLine{01950\ \ \ \textcolor{comment}{//\ the\ index\ entry.}}
+\DoxyCodeLine{01951\ \ \ \textcolor{keywordflow}{if}\ (\_flags\ \&\ SF\_data\_descriptor)\ \{}
+\DoxyCodeLine{01952\ \ \ \ \ \mbox{\hyperlink{classStreamReader}{StreamReader}}\ reader(read);}
+\DoxyCodeLine{01953\ \ \ \ \ uint32\_t\ checksum\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01954\ \ \ \ \ \textcolor{keywordflow}{if}\ (checksum\ ==\ 0x08074b50)\ \{}
+\DoxyCodeLine{01955\ \ \ \ \ \ \ \textcolor{comment}{//\ There\ is\ an\ optional\ data\ descriptor\ signature.}}
+\DoxyCodeLine{01956\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_checksum\ ==\ 0x08074b50)\ \{}
+\DoxyCodeLine{01957\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ CRC32\ happens\ to\ match\ the\ data\ descriptor\ signature\ by\ accident.}}
+\DoxyCodeLine{01958\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Since\ the\ data\ descriptor\ signature\ is\ optional,\ we\ can't\ know\ for}}
+\DoxyCodeLine{01959\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ sure\ which\ is\ which,\ so\ let's\ just\ not\ bother\ validating\ this.}}
+\DoxyCodeLine{01960\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01961\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01962\ \ \ \ \ \ \ checksum\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01963\ \ \ \ \ \}}
+\DoxyCodeLine{01964\ \ \ \ \ uint32\_t\ data\_length\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01965\ \ \ \ \ uint32\_t\ uncompressed\_length\ =\ reader.get\_uint32();}
+\DoxyCodeLine{01966\ \ \ \ \ \textcolor{keywordflow}{if}\ (checksum\ !=\ \_checksum\ ||}
+\DoxyCodeLine{01967\ \ \ \ \ \ \ \ \ data\_length\ !=\ \_data\_length\ ||}
+\DoxyCodeLine{01968\ \ \ \ \ \ \ \ \ uncompressed\_length\ !=\ \_uncompressed\_length)\ \{}
+\DoxyCodeLine{01969\ \ \ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01970\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ZIP\ file\ member\ "{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}\ has\ mismatched\ data\ descriptor.\(\backslash\)n"{}};}
+\DoxyCodeLine{01971\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01972\ \ \ \ \ \}}
+\DoxyCodeLine{01973\ \ \ \}}
+\DoxyCodeLine{01974\ }
+\DoxyCodeLine{01975\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01976\ \}}
+\DoxyCodeLine{01977\ }
+\DoxyCodeLine{01986\ \textcolor{keywordtype}{bool}\ ZipArchive::Subfile::}
+\DoxyCodeLine{01987\ write\_index(std::ostream\ \&write,\ streampos\ \&fpos)\ \{}
+\DoxyCodeLine{01988\ \ \ nassertr(write.tellp()\ ==\ fpos,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01989\ }
+\DoxyCodeLine{01990\ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ writer(write);}
+\DoxyCodeLine{01991\ \ \ writer.add\_uint32(0x02014b50);}
+\DoxyCodeLine{01992\ }
+\DoxyCodeLine{01993\ \ \ \textcolor{keywordtype}{bool}\ zip64\_length\ =}
+\DoxyCodeLine{01994\ \ \ \ \ (\_data\_length\ >=\ 0xffffffffu\ ||\ \_uncompressed\_length\ >=\ 0xffffffffu);}
+\DoxyCodeLine{01995\ \ \ \textcolor{keywordtype}{bool}\ zip64\_offset\ =\ (\_header\_start\ >=\ 0xffffffffu);}
+\DoxyCodeLine{01996\ \ \ \textcolor{keywordtype}{size\_t}\ extra\_length\ =\ zip64\_length\ *\ 16\ +\ zip64\_offset\ *\ 8;}
+\DoxyCodeLine{01997\ }
+\DoxyCodeLine{01998\ \ \ \textcolor{keywordflow}{if}\ (zip64\_length\ ||\ zip64\_offset)\ \{}
+\DoxyCodeLine{01999\ \ \ \ \ writer.add\_uint8(45);}
+\DoxyCodeLine{02000\ \ \ \ \ writer.add\_uint8(\_system);}
+\DoxyCodeLine{02001\ \ \ \ \ writer.add\_uint16((\_flags\ \&\ SF\_strong\_encryption)\ ?\ 50\ :\ 45);}
+\DoxyCodeLine{02002\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02003\ \ \ \ \ \textcolor{comment}{//\ We\ just\ write\ 2.0\ if\ it\ we\ support\ DEFLATE\ compression,\ 1.0\ otherwise.}}
+\DoxyCodeLine{02004\ \textcolor{preprocessor}{\#ifdef\ HAVE\_ZLIB}}
+\DoxyCodeLine{02005\ \ \ \ \ writer.add\_uint8(20);}
+\DoxyCodeLine{02006\ \ \ \ \ writer.add\_uint8(\_system);}
+\DoxyCodeLine{02007\ \ \ \ \ writer.add\_uint16((\_flags\ \&\ SF\_strong\_encryption)\ ?\ 50\ :\ (is\_compressed()\ ?\ 20\ :\ 10));}
+\DoxyCodeLine{02008\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{02009\ \ \ \ \ writer.add\_uint8(10);}
+\DoxyCodeLine{02010\ \ \ \ \ writer.add\_uint8(\_system);}
+\DoxyCodeLine{02011\ \ \ \ \ writer.add\_uint16((\_flags\ \&\ SF\_strong\_encryption)\ ?\ 50\ :\ 10);}
+\DoxyCodeLine{02012\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{02013\ \ \ \}}
+\DoxyCodeLine{02014\ }
+\DoxyCodeLine{02015\ \ \ writer.add\_uint16(\_flags);}
+\DoxyCodeLine{02016\ \ \ writer.add\_uint16((uint16\_t)\_compression\_method);}
+\DoxyCodeLine{02017\ }
+\DoxyCodeLine{02018\ \ \ \textcolor{keywordflow}{if}\ (\_timestamp\ >\ dos\_epoch)\ \{}
+\DoxyCodeLine{02019\ \ \ \ \ \textcolor{comment}{//\ Convert\ from\ UNIX\ timestamp\ to\ DOS/FAT\ timestamp.}}
+\DoxyCodeLine{02020\ \textcolor{preprocessor}{\#ifdef\ \_MSC\_VER}}
+\DoxyCodeLine{02021\ \ \ \ \ \textcolor{keyword}{struct\ }tm\ time\_data;}
+\DoxyCodeLine{02022\ \ \ \ \ \textcolor{keyword}{struct\ }tm\ *time\ =\ \&time\_data;}
+\DoxyCodeLine{02023\ \ \ \ \ localtime\_s(time,\ \&\_timestamp);}
+\DoxyCodeLine{02024\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{02025\ \ \ \ \ \textcolor{keyword}{struct\ }tm\ *time\ =\ localtime(\&\_timestamp);}
+\DoxyCodeLine{02026\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{02027\ \ \ \ \ writer.add\_uint16((time-\/>tm\_sec\ >>\ 1)}
+\DoxyCodeLine{02028\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ (time-\/>tm\_min\ <<\ 5)}
+\DoxyCodeLine{02029\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ (time-\/>tm\_hour\ <<\ 11));}
+\DoxyCodeLine{02030\ \ \ \ \ writer.add\_uint16(time-\/>tm\_mday}
+\DoxyCodeLine{02031\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ ((time-\/>tm\_min\ +\ 1)\ <<\ 5)}
+\DoxyCodeLine{02032\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ ((time-\/>tm\_year\ -\/\ 1980)\ <<\ 9));}
+\DoxyCodeLine{02033\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02034\ \ \ \ \ \textcolor{comment}{//\ January\ 1,\ 1980}}
+\DoxyCodeLine{02035\ \ \ \ \ writer.add\_uint16(0);}
+\DoxyCodeLine{02036\ \ \ \ \ writer.add\_uint16(33);}
+\DoxyCodeLine{02037\ \ \ \}}
+\DoxyCodeLine{02038\ }
+\DoxyCodeLine{02039\ \ \ std::string\ encoded\_name;}
+\DoxyCodeLine{02040\ \ \ std::string\ encoded\_comment;}
+\DoxyCodeLine{02041\ \ \ \textcolor{keywordflow}{if}\ (\_flags\ \&\ SF\_utf8\_encoding)\ \{}
+\DoxyCodeLine{02042\ \ \ \ \ encoded\_name\ =\ \_name;}
+\DoxyCodeLine{02043\ \ \ \ \ encoded\_comment\ =\ \_comment;}
+\DoxyCodeLine{02044\ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02045\ \ \ \ \ encoded\_name\ =\ TextEncoder::reencode\_text(\_name,\ TextEncoder::E\_utf8,\ TextEncoder::E\_cp437);}
+\DoxyCodeLine{02046\ \ \ \ \ encoded\_comment\ =\ TextEncoder::reencode\_text(\_comment,\ TextEncoder::E\_utf8,\ TextEncoder::E\_cp437);}
+\DoxyCodeLine{02047\ \ \ \}}
+\DoxyCodeLine{02048\ }
+\DoxyCodeLine{02049\ \ \ writer.add\_uint32(\_checksum);}
+\DoxyCodeLine{02050\ \ \ \textcolor{keywordflow}{if}\ (zip64\_length)\ \{}
+\DoxyCodeLine{02051\ \ \ \ \ writer.add\_uint32(0xffffffffu);}
+\DoxyCodeLine{02052\ \ \ \ \ writer.add\_uint32(0xffffffffu);}
+\DoxyCodeLine{02053\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02054\ \ \ \ \ writer.add\_uint32(\_data\_length);}
+\DoxyCodeLine{02055\ \ \ \ \ writer.add\_uint32(\_uncompressed\_length);}
+\DoxyCodeLine{02056\ \ \ \}}
+\DoxyCodeLine{02057\ \ \ writer.add\_uint16(encoded\_name.size());}
+\DoxyCodeLine{02058\ \ \ writer.add\_uint16(extra\_length);}
+\DoxyCodeLine{02059\ \ \ writer.add\_uint16(encoded\_comment.size());}
+\DoxyCodeLine{02060\ \ \ writer.add\_uint16(0);\ \textcolor{comment}{//\ disk\ number\ start}}
+\DoxyCodeLine{02061\ \ \ writer.add\_uint16(\_internal\_attribs);}
+\DoxyCodeLine{02062\ \ \ writer.add\_uint32(\_external\_attribs);}
+\DoxyCodeLine{02063\ \ \ writer.add\_uint32(zip64\_offset\ ?\ 0xffffffffu\ :\ (uint32\_t)\_header\_start);}
+\DoxyCodeLine{02064\ }
+\DoxyCodeLine{02065\ \ \ writer.append\_data(encoded\_name);}
+\DoxyCodeLine{02066\ }
+\DoxyCodeLine{02067\ \ \ \textcolor{comment}{//\ Write\ any\ extra\ fields.}}
+\DoxyCodeLine{02068\ \ \ \textcolor{keywordflow}{if}\ (zip64\_length\ ||\ zip64\_offset)\ \{}
+\DoxyCodeLine{02069\ \ \ \ \ writer.add\_uint16(0x0001);}
+\DoxyCodeLine{02070\ \ \ \ \ writer.add\_uint16(zip64\_length\ *\ 16\ +\ zip64\_offset\ *\ 8);}
+\DoxyCodeLine{02071\ \ \ \ \ \textcolor{keywordflow}{if}\ (zip64\_length)\ \{}
+\DoxyCodeLine{02072\ \ \ \ \ \ \ writer.add\_uint64(\_data\_length);}
+\DoxyCodeLine{02073\ \ \ \ \ \ \ writer.add\_uint64(\_uncompressed\_length);}
+\DoxyCodeLine{02074\ \ \ \ \ \}}
+\DoxyCodeLine{02075\ \ \ \ \ \textcolor{keywordflow}{if}\ (zip64\_offset)\ \{}
+\DoxyCodeLine{02076\ \ \ \ \ \ \ writer.add\_uint64(\_header\_start);}
+\DoxyCodeLine{02077\ \ \ \ \ \}}
+\DoxyCodeLine{02078\ \ \ \}}
+\DoxyCodeLine{02079\ }
+\DoxyCodeLine{02080\ \ \ writer.append\_data(encoded\_comment);}
+\DoxyCodeLine{02081\ }
+\DoxyCodeLine{02082\ \ \ fpos\ +=\ 46\ +\ extra\_length\ +\ encoded\_name.size()\ +\ encoded\_comment.size();}
+\DoxyCodeLine{02083\ \ \ nassertr(write.tellp()\ ==\ fpos,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02084\ \ \ \textcolor{keywordflow}{return}\ !write.fail();}
+\DoxyCodeLine{02085\ \}}
+\DoxyCodeLine{02086\ }
+\DoxyCodeLine{02095\ \textcolor{keywordtype}{bool}\ ZipArchive::Subfile::}
+\DoxyCodeLine{02096\ write\_header(std::ostream\ \&write,\ std::streampos\ \&fpos)\ \{}
+\DoxyCodeLine{02097\ \ \ nassertr(write.tellp()\ ==\ fpos,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02098\ }
+\DoxyCodeLine{02099\ \ \ std::string\ encoded\_name;}
+\DoxyCodeLine{02100\ \ \ \textcolor{keywordflow}{if}\ (\_flags\ \&\ SF\_utf8\_encoding)\ \{}
+\DoxyCodeLine{02101\ \ \ \ \ encoded\_name\ =\ \_name;}
+\DoxyCodeLine{02102\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02103\ \ \ \ \ encoded\_name\ =\ TextEncoder::reencode\_text(\_name,\ TextEncoder::E\_utf8,\ TextEncoder::E\_cp437);}
+\DoxyCodeLine{02104\ \ \ \}}
+\DoxyCodeLine{02105\ }
+\DoxyCodeLine{02106\ \ \ std::streamoff\ header\_size\ =\ 30\ +\ encoded\_name.size();}
+\DoxyCodeLine{02107\ }
+\DoxyCodeLine{02108\ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ writer(write);}
+\DoxyCodeLine{02109\ \ \ \textcolor{keywordtype}{int}\ modulo\ =\ (fpos\ +\ header\_size)\ \%\ 4;}
+\DoxyCodeLine{02110\ \ \ \textcolor{keywordflow}{if}\ (!is\_compressed()\ \&\&\ modulo\ !=\ 0)\ \{}
+\DoxyCodeLine{02111\ \ \ \ \ \textcolor{comment}{//\ Align\ uncompressed\ files\ to\ 4-\/byte\ boundary.\ \ We\ don't\ really\ need\ to\ do}}
+\DoxyCodeLine{02112\ \ \ \ \ \textcolor{comment}{//\ this,\ but\ it's\ needed\ when\ producing\ .apk\ files,\ and\ it\ doesn't\ really}}
+\DoxyCodeLine{02113\ \ \ \ \ \textcolor{comment}{//\ cause\ harm\ to\ do\ it\ in\ other\ cases\ as\ well.}}
+\DoxyCodeLine{02114\ \ \ \ \ writer.pad\_bytes(4\ -\/\ modulo);}
+\DoxyCodeLine{02115\ \ \ \ \ fpos\ +=\ (4\ -\/\ modulo);}
+\DoxyCodeLine{02116\ \ \ \}}
+\DoxyCodeLine{02117\ }
+\DoxyCodeLine{02118\ \ \ \_header\_start\ =\ fpos;}
+\DoxyCodeLine{02119\ }
+\DoxyCodeLine{02120\ \ \ writer.add\_uint32(0x04034b50);}
+\DoxyCodeLine{02121\ \ \ writer.add\_uint16((\_flags\ \&\ SF\_strong\_encryption)\ ?\ 50\ :\ (is\_compressed()\ ?\ 20\ :\ 10));}
+\DoxyCodeLine{02122\ }
+\DoxyCodeLine{02123\ \ \ writer.add\_uint16(\_flags);}
+\DoxyCodeLine{02124\ \ \ writer.add\_uint16((uint16\_t)\_compression\_method);}
+\DoxyCodeLine{02125\ }
+\DoxyCodeLine{02126\ \ \ \textcolor{keywordflow}{if}\ (\_timestamp\ >\ 315532800)\ \{}
+\DoxyCodeLine{02127\ \ \ \ \ \textcolor{comment}{//\ Convert\ from\ UNIX\ timestamp\ to\ DOS/FAT\ timestamp.}}
+\DoxyCodeLine{02128\ \textcolor{preprocessor}{\#ifdef\ \_MSC\_VER}}
+\DoxyCodeLine{02129\ \ \ \ \ \textcolor{keyword}{struct\ }tm\ time\_data;}
+\DoxyCodeLine{02130\ \ \ \ \ \textcolor{keyword}{struct\ }tm\ *time\ =\ \&time\_data;}
+\DoxyCodeLine{02131\ \ \ \ \ localtime\_s(time,\ \&\_timestamp);}
+\DoxyCodeLine{02132\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{02133\ \ \ \ \ \textcolor{keyword}{struct\ }tm\ *time\ =\ localtime(\&\_timestamp);}
+\DoxyCodeLine{02134\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{02135\ \ \ \ \ writer.add\_uint16((time-\/>tm\_sec\ >>\ 1)}
+\DoxyCodeLine{02136\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ (time-\/>tm\_min\ <<\ 5)}
+\DoxyCodeLine{02137\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ (time-\/>tm\_hour\ <<\ 11));}
+\DoxyCodeLine{02138\ \ \ \ \ writer.add\_uint16(time-\/>tm\_mday}
+\DoxyCodeLine{02139\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ ((time-\/>tm\_min\ +\ 1)\ <<\ 5)}
+\DoxyCodeLine{02140\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ |\ ((time-\/>tm\_year\ -\/\ 1980)\ <<\ 9));}
+\DoxyCodeLine{02141\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02142\ \ \ \ \ \textcolor{comment}{//\ January\ 1,\ 1980}}
+\DoxyCodeLine{02143\ \ \ \ \ writer.add\_uint16(0);}
+\DoxyCodeLine{02144\ \ \ \ \ writer.add\_uint16(33);}
+\DoxyCodeLine{02145\ \ \ \}}
+\DoxyCodeLine{02146\ }
+\DoxyCodeLine{02147\ \ \ \textcolor{comment}{//\ This\ flag\ is\ set\ if\ we\ don't\ yet\ have\ the\ checksum\ or\ lengths.\ \ We\ will}}
+\DoxyCodeLine{02148\ \ \ \textcolor{comment}{//\ write\ a\ data\ descriptor\ after\ the\ actual\ data\ containing\ these\ values.}}
+\DoxyCodeLine{02149\ \ \ \textcolor{keywordflow}{if}\ (\_flags\ \&\ SF\_data\_descriptor)\ \{}
+\DoxyCodeLine{02150\ \ \ \ \ writer.add\_uint32(0);}
+\DoxyCodeLine{02151\ \ \ \ \ writer.add\_uint32(0);}
+\DoxyCodeLine{02152\ \ \ \ \ writer.add\_uint32(0);}
+\DoxyCodeLine{02153\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02154\ \ \ \ \ writer.add\_uint32(\_checksum);}
+\DoxyCodeLine{02155\ \ \ \ \ writer.add\_uint32(\_data\_length);}
+\DoxyCodeLine{02156\ \ \ \ \ writer.add\_uint32(\_uncompressed\_length);}
+\DoxyCodeLine{02157\ \ \ \}}
+\DoxyCodeLine{02158\ }
+\DoxyCodeLine{02159\ \ \ writer.add\_uint16(encoded\_name.size());}
+\DoxyCodeLine{02160\ \ \ writer.add\_uint16(0);\ \textcolor{comment}{//\ We\ don't\ write\ extras\ for\ now.}}
+\DoxyCodeLine{02161\ \ \ writer.append\_data(encoded\_name);}
+\DoxyCodeLine{02162\ }
+\DoxyCodeLine{02163\ \ \ fpos\ +=\ header\_size;}
+\DoxyCodeLine{02164\ \ \ nassertr(write.tellp()\ ==\ fpos,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02165\ \ \ \textcolor{keywordflow}{return}\ !write.fail();}
+\DoxyCodeLine{02166\ \}}
+\DoxyCodeLine{02167\ }
+\DoxyCodeLine{02182\ \textcolor{keywordtype}{bool}\ ZipArchive::Subfile::}
+\DoxyCodeLine{02183\ write\_data(std::ostream\ \&write,\ std::istream\ *read,\ std::streampos\ \&fpos,\ \textcolor{keywordtype}{int}\ compression\_level)\ \{}
+\DoxyCodeLine{02184\ \ \ nassertr(write.tellp()\ ==\ fpos,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02185\ }
+\DoxyCodeLine{02186\ \ \ \textcolor{keywordflow}{if}\ (!is\_compressed())\ \{}
+\DoxyCodeLine{02187\ \ \ \ \ nassertr((fpos\ \%\ 4)\ ==\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02188\ \ \ \}}
+\DoxyCodeLine{02189\ }
+\DoxyCodeLine{02190\ \ \ \textcolor{comment}{//\_data\_start\ =\ fpos;}}
+\DoxyCodeLine{02191\ }
+\DoxyCodeLine{02192\ \ \ std::ostream\ *putter\ =\ \&write;}
+\DoxyCodeLine{02193\ \ \ \textcolor{keywordtype}{bool}\ delete\_putter\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02194\ }
+\DoxyCodeLine{02195\ \textcolor{preprocessor}{\#ifndef\ HAVE\_ZLIB}}
+\DoxyCodeLine{02196\ \ \ \textcolor{comment}{//\ Without\ ZLIB,\ we\ can't\ support\ compression.\ \ The\ flag\ had\ better\ not\ be}}
+\DoxyCodeLine{02197\ \ \ \textcolor{comment}{//\ set.}}
+\DoxyCodeLine{02198\ \ \ nassertr(!is\_compressed(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02199\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{02200\ \ \ \textcolor{keywordflow}{if}\ (is\_compressed())\ \{}
+\DoxyCodeLine{02201\ \ \ \ \ \textcolor{comment}{//\ Write\ it\ compressed.}}
+\DoxyCodeLine{02202\ \ \ \ \ putter\ =\ \textcolor{keyword}{new}\ OCompressStream(putter,\ delete\_putter,\ compression\_level,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02203\ \ \ \ \ delete\_putter\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02204\ \ \ \}}
+\DoxyCodeLine{02205\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{02206\ }
+\DoxyCodeLine{02207\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 4096;}
+\DoxyCodeLine{02208\ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{02209\ \ \ \textcolor{keywordtype}{size\_t}\ total\_count\ =\ 0;}
+\DoxyCodeLine{02210\ }
+\DoxyCodeLine{02211\ \textcolor{preprocessor}{\#ifdef\ HAVE\_ZLIB}}
+\DoxyCodeLine{02212\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ crc\ =\ crc32(0L,\ Z\_NULL,\ 0);}
+\DoxyCodeLine{02213\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{02214\ }
+\DoxyCodeLine{02215\ \ \ read-\/>read(buffer,\ buffer\_size);}
+\DoxyCodeLine{02216\ \ \ \textcolor{keywordtype}{size\_t}\ count\ =\ read-\/>gcount();}
+\DoxyCodeLine{02217\ \ \ \textcolor{keywordflow}{while}\ (count\ !=\ 0)\ \{}
+\DoxyCodeLine{02218\ \textcolor{preprocessor}{\#ifdef\ HAVE\_ZLIB}}
+\DoxyCodeLine{02219\ \ \ \ \ crc\ =\ crc32(crc,\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)buffer,\ count);}
+\DoxyCodeLine{02220\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{02221\ \ \ \ \ total\_count\ +=\ count;}
+\DoxyCodeLine{02222\ \ \ \ \ putter-\/>write(buffer,\ count);}
+\DoxyCodeLine{02223\ \ \ \ \ read-\/>read(buffer,\ buffer\_size);}
+\DoxyCodeLine{02224\ \ \ \ \ count\ =\ read-\/>gcount();}
+\DoxyCodeLine{02225\ \ \ \}}
+\DoxyCodeLine{02226\ }
+\DoxyCodeLine{02227\ \ \ \textcolor{keywordflow}{if}\ (delete\_putter)\ \{}
+\DoxyCodeLine{02228\ \ \ \ \ \textcolor{keyword}{delete}\ putter;}
+\DoxyCodeLine{02229\ \ \ \}}
+\DoxyCodeLine{02230\ }
+\DoxyCodeLine{02231\ \ \ \textcolor{keywordflow}{if}\ (is\_compressed())\ \{}
+\DoxyCodeLine{02232\ \ \ \ \ std::streampos\ write\_end\ =\ write.tellp();}
+\DoxyCodeLine{02233\ \ \ \ \ \_data\_length\ =\ (size\_t)(write\_end\ -\/\ fpos);}
+\DoxyCodeLine{02234\ \ \ \ \ fpos\ =\ write\_end;}
+\DoxyCodeLine{02235\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02236\ \ \ \ \ \_data\_length\ =\ total\_count;}
+\DoxyCodeLine{02237\ \ \ \ \ fpos\ +=\ total\_count;}
+\DoxyCodeLine{02238\ \ \ \}}
+\DoxyCodeLine{02239\ \ \ \_uncompressed\_length\ =\ total\_count;}
+\DoxyCodeLine{02240\ \textcolor{preprocessor}{\#ifdef\ HAVE\_ZLIB}}
+\DoxyCodeLine{02241\ \ \ \_checksum\ =\ crc;}
+\DoxyCodeLine{02242\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{02243\ }
+\DoxyCodeLine{02244\ \ \ \textcolor{comment}{//TODO:\ what\ if\ we\ need\ a\ zip64\ data\ descriptor?}}
+\DoxyCodeLine{02245\ \ \ \textcolor{keywordflow}{if}\ (\_flags\ \&\ SF\_data\_descriptor)\ \{}
+\DoxyCodeLine{02246\ \ \ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ writer(write);}
+\DoxyCodeLine{02247\ \ \ \ \ writer.add\_uint32(0x08074b50);}
+\DoxyCodeLine{02248\ \ \ \ \ writer.add\_uint32(\_checksum);}
+\DoxyCodeLine{02249\ \ \ \ \ writer.add\_uint32(\_data\_length);}
+\DoxyCodeLine{02250\ \ \ \ \ writer.add\_uint32(\_uncompressed\_length);}
+\DoxyCodeLine{02251\ \ \ \ \ fpos\ +=\ 16;}
+\DoxyCodeLine{02252\ \ \ \}}
+\DoxyCodeLine{02253\ }
+\DoxyCodeLine{02254\ \ \ nassertr(write.tellp()\ ==\ fpos,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02255\ \ \ \textcolor{keywordflow}{return}\ !write.fail();}
+\DoxyCodeLine{02256\ \}}
+
+\end{DoxyCode}

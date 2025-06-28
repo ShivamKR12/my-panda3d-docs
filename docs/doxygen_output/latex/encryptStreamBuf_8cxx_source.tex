@@ -1,0 +1,570 @@
+\doxysection{encrypt\+Stream\+Buf.\+cxx}
+\hypertarget{encryptStreamBuf_8cxx_source}{}\label{encryptStreamBuf_8cxx_source}\index{dtool/src/prc/encryptStreamBuf.cxx@{dtool/src/prc/encryptStreamBuf.cxx}}
+\mbox{\hyperlink{encryptStreamBuf_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{encryptStreamBuf_8h}{encryptStreamBuf.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__prc_8h}{config\_prc.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{streamReader_8h}{streamReader.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{streamWriter_8h}{streamWriter.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableInt_8h}{configVariableInt.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableString_8h}{configVariableString.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ <openssl/rand.h>}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ <openssl/evp.h>}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#if\ OPENSSL\_VERSION\_MAJOR\ >=\ 3}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ <openssl/provider.h>}}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00033\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}\ load\_legacy\_provider()\ \{}
+\DoxyCodeLine{00034\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}\ tried\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00035\ \ \ \textcolor{keywordflow}{if}\ (!tried)\ \{}
+\DoxyCodeLine{00036\ \ \ \ \ tried\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00037\ \ \ \ \ \textcolor{keywordflow}{if}\ (OSSL\_PROVIDER\_try\_load(\textcolor{keyword}{nullptr},\ \textcolor{stringliteral}{"{}legacy"{}},\ 1)\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00038\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (prc\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00039\ \ \ \ \ \ \ \ \ prc\_cat.debug()}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Loaded\ legacy\ OpenSSL\ provider.\(\backslash\)n"{}};}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00042\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00043\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ prc\_cat.warning()}
+\DoxyCodeLine{00045\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ load\ legacy\ OpenSSL\ provider.\(\backslash\)n"{}};}
+\DoxyCodeLine{00046\ \ \ \ \ \}}
+\DoxyCodeLine{00047\ \ \ \}}
+\DoxyCodeLine{00048\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00049\ \}}
+\DoxyCodeLine{00050\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ OPENSSL\_VERSION\_MAJOR}}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \textcolor{comment}{//\ The\ iteration\ count\ is\ scaled\ by\ this\ factor\ for\ writing\ to\ the\ stream.}}
+\DoxyCodeLine{00053\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ iteration\_count\_factor\ =\ 1000;}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00058\ EncryptStreamBuf::}
+\DoxyCodeLine{00059\ EncryptStreamBuf()\ \{}
+\DoxyCodeLine{00060\ \ \ \_source\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00061\ \ \ \_owns\_source\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00062\ \ \ \_dest\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00063\ \ \ \_owns\_dest\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ \ \ \mbox{\hyperlink{classConfigVariableString}{ConfigVariableString}}\ encryption\_algorithm}
+\DoxyCodeLine{00066\ \ \ \ \ (\textcolor{stringliteral}{"{}encryption-\/algorithm"{}},\ \textcolor{stringliteral}{"{}aes-\/256-\/cbc"{}},}
+\DoxyCodeLine{00067\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ defines\ the\ OpenSSL\ encryption\ algorithm\ which\ is\ used\ to\ "{}}}
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}encrypt\ any\ streams\ created\ by\ the\ current\ runtime.\ \ The\ default\ is\ "{}}}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}AES-\/256;\ the\ complete\ set\ of\ available\ algorithms\ is\ defined\ by\ "{}}}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}the\ current\ version\ of\ OpenSSL.\ \ This\ value\ is\ used\ only\ to\ control\ "{}}}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}encryption;\ the\ correct\ algorithm\ will\ automatically\ be\ selected\ on\ "{}}}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}decryption."{}}));}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00074\ \ \ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ encryption\_key\_length}
+\DoxyCodeLine{00075\ \ \ \ \ (\textcolor{stringliteral}{"{}encryption-\/key-\/length"{}},\ 0,}
+\DoxyCodeLine{00076\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ defines\ the\ key\ length,\ in\ bits,\ for\ the\ selected\ encryption\ "{}}}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}algorithm.\ \ Some\ algorithms\ have\ a\ variable\ key\ length.\ \ Specifying\ "{}}}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}a\ value\ of\ 0\ here\ means\ to\ use\ the\ default\ key\ length\ for\ the\ "{}}}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}algorithm\ as\ defined\ by\ OpenSSL.\ \ This\ value\ is\ used\ only\ to\ "{}}}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}control\ encryption;\ the\ correct\ key\ length\ will\ automatically\ be\ "{}}}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}selected\ on\ decryption."{}}));}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00083\ \ \ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ encryption\_iteration\_count}
+\DoxyCodeLine{00084\ \ \ \ \ (\textcolor{stringliteral}{"{}encryption-\/iteration-\/count"{}},\ 100000,}
+\DoxyCodeLine{00085\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ defines\ the\ number\ of\ times\ a\ password\ is\ hashed\ to\ generate\ a\ "{}}}
+\DoxyCodeLine{00086\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}key\ when\ encrypting.\ \ Its\ purpose\ is\ to\ make\ it\ computationally\ "{}}}
+\DoxyCodeLine{00087\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}more\ expensive\ for\ an\ attacker\ to\ search\ the\ key\ space\ "{}}}
+\DoxyCodeLine{00088\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}exhaustively.\ \ This\ should\ be\ a\ multiple\ of\ 1,000\ and\ should\ not\ "{}}}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}exceed\ about\ 65\ million;\ the\ value\ 0\ indicates\ just\ one\ application\ "{}}}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}of\ the\ hashing\ algorithm.\ \ This\ value\ is\ used\ only\ to\ control\ "{}}}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}encryption;\ the\ correct\ count\ will\ automatically\ be\ selected\ on\ "{}}}
+\DoxyCodeLine{00092\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}decryption."{}}));}
+\DoxyCodeLine{00093\ }
+\DoxyCodeLine{00094\ \ \ \_algorithm\ =\ encryption\_algorithm;}
+\DoxyCodeLine{00095\ \ \ \_key\_length\ =\ encryption\_key\_length;}
+\DoxyCodeLine{00096\ \ \ \_iteration\_count\ =\ encryption\_iteration\_count;}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00098\ \ \ \_read\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00099\ \ \ \_write\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \ \ \_read\_overflow\_buffer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00102\ \ \ \_in\_read\_overflow\_buffer\ =\ 0;}
+\DoxyCodeLine{00103\ }
+\DoxyCodeLine{00104\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_IOSTREAM}}
+\DoxyCodeLine{00105\ \ \ \textcolor{keywordtype}{char}\ *buf\ =\ \textcolor{keyword}{new}\ \textcolor{keywordtype}{char}[4096];}
+\DoxyCodeLine{00106\ \ \ \textcolor{keywordtype}{char}\ *ebuf\ =\ buf\ +\ 4096;}
+\DoxyCodeLine{00107\ \ \ setg(buf,\ ebuf,\ ebuf);}
+\DoxyCodeLine{00108\ \ \ setp(buf,\ ebuf);}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00111\ \ \ allocate();}
+\DoxyCodeLine{00112\ \ \ setg(base(),\ ebuf(),\ ebuf());}
+\DoxyCodeLine{00113\ \ \ setp(base(),\ ebuf());}
+\DoxyCodeLine{00114\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00115\ \}}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00120\ EncryptStreamBuf::}
+\DoxyCodeLine{00121\ \string~EncryptStreamBuf()\ \{}
+\DoxyCodeLine{00122\ \ \ close\_read();}
+\DoxyCodeLine{00123\ \ \ close\_write();}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_IOSTREAM}}
+\DoxyCodeLine{00126\ \ \ \textcolor{keyword}{delete}[]\ eback();}
+\DoxyCodeLine{00127\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00128\ \}}
+\DoxyCodeLine{00129\ }
+\DoxyCodeLine{00133\ \textcolor{keywordtype}{void}\ EncryptStreamBuf::}
+\DoxyCodeLine{00134\ open\_read(std::istream\ *source,\ \textcolor{keywordtype}{bool}\ owns\_source,\ \textcolor{keyword}{const}\ std::string\ \&password)\ \{}
+\DoxyCodeLine{00135\ \ \ OpenSSL\_add\_all\_algorithms();}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \ \ \_source\ =\ source;}
+\DoxyCodeLine{00138\ \ \ \_owns\_source\ =\ owns\_source;}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ \ \ \textcolor{keywordflow}{if}\ (\_read\_ctx\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00141\ \ \ \ \ EVP\_CIPHER\_CTX\_free(\_read\_ctx);}
+\DoxyCodeLine{00142\ \ \ \ \ \_read\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00143\ \ \ \}}
+\DoxyCodeLine{00144\ }
+\DoxyCodeLine{00145\ \ \ \textcolor{comment}{//\ Now\ read\ the\ header\ information.}}
+\DoxyCodeLine{00146\ \ \ \mbox{\hyperlink{classStreamReader}{StreamReader}}\ sr(\_source,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00147\ \ \ \textcolor{keywordtype}{int}\ nid\ =\ sr.get\_uint16();}
+\DoxyCodeLine{00148\ \ \ \textcolor{keywordtype}{int}\ key\_length\ =\ sr.get\_uint16();}
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordtype}{int}\ count\ =\ sr.get\_uint16();}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00151\ \textcolor{preprocessor}{\#if\ OPENSSL\_VERSION\_MAJOR\ >=\ 3}}
+\DoxyCodeLine{00152\ \ \ \textcolor{comment}{//\ First,\ convert\ the\ cipher's\ nid\ to\ its\ full\ name.}}
+\DoxyCodeLine{00153\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *cipher\_name\ =\ OBJ\_nid2ln(nid);}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ \textcolor{keyword}{const}\ EVP\_CIPHER\ *cipher\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00156\ \ \ \textcolor{keywordflow}{if}\ (cipher\_name\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{comment}{//\ Now,\ fetch\ the\ cipher\ known\ by\ this\ name.}}
+\DoxyCodeLine{00158\ \ \ \ \ cipher\ =\ EVP\_CIPHER\_fetch(\textcolor{keyword}{nullptr},\ cipher\_name,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \ \ \textcolor{keywordflow}{if}\ (cipher\ ==\ \textcolor{keyword}{nullptr}\ \&\&\ EVP\_get\_cipherbynid(nid)\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (load\_legacy\_provider())\ \{}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ cipher\ =\ EVP\_CIPHER\_fetch(\textcolor{keyword}{nullptr},\ cipher\_name,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00164\ }
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cipher\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ prc\_cat.error()}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ implementation\ available\ for\ encryption\ algorithm\ in\ stream:\ "{}}}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \ \ <<\ cipher\_name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00171\ \ \ \ \ \}}
+\DoxyCodeLine{00172\ \ \ \}}
+\DoxyCodeLine{00173\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00174\ \ \ \textcolor{keyword}{const}\ EVP\_CIPHER\ *cipher\ =\ EVP\_get\_cipherbynid(nid);}
+\DoxyCodeLine{00175\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00177\ \ \ \textcolor{keywordflow}{if}\ (cipher\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00178\ \ \ \ \ prc\_cat.error()}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unknown\ encryption\ algorithm\ in\ stream.\(\backslash\)n"{}};}
+\DoxyCodeLine{00180\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00181\ \ \ \}}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ \ \ \_algorithm\ =\ OBJ\_nid2sn(nid);}
+\DoxyCodeLine{00184\ \ \ \_key\_length\ =\ key\_length\ *\ 8;}
+\DoxyCodeLine{00185\ \ \ \_iteration\_count\ =\ count\ *\ iteration\_count\_factor;}
+\DoxyCodeLine{00186\ }
+\DoxyCodeLine{00187\ \ \ \textcolor{keywordflow}{if}\ (prc\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00188\ \ \ \ \ prc\_cat.debug()}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ decryption\ algorithm\ "{}}\ <<\ \_algorithm\ <<\ \textcolor{stringliteral}{"{}\ with\ key\ length\ "{}}}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ <<\ \_key\_length\ <<\ \textcolor{stringliteral}{"{}\ bits.\(\backslash\)n"{}};}
+\DoxyCodeLine{00191\ \ \ \ \ prc\_cat.debug()}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Key\ is\ hashed\ "{}}\ <<\ \_iteration\_count\ <<\ \textcolor{stringliteral}{"{}\ extra\ times.\(\backslash\)n"{}};}
+\DoxyCodeLine{00193\ \ \ \}}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00195\ \ \ \textcolor{keywordtype}{int}\ iv\_length\ =\ EVP\_CIPHER\_iv\_length(cipher);}
+\DoxyCodeLine{00196\ \ \ \_read\_block\_size\ =\ EVP\_CIPHER\_block\_size(cipher);}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00198\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *iv\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)alloca(iv\_length);}
+\DoxyCodeLine{00199\ \ \ iv\_length\ =\ (int)sr.extract\_bytes(iv,\ iv\_length);}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ \_read\_ctx\ =\ EVP\_CIPHER\_CTX\_new();}
+\DoxyCodeLine{00202\ \ \ nassertv(\_read\_ctx\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00204\ \ \ \textcolor{comment}{//\ Initialize\ the\ context}}
+\DoxyCodeLine{00205\ \ \ \textcolor{keywordtype}{int}\ result;}
+\DoxyCodeLine{00206\ \ \ result\ =\ EVP\_DecryptInit(\_read\_ctx,\ cipher,\ \textcolor{keyword}{nullptr},\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)iv);}
+\DoxyCodeLine{00207\ \ \ nassertv(result\ >\ 0);}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00209\ \ \ result\ =\ EVP\_CIPHER\_CTX\_set\_key\_length(\_read\_ctx,\ key\_length);}
+\DoxyCodeLine{00210\ \ \ \textcolor{keywordflow}{if}\ (result\ <=\ 0)\ \{}
+\DoxyCodeLine{00211\ \ \ \ \ prc\_cat.error()}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ key\ length\ "{}}\ <<\ key\_length\ *\ 8\ <<\ \textcolor{stringliteral}{"{}\ bits\ for\ algorithm\ "{}}}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ <<\ OBJ\_nid2sn(nid)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00214\ \ \ \ \ EVP\_CIPHER\_CTX\_free(\_read\_ctx);}
+\DoxyCodeLine{00215\ \ \ \ \ \_read\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00217\ \ \ \}}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00219\ \ \ \textcolor{comment}{//\ Hash\ the\ supplied\ password\ into\ a\ key\ of\ the\ appropriate\ length.}}
+\DoxyCodeLine{00220\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *key\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)alloca(key\_length);}
+\DoxyCodeLine{00221\ \ \ result\ =}
+\DoxyCodeLine{00222\ \ \ \ \ PKCS5\_PBKDF2\_HMAC\_SHA1((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)password.data(),\ password.length(),}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ iv,\ iv\_length,}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ count\ *\ iteration\_count\_factor\ +\ 1,}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ key\_length,\ key);}
+\DoxyCodeLine{00226\ \ \ nassertv(result\ >\ 0);}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \textcolor{comment}{//\ Store\ the\ key\ within\ the\ context.}}
+\DoxyCodeLine{00229\ \ \ result\ =\ EVP\_DecryptInit(\_read\_ctx,\ \textcolor{keyword}{nullptr},\ key,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00230\ \ \ nassertv(result\ >\ 0);}
+\DoxyCodeLine{00231\ }
+\DoxyCodeLine{00232\ \ \ \_read\_overflow\_buffer\ =\ \textcolor{keyword}{new}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}[\_read\_block\_size];}
+\DoxyCodeLine{00233\ \ \ \_in\_read\_overflow\_buffer\ =\ 0;}
+\DoxyCodeLine{00234\ \ \ \_finished\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00235\ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00236\ \}}
+\DoxyCodeLine{00237\ }
+\DoxyCodeLine{00241\ \textcolor{keywordtype}{void}\ EncryptStreamBuf::}
+\DoxyCodeLine{00242\ close\_read()\ \{}
+\DoxyCodeLine{00243\ \ \ \textcolor{keywordflow}{if}\ (\_read\_ctx\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00244\ \ \ \ \ EVP\_CIPHER\_CTX\_free(\_read\_ctx);}
+\DoxyCodeLine{00245\ \ \ \ \ \_read\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00246\ \ \ \}}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \ \ \textcolor{keywordflow}{if}\ (\_read\_overflow\_buffer\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00249\ \ \ \ \ \textcolor{keyword}{delete}[]\ \_read\_overflow\_buffer;}
+\DoxyCodeLine{00250\ \ \ \ \ \_read\_overflow\_buffer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00251\ \ \ \}}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ \textcolor{keywordflow}{if}\ (\_source\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_owns\_source)\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_source;}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \_owns\_source\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00257\ \ \ \ \ \}}
+\DoxyCodeLine{00258\ \ \ \ \ \_source\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00259\ \ \ \}}
+\DoxyCodeLine{00260\ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00265\ \textcolor{keywordtype}{void}\ EncryptStreamBuf::}
+\DoxyCodeLine{00266\ open\_write(std::ostream\ *dest,\ \textcolor{keywordtype}{bool}\ owns\_dest,\ \textcolor{keyword}{const}\ std::string\ \&password)\ \{}
+\DoxyCodeLine{00267\ \ \ OpenSSL\_add\_all\_algorithms();}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ close\_write();}
+\DoxyCodeLine{00270\ \ \ \_dest\ =\ dest;}
+\DoxyCodeLine{00271\ \ \ \_owns\_dest\ =\ owns\_dest;}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00273\ \textcolor{preprocessor}{\#if\ OPENSSL\_VERSION\_MAJOR\ >=\ 3}}
+\DoxyCodeLine{00274\ \ \ \textcolor{comment}{//\ This\ checks\ that\ there\ is\ actually\ an\ implementation\ available.}}
+\DoxyCodeLine{00275\ \ \ \textcolor{keyword}{const}\ EVP\_CIPHER\ *cipher\ =}
+\DoxyCodeLine{00276\ \ \ \ \ EVP\_CIPHER\_fetch(\textcolor{keyword}{nullptr},\ \_algorithm.c\_str(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \textcolor{keywordflow}{if}\ (cipher\ ==\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ EVP\_get\_cipherbyname(\_algorithm.c\_str())\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{comment}{//\ The\ cipher\ does\ exist,\ though,\ do\ we\ need\ to\ load\ the\ legacy\ provider?}}
+\DoxyCodeLine{00281\ \ \ \ \ \textcolor{keywordflow}{if}\ (load\_legacy\_provider())\ \{}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ cipher\ =\ EVP\_CIPHER\_fetch(\textcolor{keyword}{nullptr},\ \_algorithm.c\_str(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00283\ \ \ \ \ \}}
+\DoxyCodeLine{00284\ }
+\DoxyCodeLine{00285\ \ \ \ \ \textcolor{keywordflow}{if}\ (cipher\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ prc\_cat.error()}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ implementation\ available\ for\ encryption\ algorithm:\ "{}}}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \ \ <<\ \_algorithm\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00290\ \ \ \ \ \}}
+\DoxyCodeLine{00291\ \ \ \}}
+\DoxyCodeLine{00292\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00293\ \ \ \textcolor{keyword}{const}\ EVP\_CIPHER\ *cipher\ =}
+\DoxyCodeLine{00294\ \ \ \ \ EVP\_get\_cipherbyname(\_algorithm.c\_str());}
+\DoxyCodeLine{00295\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \ \ \textcolor{keywordflow}{if}\ (cipher\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00298\ \ \ \ \ prc\_cat.error()}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unknown\ encryption\ algorithm:\ "{}}\ <<\ \_algorithm\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00300\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00301\ \ \ \}}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00303\ \ \ \textcolor{keywordtype}{int}\ nid\ =\ EVP\_CIPHER\_nid(cipher);}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordtype}{int}\ iv\_length\ =\ EVP\_CIPHER\_iv\_length(cipher);}
+\DoxyCodeLine{00306\ \ \ \_write\_block\_size\ =\ EVP\_CIPHER\_block\_size(cipher);}
+\DoxyCodeLine{00307\ }
+\DoxyCodeLine{00308\ \ \ \textcolor{comment}{//\ Generate\ a\ random\ IV.\ \ It\ doesn't\ need\ to\ be\ cryptographically\ secure,}}
+\DoxyCodeLine{00309\ \ \ \textcolor{comment}{//\ just\ unique.}}
+\DoxyCodeLine{00310\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *iv\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)alloca(iv\_length);}
+\DoxyCodeLine{00311\ \ \ RAND\_bytes(iv,\ iv\_length);}
+\DoxyCodeLine{00312\ }
+\DoxyCodeLine{00313\ \ \ \_write\_ctx\ =\ EVP\_CIPHER\_CTX\_new();}
+\DoxyCodeLine{00314\ \ \ nassertv(\_write\_ctx\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \ \ \textcolor{keywordtype}{int}\ result;}
+\DoxyCodeLine{00317\ \ \ result\ =\ EVP\_EncryptInit(\_write\_ctx,\ cipher,\ \textcolor{keyword}{nullptr},\ iv);}
+\DoxyCodeLine{00318\ \ \ nassertv(result\ >\ 0);}
+\DoxyCodeLine{00319\ }
+\DoxyCodeLine{00320\ \ \ \textcolor{comment}{//\ Store\ the\ appropriate\ key\ length\ in\ the\ context.}}
+\DoxyCodeLine{00321\ \ \ \textcolor{keywordtype}{int}\ key\_length\ =\ (\_key\_length\ +\ 7)\ /\ 8;}
+\DoxyCodeLine{00322\ \ \ \textcolor{keywordflow}{if}\ (key\_length\ ==\ 0)\ \{}
+\DoxyCodeLine{00323\ \ \ \ \ key\_length\ =\ EVP\_CIPHER\_key\_length(cipher);}
+\DoxyCodeLine{00324\ \ \ \}}
+\DoxyCodeLine{00325\ \ \ result\ =\ EVP\_CIPHER\_CTX\_set\_key\_length(\_write\_ctx,\ key\_length);}
+\DoxyCodeLine{00326\ \ \ \textcolor{keywordflow}{if}\ (result\ <=\ 0)\ \{}
+\DoxyCodeLine{00327\ \ \ \ \ prc\_cat.error()}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ key\ length\ "{}}\ <<\ key\_length\ *\ 8\ <<\ \textcolor{stringliteral}{"{}\ bits\ for\ algorithm\ "{}}}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ <<\ OBJ\_nid2sn(nid)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00330\ \ \ \ \ EVP\_CIPHER\_CTX\_free(\_write\_ctx);}
+\DoxyCodeLine{00331\ \ \ \ \ \_write\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00332\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00333\ \ \ \}}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00335\ \ \ \textcolor{keywordtype}{int}\ count\ =\ \_iteration\_count\ /\ iteration\_count\_factor;}
+\DoxyCodeLine{00336\ }
+\DoxyCodeLine{00337\ \ \ \textcolor{keywordflow}{if}\ (prc\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00338\ \ \ \ \ prc\_cat.debug()}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ encryption\ algorithm\ "{}}\ <<\ OBJ\_nid2sn(nid)\ <<\ \textcolor{stringliteral}{"{}\ with\ key\ length\ "{}}}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ <<\ key\_length\ *\ 8\ <<\ \textcolor{stringliteral}{"{}\ bits.\(\backslash\)n"{}};}
+\DoxyCodeLine{00341\ \ \ \ \ prc\_cat.debug()}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Hashing\ key\ "{}}\ <<\ count\ *\ iteration\_count\_factor}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ extra\ times.\(\backslash\)n"{}};}
+\DoxyCodeLine{00344\ \ \ \}}
+\DoxyCodeLine{00345\ }
+\DoxyCodeLine{00346\ \ \ \textcolor{comment}{//\ Hash\ the\ supplied\ password\ into\ a\ key\ of\ the\ appropriate\ length.}}
+\DoxyCodeLine{00347\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *key\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)alloca(key\_length);}
+\DoxyCodeLine{00348\ \ \ result\ =}
+\DoxyCodeLine{00349\ \ \ \ \ PKCS5\_PBKDF2\_HMAC\_SHA1((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)password.data(),\ password.length(),}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ iv,\ iv\_length,\ count\ *\ iteration\_count\_factor\ +\ 1,}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ key\_length,\ key);}
+\DoxyCodeLine{00352\ \ \ nassertv(result\ >\ 0);}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ \textcolor{comment}{//\ Store\ the\ key\ in\ the\ context.}}
+\DoxyCodeLine{00355\ \ \ result\ =\ EVP\_EncryptInit(\_write\_ctx,\ \textcolor{keyword}{nullptr},\ key,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00356\ \ \ nassertv(result\ >\ 0);}
+\DoxyCodeLine{00357\ }
+\DoxyCodeLine{00358\ \ \ \textcolor{comment}{//\ Now\ write\ the\ header\ information\ to\ the\ stream.}}
+\DoxyCodeLine{00359\ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ sw(\_dest,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00360\ \ \ nassertv((uint16\_t)nid\ ==\ nid);}
+\DoxyCodeLine{00361\ \ \ sw.add\_uint16((uint16\_t)nid);}
+\DoxyCodeLine{00362\ \ \ nassertv((uint16\_t)key\_length\ ==\ key\_length);}
+\DoxyCodeLine{00363\ \ \ sw.add\_uint16((uint16\_t)key\_length);}
+\DoxyCodeLine{00364\ \ \ nassertv((uint16\_t)count\ ==\ count);}
+\DoxyCodeLine{00365\ \ \ sw.add\_uint16((uint16\_t)count);}
+\DoxyCodeLine{00366\ \ \ sw.append\_data(iv,\ iv\_length);}
+\DoxyCodeLine{00367\ }
+\DoxyCodeLine{00368\ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00369\ \}}
+\DoxyCodeLine{00370\ }
+\DoxyCodeLine{00374\ \textcolor{keywordtype}{void}\ EncryptStreamBuf::}
+\DoxyCodeLine{00375\ close\_write()\ \{}
+\DoxyCodeLine{00376\ \ \ \textcolor{keywordflow}{if}\ (\_dest\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00377\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ pptr()\ -\/\ pbase();}
+\DoxyCodeLine{00378\ \ \ \ \ write\_chars(pbase(),\ n);}
+\DoxyCodeLine{00379\ \ \ \ \ pbump(-\/(\textcolor{keywordtype}{int})n);}
+\DoxyCodeLine{00380\ }
+\DoxyCodeLine{00381\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_write\_ctx\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *write\_buffer\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)alloca(\_write\_block\_size);}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ bytes\_written\ =\ 0;}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ EVP\_EncryptFinal(\_write\_ctx,\ write\_buffer,\ \&bytes\_written);}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00386\ }
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \_dest-\/>write((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)write\_buffer,\ bytes\_written);}
+\DoxyCodeLine{00388\ }
+\DoxyCodeLine{00389\ \ \ \ \ \ \ EVP\_CIPHER\_CTX\_free(\_write\_ctx);}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \_write\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00391\ \ \ \ \ \}}
+\DoxyCodeLine{00392\ }
+\DoxyCodeLine{00393\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_owns\_dest)\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_dest;}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \_owns\_dest\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00396\ \ \ \ \ \}}
+\DoxyCodeLine{00397\ \ \ \ \ \_dest\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00398\ \ \ \}}
+\DoxyCodeLine{00399\ \}}
+\DoxyCodeLine{00400\ }
+\DoxyCodeLine{00405\ std::streampos\ EncryptStreamBuf::}
+\DoxyCodeLine{00406\ seekoff(std::streamoff\ off,\ ios\_seekdir\ dir,\ ios\_openmode\ which)\ \{}
+\DoxyCodeLine{00407\ \ \ \textcolor{keywordflow}{if}\ (which\ !=\ std::ios::in)\ \{}
+\DoxyCodeLine{00408\ \ \ \ \ \textcolor{comment}{//\ We\ can\ only\ do\ this\ with\ the\ input\ stream.}}
+\DoxyCodeLine{00409\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00410\ \ \ \}}
+\DoxyCodeLine{00411\ }
+\DoxyCodeLine{00412\ \ \ \textcolor{keywordflow}{if}\ (off\ !=\ 0\ ||\ dir\ !=\ std::ios::beg)\ \{}
+\DoxyCodeLine{00413\ \ \ \ \ \textcolor{comment}{//\ We\ only\ know\ how\ to\ reposition\ to\ the\ beginning.}}
+\DoxyCodeLine{00414\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00415\ \ \ \}}
+\DoxyCodeLine{00416\ }
+\DoxyCodeLine{00417\ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ egptr()\ -\/\ gptr();}
+\DoxyCodeLine{00418\ \ \ gbump(n);}
+\DoxyCodeLine{00419\ }
+\DoxyCodeLine{00420\ \ \ \textcolor{keywordflow}{if}\ (\_source-\/>rdbuf()-\/>pubseekpos(0,\ std::ios::in)\ ==\ (std::streampos)0)\ \{}
+\DoxyCodeLine{00421\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ EVP\_DecryptInit(\_read\_ctx,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00422\ \ \ \ \ nassertr\_always(result\ >\ 0,\ -\/1);}
+\DoxyCodeLine{00423\ }
+\DoxyCodeLine{00424\ \ \ \ \ \_source-\/>clear();}
+\DoxyCodeLine{00425\ \ \ \ \ \_in\_read\_overflow\_buffer\ =\ 0;}
+\DoxyCodeLine{00426\ \ \ \ \ \_finished\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00427\ }
+\DoxyCodeLine{00428\ \ \ \ \ \textcolor{comment}{//\ Skip\ past\ the\ header.}}
+\DoxyCodeLine{00429\ \ \ \ \ \textcolor{keywordtype}{int}\ iv\_length\ =\ EVP\_CIPHER\_CTX\_iv\_length(\_read\_ctx);}
+\DoxyCodeLine{00430\ \ \ \ \ \_source-\/>ignore(6\ +\ iv\_length);}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{comment}{//\ Ignore\ the\ magic\ bytes.}}
+\DoxyCodeLine{00433\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ magic\_length\ =\ get\_magic\_length();}
+\DoxyCodeLine{00434\ \ \ \ \ \textcolor{keywordtype}{char}\ *buffer\ =\ (\textcolor{keywordtype}{char}\ *)alloca(magic\_length);}
+\DoxyCodeLine{00435\ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_chars(buffer,\ magic\_length)\ ==\ magic\_length)\ \{}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00437\ \ \ \ \ \}}
+\DoxyCodeLine{00438\ \ \ \}}
+\DoxyCodeLine{00439\ }
+\DoxyCodeLine{00440\ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{00441\ \}}
+\DoxyCodeLine{00442\ }
+\DoxyCodeLine{00447\ std::streampos\ EncryptStreamBuf::}
+\DoxyCodeLine{00448\ seekpos(std::streampos\ pos,\ ios\_openmode\ which)\ \{}
+\DoxyCodeLine{00449\ \ \ \textcolor{keywordflow}{return}\ seekoff(pos,\ std::ios::beg,\ which);}
+\DoxyCodeLine{00450\ \}}
+\DoxyCodeLine{00451\ }
+\DoxyCodeLine{00456\ \textcolor{keywordtype}{int}\ EncryptStreamBuf::}
+\DoxyCodeLine{00457\ overflow(\textcolor{keywordtype}{int}\ ch)\ \{}
+\DoxyCodeLine{00458\ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ pptr()\ -\/\ pbase();}
+\DoxyCodeLine{00459\ \ \ \textcolor{keywordflow}{if}\ (n\ !=\ 0)\ \{}
+\DoxyCodeLine{00460\ \ \ \ \ write\_chars(pbase(),\ n);}
+\DoxyCodeLine{00461\ \ \ \ \ pbump(-\/(\textcolor{keywordtype}{int})n);}
+\DoxyCodeLine{00462\ \ \ \}}
+\DoxyCodeLine{00463\ }
+\DoxyCodeLine{00464\ \ \ \textcolor{keywordflow}{if}\ (ch\ !=\ EOF)\ \{}
+\DoxyCodeLine{00465\ \ \ \ \ \textcolor{comment}{//\ Write\ one\ more\ character.}}
+\DoxyCodeLine{00466\ \ \ \ \ \textcolor{keywordtype}{char}\ c\ =\ (char)ch;}
+\DoxyCodeLine{00467\ \ \ \ \ write\_chars(\&c,\ 1);}
+\DoxyCodeLine{00468\ \ \ \}}
+\DoxyCodeLine{00469\ }
+\DoxyCodeLine{00470\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00471\ \}}
+\DoxyCodeLine{00472\ }
+\DoxyCodeLine{00477\ \textcolor{keywordtype}{int}\ EncryptStreamBuf::}
+\DoxyCodeLine{00478\ sync()\ \{}
+\DoxyCodeLine{00479\ \ \ \textcolor{keywordflow}{if}\ (\_source\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00480\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ egptr()\ -\/\ gptr();}
+\DoxyCodeLine{00481\ \ \ \ \ gbump((\textcolor{keywordtype}{int})n);}
+\DoxyCodeLine{00482\ \ \ \}}
+\DoxyCodeLine{00483\ }
+\DoxyCodeLine{00484\ \ \ \textcolor{keywordflow}{if}\ (\_dest\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00485\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ pptr()\ -\/\ pbase();}
+\DoxyCodeLine{00486\ \ \ \ \ write\_chars(pbase(),\ n);}
+\DoxyCodeLine{00487\ \ \ \ \ pbump(-\/(\textcolor{keywordtype}{int})n);}
+\DoxyCodeLine{00488\ \ \ \ \ \_dest-\/>flush();}
+\DoxyCodeLine{00489\ \ \ \}}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00491\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00492\ \}}
+\DoxyCodeLine{00493\ }
+\DoxyCodeLine{00498\ \textcolor{keywordtype}{int}\ EncryptStreamBuf::}
+\DoxyCodeLine{00499\ underflow()\ \{}
+\DoxyCodeLine{00500\ \ \ \textcolor{comment}{//\ Sometimes\ underflow()\ is\ called\ even\ if\ the\ buffer\ is\ not\ empty.}}
+\DoxyCodeLine{00501\ \ \ \textcolor{keywordflow}{if}\ (gptr()\ >=\ egptr())\ \{}
+\DoxyCodeLine{00502\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ egptr()\ -\/\ eback();}
+\DoxyCodeLine{00503\ \ \ \ \ gbump(-\/(\textcolor{keywordtype}{int})buffer\_size);}
+\DoxyCodeLine{00504\ }
+\DoxyCodeLine{00505\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ num\_bytes\ =\ buffer\_size;}
+\DoxyCodeLine{00506\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ read\_count\ =\ read\_chars(gptr(),\ buffer\_size);}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00508\ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_count\ !=\ num\_bytes)\ \{}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ \textcolor{comment}{//\ Oops,\ we\ didn't\ read\ what\ we\ thought\ we\ would.}}
+\DoxyCodeLine{00510\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ \ \ gbump((\textcolor{keywordtype}{int})num\_bytes);}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EOF;}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00514\ }
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \textcolor{comment}{//\ Slide\ what\ we\ did\ read\ to\ the\ top\ of\ the\ buffer.}}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ nassertr(read\_count\ <\ num\_bytes,\ EOF);}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ delta\ =\ num\_bytes\ -\/\ read\_count;}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ memmove(gptr()\ +\ delta,\ gptr(),\ read\_count);}
+\DoxyCodeLine{00519\ \ \ \ \ \ \ gbump((\textcolor{keywordtype}{int})delta);}
+\DoxyCodeLine{00520\ \ \ \ \ \}}
+\DoxyCodeLine{00521\ \ \ \}}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00523\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})*gptr();}
+\DoxyCodeLine{00524\ \}}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00526\ }
+\DoxyCodeLine{00530\ \textcolor{keywordtype}{size\_t}\ EncryptStreamBuf::}
+\DoxyCodeLine{00531\ read\_chars(\textcolor{keywordtype}{char}\ *start,\ \textcolor{keywordtype}{size\_t}\ length)\ \{}
+\DoxyCodeLine{00532\ \ \ \textcolor{keywordflow}{if}\ (length\ ==\ 0)\ \{}
+\DoxyCodeLine{00533\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00534\ \ \ \}}
+\DoxyCodeLine{00535\ }
+\DoxyCodeLine{00536\ \ \ \textcolor{keywordflow}{if}\ (\_in\_read\_overflow\_buffer\ !=\ 0)\ \{}
+\DoxyCodeLine{00537\ \ \ \ \ \textcolor{comment}{//\ Take\ from\ the\ overflow\ buffer.}}
+\DoxyCodeLine{00538\ \ \ \ \ length\ =\ std::min(length,\ \_in\_read\_overflow\_buffer);}
+\DoxyCodeLine{00539\ \ \ \ \ memcpy(start,\ \_read\_overflow\_buffer,\ length);}
+\DoxyCodeLine{00540\ \ \ \ \ \_in\_read\_overflow\_buffer\ -\/=\ length;}
+\DoxyCodeLine{00541\ \ \ \ \ memcpy(\_read\_overflow\_buffer\ +\ length,\ \_read\_overflow\_buffer,\ \_in\_read\_overflow\_buffer);}
+\DoxyCodeLine{00542\ \ \ \ \ \textcolor{keywordflow}{return}\ length;}
+\DoxyCodeLine{00543\ \ \ \}}
+\DoxyCodeLine{00544\ }
+\DoxyCodeLine{00545\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *source\_buffer\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)alloca(length);}
+\DoxyCodeLine{00546\ \ \ \textcolor{keywordtype}{size\_t}\ max\_read\_buffer\ =\ length\ +\ \_read\_block\_size;}
+\DoxyCodeLine{00547\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *read\_buffer\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)alloca(max\_read\_buffer);}
+\DoxyCodeLine{00548\ }
+\DoxyCodeLine{00549\ \ \ \textcolor{keywordtype}{int}\ bytes\_read\ =\ 0;}
+\DoxyCodeLine{00550\ }
+\DoxyCodeLine{00551\ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00552\ \ \ \ \ \textcolor{comment}{//\ Get\ more\ bytes\ from\ the\ stream.}}
+\DoxyCodeLine{00553\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_read\_ctx\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_finished)\ \{}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00555\ \ \ \ \ \}}
+\DoxyCodeLine{00556\ }
+\DoxyCodeLine{00557\ \ \ \ \ \_source-\/>read((\textcolor{keywordtype}{char}\ *)source\_buffer,\ length);}
+\DoxyCodeLine{00558\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ source\_length\ =\ \_source-\/>gcount();}
+\DoxyCodeLine{00559\ }
+\DoxyCodeLine{00560\ \ \ \ \ bytes\_read\ =\ 0;}
+\DoxyCodeLine{00561\ \ \ \ \ \textcolor{keywordtype}{int}\ result;}
+\DoxyCodeLine{00562\ \ \ \ \ \textcolor{keywordflow}{if}\ (source\_length\ !=\ 0)\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ result\ =}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \ \ EVP\_DecryptUpdate(\_read\_ctx,\ read\_buffer,\ \&bytes\_read,}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ source\_buffer,\ source\_length);}
+\DoxyCodeLine{00566\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ result\ =}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \ \ EVP\_DecryptFinal(\_read\_ctx,\ read\_buffer,\ \&bytes\_read);}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \_finished\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00570\ \ \ \ \ \}}
+\DoxyCodeLine{00571\ }
+\DoxyCodeLine{00572\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <=\ 0)\ \{}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ prc\_cat.error()}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ decrypting\ stream.\(\backslash\)n"{}};}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_read\_ctx\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ EVP\_CIPHER\_CTX\_free(\_read\_ctx);}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \ \ \_read\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00579\ \ \ \ \ \}}
+\DoxyCodeLine{00580\ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ \}\ \textcolor{keywordflow}{while}\ (bytes\_read\ ==\ 0);}
+\DoxyCodeLine{00583\ }
+\DoxyCodeLine{00584\ \ \ \textcolor{comment}{//\ Now\ store\ the\ read\ bytes\ in\ the\ output\ stream.}}
+\DoxyCodeLine{00585\ \ \ \textcolor{keywordflow}{if}\ ((\textcolor{keywordtype}{size\_t})bytes\_read\ <=\ length)\ \{}
+\DoxyCodeLine{00586\ \ \ \ \ \textcolor{comment}{//\ No\ overflow.}}
+\DoxyCodeLine{00587\ \ \ \ \ memcpy(start,\ read\_buffer,\ bytes\_read);}
+\DoxyCodeLine{00588\ \ \ \ \ \textcolor{keywordflow}{return}\ bytes\_read;}
+\DoxyCodeLine{00589\ }
+\DoxyCodeLine{00590\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00591\ \ \ \ \ \textcolor{comment}{//\ We\ have\ to\ save\ some\ of\ the\ returned\ bytes\ in\ the\ overflow\ buffer.}}
+\DoxyCodeLine{00592\ \ \ \ \ \_in\_read\_overflow\_buffer\ =\ bytes\_read\ -\/\ length;}
+\DoxyCodeLine{00593\ \ \ \ \ nassertr(\_in\_read\_overflow\_buffer\ <=\ \_read\_block\_size,\ 0);}
+\DoxyCodeLine{00594\ }
+\DoxyCodeLine{00595\ \ \ \ \ memcpy(\_read\_overflow\_buffer,\ read\_buffer\ +\ length,}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \ \ \ \ \ \_in\_read\_overflow\_buffer);}
+\DoxyCodeLine{00597\ \ \ \ \ memcpy(start,\ read\_buffer,\ length);}
+\DoxyCodeLine{00598\ \ \ \ \ \textcolor{keywordflow}{return}\ length;}
+\DoxyCodeLine{00599\ \ \ \}}
+\DoxyCodeLine{00600\ \}}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00605\ \textcolor{keywordtype}{void}\ EncryptStreamBuf::}
+\DoxyCodeLine{00606\ write\_chars(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *start,\ \textcolor{keywordtype}{size\_t}\ length)\ \{}
+\DoxyCodeLine{00607\ \ \ \textcolor{keywordflow}{if}\ (\_write\_ctx\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ length\ !=\ 0)\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ max\_write\_buffer\ =\ length\ +\ \_write\_block\_size;}
+\DoxyCodeLine{00609\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *write\_buffer\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)alloca(max\_write\_buffer);}
+\DoxyCodeLine{00610\ }
+\DoxyCodeLine{00611\ \ \ \ \ \textcolor{keywordtype}{int}\ bytes\_written\ =\ 0;}
+\DoxyCodeLine{00612\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ EVP\_EncryptUpdate(\_write\_ctx,\ write\_buffer,\ \&bytes\_written,}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)start,\ length);}
+\DoxyCodeLine{00615\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ <=\ 0)\ \{}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ prc\_cat.error()}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ encrypting\ stream.\(\backslash\)n"{}};}
+\DoxyCodeLine{00618\ \ \ \ \ \}}
+\DoxyCodeLine{00619\ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00620\ \ \ \ \ \_dest-\/>write((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)write\_buffer,\ bytes\_written);}
+\DoxyCodeLine{00621\ \ \ \}}
+\DoxyCodeLine{00622\ \}}
+\DoxyCodeLine{00623\ }
+\DoxyCodeLine{00624\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+
+\end{DoxyCode}

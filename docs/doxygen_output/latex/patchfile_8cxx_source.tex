@@ -1,0 +1,1211 @@
+\doxysection{patchfile.\+cxx}
+\hypertarget{patchfile_8cxx_source}{}\label{patchfile_8cxx_source}\index{panda/src/express/patchfile.cxx@{panda/src/express/patchfile.cxx}}
+\mbox{\hyperlink{patchfile_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pandabase_8h}{pandabase.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__express_8h}{config\_express.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{error__utils_8h}{error\_utils.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{patchfile_8h}{patchfile.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{streamReader_8h}{streamReader.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{streamWriter_8h}{streamWriter.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{multifile_8h}{multifile.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{hashVal_8h}{hashVal.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFileSystem_8h}{virtualFileSystem.h}}"{}}}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <string.h>}\ \ \textcolor{comment}{//\ for\ strstr}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \textcolor{keyword}{using\ }std::endl;}
+\DoxyCodeLine{00028\ \textcolor{keyword}{using\ }std::ios;}
+\DoxyCodeLine{00029\ \textcolor{keyword}{using\ }std::istream;}
+\DoxyCodeLine{00030\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00031\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00032\ \textcolor{keyword}{using\ }std::streampos;}
+\DoxyCodeLine{00033\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00035\ \textcolor{comment}{//\ this\ actually\ slows\ things\ down...\ \#define}}
+\DoxyCodeLine{00036\ \textcolor{comment}{//\ USE\_MD5\_FOR\_HASHTABLE\_INDEX\_VALUES}}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00039\ \textcolor{comment}{\ *\ Patch\ File\ Format}}
+\DoxyCodeLine{00040\ \textcolor{comment}{\ *\ IF\ THIS\ CHANGES,\ UPDATE\ installerApplyPatch.cxx\ IN\ THE\ INSTALLER}}
+\DoxyCodeLine{00041\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00042\ \textcolor{comment}{\ *\ [\ HEADER\ ]}}
+\DoxyCodeLine{00043\ \textcolor{comment}{\ *\ \ \ 4\ bytes\ \ 0xfeebfaac\ ("{}magic\ number"{})}}
+\DoxyCodeLine{00044\ \textcolor{comment}{\ *\ \ \ \ \ \ \ \ \ \ \ \ (older\ patch\ files\ have\ a\ magic\ number\ 0xfeebfaab,}}
+\DoxyCodeLine{00045\ \textcolor{comment}{\ *\ \ \ \ \ \ \ \ \ \ \ \ indicating\ they\ are\ version\ number\ 0.)}}
+\DoxyCodeLine{00046\ \textcolor{comment}{\ *\ \ \ 2\ bytes\ \ version\ number\ (if\ magic\ number\ ==\ 0xfeebfaac)}}
+\DoxyCodeLine{00047\ \textcolor{comment}{\ *\ \ \ 4\ bytes\ \ length\ of\ starting\ file\ (if\ version\ >=\ 1)}}
+\DoxyCodeLine{00048\ \textcolor{comment}{\ *\ \ 16\ bytes\ \ MD5\ of\ starting\ file\ \ \ \ (if\ version\ >=\ 1)}}
+\DoxyCodeLine{00049\ \textcolor{comment}{\ *\ \ \ 4\ bytes\ \ length\ of\ resulting\ patched\ file}}
+\DoxyCodeLine{00050\ \textcolor{comment}{\ *\ \ 16\ bytes\ \ MD5\ of\ resultant\ patched\ file}}
+\DoxyCodeLine{00051\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00052\ \textcolor{comment}{\ *\ Note\ that\ MD5\ hashes\ are\ written\ in\ the\ order\ observed\ by}}
+\DoxyCodeLine{00053\ \textcolor{comment}{\ *\ HashVal::read\_stream()\ and\ HashVal::write\_stream(),\ which\ is\ not}}
+\DoxyCodeLine{00054\ \textcolor{comment}{\ *\ the\ normal\ linear\ order.\ \ (Each\ group\ of\ four\ bytes\ is\ reversed.)}}
+\DoxyCodeLine{00055\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00057\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ \_v0\_header\_length\ =\ 4\ +\ 4\ +\ 16;}
+\DoxyCodeLine{00058\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ \_v1\_header\_length\ =\ 4\ +\ 2\ +\ 4\ +\ 16\ +\ 4\ +\ 16;}
+\DoxyCodeLine{00059\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00060\ \textcolor{comment}{\ *\ [\ ADD/COPY\ pairs;\ repeated\ N\ times\ ]}}
+\DoxyCodeLine{00061\ \textcolor{comment}{\ *\ \ \ 2\ bytes\ \ AL\ =\ ADD\ length}}
+\DoxyCodeLine{00062\ \textcolor{comment}{\ *\ \ AL\ bytes\ \ bytes\ to\ add}}
+\DoxyCodeLine{00063\ \textcolor{comment}{\ *\ \ \ 2\ bytes\ \ CL\ =\ COPY\ length}}
+\DoxyCodeLine{00064\ \textcolor{comment}{\ *\ \ \ 4\ bytes\ \ offset\ of\ data\ to\ copy\ from\ original\ file,\ if\ CL\ !=\ 0.}}
+\DoxyCodeLine{00065\ \textcolor{comment}{\ *\ \ \ \ \ \ \ \ \ \ \ \ If\ version\ >=\ 2,\ offset\ is\ relative\ to\ end\ of\ previous}}
+\DoxyCodeLine{00066\ \textcolor{comment}{\ *\ \ \ \ \ \ \ \ \ \ \ \ copy\ block;\ if\ version\ <\ 2,\ offset\ is\ relative\ to}}
+\DoxyCodeLine{00067\ \textcolor{comment}{\ *\ \ \ \ \ \ \ \ \ \ \ \ beginning\ of\ file.}}
+\DoxyCodeLine{00068\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00069\ \textcolor{comment}{\ *\ [\ TERMINATOR\ ]}}
+\DoxyCodeLine{00070\ \textcolor{comment}{\ *\ \ \ 2\ bytes\ \ zero-\/length\ ADD}}
+\DoxyCodeLine{00071\ \textcolor{comment}{\ *\ \ \ 2\ bytes\ \ zero-\/length\ COPY}}
+\DoxyCodeLine{00072\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00074\ \textcolor{comment}{//\ Defines}}
+\DoxyCodeLine{00075\ \textcolor{keyword}{const}\ uint32\_t\ Patchfile::\_v0\_magic\_number\ =\ 0xfeebfaab;}
+\DoxyCodeLine{00076\ \textcolor{keyword}{const}\ uint32\_t\ Patchfile::\_magic\_number\ =\ 0xfeebfaac;}
+\DoxyCodeLine{00077\ }
+\DoxyCodeLine{00078\ \textcolor{comment}{//\ Created\ version\ 1\ on\ 11202\ to\ store\ length\ and\ MD5\ of\ original\ file.\ \ To}}
+\DoxyCodeLine{00079\ \textcolor{comment}{//\ version\ 2\ on\ 11202\ to\ store\ copy\ offsets\ as\ relative.}}
+\DoxyCodeLine{00080\ \textcolor{keyword}{const}\ uint16\_t\ Patchfile::\_current\_version\ =\ 2;}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00082\ \textcolor{keyword}{const}\ uint32\_t\ Patchfile::\_HASH\_BITS\ =\ 24;}
+\DoxyCodeLine{00083\ \textcolor{keyword}{const}\ uint32\_t\ Patchfile::\_HASHTABLESIZE\ =\ uint32\_t(1)\ <<\ Patchfile::\_HASH\_BITS;}
+\DoxyCodeLine{00084\ \textcolor{keyword}{const}\ uint32\_t\ Patchfile::\_DEFAULT\_FOOTPRINT\_LENGTH\ =\ 9;\ \textcolor{comment}{//\ this\ produced\ the\ smallest\ patch\ file\ for\ libpanda.dll\ when\ tested,\ 12/20/2000}}
+\DoxyCodeLine{00085\ \textcolor{keyword}{const}\ uint32\_t\ Patchfile::\_NULL\_VALUE\ =\ uint32\_t(0)\ -\/\ 1;}
+\DoxyCodeLine{00086\ \textcolor{keyword}{const}\ uint32\_t\ Patchfile::\_MAX\_RUN\_LENGTH\ =\ (uint32\_t(1)\ <<\ 16)\ -\/\ 1;}
+\DoxyCodeLine{00087\ \textcolor{keyword}{const}\ uint32\_t\ Patchfile::\_HASH\_MASK\ =\ (uint32\_t(1)\ <<\ Patchfile::\_HASH\_BITS)\ -\/\ 1;}
+\DoxyCodeLine{00088\ }
+\DoxyCodeLine{00092\ Patchfile::}
+\DoxyCodeLine{00093\ Patchfile()\ \{}
+\DoxyCodeLine{00094\ \ \ PT(\mbox{\hyperlink{classBuffer}{Buffer}})\ buffer\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBuffer}{Buffer}}(patchfile\_buffer\_size);}
+\DoxyCodeLine{00095\ \ \ init(buffer);}
+\DoxyCodeLine{00096\ \}}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00101\ Patchfile::}
+\DoxyCodeLine{00102\ Patchfile(PT(\mbox{\hyperlink{classBuffer}{Buffer}})\ buffer)\ \{}
+\DoxyCodeLine{00103\ \ \ init(buffer);}
+\DoxyCodeLine{00104\ \}}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00109\ \textcolor{keywordtype}{void}\ Patchfile::}
+\DoxyCodeLine{00110\ init(PT(\mbox{\hyperlink{classBuffer}{Buffer}})\ buffer)\ \{}
+\DoxyCodeLine{00111\ \ \ \_rename\_output\_to\_orig\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00112\ \ \ \_delete\_patchfile\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00113\ \ \ \_hash\_table\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00114\ \ \ \_initiated\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00115\ \ \ nassertv(!buffer.is\_null());}
+\DoxyCodeLine{00116\ \ \ \_buffer\ =\ buffer;}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \ \ \_version\_number\ =\ 0;}
+\DoxyCodeLine{00119\ \ \ \_allow\_multifile\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00121\ \ \ \_patch\_stream\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00122\ \ \ \_origfile\_stream\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \ \ reset\_footprint\_length();}
+\DoxyCodeLine{00125\ \}}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00130\ Patchfile::}
+\DoxyCodeLine{00131\ \string~Patchfile()\ \{}
+\DoxyCodeLine{00132\ \ \ \textcolor{keywordflow}{if}\ (\_hash\_table\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00133\ \ \ \ \ PANDA\_FREE\_ARRAY(\_hash\_table);}
+\DoxyCodeLine{00134\ \ \ \}}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00136\ \ \ \textcolor{keywordflow}{if}\ (\_initiated)\ \{}
+\DoxyCodeLine{00137\ \ \ \ \ cleanup();}
+\DoxyCodeLine{00138\ \ \ \}}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ \ \ nassertv(\_patch\_stream\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00141\ \ \ nassertv(\_origfile\_stream\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00142\ \}}
+\DoxyCodeLine{00143\ }
+\DoxyCodeLine{00147\ \textcolor{keywordtype}{void}\ Patchfile::}
+\DoxyCodeLine{00148\ cleanup()\ \{}
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordflow}{if}\ (!\_initiated)\ \{}
+\DoxyCodeLine{00150\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::cleanup()\ -\/\ Patching\ has\ not\ been\ initiated"{}}}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ <<\ endl;}
+\DoxyCodeLine{00153\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00154\ \ \ \}}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00156\ \ \ \textcolor{comment}{//\ close\ files}}
+\DoxyCodeLine{00157\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00158\ \ \ \textcolor{keywordflow}{if}\ (\_origfile\_stream\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00159\ \ \ \ \ vfs-\/>close\_read\_file(\_origfile\_stream);}
+\DoxyCodeLine{00160\ \ \ \ \ \_origfile\_stream\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00161\ \ \ \}}
+\DoxyCodeLine{00162\ \ \ \textcolor{keywordflow}{if}\ (\_patch\_stream\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00163\ \ \ \ \ vfs-\/>close\_read\_file(\_patch\_stream);}
+\DoxyCodeLine{00164\ \ \ \ \ \_patch\_stream\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00165\ \ \ \}}
+\DoxyCodeLine{00166\ \ \ \_write\_stream.close();}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \ \ \_initiated\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00169\ \}}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00171\ \textcolor{comment}{//\ PATCH\ FILE\ APPLY\ MEMBER\ FUNCTIONS}}
+\DoxyCodeLine{00172\ }
+\DoxyCodeLine{00173\ \textcolor{comment}{//\ NOTE:\ this\ patch-\/application\ functionality\ unfortunately\ has\ to\ be}}
+\DoxyCodeLine{00174\ \textcolor{comment}{//\ duplicated\ in\ the\ Installer.\ \ It\ is\ contained\ in\ the\ file}}
+\DoxyCodeLine{00175\ \textcolor{comment}{//\ installerApplyPatch.cxx\ PLEASE\ MAKE\ SURE\ THAT\ THAT\ FILE\ GETS\ UPDATED\ IF\ ANY}}
+\DoxyCodeLine{00176\ \textcolor{comment}{//\ OF\ THIS\ LOGIC\ CHANGES!\ (i.e.\ \ if\ the\ patch\ file\ format\ changes)}}
+\DoxyCodeLine{00177\ }
+\DoxyCodeLine{00182\ \textcolor{keywordtype}{int}\ Patchfile::}
+\DoxyCodeLine{00183\ initiate(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&patch\_file,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&file)\ \{}
+\DoxyCodeLine{00184\ \ \ \textcolor{keywordtype}{int}\ result\ =\ initiate(patch\_file,\ file,\ \mbox{\hyperlink{classFilename_ab0650c0800c5af778d667c6b855e644a}{Filename::temporary}}(\textcolor{stringliteral}{"{}"{}},\ \textcolor{stringliteral}{"{}patch\_"{}}));}
+\DoxyCodeLine{00185\ \ \ \_rename\_output\_to\_orig\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00186\ \ \ \_delete\_patchfile\ =\ !keep\_temporary\_files;}
+\DoxyCodeLine{00187\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00188\ \}}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00194\ \textcolor{keywordtype}{int}\ Patchfile::}
+\DoxyCodeLine{00195\ initiate(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&patch\_file,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&orig\_file,}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&target\_file)\ \{}
+\DoxyCodeLine{00197\ \ \ \textcolor{keywordflow}{if}\ (\_initiated)\ \{}
+\DoxyCodeLine{00198\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::initiate()\ -\/\ Patching\ has\ already\ been\ initiated"{}}}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ <<\ endl;}
+\DoxyCodeLine{00201\ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_abort;}
+\DoxyCodeLine{00202\ \ \ \}}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00204\ \ \ nassertr(orig\_file\ !=\ target\_file,\ EU\_error\_abort);}
+\DoxyCodeLine{00205\ }
+\DoxyCodeLine{00206\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00207\ }
+\DoxyCodeLine{00208\ \ \ \textcolor{comment}{//\ Open\ the\ original\ file\ for\ read}}
+\DoxyCodeLine{00209\ \ \ nassertr(\_origfile\_stream\ ==\ \textcolor{keyword}{nullptr},\ EU\_error\_abort);}
+\DoxyCodeLine{00210\ \ \ \_orig\_file\ =\ orig\_file;}
+\DoxyCodeLine{00211\ \ \ \_orig\_file.set\_binary();}
+\DoxyCodeLine{00212\ \ \ \_origfile\_stream\ =\ vfs-\/>open\_read\_file(\_orig\_file,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00213\ \ \ \textcolor{keywordflow}{if}\ (\_origfile\_stream\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00214\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::initiate()\ -\/\ Failed\ to\ open\ file:\ "{}}\ <<\ \_orig\_file\ <<\ endl;}
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_write\_error();}
+\DoxyCodeLine{00217\ \ \ \}}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00219\ \ \ \textcolor{comment}{//\ Open\ the\ temp\ file\ for\ write}}
+\DoxyCodeLine{00220\ \ \ \_output\_file\ =\ target\_file;}
+\DoxyCodeLine{00221\ \ \ \_output\_file.set\_binary();}
+\DoxyCodeLine{00222\ \ \ \textcolor{keywordflow}{if}\ (!\_output\_file.\mbox{\hyperlink{classFilename_ad37a9d52c837218b01076de184dc5f4d}{open\_write}}(\_write\_stream))\ \{}
+\DoxyCodeLine{00223\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::initiate()\ -\/\ Failed\ to\ open\ file:\ "{}}\ <<\ \_output\_file\ <<\ endl;}
+\DoxyCodeLine{00225\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_write\_error();}
+\DoxyCodeLine{00226\ \ \ \}}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile\ using\ output\ file\ "{}}\ <<\ \_output\_file\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00231\ \ \ \}}
+\DoxyCodeLine{00232\ }
+\DoxyCodeLine{00233\ \ \ \textcolor{keywordtype}{int}\ result\ =\ internal\_read\_header(patch\_file);}
+\DoxyCodeLine{00234\ \ \ \_total\_bytes\_processed\ =\ 0;}
+\DoxyCodeLine{00235\ }
+\DoxyCodeLine{00236\ \ \ \_initiated\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00237\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00238\ \}}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00245\ \textcolor{keywordtype}{int}\ Patchfile::}
+\DoxyCodeLine{00246\ read\_header(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&patch\_file)\ \{}
+\DoxyCodeLine{00247\ \ \ \textcolor{keywordflow}{if}\ (\_initiated)\ \{}
+\DoxyCodeLine{00248\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::initiate()\ -\/\ Patching\ has\ already\ been\ initiated"{}}}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ <<\ endl;}
+\DoxyCodeLine{00251\ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_abort;}
+\DoxyCodeLine{00252\ \ \ \}}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \ \ \textcolor{keywordtype}{int}\ result\ =\ internal\_read\_header(patch\_file);}
+\DoxyCodeLine{00255\ \ \ \textcolor{keywordflow}{if}\ (\_patch\_stream\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00256\ \ \ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00257\ \ \ \ \ vfs-\/>close\_read\_file(\_patch\_stream);}
+\DoxyCodeLine{00258\ \ \ \ \ \_patch\_stream\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00259\ \ \ \}}
+\DoxyCodeLine{00260\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00261\ \}}
+\DoxyCodeLine{00262\ }
+\DoxyCodeLine{00273\ \textcolor{keywordtype}{int}\ Patchfile::}
+\DoxyCodeLine{00274\ run()\ \{}
+\DoxyCodeLine{00275\ \ \ \textcolor{comment}{//\ Now\ patch\ the\ file\ using\ the\ given\ buffer}}
+\DoxyCodeLine{00276\ \ \ \textcolor{keywordtype}{int}\ buflen;}
+\DoxyCodeLine{00277\ \ \ \textcolor{keywordtype}{int}\ bytes\_read;}
+\DoxyCodeLine{00278\ \ \ uint16\_t\ ADD\_length;}
+\DoxyCodeLine{00279\ \ \ uint16\_t\ COPY\_length;}
+\DoxyCodeLine{00280\ \ \ int32\_t\ COPY\_offset;}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \ \ \textcolor{keywordflow}{if}\ (\_initiated\ ==\ \textcolor{keyword}{false})\ \{}
+\DoxyCodeLine{00283\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::run()\ -\/\ Patching\ has\ not\ been\ initiated"{}}}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ <<\ endl;}
+\DoxyCodeLine{00286\ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_abort;}
+\DoxyCodeLine{00287\ \ \ \}}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ nassertr(\_patch\_stream\ !=\ \textcolor{keyword}{nullptr},\ EU\_error\_abort);}
+\DoxyCodeLine{00290\ \ \ nassertr(\_origfile\_stream\ !=\ \textcolor{keyword}{nullptr},\ EU\_error\_abort);}
+\DoxyCodeLine{00291\ \ \ \mbox{\hyperlink{classStreamReader}{StreamReader}}\ patch\_reader(*\_patch\_stream);}
+\DoxyCodeLine{00292\ }
+\DoxyCodeLine{00293\ \ \ buflen\ =\ \_buffer-\/>get\_length();}
+\DoxyCodeLine{00294\ \ \ bytes\_read\ =\ 0;}
+\DoxyCodeLine{00295\ }
+\DoxyCodeLine{00296\ \ \ \textcolor{keywordflow}{while}\ (bytes\_read\ <\ buflen)\ \{}
+\DoxyCodeLine{00297\ \ \ \ \ \textcolor{comment}{//\ read\ \#\ of\ ADD\ bytes}}
+\DoxyCodeLine{00298\ \ \ \ \ nassertr(\_buffer-\/>get\_length()\ >=\ (\textcolor{keywordtype}{int})\textcolor{keyword}{sizeof}(ADD\_length),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00299\ \ \ \ \ ADD\_length\ =\ patch\_reader.get\_uint16();}
+\DoxyCodeLine{00300\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_patch\_stream-\/>fail())\ \{}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Truncated\ patch\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_file\_invalid;}
+\DoxyCodeLine{00304\ \ \ \ \ \}}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00306\ \ \ \ \ bytes\_read\ +=\ (int)ADD\_length;}
+\DoxyCodeLine{00307\ \ \ \ \ \_total\_bytes\_processed\ +=\ (int)ADD\_length;}
+\DoxyCodeLine{00308\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_total\_bytes\_processed\ >\ \_total\_bytes\_to\_process)\ \{}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Runaway\ patch\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_file\_invalid;}
+\DoxyCodeLine{00312\ \ \ \ \ \}}
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00314\ \ \ \ \ \textcolor{comment}{//\ if\ there\ are\ bytes\ to\ add,\ read\ them\ from\ patch\ file\ and\ write\ them\ to}}
+\DoxyCodeLine{00315\ \ \ \ \ \textcolor{comment}{//\ output}}
+\DoxyCodeLine{00316\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam()\ \&\&\ ADD\_length\ !=\ 0)\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ADD:\ "{}}\ <<\ ADD\_length\ <<\ \textcolor{stringliteral}{"{}\ (to\ "{}}}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ <<\ \_write\_stream.tellp()\ <<\ \textcolor{stringliteral}{"{})"{}}\ <<\ endl;}
+\DoxyCodeLine{00320\ \ \ \ \ \}}
+\DoxyCodeLine{00321\ }
+\DoxyCodeLine{00322\ \ \ \ \ uint32\_t\ bytes\_left\ =\ (uint32\_t)ADD\_length;}
+\DoxyCodeLine{00323\ \ \ \ \ \textcolor{keywordflow}{while}\ (bytes\_left\ >\ 0)\ \{}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ uint32\_t\ bytes\_this\_time\ =\ (uint32\_t)\ min(bytes\_left,\ (uint32\_t)\ buflen);}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \_patch\_stream-\/>read(\_buffer-\/>\_buffer,\ bytes\_this\_time);}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_patch\_stream-\/>fail())\ \{}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Truncated\ patch\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_file\_invalid;}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \_write\_stream.write(\_buffer-\/>\_buffer,\ bytes\_this\_time);}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ bytes\_left\ -\/=\ bytes\_this\_time;}
+\DoxyCodeLine{00333\ \ \ \ \ \}}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00335\ \ \ \ \ \textcolor{comment}{//\ read\ \#\ of\ COPY\ bytes}}
+\DoxyCodeLine{00336\ \ \ \ \ nassertr(\_buffer-\/>get\_length()\ >=\ (\textcolor{keywordtype}{int})\textcolor{keyword}{sizeof}(COPY\_length),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00337\ \ \ \ \ COPY\_length\ =\ patch\_reader.get\_uint16();}
+\DoxyCodeLine{00338\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_patch\_stream-\/>fail())\ \{}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Truncated\ patch\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_file\_invalid;}
+\DoxyCodeLine{00342\ \ \ \ \ \}}
+\DoxyCodeLine{00343\ }
+\DoxyCodeLine{00344\ \ \ \ \ bytes\_read\ +=\ (int)COPY\_length;}
+\DoxyCodeLine{00345\ \ \ \ \ \_total\_bytes\_processed\ +=\ (int)COPY\_length;}
+\DoxyCodeLine{00346\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_total\_bytes\_processed\ >\ \_total\_bytes\_to\_process)\ \{}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Runaway\ patch\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_file\_invalid;}
+\DoxyCodeLine{00350\ \ \ \ \ \}}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ \ \ \ \ \textcolor{comment}{//\ if\ there\ are\ bytes\ to\ copy,\ read\ them\ from\ original\ file\ and\ write\ them}}
+\DoxyCodeLine{00353\ \ \ \ \ \textcolor{comment}{//\ to\ output}}
+\DoxyCodeLine{00354\ \ \ \ \ \textcolor{keywordflow}{if}\ (0\ !=\ COPY\_length)\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \textcolor{comment}{//\ read\ copy\ offset}}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ nassertr(\_buffer-\/>get\_length()\ >=\ (\textcolor{keywordtype}{int})\textcolor{keyword}{sizeof}(COPY\_offset),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ COPY\_offset\ =\ patch\_reader.get\_int32();}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_patch\_stream-\/>fail())\ \{}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Truncated\ patch\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_file\_invalid;}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00363\ }
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \textcolor{comment}{//\ seek\ to\ the\ copy\ source\ pos}}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_version\_number\ <\ 2)\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ \_origfile\_stream-\/>seekg(COPY\_offset,\ ios::beg);}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ \_origfile\_stream-\/>seekg(COPY\_offset,\ ios::cur);}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_origfile\_stream-\/>fail())\ \{}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ copy\ offset\ in\ patch\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_file\_invalid;}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}COPY:\ "{}}\ <<\ COPY\_length\ <<\ \textcolor{stringliteral}{"{}\ bytes\ from\ offset\ "{}}}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ <<\ COPY\_offset\ <<\ \textcolor{stringliteral}{"{}\ (from\ "{}}\ <<\ \_origfile\_stream-\/>tellg()}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}\ <<\ \_write\_stream.tellp()\ <<\ \textcolor{stringliteral}{"{})"{}}}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \ \ \ \ <<\ endl;}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \textcolor{comment}{//\ read\ the\ copy\ bytes\ from\ original\ file\ and\ write\ them\ to\ output}}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ uint32\_t\ bytes\_left\ =\ (uint32\_t)COPY\_length;}
+\DoxyCodeLine{00386\ }
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (bytes\_left\ >\ 0)\ \{}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ \ \ uint32\_t\ bytes\_this\_time\ =\ (uint32\_t)\ min(bytes\_left,\ (uint32\_t)\ buflen);}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \ \ \_origfile\_stream-\/>read(\_buffer-\/>\_buffer,\ bytes\_this\_time);}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_origfile\_stream-\/>fail())\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ copy\ length\ in\ patch\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_file\_invalid;}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \_write\_stream.write(\_buffer-\/>\_buffer,\ bytes\_this\_time);}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ bytes\_left\ -\/=\ bytes\_this\_time;}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00398\ \ \ \ \ \}}
+\DoxyCodeLine{00399\ }
+\DoxyCodeLine{00400\ \ \ \ \ \textcolor{comment}{//\ if\ we\ got\ a\ pair\ of\ zero-\/length\ ADD\ and\ COPY\ blocks,\ we're\ done}}
+\DoxyCodeLine{00401\ \ \ \ \ \textcolor{keywordflow}{if}\ ((0\ ==\ ADD\_length)\ \&\&\ (0\ ==\ COPY\_length))\ \{}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ cleanup();}
+\DoxyCodeLine{00403\ }
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ <<\ "{}result\ file\ =\ "{}\ <<\ \_result\_file\_length}}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ total\ bytes\ =\ "{}}\ <<\ \_total\_bytes\_processed\ <<\ endl;}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00409\ }
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \textcolor{comment}{//\ check\ the\ MD5\ from\ the\ patch\ file\ against\ the\ newly\ patched\ file}}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classHashVal}{HashVal}}\ MD5\_actual;}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \ \ MD5\_actual.hash\_file(\_output\_file);}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_MD5\_ofResult\ !=\ MD5\_actual)\ \{}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Whoops,\ patching\ screwed\ up\ somehow.}}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_origfile\_stream\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \ \ \ \ vfs-\/>close\_read\_file(\_origfile\_stream);}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ \ \ \ \ \_origfile\_stream\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \ \ \ \ \_write\_stream.close();}
+\DoxyCodeLine{00422\ }
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patching\ produced\ incorrect\ checksum.\ \ Got:\(\backslash\)n"{}}}
+\DoxyCodeLine{00425\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ \ \ "{}}\ <<\ MD5\_actual}
+\DoxyCodeLine{00426\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)nExpected:\(\backslash\)n"{}}}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ \ \ "{}}\ <<\ \_MD5\_ofResult}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00429\ }
+\DoxyCodeLine{00430\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ a\ fine\ time\ to\ double-\/check\ the\ starting\ checksum.}}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!has\_source\_hash())\ \{}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ source\ hash\ in\ patch\ file\ to\ verify.\(\backslash\)n"{}};}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classHashVal}{HashVal}}\ MD5\_orig;}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \ \ \ \ \ \ MD5\_orig.hash\_file(\_orig\_file);}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (MD5\_orig\ !=\ get\_source\_hash())\ \{}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Started\ from\ incorrect\ source\ file.\ \ Got:\(\backslash\)n"{}}}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ \ \ "{}}\ <<\ MD5\_orig}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)nExpected:\(\backslash\)n"{}}}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ \ \ "{}}\ <<\ get\_source\_hash()}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Started\ from\ correct\ source\ file:\(\backslash\)n"{}}}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ \ \ "{}}\ <<\ MD5\_orig}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00451\ }
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ delete\ the\ temp\ file\ and\ the\ patch\ file}}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rename\_output\_to\_orig)\ \{}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \ \ \ \ \ \ \_output\_file.\mbox{\hyperlink{classFilename_a722fac5764b2c91628bbbf4ddc8c6254}{unlink}}();}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_delete\_patchfile)\ \{}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \ \ \ \ \ \ \_patch\_file.\mbox{\hyperlink{classFilename_a722fac5764b2c91628bbbf4ddc8c6254}{unlink}}();}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ return\ "{}invalid\ checksum"{}}}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_invalid\_checksum;}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00463\ }
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \textcolor{comment}{//\ delete\ the\ patch\ file}}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_delete\_patchfile)\ \{}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \ \ \_patch\_file.\mbox{\hyperlink{classFilename_a722fac5764b2c91628bbbf4ddc8c6254}{unlink}}();}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00468\ }
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \textcolor{comment}{//\ rename\ the\ temp\ file\ to\ the\ original\ file\ name}}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_rename\_output\_to\_orig)\ \{}
+\DoxyCodeLine{00471\ \ \ \ \ \ \ \ \ \_orig\_file.\mbox{\hyperlink{classFilename_a722fac5764b2c91628bbbf4ddc8c6254}{unlink}}();}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_output\_file.\mbox{\hyperlink{classFilename_a6624cb0d69babb7da9c6c1af0551ecc4}{rename\_to}}(\_orig\_file))\ \{}
+\DoxyCodeLine{00473\ \ \ \ \ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::run()\ failed\ to\ rename\ temp\ file\ to:\ "{}}\ <<\ \_orig\_file}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ endl;}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_write\_file\_rename;}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00478\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_success;}
+\DoxyCodeLine{00481\ \ \ \ \ \}}
+\DoxyCodeLine{00482\ \ \ \}}
+\DoxyCodeLine{00483\ }
+\DoxyCodeLine{00484\ \ \ \textcolor{keywordflow}{return}\ EU\_ok;}
+\DoxyCodeLine{00485\ \}}
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00493\ \textcolor{keywordtype}{bool}\ Patchfile::}
+\DoxyCodeLine{00494\ apply(\mbox{\hyperlink{classFilename}{Filename}}\ \&patch\_file,\ \mbox{\hyperlink{classFilename}{Filename}}\ \&file)\ \{}
+\DoxyCodeLine{00495\ \ \ \textcolor{keywordtype}{int}\ ret\ =\ initiate(patch\_file,\ file);}
+\DoxyCodeLine{00496\ \ \ \textcolor{keywordflow}{if}\ (ret\ <\ 0)}
+\DoxyCodeLine{00497\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00498\ \ \ \textcolor{keywordflow}{for}\ (;;)\ \{}
+\DoxyCodeLine{00499\ \ \ \ \ ret\ =\ run();}
+\DoxyCodeLine{00500\ \ \ \ \ \textcolor{keywordflow}{if}\ (ret\ ==\ EU\_success)}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00502\ \ \ \ \ \textcolor{keywordflow}{if}\ (ret\ <\ 0)}
+\DoxyCodeLine{00503\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00504\ \ \ \}}
+\DoxyCodeLine{00505\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00506\ \}}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00514\ \textcolor{keywordtype}{bool}\ Patchfile::}
+\DoxyCodeLine{00515\ apply(\mbox{\hyperlink{classFilename}{Filename}}\ \&patch\_file,\ \mbox{\hyperlink{classFilename}{Filename}}\ \&orig\_file,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&target\_file)\ \{}
+\DoxyCodeLine{00516\ \ \ \textcolor{keywordtype}{int}\ ret\ =\ initiate(patch\_file,\ orig\_file,\ target\_file);}
+\DoxyCodeLine{00517\ \ \ \textcolor{keywordflow}{if}\ (ret\ <\ 0)}
+\DoxyCodeLine{00518\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00519\ \ \ \textcolor{keywordflow}{for}\ (;;)\ \{}
+\DoxyCodeLine{00520\ \ \ \ \ ret\ =\ run();}
+\DoxyCodeLine{00521\ \ \ \ \ \textcolor{keywordflow}{if}\ (ret\ ==\ EU\_success)}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00523\ \ \ \ \ \textcolor{keywordflow}{if}\ (ret\ <\ 0)}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00525\ \ \ \}}
+\DoxyCodeLine{00526\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00527\ \}}
+\DoxyCodeLine{00528\ }
+\DoxyCodeLine{00529\ }
+\DoxyCodeLine{00533\ \textcolor{keywordtype}{int}\ Patchfile::}
+\DoxyCodeLine{00534\ internal\_read\_header(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&patch\_file)\ \{}
+\DoxyCodeLine{00535\ \ \ \textcolor{comment}{//\ Open\ the\ patch\ file\ for\ read}}
+\DoxyCodeLine{00536\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00537\ \ \ nassertr(\_patch\_stream\ ==\ \textcolor{keyword}{nullptr},\ EU\_error\_abort);}
+\DoxyCodeLine{00538\ \ \ \_patch\_file\ =\ patch\_file;}
+\DoxyCodeLine{00539\ \ \ \_patch\_file.set\_binary();}
+\DoxyCodeLine{00540\ \ \ \_patch\_stream\ =\ vfs-\/>open\_read\_file(\_patch\_file,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00541\ \ \ \textcolor{keywordflow}{if}\ (\_patch\_stream\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00542\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::initiate()\ -\/\ Failed\ to\ open\ file:\ "{}}\ <<\ \_patch\_file\ <<\ endl;}
+\DoxyCodeLine{00544\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_write\_error();}
+\DoxyCodeLine{00545\ \ \ \}}
+\DoxyCodeLine{00546\ }
+\DoxyCodeLine{00547\ \ \ \textcolor{comment}{//\ read\ header,\ make\ sure\ the\ patch\ file\ is\ valid}}
+\DoxyCodeLine{00548\ \ \ \mbox{\hyperlink{classStreamReader}{StreamReader}}\ patch\_reader(*\_patch\_stream);}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00550\ \ \ \textcolor{comment}{//\ check\ the\ magic\ number}}
+\DoxyCodeLine{00551\ \ \ nassertr(\_buffer-\/>get\_length()\ >=\ \_v0\_header\_length,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00552\ \ \ uint32\_t\ magic\_number\ =\ patch\_reader.get\_uint32();}
+\DoxyCodeLine{00553\ \ \ \textcolor{keywordflow}{if}\ (magic\_number\ !=\ \_magic\_number\ \&\&\ magic\_number\ !=\ \_v0\_magic\_number)\ \{}
+\DoxyCodeLine{00554\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00555\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ patch\ file:\ "{}}\ <<\ \_patch\_file\ <<\ endl;}
+\DoxyCodeLine{00556\ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_file\_invalid;}
+\DoxyCodeLine{00557\ \ \ \}}
+\DoxyCodeLine{00558\ }
+\DoxyCodeLine{00559\ \ \ \_version\_number\ =\ 0;}
+\DoxyCodeLine{00560\ \ \ \textcolor{keywordflow}{if}\ (magic\_number\ !=\ \_v0\_magic\_number)\ \{}
+\DoxyCodeLine{00561\ \ \ \ \ \_version\_number\ =\ patch\_reader.get\_uint16();}
+\DoxyCodeLine{00562\ \ \ \}}
+\DoxyCodeLine{00563\ \ \ \textcolor{keywordflow}{if}\ (\_version\_number\ >\ \_current\_version)\ \{}
+\DoxyCodeLine{00564\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Can't\ read\ version\ "{}}\ <<\ \_version\_number\ <<\ \textcolor{stringliteral}{"{}\ patch\ files:\ "{}}}
+\DoxyCodeLine{00566\ \ \ \ \ \ \ <<\ \_patch\_file\ <<\ endl;}
+\DoxyCodeLine{00567\ \ \ \ \ \textcolor{keywordflow}{return}\ EU\_error\_file\_invalid;}
+\DoxyCodeLine{00568\ \ \ \}}
+\DoxyCodeLine{00569\ }
+\DoxyCodeLine{00570\ \ \ \textcolor{keywordflow}{if}\ (\_version\_number\ >=\ 1)\ \{}
+\DoxyCodeLine{00571\ \ \ \ \ \textcolor{comment}{//\ Get\ the\ length\ of\ the\ source\ file.}}
+\DoxyCodeLine{00572\ \ \ \ \ \textcolor{comment}{/*uint32\_t\ source\_file\_length\ =*/}\ patch\_reader.get\_uint32();}
+\DoxyCodeLine{00573\ }
+\DoxyCodeLine{00574\ \ \ \ \ \textcolor{comment}{//\ get\ the\ MD5\ of\ the\ source\ file.}}
+\DoxyCodeLine{00575\ \ \ \ \ \_MD5\_ofSource.read\_stream(patch\_reader);}
+\DoxyCodeLine{00576\ \ \ \}}
+\DoxyCodeLine{00577\ }
+\DoxyCodeLine{00578\ \ \ \textcolor{comment}{//\ get\ the\ length\ of\ the\ patched\ result\ file}}
+\DoxyCodeLine{00579\ \ \ \_total\_bytes\_to\_process\ =\ patch\_reader.get\_uint32();}
+\DoxyCodeLine{00580\ }
+\DoxyCodeLine{00581\ \ \ \textcolor{comment}{//\ get\ the\ MD5\ of\ the\ resultant\ patched\ file}}
+\DoxyCodeLine{00582\ \ \ \_MD5\_ofResult.read\_stream(patch\_reader);}
+\DoxyCodeLine{00583\ }
+\DoxyCodeLine{00584\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00585\ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::initiate()\ -\/\ valid\ patchfile"{}}\ <<\ endl;}
+\DoxyCodeLine{00587\ \ \ \}}
+\DoxyCodeLine{00588\ }
+\DoxyCodeLine{00589\ \ \ \textcolor{keywordflow}{return}\ EU\_success;}
+\DoxyCodeLine{00590\ \}}
+\DoxyCodeLine{00591\ }
+\DoxyCodeLine{00592\ \textcolor{comment}{//\ PATCH\ FILE\ BUILDING\ MEMBER\ FUNCTIONS}}
+\DoxyCodeLine{00593\ }
+\DoxyCodeLine{00597\ uint32\_t\ Patchfile::}
+\DoxyCodeLine{00598\ calc\_hash(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *buffer)\ \{}
+\DoxyCodeLine{00599\ \textcolor{preprocessor}{\#ifdef\ USE\_MD5\_FOR\_HASHTABLE\_INDEX\_VALUES}}
+\DoxyCodeLine{00600\ \ \ \mbox{\hyperlink{classHashVal}{HashVal}}\ hash;}
+\DoxyCodeLine{00601\ \ \ hash.hash\_buffer(buffer,\ \_footprint\_length);}
+\DoxyCodeLine{00602\ }
+\DoxyCodeLine{00603\ \ \ \textcolor{comment}{//\ cout\ <<\ uint16\_t(hash.get\_value(0))\ <<\ "{}\ "{};}}
+\DoxyCodeLine{00604\ }
+\DoxyCodeLine{00605\ \ \ \textcolor{keywordflow}{return}\ uint16\_t(hash.get\_value(0));}
+\DoxyCodeLine{00606\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00607\ \ \ uint32\_t\ hash\_value\ =\ 0;}
+\DoxyCodeLine{00608\ }
+\DoxyCodeLine{00609\ \ \ \textcolor{keywordflow}{for}(\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (int)\_footprint\_length;\ i++)\ \{}
+\DoxyCodeLine{00610\ \ \ \ \ \textcolor{comment}{//\ this\ is\ probably\ not\ such\ a\ good\ hash.\ \ to\ be\ replaced\ -\/-\/>\ TRIED\ MD5,}}
+\DoxyCodeLine{00611\ \ \ \ \ \textcolor{comment}{//\ was\ not\ worth\ it\ for\ the\ execution-\/time\ hit\ on\ 800Mhz\ PC}}
+\DoxyCodeLine{00612\ \ \ \ \ hash\_value\ \string^=\ uint32\_t(*buffer)\ <<\ ((i\ *\ 2)\ \%\ Patchfile::\_HASH\_BITS);}
+\DoxyCodeLine{00613\ \ \ \ \ buffer++;}
+\DoxyCodeLine{00614\ \ \ \}}
+\DoxyCodeLine{00615\ }
+\DoxyCodeLine{00616\ \ \ \textcolor{comment}{//\ use\ the\ bits\ that\ overflowed\ past\ the\ end\ of\ the\ hash\ bit\ range\ (this\ is}}
+\DoxyCodeLine{00617\ \ \ \textcolor{comment}{//\ intended\ for\ \_HASH\_BITS\ ==\ 24)}}
+\DoxyCodeLine{00618\ \ \ hash\_value\ \string^=\ (hash\_value\ >>\ Patchfile::\_HASH\_BITS);}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00620\ \ \ \textcolor{comment}{//\ cout\ <<\ hash\_value\ <<\ "{}\ "{};}}
+\DoxyCodeLine{00621\ }
+\DoxyCodeLine{00622\ \ \ \textcolor{keywordflow}{return}\ hash\_value\ \&\ \_HASH\_MASK;}
+\DoxyCodeLine{00623\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00624\ \}}
+\DoxyCodeLine{00625\ }
+\DoxyCodeLine{00642\ \textcolor{keywordtype}{void}\ Patchfile::}
+\DoxyCodeLine{00643\ build\_hash\_link\_tables(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *buffer\_orig,\ uint32\_t\ length\_orig,}
+\DoxyCodeLine{00644\ \ \ uint32\_t\ *hash\_table,\ uint32\_t\ *link\_table)\ \{}
+\DoxyCodeLine{00645\ }
+\DoxyCodeLine{00646\ \ \ uint32\_t\ i;}
+\DoxyCodeLine{00647\ }
+\DoxyCodeLine{00648\ \ \ \textcolor{comment}{//\ clear\ hash\ table}}
+\DoxyCodeLine{00649\ \ \ \textcolor{keywordflow}{for}(i\ =\ 0;\ i\ <\ \_HASHTABLESIZE;\ i++)\ \{}
+\DoxyCodeLine{00650\ \ \ \ \ hash\_table[i]\ =\ \_NULL\_VALUE;}
+\DoxyCodeLine{00651\ \ \ \}}
+\DoxyCodeLine{00652\ }
+\DoxyCodeLine{00653\ \ \ \textcolor{comment}{//\ clear\ link\ table}}
+\DoxyCodeLine{00654\ \ \ \textcolor{keywordflow}{for}(i\ =\ 0;\ i\ <\ length\_orig;\ i++)\ \{}
+\DoxyCodeLine{00655\ \ \ \ \ link\_table[i]\ =\ \_NULL\_VALUE;}
+\DoxyCodeLine{00656\ \ \ \}}
+\DoxyCodeLine{00657\ }
+\DoxyCodeLine{00658\ \ \ \textcolor{keywordflow}{if}(length\_orig\ <\ \_footprint\_length)\ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00659\ }
+\DoxyCodeLine{00660\ \ \ \textcolor{comment}{//\ run\ through\ original\ file\ and\ hash\ each\ footprint}}
+\DoxyCodeLine{00661\ \ \ \textcolor{keywordflow}{for}(i\ =\ 0;\ i\ <\ (length\_orig\ -\/\ \_footprint\_length);\ i++)\ \{}
+\DoxyCodeLine{00662\ }
+\DoxyCodeLine{00663\ \ \ \ \ uint32\_t\ hash\_value\ =\ calc\_hash(\&buffer\_orig[i]);}
+\DoxyCodeLine{00664\ }
+\DoxyCodeLine{00665\ \ \ \ \ \textcolor{comment}{//\ we\ must\ now\ store\ this\ file\ index\ in\ the\ hash\ table\ at\ the\ offset\ of}}
+\DoxyCodeLine{00666\ \ \ \ \ \textcolor{comment}{//\ the\ hash\ value}}
+\DoxyCodeLine{00667\ }
+\DoxyCodeLine{00668\ \ \ \ \ \textcolor{comment}{//\ to\ account\ for\ multiple\ file\ offsets\ with\ identical\ hash\ values,\ there}}
+\DoxyCodeLine{00669\ \ \ \ \ \textcolor{comment}{//\ is\ a\ link\ table\ with\ an\ entry\ for\ every\ footprint\ in\ the\ file.\ \ We}}
+\DoxyCodeLine{00670\ \ \ \ \ \textcolor{comment}{//\ create\ linked\ lists\ of\ offsets\ in\ the\ link\ table.}}
+\DoxyCodeLine{00671\ }
+\DoxyCodeLine{00672\ \ \ \ \ \textcolor{comment}{//\ first,\ set\ the\ value\ in\ the\ link\ table\ for\ the\ current\ offset\ to}}
+\DoxyCodeLine{00673\ \ \ \ \ \textcolor{comment}{//\ whatever\ the\ current\ list\ head\ is\ (the\ value\ in\ the\ hash\ table)\ (note}}
+\DoxyCodeLine{00674\ \ \ \ \ \textcolor{comment}{//\ that\ this\ only\ works\ because\ the\ hash\ and\ link\ tables\ both\ use}}
+\DoxyCodeLine{00675\ \ \ \ \ \textcolor{comment}{//\ \_NULL\_VALUE\ to\ indicate\ a\ null\ index)}}
+\DoxyCodeLine{00676\ \ \ \ \ link\_table[i]\ =\ hash\_table[hash\_value];}
+\DoxyCodeLine{00677\ }
+\DoxyCodeLine{00678\ \ \ \ \ \textcolor{comment}{//\ set\ the\ new\ list\ head;\ store\ the\ current\ offset\ in\ the\ hash\ table\ at}}
+\DoxyCodeLine{00679\ \ \ \ \ \textcolor{comment}{//\ the\ offset\ of\ the\ footprint's\ hash\ value}}
+\DoxyCodeLine{00680\ \ \ \ \ hash\_table[hash\_value]\ =\ i;}
+\DoxyCodeLine{00681\ }
+\DoxyCodeLine{00682\ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00683\ \textcolor{comment}{\ \ \ \ if\ (\_NULL\_VALUE\ ==\ hash\_table[hash\_value])\ \{}}
+\DoxyCodeLine{00684\ \textcolor{comment}{\ \ \ \ \ \ //\ hash\ entry\ is\ empty,\ store\ this\ offset}}
+\DoxyCodeLine{00685\ \textcolor{comment}{\ \ \ \ \ \ hash\_table[hash\_value]\ =\ i;}}
+\DoxyCodeLine{00686\ \textcolor{comment}{\ \ \ \ \}\ else\ \{}}
+\DoxyCodeLine{00687\ \textcolor{comment}{\ \ \ \ \ \ //\ hash\ entry\ is\ taken,\ go\ to\ the\ link\ table}}
+\DoxyCodeLine{00688\ \textcolor{comment}{\ \ \ \ \ \ uint32\_t\ link\_offset\ =\ hash\_table[hash\_value];}}
+\DoxyCodeLine{00689\ \textcolor{comment}{}}
+\DoxyCodeLine{00690\ \textcolor{comment}{\ \ \ \ \ \ while\ (\_NULL\_VALUE\ !=\ link\_table[link\_offset])\ \{}}
+\DoxyCodeLine{00691\ \textcolor{comment}{\ \ \ \ \ \ \ \ link\_offset\ =\ link\_table[link\_offset];}}
+\DoxyCodeLine{00692\ \textcolor{comment}{\ \ \ \ \ \ \}}}
+\DoxyCodeLine{00693\ \textcolor{comment}{\ \ \ \ \ \ link\_table[link\_offset]\ =\ i;}}
+\DoxyCodeLine{00694\ \textcolor{comment}{\ \ \ \ \}}}
+\DoxyCodeLine{00695\ \textcolor{comment}{\ \ \ \ */}}
+\DoxyCodeLine{00696\ \ \ \}}
+\DoxyCodeLine{00697\ \}}
+\DoxyCodeLine{00698\ }
+\DoxyCodeLine{00703\ uint32\_t\ Patchfile::}
+\DoxyCodeLine{00704\ calc\_match\_length(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ buf1,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ buf2,\ uint32\_t\ max\_length,}
+\DoxyCodeLine{00705\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint32\_t\ min\_length)\ \{}
+\DoxyCodeLine{00706\ \ \ \textcolor{comment}{//\ early\ out:\ look\ ahead\ and\ sample\ the\ end\ of\ the\ minimum\ range}}
+\DoxyCodeLine{00707\ \ \ \textcolor{keywordflow}{if}\ (min\_length\ >\ 2)\ \{}
+\DoxyCodeLine{00708\ \ \ \ \ \textcolor{keywordflow}{if}\ (min\_length\ >=\ max\_length)}
+\DoxyCodeLine{00709\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00710\ \ \ \ \ \textcolor{keywordflow}{if}\ (buf1[min\_length]\ !=\ buf2[min\_length]\ ||}
+\DoxyCodeLine{00711\ \ \ \ \ \ \ \ \ buf1[min\_length-\/1]\ !=\ buf2[min\_length-\/1]\ ||}
+\DoxyCodeLine{00712\ \ \ \ \ \ \ \ \ buf1[min\_length-\/2]\ !=\ buf2[min\_length-\/2])\ \{}
+\DoxyCodeLine{00713\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00714\ \ \ \ \ \}}
+\DoxyCodeLine{00715\ \ \ \}}
+\DoxyCodeLine{00716\ }
+\DoxyCodeLine{00717\ \ \ uint32\_t\ length\ =\ 0;}
+\DoxyCodeLine{00718\ \ \ \textcolor{keywordflow}{while}\ ((length\ <\ max\_length)\ \&\&\ (*buf1\ ==\ *buf2))\ \{}
+\DoxyCodeLine{00719\ \ \ \ \ buf1++,\ buf2++,\ length++;}
+\DoxyCodeLine{00720\ \ \ \}}
+\DoxyCodeLine{00721\ \ \ \textcolor{keywordflow}{return}\ length;}
+\DoxyCodeLine{00722\ \}}
+\DoxyCodeLine{00723\ }
+\DoxyCodeLine{00729\ \textcolor{keywordtype}{void}\ Patchfile::}
+\DoxyCodeLine{00730\ find\_longest\_match(uint32\_t\ new\_pos,\ uint32\_t\ \&copy\_pos,\ uint16\_t\ \&copy\_length,}
+\DoxyCodeLine{00731\ \ \ uint32\_t\ *hash\_table,\ uint32\_t\ *link\_table,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ buffer\_orig,}
+\DoxyCodeLine{00732\ \ \ uint32\_t\ length\_orig,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ buffer\_new,\ uint32\_t\ length\_new)\ \{}
+\DoxyCodeLine{00733\ }
+\DoxyCodeLine{00734\ \ \ \textcolor{comment}{//\ set\ length\ to\ a\ safe\ value}}
+\DoxyCodeLine{00735\ \ \ copy\_length\ =\ 0;}
+\DoxyCodeLine{00736\ }
+\DoxyCodeLine{00737\ \ \ \textcolor{comment}{//\ get\ offset\ of\ matching\ string\ (in\ orig\ file)\ from\ hash\ table}}
+\DoxyCodeLine{00738\ \ \ uint32\_t\ hash\_value\ =\ calc\_hash(\&buffer\_new[new\_pos]);}
+\DoxyCodeLine{00739\ }
+\DoxyCodeLine{00740\ \ \ \textcolor{comment}{//\ if\ no\ match,\ bail}}
+\DoxyCodeLine{00741\ \ \ \textcolor{keywordflow}{if}\ (\_NULL\_VALUE\ ==\ hash\_table[hash\_value])}
+\DoxyCodeLine{00742\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00743\ }
+\DoxyCodeLine{00744\ \ \ copy\_pos\ =\ hash\_table[hash\_value];}
+\DoxyCodeLine{00745\ }
+\DoxyCodeLine{00746\ \ \ \textcolor{comment}{//\ calc\ match\ length}}
+\DoxyCodeLine{00747\ \ \ copy\_length\ =\ (uint16\_t)calc\_match\_length(\&buffer\_new[new\_pos],}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \&buffer\_orig[copy\_pos],}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ min(min((length\_new\ -\/\ new\_pos),}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (length\_orig\ -\/\ copy\_pos)),}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_MAX\_RUN\_LENGTH),}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 0);}
+\DoxyCodeLine{00753\ }
+\DoxyCodeLine{00754\ \ \ \textcolor{comment}{//\ run\ through\ link\ table,\ see\ if\ we\ find\ any\ longer\ matches}}
+\DoxyCodeLine{00755\ \ \ uint32\_t\ match\_offset;}
+\DoxyCodeLine{00756\ \ \ uint16\_t\ match\_length;}
+\DoxyCodeLine{00757\ \ \ match\_offset\ =\ link\_table[copy\_pos];}
+\DoxyCodeLine{00758\ }
+\DoxyCodeLine{00759\ \ \ \textcolor{keywordflow}{while}\ (match\_offset\ !=\ \_NULL\_VALUE)\ \{}
+\DoxyCodeLine{00760\ \ \ \ \ match\_length\ =\ (uint16\_t)calc\_match\_length(\&buffer\_new[new\_pos],}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \&buffer\_orig[match\_offset],}
+\DoxyCodeLine{00762\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ min(min((length\_new\ -\/\ new\_pos),}
+\DoxyCodeLine{00763\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (length\_orig\ -\/\ match\_offset)),}
+\DoxyCodeLine{00764\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_MAX\_RUN\_LENGTH),}
+\DoxyCodeLine{00765\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ copy\_length);}
+\DoxyCodeLine{00766\ }
+\DoxyCodeLine{00767\ \ \ \ \ \textcolor{comment}{//\ have\ we\ found\ a\ longer\ match?}}
+\DoxyCodeLine{00768\ \ \ \ \ \textcolor{keywordflow}{if}\ (match\_length\ >\ copy\_length)\ \{}
+\DoxyCodeLine{00769\ \ \ \ \ \ \ copy\_pos\ =\ match\_offset;}
+\DoxyCodeLine{00770\ \ \ \ \ \ \ copy\_length\ =\ match\_length;}
+\DoxyCodeLine{00771\ \ \ \ \ \}}
+\DoxyCodeLine{00772\ }
+\DoxyCodeLine{00773\ \ \ \ \ \textcolor{comment}{//\ traverse\ the\ link\ table}}
+\DoxyCodeLine{00774\ \ \ \ \ match\_offset\ =\ link\_table[match\_offset];}
+\DoxyCodeLine{00775\ \ \ \}}
+\DoxyCodeLine{00776\ \}}
+\DoxyCodeLine{00777\ }
+\DoxyCodeLine{00781\ \textcolor{keywordtype}{void}\ Patchfile::}
+\DoxyCodeLine{00782\ emit\_ADD(ostream\ \&write\_stream,\ uint32\_t\ length,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ buffer)\ \{}
+\DoxyCodeLine{00783\ \ \ nassertv(length\ ==\ (uint16\_t)length);\ \textcolor{comment}{//we\ only\ write\ a\ uint16}}
+\DoxyCodeLine{00784\ }
+\DoxyCodeLine{00785\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00786\ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00787\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}ADD:\ "{}}\ <<\ length\ <<\ \textcolor{stringliteral}{"{}\ (to\ "{}}\ <<\ \_add\_pos\ <<\ \textcolor{stringliteral}{"{})"{}}\ <<\ endl;}
+\DoxyCodeLine{00788\ \ \ \}}
+\DoxyCodeLine{00789\ }
+\DoxyCodeLine{00790\ \ \ \textcolor{comment}{//\ write\ ADD\ length}}
+\DoxyCodeLine{00791\ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ patch\_writer(write\_stream);}
+\DoxyCodeLine{00792\ \ \ patch\_writer.add\_uint16((uint16\_t)length);}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00794\ \ \ \textcolor{comment}{//\ if\ there\ are\ bytes\ to\ add,\ add\ them}}
+\DoxyCodeLine{00795\ \ \ \textcolor{keywordflow}{if}\ (length\ >\ 0)\ \{}
+\DoxyCodeLine{00796\ \ \ \ \ patch\_writer.append\_data(buffer,\ (uint16\_t)length);}
+\DoxyCodeLine{00797\ \ \ \}}
+\DoxyCodeLine{00798\ }
+\DoxyCodeLine{00799\ \ \ \_add\_pos\ +=\ length;}
+\DoxyCodeLine{00800\ \}}
+\DoxyCodeLine{00801\ }
+\DoxyCodeLine{00805\ \textcolor{keywordtype}{void}\ Patchfile::}
+\DoxyCodeLine{00806\ emit\_COPY(ostream\ \&write\_stream,\ uint32\_t\ length,\ uint32\_t\ copy\_pos)\ \{}
+\DoxyCodeLine{00807\ \ \ nassertv(length\ ==\ (uint16\_t)length);\ \textcolor{comment}{//we\ only\ write\ a\ uint16}}
+\DoxyCodeLine{00808\ }
+\DoxyCodeLine{00809\ \ \ int32\_t\ offset\ =\ (int)copy\_pos\ -\/\ (\textcolor{keywordtype}{int})\_last\_copy\_pos;}
+\DoxyCodeLine{00810\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00811\ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}COPY:\ "{}}\ <<\ length\ <<\ \textcolor{stringliteral}{"{}\ bytes\ from\ offset\ "{}}\ <<\ offset}
+\DoxyCodeLine{00813\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ (from\ "{}}\ <<\ copy\_pos\ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}\ <<\ \_add\_pos\ <<\ \textcolor{stringliteral}{"{})"{}}\ <<\ endl;}
+\DoxyCodeLine{00814\ \ \ \}}
+\DoxyCodeLine{00815\ }
+\DoxyCodeLine{00816\ \ \ \textcolor{comment}{//\ write\ COPY\ length}}
+\DoxyCodeLine{00817\ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ patch\_writer(write\_stream);}
+\DoxyCodeLine{00818\ \ \ patch\_writer.add\_uint16((uint16\_t)length);}
+\DoxyCodeLine{00819\ }
+\DoxyCodeLine{00820\ \ \ \textcolor{keywordflow}{if}\ ((uint16\_t)length\ !=\ 0)\ \{}
+\DoxyCodeLine{00821\ \ \ \ \ \textcolor{comment}{//\ write\ COPY\ offset}}
+\DoxyCodeLine{00822\ \ \ \ \ patch\_writer.add\_int32(offset);}
+\DoxyCodeLine{00823\ \ \ \ \ \_last\_copy\_pos\ =\ copy\_pos\ +\ length;}
+\DoxyCodeLine{00824\ \ \ \}}
+\DoxyCodeLine{00825\ }
+\DoxyCodeLine{00826\ \ \ \_add\_pos\ +=\ length;}
+\DoxyCodeLine{00827\ \}}
+\DoxyCodeLine{00828\ }
+\DoxyCodeLine{00833\ \textcolor{keywordtype}{void}\ Patchfile::}
+\DoxyCodeLine{00834\ emit\_add\_and\_copy(ostream\ \&write\_stream,}
+\DoxyCodeLine{00835\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint32\_t\ add\_length,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *add\_buffer,}
+\DoxyCodeLine{00836\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint32\_t\ copy\_length,\ uint32\_t\ copy\_pos)\ \{}
+\DoxyCodeLine{00837\ \ \ \textcolor{keywordflow}{if}\ (add\_length\ ==\ 0\ \&\&\ copy\_length\ ==\ 0)\ \{}
+\DoxyCodeLine{00838\ \ \ \ \ \textcolor{comment}{//\ Don't\ accidentally\ emit\ a\ termination\ code.}}
+\DoxyCodeLine{00839\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00840\ \ \ \}}
+\DoxyCodeLine{00841\ }
+\DoxyCodeLine{00842\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ uint16\_t\ max\_write\ =\ 65535;}
+\DoxyCodeLine{00843\ \ \ \textcolor{keywordflow}{while}\ (add\_length\ >\ max\_write)\ \{}
+\DoxyCodeLine{00844\ \ \ \ \ \textcolor{comment}{//\ Overflow.\ \ This\ chunk\ is\ too\ large\ to\ fit\ into\ a\ single\ ADD\ block,\ so}}
+\DoxyCodeLine{00845\ \ \ \ \ \textcolor{comment}{//\ we\ have\ to\ write\ it\ as\ multiple\ ADDs.}}
+\DoxyCodeLine{00846\ \ \ \ \ emit\_ADD(write\_stream,\ max\_write,\ add\_buffer);}
+\DoxyCodeLine{00847\ \ \ \ \ add\_buffer\ +=\ max\_write;}
+\DoxyCodeLine{00848\ \ \ \ \ add\_length\ -\/=\ max\_write;}
+\DoxyCodeLine{00849\ \ \ \ \ emit\_COPY(write\_stream,\ 0,\ 0);}
+\DoxyCodeLine{00850\ \ \ \}}
+\DoxyCodeLine{00851\ }
+\DoxyCodeLine{00852\ \ \ emit\_ADD(write\_stream,\ add\_length,\ add\_buffer);}
+\DoxyCodeLine{00853\ }
+\DoxyCodeLine{00854\ \ \ \textcolor{keywordflow}{while}\ (copy\_length\ >\ max\_write)\ \{}
+\DoxyCodeLine{00855\ \ \ \ \ \textcolor{comment}{//\ Overflow.}}
+\DoxyCodeLine{00856\ \ \ \ \ emit\_COPY(write\_stream,\ max\_write,\ copy\_pos);}
+\DoxyCodeLine{00857\ \ \ \ \ copy\_pos\ +=\ max\_write;}
+\DoxyCodeLine{00858\ \ \ \ \ copy\_length\ -\/=\ max\_write;}
+\DoxyCodeLine{00859\ \ \ \ \ emit\_ADD(write\_stream,\ 0,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00860\ \ \ \}}
+\DoxyCodeLine{00861\ }
+\DoxyCodeLine{00862\ \ \ emit\_COPY(write\_stream,\ copy\_length,\ copy\_pos);}
+\DoxyCodeLine{00863\ \}}
+\DoxyCodeLine{00864\ }
+\DoxyCodeLine{00869\ \textcolor{keywordtype}{void}\ Patchfile::}
+\DoxyCodeLine{00870\ cache\_add\_and\_copy(ostream\ \&write\_stream,}
+\DoxyCodeLine{00871\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint32\_t\ add\_length,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *add\_buffer,}
+\DoxyCodeLine{00872\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint32\_t\ copy\_length,\ uint32\_t\ copy\_pos)\ \{}
+\DoxyCodeLine{00873\ \ \ \textcolor{keywordflow}{if}\ (add\_length\ !=\ 0)\ \{}
+\DoxyCodeLine{00874\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_cache\_copy\_length\ !=\ 0)\ \{}
+\DoxyCodeLine{00875\ \ \ \ \ \ \ \textcolor{comment}{//\ Have\ to\ flush.}}
+\DoxyCodeLine{00876\ \ \ \ \ \ \ cache\_flush(write\_stream);}
+\DoxyCodeLine{00877\ \ \ \ \ \}}
+\DoxyCodeLine{00878\ \ \ \ \ \textcolor{comment}{//\ Add\ the\ string\ to\ the\ current\ cache.}}
+\DoxyCodeLine{00879\ \ \ \ \ \_cache\_add\_data\ +=\ string(add\_buffer,\ add\_length);}
+\DoxyCodeLine{00880\ \ \ \}}
+\DoxyCodeLine{00881\ }
+\DoxyCodeLine{00882\ \ \ \textcolor{keywordflow}{if}\ (copy\_length\ !=\ 0)\ \{}
+\DoxyCodeLine{00883\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_cache\_copy\_length\ ==\ 0)\ \{}
+\DoxyCodeLine{00884\ \ \ \ \ \ \ \textcolor{comment}{//\ Start\ a\ new\ copy\ phase.}}
+\DoxyCodeLine{00885\ \ \ \ \ \ \ \_cache\_copy\_start\ =\ copy\_pos;}
+\DoxyCodeLine{00886\ \ \ \ \ \ \ \_cache\_copy\_length\ =\ copy\_length;}
+\DoxyCodeLine{00887\ }
+\DoxyCodeLine{00888\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_cache\_copy\_start\ +\ \_cache\_copy\_length\ ==\ copy\_pos)\ \{}
+\DoxyCodeLine{00889\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ can\ just\ tack\ on\ the\ copy\ to\ what\ we've\ already\ got.}}
+\DoxyCodeLine{00890\ \ \ \ \ \ \ \_cache\_copy\_length\ +=\ copy\_length;}
+\DoxyCodeLine{00891\ }
+\DoxyCodeLine{00892\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00893\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ a\ discontinuous\ copy.\ \ We\ have\ to\ flush.}}
+\DoxyCodeLine{00894\ \ \ \ \ \ \ cache\_flush(write\_stream);}
+\DoxyCodeLine{00895\ \ \ \ \ \ \ \_cache\_copy\_start\ =\ copy\_pos;}
+\DoxyCodeLine{00896\ \ \ \ \ \ \ \_cache\_copy\_length\ =\ copy\_length;}
+\DoxyCodeLine{00897\ \ \ \ \ \}}
+\DoxyCodeLine{00898\ \ \ \}}
+\DoxyCodeLine{00899\ \}}
+\DoxyCodeLine{00900\ }
+\DoxyCodeLine{00905\ \textcolor{keywordtype}{void}\ Patchfile::}
+\DoxyCodeLine{00906\ cache\_flush(ostream\ \&write\_stream)\ \{}
+\DoxyCodeLine{00907\ \ \ emit\_add\_and\_copy(write\_stream,}
+\DoxyCodeLine{00908\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_cache\_add\_data.size(),\ \_cache\_add\_data.data(),}
+\DoxyCodeLine{00909\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_cache\_copy\_length,\ \_cache\_copy\_start);}
+\DoxyCodeLine{00910\ \ \ \_cache\_add\_data\ =\ string();}
+\DoxyCodeLine{00911\ \ \ \_cache\_copy\_length\ =\ 0;}
+\DoxyCodeLine{00912\ \}}
+\DoxyCodeLine{00913\ }
+\DoxyCodeLine{00914\ }
+\DoxyCodeLine{00919\ \textcolor{keywordtype}{void}\ Patchfile::}
+\DoxyCodeLine{00920\ write\_header(ostream\ \&write\_stream,}
+\DoxyCodeLine{00921\ \ \ \ \ \ \ \ \ \ \ \ \ \ istream\ \&stream\_orig,\ istream\ \&stream\_new)\ \{}
+\DoxyCodeLine{00922\ \ \ \textcolor{comment}{//\ prepare\ to\ write\ the\ patch\ file\ header}}
+\DoxyCodeLine{00923\ }
+\DoxyCodeLine{00924\ \ \ \textcolor{comment}{//\ write\ the\ patch\ file\ header}}
+\DoxyCodeLine{00925\ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ patch\_writer(write\_stream);}
+\DoxyCodeLine{00926\ \ \ patch\_writer.add\_uint32(\_magic\_number);}
+\DoxyCodeLine{00927\ \ \ patch\_writer.add\_uint16(\_current\_version);}
+\DoxyCodeLine{00928\ }
+\DoxyCodeLine{00929\ \ \ stream\_orig.seekg(0,\ ios::end);}
+\DoxyCodeLine{00930\ \ \ streampos\ source\_file\_length\ =\ stream\_orig.tellg();}
+\DoxyCodeLine{00931\ \ \ patch\_writer.add\_uint32((uint32\_t)source\_file\_length);}
+\DoxyCodeLine{00932\ }
+\DoxyCodeLine{00933\ \ \ \textcolor{comment}{//\ calc\ MD5\ of\ original\ file}}
+\DoxyCodeLine{00934\ \ \ \_MD5\_ofSource.hash\_stream(stream\_orig);}
+\DoxyCodeLine{00935\ \ \ \textcolor{comment}{//\ add\ it\ to\ the\ header}}
+\DoxyCodeLine{00936\ \ \ \_MD5\_ofSource.write\_stream(patch\_writer);}
+\DoxyCodeLine{00937\ }
+\DoxyCodeLine{00938\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00939\ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{00940\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Orig:\ "{}}\ <<\ \_MD5\_ofSource\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00941\ \ \ \}}
+\DoxyCodeLine{00942\ }
+\DoxyCodeLine{00943\ \ \ stream\_new.seekg(0,\ ios::end);}
+\DoxyCodeLine{00944\ \ \ streampos\ result\_file\_length\ =\ stream\_new.tellg();}
+\DoxyCodeLine{00945\ \ \ patch\_writer.add\_uint32((uint32\_t)result\_file\_length);}
+\DoxyCodeLine{00946\ }
+\DoxyCodeLine{00947\ \ \ \textcolor{comment}{//\ calc\ MD5\ of\ resultant\ patched\ file}}
+\DoxyCodeLine{00948\ \ \ \_MD5\_ofResult.hash\_stream(stream\_new);}
+\DoxyCodeLine{00949\ \ \ \textcolor{comment}{//\ add\ it\ to\ the\ header}}
+\DoxyCodeLine{00950\ \ \ \_MD5\_ofResult.write\_stream(patch\_writer);}
+\DoxyCodeLine{00951\ }
+\DoxyCodeLine{00952\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00953\ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{00954\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ New:\ "{}}\ <<\ \_MD5\_ofResult\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00955\ \ \ \}}
+\DoxyCodeLine{00956\ \}}
+\DoxyCodeLine{00957\ }
+\DoxyCodeLine{00961\ \textcolor{keywordtype}{void}\ Patchfile::}
+\DoxyCodeLine{00962\ write\_terminator(ostream\ \&write\_stream)\ \{}
+\DoxyCodeLine{00963\ \ \ cache\_flush(write\_stream);}
+\DoxyCodeLine{00964\ \ \ \textcolor{comment}{//\ write\ terminator\ (null\ ADD,\ null\ COPY)}}
+\DoxyCodeLine{00965\ \ \ emit\_ADD(write\_stream,\ 0,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00966\ \ \ emit\_COPY(write\_stream,\ 0,\ 0);}
+\DoxyCodeLine{00967\ \}}
+\DoxyCodeLine{00968\ }
+\DoxyCodeLine{00975\ \textcolor{keywordtype}{bool}\ Patchfile::}
+\DoxyCodeLine{00976\ compute\_file\_patches(ostream\ \&write\_stream,}
+\DoxyCodeLine{00977\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint32\_t\ offset\_orig,\ uint32\_t\ offset\_new,}
+\DoxyCodeLine{00978\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ istream\ \&stream\_orig,\ istream\ \&stream\_new)\ \{}
+\DoxyCodeLine{00979\ \ \ \textcolor{comment}{//\ read\ in\ original\ file}}
+\DoxyCodeLine{00980\ \ \ stream\_orig.seekg(0,\ ios::end);}
+\DoxyCodeLine{00981\ \ \ nassertr(stream\_orig,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00982\ \ \ uint32\_t\ source\_file\_length\ =\ stream\_orig.tellg();}
+\DoxyCodeLine{00983\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00984\ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{00985\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Allocating\ "{}}\ <<\ source\_file\_length\ <<\ \textcolor{stringliteral}{"{}\ bytes\ to\ read\ orig\(\backslash\)n"{}};}
+\DoxyCodeLine{00986\ \ \ \}}
+\DoxyCodeLine{00987\ }
+\DoxyCodeLine{00988\ \ \ \textcolor{keywordtype}{char}\ *buffer\_orig\ =\ (\textcolor{keywordtype}{char}\ *)PANDA\_MALLOC\_ARRAY(source\_file\_length);}
+\DoxyCodeLine{00989\ \ \ stream\_orig.seekg(0,\ ios::beg);}
+\DoxyCodeLine{00990\ \ \ stream\_orig.read(buffer\_orig,\ source\_file\_length);}
+\DoxyCodeLine{00991\ }
+\DoxyCodeLine{00992\ \ \ \textcolor{comment}{//\ read\ in\ new\ file}}
+\DoxyCodeLine{00993\ \ \ stream\_new.seekg(0,\ ios::end);}
+\DoxyCodeLine{00994\ \ \ uint32\_t\ result\_file\_length\ =\ stream\_new.tellg();}
+\DoxyCodeLine{00995\ \ \ nassertr(stream\_new,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00996\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00997\ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{00998\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Allocating\ "{}}\ <<\ result\_file\_length\ <<\ \textcolor{stringliteral}{"{}\ bytes\ to\ read\ new\(\backslash\)n"{}};}
+\DoxyCodeLine{00999\ \ \ \}}
+\DoxyCodeLine{01000\ }
+\DoxyCodeLine{01001\ \ \ \textcolor{keywordtype}{char}\ *buffer\_new\ =\ (\textcolor{keywordtype}{char}\ *)PANDA\_MALLOC\_ARRAY(result\_file\_length);}
+\DoxyCodeLine{01002\ \ \ stream\_new.seekg(0,\ ios::beg);}
+\DoxyCodeLine{01003\ \ \ stream\_new.read(buffer\_new,\ result\_file\_length);}
+\DoxyCodeLine{01004\ }
+\DoxyCodeLine{01005\ \ \ \textcolor{comment}{//\ allocate\ hashlink\ tables}}
+\DoxyCodeLine{01006\ \ \ \textcolor{keywordflow}{if}\ (\_hash\_table\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01007\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01008\ \ \ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{01009\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Allocating\ hashtable\ of\ size\ "{}}\ <<\ \_HASHTABLESIZE\ <<\ \textcolor{stringliteral}{"{}\ *\ 4\(\backslash\)n"{}};}
+\DoxyCodeLine{01010\ \ \ \ \ \}}
+\DoxyCodeLine{01011\ \ \ \ \ \_hash\_table\ =\ (uint32\_t\ *)PANDA\_MALLOC\_ARRAY(\_HASHTABLESIZE\ *\ \textcolor{keyword}{sizeof}(uint32\_t));}
+\DoxyCodeLine{01012\ \ \ \}}
+\DoxyCodeLine{01013\ }
+\DoxyCodeLine{01014\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01015\ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{01016\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Allocating\ linktable\ of\ size\ "{}}\ <<\ source\_file\_length\ <<\ \textcolor{stringliteral}{"{}\ *\ 4\(\backslash\)n"{}};}
+\DoxyCodeLine{01017\ \ \ \}}
+\DoxyCodeLine{01018\ }
+\DoxyCodeLine{01019\ \ \ uint32\_t\ *link\_table\ =\ (uint32\_t\ *)PANDA\_MALLOC\_ARRAY(source\_file\_length\ *\ \textcolor{keyword}{sizeof}(uint32\_t));}
+\DoxyCodeLine{01020\ }
+\DoxyCodeLine{01021\ \ \ \textcolor{comment}{//\ build\ hash\ and\ link\ tables\ for\ original\ file}}
+\DoxyCodeLine{01022\ \ \ build\_hash\_link\_tables(buffer\_orig,\ source\_file\_length,\ \_hash\_table,\ link\_table);}
+\DoxyCodeLine{01023\ }
+\DoxyCodeLine{01024\ \ \ \textcolor{comment}{//\ run\ through\ new\ file}}
+\DoxyCodeLine{01025\ }
+\DoxyCodeLine{01026\ \ \ uint32\_t\ new\_pos\ =\ 0;}
+\DoxyCodeLine{01027\ \ \ uint32\_t\ start\_pos\ =\ new\_pos;\ \textcolor{comment}{//\ this\ is\ the\ position\ for\ the\ start\ of\ ADD\ operations}}
+\DoxyCodeLine{01028\ }
+\DoxyCodeLine{01029\ \ \ \textcolor{keywordflow}{if}(((uint32\_t)\ result\_file\_length)\ >=\ \_footprint\_length)}
+\DoxyCodeLine{01030\ \ \ \{}
+\DoxyCodeLine{01031\ \ \ \ \ \textcolor{keywordflow}{while}\ (new\_pos\ <\ (result\_file\_length\ -\/\ \_footprint\_length))\ \{}
+\DoxyCodeLine{01032\ }
+\DoxyCodeLine{01033\ \ \ \ \ \ \ \textcolor{comment}{//\ find\ best\ match\ for\ current\ position}}
+\DoxyCodeLine{01034\ \ \ \ \ \ \ uint32\_t\ COPY\_pos;}
+\DoxyCodeLine{01035\ \ \ \ \ \ \ uint16\_t\ COPY\_length;}
+\DoxyCodeLine{01036\ }
+\DoxyCodeLine{01037\ \ \ \ \ \ \ find\_longest\_match(new\_pos,\ COPY\_pos,\ COPY\_length,\ \_hash\_table,\ link\_table,}
+\DoxyCodeLine{01038\ \ \ \ \ \ \ \ \ buffer\_orig,\ source\_file\_length,\ buffer\_new,\ result\_file\_length);}
+\DoxyCodeLine{01039\ }
+\DoxyCodeLine{01040\ \ \ \ \ \ \ \textcolor{comment}{//\ if\ no\ match\ or\ match\ not\ longer\ than\ footprint\ length,\ skip\ to\ next}}
+\DoxyCodeLine{01041\ \ \ \ \ \ \ \textcolor{comment}{//\ byte}}
+\DoxyCodeLine{01042\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (COPY\_length\ <\ \_footprint\_length)\ \{}
+\DoxyCodeLine{01043\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ go\ to\ next\ byte}}
+\DoxyCodeLine{01044\ \ \ \ \ \ \ \ \ new\_pos++;}
+\DoxyCodeLine{01045\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01046\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ emit\ ADD\ for\ all\ skipped\ bytes}}
+\DoxyCodeLine{01047\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_skipped\ =\ (int)new\_pos\ -\/\ (\textcolor{keywordtype}{int})start\_pos;}
+\DoxyCodeLine{01048\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01049\ \ \ \ \ \ \ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{01050\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}build:\ num\_skipped\ =\ "{}}\ <<\ num\_skipped}
+\DoxyCodeLine{01051\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ endl;}
+\DoxyCodeLine{01052\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01053\ \ \ \ \ \ \ \ \ cache\_add\_and\_copy(write\_stream,\ num\_skipped,\ \&buffer\_new[start\_pos],}
+\DoxyCodeLine{01054\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ COPY\_length,\ COPY\_pos\ +\ offset\_orig);}
+\DoxyCodeLine{01055\ \ \ \ \ \ \ \ \ new\_pos\ +=\ (uint32\_t)COPY\_length;}
+\DoxyCodeLine{01056\ \ \ \ \ \ \ \ \ start\_pos\ =\ new\_pos;}
+\DoxyCodeLine{01057\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01058\ \ \ \ \ \}}
+\DoxyCodeLine{01059\ \ \ \}}
+\DoxyCodeLine{01060\ }
+\DoxyCodeLine{01061\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_spam())\ \{}
+\DoxyCodeLine{01062\ \ \ \ \ express\_cat.spam()}
+\DoxyCodeLine{01063\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}build:\ result\_file\_length\ =\ "{}}\ <<\ result\_file\_length}
+\DoxyCodeLine{01064\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ start\_pos\ =\ "{}}\ <<\ start\_pos}
+\DoxyCodeLine{01065\ \ \ \ \ \ \ <<\ endl;}
+\DoxyCodeLine{01066\ \ \ \}}
+\DoxyCodeLine{01067\ }
+\DoxyCodeLine{01068\ \ \ \textcolor{comment}{//\ are\ there\ still\ more\ bytes\ left\ in\ the\ new\ file?}}
+\DoxyCodeLine{01069\ \ \ \textcolor{keywordflow}{if}\ (start\_pos\ !=\ result\_file\_length)\ \{}
+\DoxyCodeLine{01070\ \ \ \ \ \textcolor{comment}{//\ emit\ ADD\ for\ all\ remaining\ bytes}}
+\DoxyCodeLine{01071\ }
+\DoxyCodeLine{01072\ \ \ \ \ uint32\_t\ remaining\_bytes\ =\ result\_file\_length\ -\/\ start\_pos;}
+\DoxyCodeLine{01073\ \ \ \ \ cache\_add\_and\_copy(write\_stream,\ remaining\_bytes,\ \&buffer\_new[start\_pos],}
+\DoxyCodeLine{01074\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 0,\ 0);}
+\DoxyCodeLine{01075\ \ \ \ \ \textcolor{comment}{//start\_pos\ +=\ remaining\_bytes;}}
+\DoxyCodeLine{01076\ \ \ \}}
+\DoxyCodeLine{01077\ }
+\DoxyCodeLine{01078\ \ \ PANDA\_FREE\_ARRAY(link\_table);}
+\DoxyCodeLine{01079\ }
+\DoxyCodeLine{01080\ \ \ PANDA\_FREE\_ARRAY(buffer\_orig);}
+\DoxyCodeLine{01081\ \ \ PANDA\_FREE\_ARRAY(buffer\_new);}
+\DoxyCodeLine{01082\ }
+\DoxyCodeLine{01083\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01084\ \}}
+\DoxyCodeLine{01085\ }
+\DoxyCodeLine{01092\ \textcolor{keywordtype}{bool}\ Patchfile::}
+\DoxyCodeLine{01093\ compute\_mf\_patches(ostream\ \&write\_stream,}
+\DoxyCodeLine{01094\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint32\_t\ offset\_orig,\ uint32\_t\ offset\_new,}
+\DoxyCodeLine{01095\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ istream\ \&stream\_orig,\ istream\ \&stream\_new)\ \{}
+\DoxyCodeLine{01096\ \ \ \mbox{\hyperlink{classMultifile}{Multifile}}\ mf\_orig,\ mf\_new;}
+\DoxyCodeLine{01097\ \ \ \mbox{\hyperlink{classIStreamWrapper}{IStreamWrapper}}\ stream\_origw(stream\_orig);}
+\DoxyCodeLine{01098\ \ \ \mbox{\hyperlink{classIStreamWrapper}{IStreamWrapper}}\ stream\_neww(stream\_new);}
+\DoxyCodeLine{01099\ \ \ \textcolor{keywordflow}{if}\ (!mf\_orig.open\_read(\&stream\_origw)\ ||}
+\DoxyCodeLine{01100\ \ \ \ \ \ \ !mf\_new.open\_read(\&stream\_neww))\ \{}
+\DoxyCodeLine{01101\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{01102\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Input\ multifiles\ appear\ to\ be\ corrupt.\(\backslash\)n"{}};}
+\DoxyCodeLine{01103\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01104\ \ \ \}}
+\DoxyCodeLine{01105\ }
+\DoxyCodeLine{01106\ \ \ \textcolor{keywordflow}{if}\ (mf\_new.needs\_repack())\ \{}
+\DoxyCodeLine{01107\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{01108\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Input\ multifiles\ need\ to\ be\ repacked.\(\backslash\)n"{}};}
+\DoxyCodeLine{01109\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01110\ \ \ \}}
+\DoxyCodeLine{01111\ }
+\DoxyCodeLine{01112\ \ \ \textcolor{comment}{//\ First,\ compute\ the\ patch\ for\ the\ header\ \ index.}}
+\DoxyCodeLine{01113\ }
+\DoxyCodeLine{01114\ \ \ \{}
+\DoxyCodeLine{01115\ \ \ \ \ \mbox{\hyperlink{classISubStream}{ISubStream}}\ index\_orig(\&stream\_origw,\ 0,\ mf\_orig.get\_index\_end());}
+\DoxyCodeLine{01116\ \ \ \ \ \mbox{\hyperlink{classISubStream}{ISubStream}}\ index\_new(\&stream\_neww,\ 0,\ mf\_new.get\_index\_end());}
+\DoxyCodeLine{01117\ \ \ \ \ \textcolor{keywordflow}{if}\ (!do\_compute\_patches(\textcolor{stringliteral}{"{}"{}},\ \textcolor{stringliteral}{"{}"{}},}
+\DoxyCodeLine{01118\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ write\_stream,\ offset\_orig,\ offset\_new,}
+\DoxyCodeLine{01119\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ index\_orig,\ index\_new))\ \{}
+\DoxyCodeLine{01120\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01121\ \ \ \ \ \}}
+\DoxyCodeLine{01122\ \ \ \ \ nassertr(\_add\_pos\ +\ \_cache\_add\_data.size()\ +\ \_cache\_copy\_length\ ==\ offset\_new\ +\ (uint32\_t)mf\_new.get\_index\_end(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01123\ \ \ \}}
+\DoxyCodeLine{01124\ }
+\DoxyCodeLine{01125\ \ \ \textcolor{comment}{//\ Now\ walk\ through\ each\ subfile\ in\ the\ new\ multifile.\ \ If\ a\ particular}}
+\DoxyCodeLine{01126\ \ \ \textcolor{comment}{//\ subfile\ exists\ in\ both\ source\ files,\ we\ compute\ the\ patches\ for\ the}}
+\DoxyCodeLine{01127\ \ \ \textcolor{comment}{//\ subfile;\ for\ a\ new\ subfile,\ we\ trivially\ add\ it.\ \ If\ a\ subfile\ has\ been}}
+\DoxyCodeLine{01128\ \ \ \textcolor{comment}{//\ removed,\ we\ simply\ don't\ add\ it\ (we'll\ never\ even\ notice\ this\ case).}}
+\DoxyCodeLine{01129\ \ \ \textcolor{keywordtype}{int}\ new\_num\_subfiles\ =\ mf\_new.get\_num\_subfiles();}
+\DoxyCodeLine{01130\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ni\ =\ 0;\ ni\ <\ new\_num\_subfiles;\ ++ni)\ \{}
+\DoxyCodeLine{01131\ \ \ \ \ nassertr(\_add\_pos\ +\ \_cache\_add\_data.size()\ +\ \_cache\_copy\_length\ ==\ offset\_new\ +\ (uint32\_t)mf\_new.get\_subfile\_internal\_start(ni),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01132\ \ \ \ \ \textcolor{keywordtype}{string}\ name\ =\ mf\_new.get\_subfile\_name(ni);}
+\DoxyCodeLine{01133\ \ \ \ \ \textcolor{keywordtype}{int}\ oi\ =\ mf\_orig.find\_subfile(name);}
+\DoxyCodeLine{01134\ }
+\DoxyCodeLine{01135\ \ \ \ \ \textcolor{keywordflow}{if}\ (oi\ <\ 0)\ \{}
+\DoxyCodeLine{01136\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ is\ a\ newly-\/added\ subfile.\ \ Add\ it\ the\ hard\ way.}}
+\DoxyCodeLine{01137\ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01138\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Adding\ subfile\ "{}}\ <<\ mf\_new.get\_subfile\_name(ni)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01139\ }
+\DoxyCodeLine{01140\ \ \ \ \ \ \ streampos\ new\_start\ =\ mf\_new.get\_subfile\_internal\_start(ni);}
+\DoxyCodeLine{01141\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ new\_size\ =\ mf\_new.get\_subfile\_internal\_length(ni);}
+\DoxyCodeLine{01142\ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ *buffer\_new\ =\ (\textcolor{keywordtype}{char}\ *)PANDA\_MALLOC\_ARRAY(new\_size);}
+\DoxyCodeLine{01143\ \ \ \ \ \ \ stream\_new.seekg(new\_start,\ ios::beg);}
+\DoxyCodeLine{01144\ \ \ \ \ \ \ stream\_new.read(buffer\_new,\ new\_size);}
+\DoxyCodeLine{01145\ \ \ \ \ \ \ cache\_add\_and\_copy(write\_stream,\ new\_size,\ buffer\_new,\ 0,\ 0);}
+\DoxyCodeLine{01146\ \ \ \ \ \ \ PANDA\_FREE\_ARRAY(buffer\_new);}
+\DoxyCodeLine{01147\ }
+\DoxyCodeLine{01148\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01149\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ subfile\ exists\ in\ both\ the\ original\ and\ the\ new\ files.\ \ Patch}}
+\DoxyCodeLine{01150\ \ \ \ \ \ \ \textcolor{comment}{//\ it.}}
+\DoxyCodeLine{01151\ \ \ \ \ \ \ streampos\ orig\_start\ =\ mf\_orig.get\_subfile\_internal\_start(oi);}
+\DoxyCodeLine{01152\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ orig\_size\ =\ mf\_orig.get\_subfile\_internal\_length(oi);}
+\DoxyCodeLine{01153\ }
+\DoxyCodeLine{01154\ \ \ \ \ \ \ streampos\ new\_start\ =\ mf\_new.get\_subfile\_internal\_start(ni);}
+\DoxyCodeLine{01155\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ new\_size\ =\ mf\_new.get\_subfile\_internal\_length(ni);}
+\DoxyCodeLine{01156\ }
+\DoxyCodeLine{01157\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!patch\_subfile(write\_stream,\ offset\_orig,\ offset\_new,}
+\DoxyCodeLine{01158\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ mf\_new.get\_subfile\_name(ni),}
+\DoxyCodeLine{01159\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ stream\_origw,\ orig\_start,\ orig\_start\ +\ (streampos)orig\_size,}
+\DoxyCodeLine{01160\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ stream\_neww,\ new\_start,\ new\_start\ +\ (streampos)new\_size))\ \{}
+\DoxyCodeLine{01161\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01162\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01163\ \ \ \ \ \}}
+\DoxyCodeLine{01164\ \ \ \}}
+\DoxyCodeLine{01165\ }
+\DoxyCodeLine{01166\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01167\ \}}
+\DoxyCodeLine{01168\ }
+\DoxyCodeLine{01177\ \textcolor{keywordtype}{bool}\ Patchfile::}
+\DoxyCodeLine{01178\ build(\mbox{\hyperlink{classFilename}{Filename}}\ file\_orig,\ \mbox{\hyperlink{classFilename}{Filename}}\ file\_new,\ \mbox{\hyperlink{classFilename}{Filename}}\ patch\_name)\ \{}
+\DoxyCodeLine{01179\ \ \ patch\_name.set\_binary();}
+\DoxyCodeLine{01180\ }
+\DoxyCodeLine{01181\ \ \ \textcolor{comment}{//\ Open\ the\ original\ file\ for\ read}}
+\DoxyCodeLine{01182\ \ \ pifstream\ stream\_orig;}
+\DoxyCodeLine{01183\ \ \ file\_orig.set\_binary();}
+\DoxyCodeLine{01184\ \ \ \textcolor{keywordflow}{if}\ (!file\_orig.\mbox{\hyperlink{classFilename_a5b46ff925e027d0949aa23afc20f55a9}{open\_read}}(stream\_orig))\ \{}
+\DoxyCodeLine{01185\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{01186\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::build()\ -\/\ Failed\ to\ open\ file:\ "{}}\ <<\ file\_orig\ <<\ endl;}
+\DoxyCodeLine{01187\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01188\ \ \ \}}
+\DoxyCodeLine{01189\ }
+\DoxyCodeLine{01190\ \ \ \textcolor{comment}{//\ Open\ the\ new\ file\ for\ read}}
+\DoxyCodeLine{01191\ \ \ pifstream\ stream\_new;}
+\DoxyCodeLine{01192\ \ \ file\_new.set\_binary();}
+\DoxyCodeLine{01193\ \ \ \textcolor{keywordflow}{if}\ (!file\_new.\mbox{\hyperlink{classFilename_a5b46ff925e027d0949aa23afc20f55a9}{open\_read}}(stream\_new))\ \{}
+\DoxyCodeLine{01194\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{01195\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::build()\ -\/\ Failed\ to\ open\ file:\ "{}}\ <<\ file\_new\ <<\ endl;}
+\DoxyCodeLine{01196\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01197\ \ \ \}}
+\DoxyCodeLine{01198\ }
+\DoxyCodeLine{01199\ \ \ \textcolor{comment}{//\ Open\ patch\ file\ for\ write}}
+\DoxyCodeLine{01200\ \ \ pofstream\ write\_stream;}
+\DoxyCodeLine{01201\ \ \ \textcolor{keywordflow}{if}\ (!patch\_name.\mbox{\hyperlink{classFilename_ad37a9d52c837218b01076de184dc5f4d}{open\_write}}(write\_stream))\ \{}
+\DoxyCodeLine{01202\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{01203\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patchfile::build()\ -\/\ Failed\ to\ open\ file:\ "{}}\ <<\ patch\_name\ <<\ endl;}
+\DoxyCodeLine{01204\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01205\ \ \ \}}
+\DoxyCodeLine{01206\ }
+\DoxyCodeLine{01207\ \ \ \_last\_copy\_pos\ =\ 0;}
+\DoxyCodeLine{01208\ \ \ \_add\_pos\ =\ 0;}
+\DoxyCodeLine{01209\ \ \ \_cache\_add\_data\ =\ string();}
+\DoxyCodeLine{01210\ \ \ \_cache\_copy\_start\ =\ 0;}
+\DoxyCodeLine{01211\ \ \ \_cache\_copy\_length\ =\ 0;}
+\DoxyCodeLine{01212\ }
+\DoxyCodeLine{01213\ \ \ write\_header(write\_stream,\ stream\_orig,\ stream\_new);}
+\DoxyCodeLine{01214\ }
+\DoxyCodeLine{01215\ \ \ \textcolor{keywordflow}{if}\ (!do\_compute\_patches(file\_orig,\ file\_new,}
+\DoxyCodeLine{01216\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ write\_stream,\ 0,\ 0,}
+\DoxyCodeLine{01217\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ stream\_orig,\ stream\_new))\ \{}
+\DoxyCodeLine{01218\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01219\ \ \ \}}
+\DoxyCodeLine{01220\ }
+\DoxyCodeLine{01221\ \ \ write\_terminator(write\_stream);}
+\DoxyCodeLine{01222\ }
+\DoxyCodeLine{01223\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01224\ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{01225\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patch\ file\ will\ generate\ "{}}\ <<\ \_add\_pos\ <<\ \textcolor{stringliteral}{"{}-\/byte\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{01226\ \ \ \}}
+\DoxyCodeLine{01227\ }
+\DoxyCodeLine{01228\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{01229\ \ \{}
+\DoxyCodeLine{01230\ \ \ \ \textcolor{comment}{//\ Make\ sure\ the\ resulting\ file\ would\ be\ the\ right\ size.}}
+\DoxyCodeLine{01231\ \ \ \ stream\_new.seekg(0,\ ios::end);}
+\DoxyCodeLine{01232\ \ \ \ streampos\ result\_file\_length\ =\ stream\_new.tellg();}
+\DoxyCodeLine{01233\ \ \ \ nassertr(\_add\_pos\ ==\ result\_file\_length,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01234\ \ \}}
+\DoxyCodeLine{01235\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NDEBUG}}
+\DoxyCodeLine{01236\ }
+\DoxyCodeLine{01237\ \ \ \textcolor{keywordflow}{return}\ (\_last\_copy\_pos\ !=\ 0);}
+\DoxyCodeLine{01238\ \}}
+\DoxyCodeLine{01239\ }
+\DoxyCodeLine{01244\ \textcolor{keywordtype}{bool}\ Patchfile::}
+\DoxyCodeLine{01245\ do\_compute\_patches(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&file\_orig,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&file\_new,}
+\DoxyCodeLine{01246\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ostream\ \&write\_stream,}
+\DoxyCodeLine{01247\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint32\_t\ offset\_orig,\ uint32\_t\ offset\_new,}
+\DoxyCodeLine{01248\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ istream\ \&stream\_orig,\ istream\ \&stream\_new)\ \{}
+\DoxyCodeLine{01249\ \ \ nassertr(\_add\_pos\ +\ \_cache\_add\_data.size()\ +\ \_cache\_copy\_length\ ==\ offset\_new,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01250\ }
+\DoxyCodeLine{01251\ \ \ \textcolor{comment}{//\ Check\ whether\ our\ input\ files\ are\ Panda\ multifiles\ or\ tar\ files.}}
+\DoxyCodeLine{01252\ \ \ \textcolor{keywordtype}{bool}\ is\_multifile\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01253\ }
+\DoxyCodeLine{01254\ \ \ \textcolor{keywordflow}{if}\ (\_allow\_multifile)\ \{}
+\DoxyCodeLine{01255\ \ \ \ \ \textcolor{keywordflow}{if}\ (strstr(file\_orig.get\_basename().c\_str(),\ \textcolor{stringliteral}{"{}.mf"{}})\ !=\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{01256\ \ \ \ \ \ \ \ \ strstr(file\_new.get\_basename().c\_str(),\ \textcolor{stringliteral}{"{}.mf"{}})\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01257\ \ \ \ \ \ \ \textcolor{comment}{//\ Read\ the\ first\ n\ bytes\ of\ both\ files\ for\ the\ Multifile\ magic\ number.}}
+\DoxyCodeLine{01258\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ magic\_number\ =\ Multifile::get\_magic\_number();}
+\DoxyCodeLine{01259\ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ *buffer\ =\ (\textcolor{keywordtype}{char}\ *)PANDA\_MALLOC\_ARRAY(magic\_number.size());}
+\DoxyCodeLine{01260\ \ \ \ \ \ \ stream\_orig.seekg(0,\ ios::beg);}
+\DoxyCodeLine{01261\ \ \ \ \ \ \ stream\_orig.read(buffer,\ magic\_number.size());}
+\DoxyCodeLine{01262\ }
+\DoxyCodeLine{01263\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (stream\_orig.gcount()\ ==\ (int)magic\_number.size()\ \&\&}
+\DoxyCodeLine{01264\ \ \ \ \ \ \ \ \ \ \ memcmp(buffer,\ magic\_number.data(),\ magic\_number.size())\ ==\ 0)\ \{}
+\DoxyCodeLine{01265\ \ \ \ \ \ \ \ \ stream\_new.seekg(0,\ ios::beg);}
+\DoxyCodeLine{01266\ \ \ \ \ \ \ \ \ stream\_new.read(buffer,\ magic\_number.size());}
+\DoxyCodeLine{01267\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (stream\_new.gcount()\ ==\ (int)magic\_number.size()\ \&\&}
+\DoxyCodeLine{01268\ \ \ \ \ \ \ \ \ \ \ \ \ memcmp(buffer,\ magic\_number.data(),\ magic\_number.size())\ ==\ 0)\ \{}
+\DoxyCodeLine{01269\ \ \ \ \ \ \ \ \ \ \ is\_multifile\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01270\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01271\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01272\ \ \ \ \ \ \ PANDA\_FREE\_ARRAY(buffer);}
+\DoxyCodeLine{01273\ \ \ \ \ \}}
+\DoxyCodeLine{01274\ \ \ \}}
+\DoxyCodeLine{01275\ }
+\DoxyCodeLine{01276\ \ \ \textcolor{keywordflow}{if}\ (is\_multifile)\ \{}
+\DoxyCodeLine{01277\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01278\ \ \ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{01279\ \ \ \ \ \ \ \ \ <<\ file\_orig.get\_basename()\ <<\ \textcolor{stringliteral}{"{}\ appears\ to\ be\ a\ Panda\ Multifile.\(\backslash\)n"{}};}
+\DoxyCodeLine{01280\ \ \ \ \ \}}
+\DoxyCodeLine{01281\ \ \ \ \ \textcolor{keywordflow}{if}\ (!compute\_mf\_patches(write\_stream,\ offset\_orig,\ offset\_new,}
+\DoxyCodeLine{01282\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ stream\_orig,\ stream\_new))\ \{}
+\DoxyCodeLine{01283\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01284\ \ \ \ \ \}}
+\DoxyCodeLine{01285\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01286\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01287\ \ \ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{01288\ \ \ \ \ \ \ \ \ <<\ file\_orig.get\_basename()\ <<\ \textcolor{stringliteral}{"{}\ is\ not\ a\ multifile.\(\backslash\)n"{}};}
+\DoxyCodeLine{01289\ \ \ \ \ \}}
+\DoxyCodeLine{01290\ \ \ \ \ \textcolor{keywordflow}{if}\ (!compute\_file\_patches(write\_stream,\ offset\_orig,\ offset\_new,}
+\DoxyCodeLine{01291\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ stream\_orig,\ stream\_new))\ \{}
+\DoxyCodeLine{01292\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01293\ \ \ \ \ \}}
+\DoxyCodeLine{01294\ \ \ \}}
+\DoxyCodeLine{01295\ }
+\DoxyCodeLine{01296\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01297\ \}}
+\DoxyCodeLine{01298\ }
+\DoxyCodeLine{01302\ \textcolor{keywordtype}{bool}\ Patchfile::}
+\DoxyCodeLine{01303\ patch\_subfile(ostream\ \&write\_stream,}
+\DoxyCodeLine{01304\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint32\_t\ offset\_orig,\ uint32\_t\ offset\_new,}
+\DoxyCodeLine{01305\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,}
+\DoxyCodeLine{01306\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classIStreamWrapper}{IStreamWrapper}}\ \&stream\_orig,\ streampos\ orig\_start,\ streampos\ orig\_end,}
+\DoxyCodeLine{01307\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classIStreamWrapper}{IStreamWrapper}}\ \&stream\_new,\ streampos\ new\_start,\ streampos\ new\_end)\ \{}
+\DoxyCodeLine{01308\ \ \ nassertr(\_add\_pos\ +\ \_cache\_add\_data.size()\ +\ \_cache\_copy\_length\ ==\ offset\_new\ +\ (uint32\_t)new\_start,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01309\ }
+\DoxyCodeLine{01310\ \ \ \textcolor{keywordtype}{size\_t}\ new\_size\ =\ new\_end\ -\/\ new\_start;}
+\DoxyCodeLine{01311\ \ \ \textcolor{keywordtype}{size\_t}\ orig\_size\ =\ orig\_end\ -\/\ orig\_start;}
+\DoxyCodeLine{01312\ }
+\DoxyCodeLine{01313\ \ \ \mbox{\hyperlink{classISubStream}{ISubStream}}\ subfile\_orig(\&stream\_orig,\ orig\_start,\ orig\_end);}
+\DoxyCodeLine{01314\ \ \ \mbox{\hyperlink{classISubStream}{ISubStream}}\ subfile\_new(\&stream\_new,\ new\_start,\ new\_end);}
+\DoxyCodeLine{01315\ }
+\DoxyCodeLine{01316\ \ \ \textcolor{keywordtype}{bool}\ is\_unchanged\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01317\ \ \ \textcolor{keywordflow}{if}\ (orig\_size\ ==\ new\_size)\ \{}
+\DoxyCodeLine{01318\ \ \ \ \ \mbox{\hyperlink{classHashVal}{HashVal}}\ hash\_orig,\ hash\_new;}
+\DoxyCodeLine{01319\ \ \ \ \ hash\_orig.hash\_stream(subfile\_orig);}
+\DoxyCodeLine{01320\ \ \ \ \ hash\_new.hash\_stream(subfile\_new);}
+\DoxyCodeLine{01321\ }
+\DoxyCodeLine{01322\ \ \ \ \ \textcolor{keywordflow}{if}\ (hash\_orig\ ==\ hash\_new)\ \{}
+\DoxyCodeLine{01323\ \ \ \ \ \ \ \textcolor{comment}{//\ Actually,\ the\ subfile\ is\ unchanged;\ just\ emit\ it.}}
+\DoxyCodeLine{01324\ \ \ \ \ \ \ is\_unchanged\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01325\ \ \ \ \ \}}
+\DoxyCodeLine{01326\ \ \ \}}
+\DoxyCodeLine{01327\ }
+\DoxyCodeLine{01328\ \ \ \textcolor{keywordflow}{if}\ (is\_unchanged)\ \{}
+\DoxyCodeLine{01329\ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug()\ \&\&\ !filename.empty())\ \{}
+\DoxyCodeLine{01330\ \ \ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{01331\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Keeping\ subfile\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01332\ \ \ \ \ \}}
+\DoxyCodeLine{01333\ \ \ \ \ cache\_add\_and\_copy(write\_stream,\ 0,\ \textcolor{keyword}{nullptr},}
+\DoxyCodeLine{01334\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ orig\_size,\ offset\_orig\ +\ orig\_start);}
+\DoxyCodeLine{01335\ }
+\DoxyCodeLine{01336\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01337\ \ \ \ \ \textcolor{keywordflow}{if}\ (!filename.empty())\ \{}
+\DoxyCodeLine{01338\ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01339\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Patching\ subfile\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01340\ \ \ \ \ \}}
+\DoxyCodeLine{01341\ }
+\DoxyCodeLine{01342\ \ \ \ \ \textcolor{keywordflow}{if}\ (!do\_compute\_patches(filename,\ filename,\ write\_stream,}
+\DoxyCodeLine{01343\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ offset\_orig\ +\ orig\_start,\ offset\_new\ +\ new\_start,}
+\DoxyCodeLine{01344\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ subfile\_orig,\ subfile\_new))\ \{}
+\DoxyCodeLine{01345\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01346\ \ \ \ \ \}}
+\DoxyCodeLine{01347\ \ \ \}}
+\DoxyCodeLine{01348\ }
+\DoxyCodeLine{01349\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01350\ \}}
+
+\end{DoxyCode}

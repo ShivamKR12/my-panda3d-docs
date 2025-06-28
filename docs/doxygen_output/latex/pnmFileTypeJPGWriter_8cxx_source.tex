@@ -1,0 +1,311 @@
+\doxysection{pnm\+File\+Type\+JPGWriter.\+cxx}
+\hypertarget{pnmFileTypeJPGWriter_8cxx_source}{}\label{pnmFileTypeJPGWriter_8cxx_source}\index{panda/src/pnmimagetypes/pnmFileTypeJPGWriter.cxx@{panda/src/pnmimagetypes/pnmFileTypeJPGWriter.cxx}}
+\mbox{\hyperlink{pnmFileTypeJPGWriter_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmFileTypeJPG_8h}{pnmFileTypeJPG.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ HAVE\_JPEG}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pnmimagetypes_8h}{config\_pnmimagetypes.h}}"{}}}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmImage_8h}{pnmImage.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmWriter_8h}{pnmWriter.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{comment}{//\ The\ following\ bit\ of\ code,\ for\ setting\ up\ jpeg\_ostream\_src(),\ was\ lifted}}
+\DoxyCodeLine{00026\ \textcolor{comment}{//\ from\ jpeglib,\ and\ modified\ to\ work\ with\ ostream\ instead\ of\ stdio.}}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00029\ \textcolor{comment}{\ *\ jdatadst.c}}
+\DoxyCodeLine{00030\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00031\ \textcolor{comment}{\ *\ Copyright\ (C)\ 1994-\/1996,\ Thomas\ G.\ Lane.}}
+\DoxyCodeLine{00032\ \textcolor{comment}{\ *\ This\ file\ is\ part\ of\ the\ Independent\ JPEG\ Group's\ software.}}
+\DoxyCodeLine{00033\ \textcolor{comment}{\ *\ For\ conditions\ of\ distribution\ and\ use,\ see\ the\ accompanying\ README\ file.}}
+\DoxyCodeLine{00034\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00035\ \textcolor{comment}{\ *\ This\ file\ contains\ compression\ data\ destination\ routines\ for\ the\ case\ of}}
+\DoxyCodeLine{00036\ \textcolor{comment}{\ *\ emitting\ JPEG\ data\ to\ a\ file\ (or\ any\ stdio\ stream).\ \ While\ these\ routines}}
+\DoxyCodeLine{00037\ \textcolor{comment}{\ *\ are\ sufficient\ for\ most\ applications,\ some\ will\ want\ to\ use\ a\ different}}
+\DoxyCodeLine{00038\ \textcolor{comment}{\ *\ destination\ manager.}}
+\DoxyCodeLine{00039\ \textcolor{comment}{\ *\ IMPORTANT:\ we\ assume\ that\ fwrite()\ will\ correctly\ transcribe\ an\ array\ of}}
+\DoxyCodeLine{00040\ \textcolor{comment}{\ *\ JOCTETs\ into\ 8-\/bit-\/wide\ elements\ on\ external\ storage.\ \ If\ char\ is\ wider}}
+\DoxyCodeLine{00041\ \textcolor{comment}{\ *\ than\ 8\ bits\ on\ your\ machine,\ you\ may\ need\ to\ do\ some\ tweaking.}}
+\DoxyCodeLine{00042\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00044\ \textcolor{comment}{/*\ this\ is\ not\ a\ core\ library\ module,\ so\ it\ doesn't\ define\ JPEG\_INTERNALS\ */}}
+\DoxyCodeLine{00045\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \{}
+\DoxyCodeLine{00046\ \textcolor{preprocessor}{\#include\ <jpeglib.h>}}
+\DoxyCodeLine{00047\ \textcolor{preprocessor}{\#include\ <jerror.h>}}
+\DoxyCodeLine{00048\ \}}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \textcolor{comment}{/*\ Expanded\ data\ destination\ object\ for\ stdio\ output\ */}}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00054\ \ \ \textcolor{keyword}{struct\ }jpeg\_destination\_mgr\ pub;\ \textcolor{comment}{/*\ public\ fields\ */}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \ \ std::ostream\ *\ outfile;\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{/*\ target\ stream\ */}}
+\DoxyCodeLine{00057\ \ \ JOCTET\ *\ buffer;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{/*\ start\ of\ buffer\ */}}
+\DoxyCodeLine{00058\ \}\ my\_destination\_mgr;}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00060\ \textcolor{keyword}{typedef}\ my\_destination\_mgr\ *\ my\_dest\_ptr;}
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00062\ \textcolor{preprocessor}{\#define\ OUTPUT\_BUF\_SIZE\ \ 4096\ \ \ }\textcolor{comment}{/*\ choose\ an\ efficiently\ fwrite'able\ size\ */}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00066\ \textcolor{comment}{\ *\ Initialize\ destination\ -\/-\/-\/\ called\ by\ jpeg\_start\_compress}}
+\DoxyCodeLine{00067\ \textcolor{comment}{\ *\ before\ any\ data\ is\ actually\ written.}}
+\DoxyCodeLine{00068\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ METHODDEF(\textcolor{keywordtype}{void})}
+\DoxyCodeLine{00071\ init\_destination\ (j\_compress\_ptr\ cinfo)}
+\DoxyCodeLine{00072\ \{}
+\DoxyCodeLine{00073\ \ \ my\_dest\_ptr\ dest\ =\ (my\_dest\_ptr)\ cinfo-\/>dest;}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ \textcolor{comment}{/*\ Allocate\ the\ output\ buffer\ -\/-\/-\/\ it\ will\ be\ released\ when\ done\ with\ image\ */}}
+\DoxyCodeLine{00076\ \ \ dest-\/>buffer\ =\ (JOCTET\ *)}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ (*cinfo-\/>mem-\/>alloc\_small)\ ((j\_common\_ptr)\ cinfo,\ JPOOL\_IMAGE,}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ OUTPUT\_BUF\_SIZE\ *\ \textcolor{keyword}{sizeof}(JOCTET));}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \ \ dest-\/>pub.next\_output\_byte\ =\ dest-\/>buffer;}
+\DoxyCodeLine{00081\ \ \ dest-\/>pub.free\_in\_buffer\ =\ OUTPUT\_BUF\_SIZE;}
+\DoxyCodeLine{00082\ \}}
+\DoxyCodeLine{00083\ }
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00085\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00086\ \textcolor{comment}{\ *\ Empty\ the\ output\ buffer\ -\/-\/-\/\ called\ whenever\ buffer\ fills\ up.}}
+\DoxyCodeLine{00087\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00088\ \textcolor{comment}{\ *\ In\ typical\ applications,\ this\ should\ write\ the\ entire\ output\ buffer}}
+\DoxyCodeLine{00089\ \textcolor{comment}{\ *\ (ignoring\ the\ current\ state\ of\ next\_output\_byte\ \&\ free\_in\_buffer),}}
+\DoxyCodeLine{00090\ \textcolor{comment}{\ *\ reset\ the\ pointer\ \&\ count\ to\ the\ start\ of\ the\ buffer,\ and\ return\ TRUE}}
+\DoxyCodeLine{00091\ \textcolor{comment}{\ *\ indicating\ that\ the\ buffer\ has\ been\ dumped.}}
+\DoxyCodeLine{00092\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00093\ \textcolor{comment}{\ *\ In\ applications\ that\ need\ to\ be\ able\ to\ suspend\ compression\ due\ to\ output}}
+\DoxyCodeLine{00094\ \textcolor{comment}{\ *\ overrun,\ a\ FALSE\ return\ indicates\ that\ the\ buffer\ cannot\ be\ emptied\ now.}}
+\DoxyCodeLine{00095\ \textcolor{comment}{\ *\ In\ this\ situation,\ the\ compressor\ will\ return\ to\ its\ caller\ (possibly\ with}}
+\DoxyCodeLine{00096\ \textcolor{comment}{\ *\ an\ indication\ that\ it\ has\ not\ accepted\ all\ the\ supplied\ scanlines).\ \ The}}
+\DoxyCodeLine{00097\ \textcolor{comment}{\ *\ application\ should\ resume\ compression\ after\ it\ has\ made\ more\ room\ in\ the}}
+\DoxyCodeLine{00098\ \textcolor{comment}{\ *\ output\ buffer.\ \ Note\ that\ there\ are\ substantial\ restrictions\ on\ the\ use\ of}}
+\DoxyCodeLine{00099\ \textcolor{comment}{\ *\ suspension\ -\/-\/-\/\ see\ the\ documentation.}}
+\DoxyCodeLine{00100\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00101\ \textcolor{comment}{\ *\ When\ suspending,\ the\ compressor\ will\ back\ up\ to\ a\ convenient\ restart\ point}}
+\DoxyCodeLine{00102\ \textcolor{comment}{\ *\ (typically\ the\ start\ of\ the\ current\ MCU).\ next\_output\_byte\ \&\ free\_in\_buffer}}
+\DoxyCodeLine{00103\ \textcolor{comment}{\ *\ indicate\ where\ the\ restart\ point\ will\ be\ if\ the\ current\ call\ returns\ FALSE.}}
+\DoxyCodeLine{00104\ \textcolor{comment}{\ *\ Data\ beyond\ this\ point\ will\ be\ regenerated\ after\ resumption,\ so\ do\ not}}
+\DoxyCodeLine{00105\ \textcolor{comment}{\ *\ write\ it\ out\ when\ emptying\ the\ buffer\ externally.}}
+\DoxyCodeLine{00106\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00108\ METHODDEF(\textcolor{keywordtype}{boolean})}
+\DoxyCodeLine{00109\ empty\_output\_buffer\ (j\_compress\_ptr\ cinfo)}
+\DoxyCodeLine{00110\ \{}
+\DoxyCodeLine{00111\ \ \ my\_dest\_ptr\ dest\ =\ (my\_dest\_ptr)\ cinfo-\/>dest;}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00113\ \ \ \textcolor{keywordflow}{if}\ (!dest-\/>outfile-\/>write((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)dest-\/>buffer,\ OUTPUT\_BUF\_SIZE))}
+\DoxyCodeLine{00114\ \ \ \ \ ERREXIT(cinfo,\ JERR\_FILE\_WRITE);}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ dest-\/>pub.next\_output\_byte\ =\ dest-\/>buffer;}
+\DoxyCodeLine{00117\ \ \ dest-\/>pub.free\_in\_buffer\ =\ OUTPUT\_BUF\_SIZE;}
+\DoxyCodeLine{00118\ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00121\ \}}
+\DoxyCodeLine{00122\ }
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00125\ \textcolor{comment}{\ *\ Terminate\ destination\ -\/-\/-\/\ called\ by\ jpeg\_finish\_compress}}
+\DoxyCodeLine{00126\ \textcolor{comment}{\ *\ after\ all\ data\ has\ been\ written.\ \ Usually\ needs\ to\ flush\ buffer.}}
+\DoxyCodeLine{00127\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00128\ \textcolor{comment}{\ *\ NB:\ *not*\ called\ by\ jpeg\_abort\ or\ jpeg\_destroy;\ surrounding}}
+\DoxyCodeLine{00129\ \textcolor{comment}{\ *\ application\ must\ deal\ with\ any\ cleanup\ that\ should\ happen\ even}}
+\DoxyCodeLine{00130\ \textcolor{comment}{\ *\ for\ error\ exit.}}
+\DoxyCodeLine{00131\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ METHODDEF(\textcolor{keywordtype}{void})}
+\DoxyCodeLine{00134\ term\_destination\ (j\_compress\_ptr\ cinfo)}
+\DoxyCodeLine{00135\ \{}
+\DoxyCodeLine{00136\ \ \ my\_dest\_ptr\ dest\ =\ (my\_dest\_ptr)\ cinfo-\/>dest;}
+\DoxyCodeLine{00137\ \ \ \textcolor{keywordtype}{size\_t}\ datacount\ =\ OUTPUT\_BUF\_SIZE\ -\/\ dest-\/>pub.free\_in\_buffer;}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00139\ \ \ \textcolor{comment}{/*\ Write\ any\ data\ remaining\ in\ the\ buffer\ */}}
+\DoxyCodeLine{00140\ \ \ \textcolor{keywordflow}{if}\ (datacount\ >\ 0)\ \{}
+\DoxyCodeLine{00141\ \ \ \ \ \textcolor{keywordflow}{if}\ (!dest-\/>outfile-\/>write((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)dest-\/>buffer,\ datacount))}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ ERREXIT(cinfo,\ JERR\_FILE\_WRITE);}
+\DoxyCodeLine{00143\ \ \ \}}
+\DoxyCodeLine{00144\ \ \ dest-\/>outfile-\/>flush();}
+\DoxyCodeLine{00145\ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00146\ \ \ \textcolor{comment}{/*\ Make\ sure\ we\ wrote\ the\ output\ file\ OK\ */}}
+\DoxyCodeLine{00147\ \ \ \textcolor{keywordflow}{if}\ (dest-\/>outfile-\/>fail())}
+\DoxyCodeLine{00148\ \ \ \ \ ERREXIT(cinfo,\ JERR\_FILE\_WRITE);}
+\DoxyCodeLine{00149\ \}}
+\DoxyCodeLine{00150\ }
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00152\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00153\ \textcolor{comment}{\ *\ Prepare\ for\ output\ to\ a\ stdio\ stream.}}
+\DoxyCodeLine{00154\ \textcolor{comment}{\ *\ The\ caller\ must\ have\ already\ opened\ the\ stream,\ and\ is\ responsible}}
+\DoxyCodeLine{00155\ \textcolor{comment}{\ *\ for\ closing\ it\ after\ finishing\ compression.}}
+\DoxyCodeLine{00156\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00157\ }
+\DoxyCodeLine{00158\ GLOBAL(\textcolor{keywordtype}{void})}
+\DoxyCodeLine{00159\ jpeg\_ostream\_dest\ (j\_compress\_ptr\ cinfo,\ std::ostream\ *\ outfile)}
+\DoxyCodeLine{00160\ \{}
+\DoxyCodeLine{00161\ \ \ my\_dest\_ptr\ dest;}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00163\ \ \ \textcolor{comment}{/*\ The\ destination\ object\ is\ made\ permanent\ so\ that\ multiple\ JPEG\ images}}
+\DoxyCodeLine{00164\ \textcolor{comment}{\ \ \ *\ can\ be\ written\ to\ the\ same\ file\ without\ re-\/executing\ jpeg\_stdio\_dest.}}
+\DoxyCodeLine{00165\ \textcolor{comment}{\ \ \ *\ This\ makes\ it\ dangerous\ to\ use\ this\ manager\ and\ a\ different\ destination}}
+\DoxyCodeLine{00166\ \textcolor{comment}{\ \ \ *\ manager\ serially\ with\ the\ same\ JPEG\ object,\ because\ their\ private\ object}}
+\DoxyCodeLine{00167\ \textcolor{comment}{\ \ \ *\ sizes\ may\ be\ different.\ \ Caveat\ programmer.}}
+\DoxyCodeLine{00168\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00169\ \ \ \textcolor{keywordflow}{if}\ (cinfo-\/>dest\ ==\ \textcolor{keyword}{nullptr})\ \{\ \ \ \ \textcolor{comment}{/*\ first\ time\ for\ this\ JPEG\ object?\ */}}
+\DoxyCodeLine{00170\ \ \ \ \ cinfo-\/>dest\ =\ (\textcolor{keyword}{struct\ }jpeg\_destination\_mgr\ *)}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ (*cinfo-\/>mem-\/>alloc\_small)\ ((j\_common\_ptr)\ cinfo,\ JPOOL\_PERMANENT,}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{sizeof}(my\_destination\_mgr));}
+\DoxyCodeLine{00173\ \ \ \}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00175\ \ \ dest\ =\ (my\_dest\_ptr)\ cinfo-\/>dest;}
+\DoxyCodeLine{00176\ \ \ dest-\/>pub.init\_destination\ =\ init\_destination;}
+\DoxyCodeLine{00177\ \ \ dest-\/>pub.empty\_output\_buffer\ =\ empty\_output\_buffer;}
+\DoxyCodeLine{00178\ \ \ dest-\/>pub.term\_destination\ =\ term\_destination;}
+\DoxyCodeLine{00179\ \ \ dest-\/>outfile\ =\ outfile;}
+\DoxyCodeLine{00180\ \}}
+\DoxyCodeLine{00181\ }
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ }
+\DoxyCodeLine{00184\ \textcolor{comment}{//\ The\ rest\ of\ the\ code\ in\ this\ file\ is\ new\ to\ Panda.}}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00189\ PNMFileTypeJPG::Writer::}
+\DoxyCodeLine{00190\ Writer(\mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type,\ std::ostream\ *file,\ \textcolor{keywordtype}{bool}\ owns\_file)\ :}
+\DoxyCodeLine{00191\ \ \ \mbox{\hyperlink{classPNMWriter}{PNMWriter}}(type,\ file,\ owns\_file)}
+\DoxyCodeLine{00192\ \{}
+\DoxyCodeLine{00193\ \}}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00211\ \textcolor{keywordtype}{int}\ PNMFileTypeJPG::Writer::}
+\DoxyCodeLine{00212\ write\_data(\mbox{\hyperlink{structpixel}{xel}}\ *array,\ xelval\ *)\ \{}
+\DoxyCodeLine{00213\ \ \ \textcolor{keywordflow}{if}\ (\_y\_size<=0\ ||\ \_x\_size<=0)\ \{}
+\DoxyCodeLine{00214\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00215\ \ \ \}}
+\DoxyCodeLine{00216\ }
+\DoxyCodeLine{00217\ \ \ \textcolor{comment}{/*\ This\ struct\ contains\ the\ JPEG\ compression\ parameters\ and\ pointers\ to}}
+\DoxyCodeLine{00218\ \textcolor{comment}{\ \ \ *\ working\ space\ (which\ is\ allocated\ as\ needed\ by\ the\ JPEG\ library).}}
+\DoxyCodeLine{00219\ \textcolor{comment}{\ \ \ *\ It\ is\ possible\ to\ have\ several\ such\ structures,\ representing\ multiple}}
+\DoxyCodeLine{00220\ \textcolor{comment}{\ \ \ *\ compression/decompression\ processes,\ in\ existence\ at\ once.\ \ We\ refer}}
+\DoxyCodeLine{00221\ \textcolor{comment}{\ \ \ *\ to\ any\ one\ struct\ (and\ its\ associated\ working\ data)\ as\ a\ "{}JPEG\ object"{}.}}
+\DoxyCodeLine{00222\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00223\ \ \ \textcolor{keyword}{struct\ }jpeg\_compress\_struct\ cinfo;}
+\DoxyCodeLine{00224\ \ \ \textcolor{comment}{/*\ This\ struct\ represents\ a\ JPEG\ error\ handler.\ \ It\ is\ declared\ separately}}
+\DoxyCodeLine{00225\ \textcolor{comment}{\ \ \ *\ because\ applications\ often\ want\ to\ supply\ a\ specialized\ error\ handler}}
+\DoxyCodeLine{00226\ \textcolor{comment}{\ \ \ *\ (see\ the\ second\ half\ of\ this\ file\ for\ an\ example).\ \ But\ here\ we\ just}}
+\DoxyCodeLine{00227\ \textcolor{comment}{\ \ \ *\ take\ the\ easy\ way\ out\ and\ use\ the\ standard\ error\ handler,\ which\ will}}
+\DoxyCodeLine{00228\ \textcolor{comment}{\ \ \ *\ print\ a\ message\ on\ stderr\ and\ call\ exit()\ if\ compression\ fails.}}
+\DoxyCodeLine{00229\ \textcolor{comment}{\ \ \ *\ Note\ that\ this\ struct\ must\ live\ as\ long\ as\ the\ main\ JPEG\ parameter}}
+\DoxyCodeLine{00230\ \textcolor{comment}{\ \ \ *\ struct,\ to\ avoid\ dangling-\/pointer\ problems.}}
+\DoxyCodeLine{00231\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00232\ \ \ \textcolor{keyword}{struct\ }jpeg\_error\_mgr\ jerr;}
+\DoxyCodeLine{00233\ \ \ \textcolor{comment}{/*\ More\ stuff\ */}}
+\DoxyCodeLine{00234\ \ \ JSAMPROW\ row\_pointer[1];\ \ \ \ \ \ \textcolor{comment}{/*\ pointer\ to\ JSAMPLE\ row[s]\ */}}
+\DoxyCodeLine{00235\ \ \ \textcolor{keywordtype}{int}\ row\_stride;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{/*\ physical\ row\ width\ in\ image\ buffer\ */}}
+\DoxyCodeLine{00236\ }
+\DoxyCodeLine{00237\ \ \ \textcolor{comment}{/*\ Step\ 1:\ allocate\ and\ initialize\ JPEG\ compression\ object\ */}}
+\DoxyCodeLine{00238\ }
+\DoxyCodeLine{00239\ \ \ \textcolor{comment}{/*\ We\ have\ to\ set\ up\ the\ error\ handler\ first,\ in\ case\ the\ initialization}}
+\DoxyCodeLine{00240\ \textcolor{comment}{\ \ \ *\ step\ fails.\ \ (Unlikely,\ but\ it\ could\ happen\ if\ you\ are\ out\ of\ memory.)}}
+\DoxyCodeLine{00241\ \textcolor{comment}{\ \ \ *\ This\ routine\ fills\ in\ the\ contents\ of\ struct\ jerr,\ and\ returns\ jerr's}}
+\DoxyCodeLine{00242\ \textcolor{comment}{\ \ \ *\ address\ which\ we\ place\ into\ the\ link\ field\ in\ cinfo.}}
+\DoxyCodeLine{00243\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00244\ \ \ cinfo.err\ =\ jpeg\_std\_error(\&jerr);}
+\DoxyCodeLine{00245\ }
+\DoxyCodeLine{00246\ \ \ \textcolor{comment}{/*\ Now\ we\ can\ initialize\ the\ JPEG\ compression\ object.\ */}}
+\DoxyCodeLine{00247\ \ \ jpeg\_create\_compress(\&cinfo);}
+\DoxyCodeLine{00248\ }
+\DoxyCodeLine{00249\ \ \ \textcolor{comment}{/*\ Step\ 2:\ specify\ data\ destination\ (eg,\ a\ file)\ */}}
+\DoxyCodeLine{00250\ \ \ \textcolor{comment}{/*\ Note:\ steps\ 2\ and\ 3\ can\ be\ done\ in\ either\ order.\ */}}
+\DoxyCodeLine{00251\ \ \ jpeg\_ostream\_dest(\&cinfo,\ \_file);}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ \textcolor{comment}{/*\ Step\ 3:\ set\ parameters\ for\ compression\ */}}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \ \ \textcolor{comment}{/*\ First\ we\ supply\ a\ description\ of\ the\ input\ image.}}
+\DoxyCodeLine{00256\ \textcolor{comment}{\ \ \ *\ Four\ fields\ of\ the\ cinfo\ struct\ must\ be\ filled\ in:}}
+\DoxyCodeLine{00257\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00258\ \ \ cinfo.image\_width\ =\ \_x\_size;\ \ \ \ \ \ \textcolor{comment}{/*\ image\ width\ and\ height,\ in\ pixels\ */}}
+\DoxyCodeLine{00259\ \ \ cinfo.image\_height\ =\ \_y\_size;}
+\DoxyCodeLine{00260\ \ \ \textcolor{keywordflow}{if}\ (is\_grayscale())\ \{}
+\DoxyCodeLine{00261\ \ \ \ \ cinfo.input\_components\ =\ 1;}
+\DoxyCodeLine{00262\ \ \ \ \ cinfo.in\_color\_space\ =\ JCS\_GRAYSCALE;}
+\DoxyCodeLine{00263\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00264\ \ \ \ \ cinfo.input\_components\ =\ 3;}
+\DoxyCodeLine{00265\ \ \ \ \ cinfo.in\_color\_space\ =\ JCS\_RGB;}
+\DoxyCodeLine{00266\ \ \ \}}
+\DoxyCodeLine{00267\ \ \ \textcolor{comment}{/*\ Now\ use\ the\ library's\ routine\ to\ set\ default\ compression\ parameters.}}
+\DoxyCodeLine{00268\ \textcolor{comment}{\ \ \ *\ (You\ must\ set\ at\ least\ cinfo.in\_color\_space\ before\ calling\ this,}}
+\DoxyCodeLine{00269\ \textcolor{comment}{\ \ \ *\ since\ the\ defaults\ depend\ on\ the\ source\ color\ space.)}}
+\DoxyCodeLine{00270\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00271\ \ \ jpeg\_set\_defaults(\&cinfo);}
+\DoxyCodeLine{00272\ \ \ \textcolor{comment}{/*\ Now\ you\ can\ set\ any\ non-\/default\ parameters\ you\ wish\ to.}}
+\DoxyCodeLine{00273\ \textcolor{comment}{\ \ \ *\ Here\ we\ just\ illustrate\ the\ use\ of\ quality\ (quantization\ table)\ scaling:}}
+\DoxyCodeLine{00274\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00275\ \ \ jpeg\_set\_quality(\&cinfo,\ jpeg\_quality,\ TRUE\ \textcolor{comment}{/*\ limit\ to\ baseline-\/JPEG\ values\ */});}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00277\ \ \ \textcolor{comment}{/*\ Step\ 4:\ Start\ compressor\ */}}
+\DoxyCodeLine{00278\ }
+\DoxyCodeLine{00279\ \ \ \textcolor{comment}{/*\ TRUE\ ensures\ that\ we\ will\ write\ a\ complete\ interchange-\/JPEG\ file.}}
+\DoxyCodeLine{00280\ \textcolor{comment}{\ \ \ *\ Pass\ TRUE\ unless\ you\ are\ very\ sure\ of\ what\ you're\ doing.}}
+\DoxyCodeLine{00281\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00282\ \ \ jpeg\_start\_compress(\&cinfo,\ TRUE);}
+\DoxyCodeLine{00283\ }
+\DoxyCodeLine{00284\ \ \ \textcolor{comment}{/*\ Write\ the\ user\ comment,\ if\ any\ */}}
+\DoxyCodeLine{00285\ \ \ \textcolor{keywordflow}{if}\ (\_comment.size())\ \{}
+\DoxyCodeLine{00286\ \ \ \ \ jpeg\_write\_marker(}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \&cinfo,\ JPEG\_COM,\ (JOCTET\ *)\_comment.c\_str(),\ strlen(\_comment.c\_str()));}
+\DoxyCodeLine{00288\ \ \ \}}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00290\ \ \ \textcolor{comment}{/*\ Step\ 5:\ while\ (scan\ lines\ remain\ to\ be\ written)\ */}}
+\DoxyCodeLine{00291\ \ \ \textcolor{comment}{/*\ \ \ \ \ \ \ \ \ \ \ jpeg\_write\_scanlines(...);\ */}}
+\DoxyCodeLine{00292\ }
+\DoxyCodeLine{00293\ \ \ \textcolor{comment}{/*\ Here\ we\ use\ the\ library's\ state\ variable\ cinfo.next\_scanline\ as\ the}}
+\DoxyCodeLine{00294\ \textcolor{comment}{\ \ \ *\ loop\ counter,\ so\ that\ we\ don't\ have\ to\ keep\ track\ ourselves.}}
+\DoxyCodeLine{00295\ \textcolor{comment}{\ \ \ *\ To\ keep\ things\ simple,\ we\ pass\ one\ scanline\ per\ call;\ you\ can\ pass}}
+\DoxyCodeLine{00296\ \textcolor{comment}{\ \ \ *\ more\ if\ you\ wish,\ though.}}
+\DoxyCodeLine{00297\ \textcolor{comment}{\ \ \ */}}
+\DoxyCodeLine{00298\ \ \ row\_stride\ =\ \_x\_size\ *\ cinfo.input\_components;\ \textcolor{comment}{/*\ JSAMPLEs\ per\ row\ in\ image\_buffer\ */}}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00300\ \ \ \textcolor{keywordtype}{int}\ x\ =\ 0;}
+\DoxyCodeLine{00301\ \ \ JSAMPROW\ row\ =\ \textcolor{keyword}{new}\ JSAMPLE[row\_stride];}
+\DoxyCodeLine{00302\ \ \ \textcolor{keywordflow}{while}\ (cinfo.next\_scanline\ <\ cinfo.image\_height)\ \{}
+\DoxyCodeLine{00303\ \ \ \ \ \textcolor{comment}{/*\ jpeg\_write\_scanlines\ expects\ an\ array\ of\ pointers\ to\ scanlines.}}
+\DoxyCodeLine{00304\ \textcolor{comment}{\ \ \ \ \ *\ Here\ the\ array\ is\ only\ one\ element\ long,\ but\ you\ could\ pass}}
+\DoxyCodeLine{00305\ \textcolor{comment}{\ \ \ \ \ *\ more\ than\ one\ scanline\ at\ a\ time\ if\ that's\ more\ convenient.}}
+\DoxyCodeLine{00306\ \textcolor{comment}{\ \ \ \ \ */}}
+\DoxyCodeLine{00307\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ row\_stride;\ i\ +=\ cinfo.input\_components)\ \{}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cinfo.input\_components\ ==\ 1)\ \{}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \ \ row[i]\ =\ (JSAMPLE)(MAXJSAMPLE\ *\ PPM\_GETB(array[x])/\_maxval);}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ row[i]\ =\ (JSAMPLE)(MAXJSAMPLE\ *\ PPM\_GETR(array[x])/\_maxval);}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ row[i+1]\ =\ (JSAMPLE)(MAXJSAMPLE\ *\ PPM\_GETG(array[x])/\_maxval);}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ row[i+2]\ =\ (JSAMPLE)(MAXJSAMPLE\ *\ PPM\_GETB(array[x])/\_maxval);}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ x++;}
+\DoxyCodeLine{00316\ \ \ \ \ \}}
+\DoxyCodeLine{00317\ \ \ \ \ \textcolor{comment}{//\ row\_pointer[0]\ =\ \&\ image\_buffer[cinfo.next\_scanline\ *\ row\_stride];}}
+\DoxyCodeLine{00318\ \ \ \ \ \textcolor{comment}{//\ (void)\ jpeg\_write\_scanlines(\&cinfo,\ row\_pointer,\ 1);}}
+\DoxyCodeLine{00319\ \ \ \ \ row\_pointer[0]\ =\ row;}
+\DoxyCodeLine{00320\ \ \ \ \ (void)\ jpeg\_write\_scanlines(\&cinfo,\ row\_pointer,\ 1);}
+\DoxyCodeLine{00321\ \ \ \}}
+\DoxyCodeLine{00322\ \ \ \textcolor{keyword}{delete}[]\ row;}
+\DoxyCodeLine{00323\ }
+\DoxyCodeLine{00324\ \ \ \textcolor{comment}{/*\ Step\ 6:\ Finish\ compression\ */}}
+\DoxyCodeLine{00325\ }
+\DoxyCodeLine{00326\ \ \ jpeg\_finish\_compress(\&cinfo);}
+\DoxyCodeLine{00327\ }
+\DoxyCodeLine{00328\ \ \ \textcolor{comment}{/*\ Step\ 7:\ release\ JPEG\ compression\ object\ */}}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00330\ \ \ \textcolor{comment}{/*\ This\ is\ an\ important\ step\ since\ it\ will\ release\ a\ good\ deal\ of\ memory.\ */}}
+\DoxyCodeLine{00331\ \ \ jpeg\_destroy\_compress(\&cinfo);}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00333\ \ \ \textcolor{keywordflow}{return}\ \_y\_size;}
+\DoxyCodeLine{00334\ \}}
+\DoxyCodeLine{00335\ }
+\DoxyCodeLine{00336\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_JPEG}}
+
+\end{DoxyCode}

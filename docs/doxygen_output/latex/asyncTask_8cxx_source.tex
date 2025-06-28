@@ -1,0 +1,399 @@
+\doxysection{async\+Task.\+cxx}
+\hypertarget{asyncTask_8cxx_source}{}\label{asyncTask_8cxx_source}\index{panda/src/event/asyncTask.cxx@{panda/src/event/asyncTask.cxx}}
+\mbox{\hyperlink{asyncTask_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{asyncTask_8h}{asyncTask.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{asyncTaskManager_8h}{asyncTaskManager.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__event_8h}{config\_event.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pt__Event_8h}{pt\_Event.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{throw__event_8h}{throw\_event.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{eventParameter_8h}{eventParameter.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ AtomicAdjust::Integer\ AsyncTask::\_next\_task\_id;}
+\DoxyCodeLine{00024\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ AsyncTask::\_tasks\_pcollector(\textcolor{stringliteral}{"{}App:Tasks"{}});}
+\DoxyCodeLine{00025\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ AsyncTask::\_type\_handle;}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00030\ AsyncTask::}
+\DoxyCodeLine{00031\ AsyncTask(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name)\ :}
+\DoxyCodeLine{00032\ \ \ \_chain\_name(\textcolor{stringliteral}{"{}default"{}}),}
+\DoxyCodeLine{00033\ \ \ \_delay(0.0),}
+\DoxyCodeLine{00034\ \ \ \_has\_delay(false),}
+\DoxyCodeLine{00035\ \ \ \_wake\_time(0.0),}
+\DoxyCodeLine{00036\ \ \ \_sort(0),}
+\DoxyCodeLine{00037\ \ \ \_priority(0),}
+\DoxyCodeLine{00038\ \ \ \_state(S\_inactive),}
+\DoxyCodeLine{00039\ \ \ \_servicing\_thread(nullptr),}
+\DoxyCodeLine{00040\ \ \ \_chain(nullptr),}
+\DoxyCodeLine{00041\ \ \ \_start\_time(0.0),}
+\DoxyCodeLine{00042\ \ \ \_start\_frame(0),}
+\DoxyCodeLine{00043\ \ \ \_dt(0.0),}
+\DoxyCodeLine{00044\ \ \ \_max\_dt(0.0),}
+\DoxyCodeLine{00045\ \ \ \_total\_dt(0.0),}
+\DoxyCodeLine{00046\ \ \ \_num\_frames(0)}
+\DoxyCodeLine{00047\ \{}
+\DoxyCodeLine{00048\ \ \ set\_name(name);}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \ \ \textcolor{comment}{//\ Carefully\ copy\ \_next\_task\_id\ and\ increment\ it\ so\ that\ we\ get\ a\ unique\ ID.}}
+\DoxyCodeLine{00051\ \ \ AtomicAdjust::Integer\ current\_id\ =\ \_next\_task\_id;}
+\DoxyCodeLine{00052\ \ \ \textcolor{keywordflow}{while}\ (AtomicAdjust::compare\_and\_exchange(\_next\_task\_id,\ current\_id,\ current\_id\ +\ 1)\ !=\ current\_id)\ \{}
+\DoxyCodeLine{00053\ \ \ \ \ current\_id\ =\ \_next\_task\_id;}
+\DoxyCodeLine{00054\ \ \ \}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \ \ \_task\_id\ =\ current\_id;}
+\DoxyCodeLine{00057\ \}}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00062\ AsyncTask::}
+\DoxyCodeLine{00063\ \string~AsyncTask()\ \{}
+\DoxyCodeLine{00064\ \ \ nassertv(\_state\ ==\ S\_inactive\ \&\&\ \_manager\ ==\ \textcolor{keyword}{nullptr}\ \&\&\ \_chain\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00065\ \}}
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00075\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classAsyncTask_a98c321fa52ebe8206bc22c3b5a9459ec}{AsyncTask::}}}
+\DoxyCodeLine{00076\ \mbox{\hyperlink{classAsyncTask_a98c321fa52ebe8206bc22c3b5a9459ec}{remove}}()\ \{}
+\DoxyCodeLine{00077\ \ \ \mbox{\hyperlink{classAsyncTaskManager}{AsyncTaskManager}}\ *manager\ =\ \_manager;}
+\DoxyCodeLine{00078\ \ \ \textcolor{keywordflow}{if}\ (manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00079\ \ \ \ \ nassertr(\_chain-\/>\_manager\ ==\ manager,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00080\ \ \ \ \ \textcolor{keywordflow}{if}\ (task\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ task\_cat.debug()}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Removing\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00083\ \ \ \ \ \}}
+\DoxyCodeLine{00084\ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(manager-\/>\_lock);}
+\DoxyCodeLine{00085\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_chain-\/>\mbox{\hyperlink{classAsyncTaskChain_a1b61cdf68df6ca4be2e0fb803aa8d2a2}{do\_remove}}(\textcolor{keyword}{this},\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00086\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00087\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00088\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (task\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \ \ task\_cat.debug()}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ (unable\ to\ remove\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{})\(\backslash\)n"{}};}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00092\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00093\ \ \ \ \ \}}
+\DoxyCodeLine{00094\ \ \ \}}
+\DoxyCodeLine{00095\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00096\ \}}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00106\ \textcolor{keywordtype}{double}\ \mbox{\hyperlink{classAsyncTask_a8fb3d9960392bc1e18fbe719ac0eaaa5}{AsyncTask::}}}
+\DoxyCodeLine{00107\ \mbox{\hyperlink{classAsyncTask_a8fb3d9960392bc1e18fbe719ac0eaaa5}{get\_wake\_time}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00108\ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00109\ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_manager-\/>\_lock);}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_state\ ==\ S\_sleeping)\ \{}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \_wake\_time;}
+\DoxyCodeLine{00112\ \ \ \ \ \}}
+\DoxyCodeLine{00113\ \ \ \}}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \ \ \textcolor{comment}{//\ If\ it's\ not\ on\ any\ manager,\ or\ it's\ not\ sleeping,\ the\ wake\ time\ is\ 0.0.}}
+\DoxyCodeLine{00116\ \ \ \textcolor{keywordflow}{return}\ 0.0;}
+\DoxyCodeLine{00117\ \}}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00128\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAsyncTask_af9aab06f00dc518aa8c95c88bdf0fc65}{AsyncTask::}}}
+\DoxyCodeLine{00129\ \mbox{\hyperlink{classAsyncTask_af9aab06f00dc518aa8c95c88bdf0fc65}{recalc\_wake\_time}}()\ \{}
+\DoxyCodeLine{00130\ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00131\ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_manager-\/>\_lock);}
+\DoxyCodeLine{00132\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_state\ ==\ S\_sleeping)\ \{}
+\DoxyCodeLine{00133\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ now\ =\ \_manager-\/>\_clock-\/>get\_frame\_time();}
+\DoxyCodeLine{00134\ \ \ \ \ \ \ \_wake\_time\ =\ now\ +\ \_delay;}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \_start\_time\ =\ \_wake\_time;}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \ \ \ \ \ \ make\_heap(\_chain-\/>\_sleeping.begin(),\ \_chain-\/>\_sleeping.end(),}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classAsyncTaskChain_1_1AsyncTaskSortWakeTime}{AsyncTaskChain::AsyncTaskSortWakeTime}}());}
+\DoxyCodeLine{00139\ \ \ \ \ \}}
+\DoxyCodeLine{00140\ \ \ \}}
+\DoxyCodeLine{00141\ \}}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00149\ \textcolor{keywordtype}{double}\ \mbox{\hyperlink{classAsyncTask_a550f3dea716a35d71cc1dfc6d97b7ad1}{AsyncTask::}}}
+\DoxyCodeLine{00150\ \mbox{\hyperlink{classAsyncTask_a550f3dea716a35d71cc1dfc6d97b7ad1}{get\_elapsed\_time}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00151\ \ \ nassertr(\_state\ !=\ S\_inactive,\ 0.0);}
+\DoxyCodeLine{00152\ \ \ nassertr(\_manager\ !=\ \textcolor{keyword}{nullptr},\ 0.0);}
+\DoxyCodeLine{00153\ \ \ \textcolor{keywordflow}{return}\ \_manager-\/>\_clock-\/>get\_frame\_time()\ -\/\ \_start\_time;}
+\DoxyCodeLine{00154\ \}}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00162\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classAsyncTask_a0b5208b9242c3a1f3b9dfd39e7f0da0f}{AsyncTask::}}}
+\DoxyCodeLine{00163\ \mbox{\hyperlink{classAsyncTask_a0b5208b9242c3a1f3b9dfd39e7f0da0f}{get\_elapsed\_frames}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00164\ \ \ nassertr(\_state\ !=\ S\_inactive,\ 0);}
+\DoxyCodeLine{00165\ \ \ nassertr(\_manager\ !=\ \textcolor{keyword}{nullptr},\ 0);}
+\DoxyCodeLine{00166\ \ \ \textcolor{keywordflow}{return}\ \_manager-\/>\_clock-\/>get\_frame\_count()\ -\/\ \_start\_frame;}
+\DoxyCodeLine{00167\ \}}
+\DoxyCodeLine{00168\ }
+\DoxyCodeLine{00172\ \textcolor{keywordtype}{void}\ AsyncTask::}
+\DoxyCodeLine{00173\ set\_name(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name)\ \{}
+\DoxyCodeLine{00174\ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00175\ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_manager-\/>\_lock);}
+\DoxyCodeLine{00176\ \ \ \ \ \textcolor{keywordflow}{if}\ (Namable::get\_name()\ !=\ name)\ \{}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \textcolor{comment}{//\ Changing\ an\ active\ task's\ name\ requires\ moving\ it\ around\ on\ its\ name}}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \textcolor{comment}{//\ index.}}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \_manager-\/>\mbox{\hyperlink{classAsyncTaskManager_a48e444ad13e0360d9763d803868dbfb1}{remove\_task\_by\_name}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ Namable::set\_name(name);}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \_manager-\/>add\_task\_by\_name(\textcolor{keyword}{this});}
+\DoxyCodeLine{00183\ \ \ \ \ \}}
+\DoxyCodeLine{00184\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00185\ \ \ \ \ \textcolor{comment}{//\ If\ it\ hasn't\ been\ started\ anywhere,\ we\ can\ just\ change\ the\ name.}}
+\DoxyCodeLine{00186\ \ \ \ \ Namable::set\_name(name);}
+\DoxyCodeLine{00187\ \ \ \}}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00190\ \ \ \textcolor{comment}{//\ Update\ the\ PStatCollector\ with\ the\ new\ name.\ \ If\ the\ name\ includes\ a}}
+\DoxyCodeLine{00191\ \ \ \textcolor{comment}{//\ colon,\ we\ stop\ the\ collector\ name\ there,\ and\ don't\ go\ further.}}
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordtype}{size\_t}\ end\ =\ name.size();}
+\DoxyCodeLine{00193\ \ \ \textcolor{keywordtype}{size\_t}\ colon\ =\ name.find(\textcolor{charliteral}{':'});}
+\DoxyCodeLine{00194\ \ \ \textcolor{keywordflow}{if}\ (colon\ !=\ string::npos)\ \{}
+\DoxyCodeLine{00195\ \ \ \ \ end\ =\ std::min(end,\ colon);}
+\DoxyCodeLine{00196\ \ \ \}}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00198\ \ \ \textcolor{comment}{//\ If\ the\ name\ ends\ with\ a\ hyphen\ followed\ by\ a\ string\ of\ digits,\ we\ strip}}
+\DoxyCodeLine{00199\ \ \ \textcolor{comment}{//\ all\ that\ off,\ for\ the\ parent\ collector,\ to\ group\ related\ tasks\ together}}
+\DoxyCodeLine{00200\ \ \ \textcolor{comment}{//\ in\ the\ pstats\ graph.\ \ We\ still\ create\ a\ child\ collector\ that\ contains\ the}}
+\DoxyCodeLine{00201\ \ \ \textcolor{comment}{//\ full\ name,\ however.}}
+\DoxyCodeLine{00202\ \ \ \textcolor{keywordtype}{size\_t}\ trimmed\ =\ end;}
+\DoxyCodeLine{00203\ \ \ \textcolor{keywordtype}{size\_t}\ p\ =\ trimmed;}
+\DoxyCodeLine{00204\ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00205\ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ >\ 0\ \&\&\ isdigit(name[p\ -\/\ 1]))\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ -\/-\/p;}
+\DoxyCodeLine{00207\ \ \ \ \ \}}
+\DoxyCodeLine{00208\ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ >\ 0\ \&\&\ (name[p\ -\/\ 1]\ ==\ \textcolor{charliteral}{'-\/'}\ ||\ name[p\ -\/\ 1]\ ==\ \textcolor{charliteral}{'\_'}))\ \{}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ -\/-\/p;}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ trimmed\ =\ p;}
+\DoxyCodeLine{00211\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \textcolor{comment}{//p\ =\ trimmed;}}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00214\ \ \ \ \ \}}
+\DoxyCodeLine{00215\ \ \ \}}
+\DoxyCodeLine{00216\ \ \ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ parent(\_tasks\_pcollector,\ name.substr(0,\ trimmed));}
+\DoxyCodeLine{00217\ \ \ \textcolor{comment}{//\ prevent\ memory\ leak\ \_task\_pcollector\ =\ PStatCollector(parent,}}
+\DoxyCodeLine{00218\ \ \ \textcolor{comment}{//\ name.substr(0,\ end));}}
+\DoxyCodeLine{00219\ \ \ \_task\_pcollector\ =\ parent;}
+\DoxyCodeLine{00220\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ DO\_PSTATS}}
+\DoxyCodeLine{00221\ \}}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00227\ \textcolor{keywordtype}{string}\ \mbox{\hyperlink{classAsyncTask_ae3ad9280055523c9c7e92d72959ec6c2}{AsyncTask::}}}
+\DoxyCodeLine{00228\ \mbox{\hyperlink{classAsyncTask_ae3ad9280055523c9c7e92d72959ec6c2}{get\_name\_prefix}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00229\ \ \ \textcolor{keywordtype}{string}\ name\ =\ get\_name();}
+\DoxyCodeLine{00230\ \ \ \textcolor{keywordtype}{size\_t}\ trimmed\ =\ name.size();}
+\DoxyCodeLine{00231\ \ \ \textcolor{keywordtype}{size\_t}\ p\ =\ trimmed;}
+\DoxyCodeLine{00232\ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00233\ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ >\ 0\ \&\&\ isdigit(name[p\ -\/\ 1]))\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ -\/-\/p;}
+\DoxyCodeLine{00235\ \ \ \ \ \}}
+\DoxyCodeLine{00236\ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ >\ 0\ \&\&\ (name[p\ -\/\ 1]\ ==\ \textcolor{charliteral}{'-\/'}\ ||\ name[p\ -\/\ 1]\ ==\ \textcolor{charliteral}{'\_'}))\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ -\/-\/p;}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ trimmed\ =\ p;}
+\DoxyCodeLine{00239\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \textcolor{comment}{//p\ =\ trimmed;}}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00242\ \ \ \ \ \}}
+\DoxyCodeLine{00243\ \ \ \}}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00245\ \ \ \textcolor{keywordflow}{return}\ name.substr(0,\ trimmed);}
+\DoxyCodeLine{00246\ \}}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00252\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAsyncTask_afb231dcc2624a1bcebe155d44ea8b33d}{AsyncTask::}}}
+\DoxyCodeLine{00253\ \mbox{\hyperlink{classAsyncTask_afb231dcc2624a1bcebe155d44ea8b33d}{set\_task\_chain}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&chain\_name)\ \{}
+\DoxyCodeLine{00254\ \ \ \textcolor{keywordflow}{if}\ (chain\_name\ !=\ \_chain\_name)\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_manager-\/>\_lock);}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_state\ ==\ S\_active)\ \{}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Changing\ chains\ on\ an\ "{}active"{}\ (i.e.\ \ enqueued)\ task\ means\ removing}}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ it\ and\ re-\/inserting\ it\ into\ the\ queue.}}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classAsyncTask}{AsyncTask}})\ hold\_task\ =\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classAsyncTaskManager}{AsyncTaskManager}})\ manager\ =\ \_manager;}
+\DoxyCodeLine{00262\ }
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classAsyncTaskChain}{AsyncTaskChain}}\ *chain\_a\ =\ manager-\/>do\_find\_task\_chain(\_chain\_name);}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ nassertv(chain\_a\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \ \ chain\_a-\/>\mbox{\hyperlink{classAsyncTaskChain_a1b61cdf68df6ca4be2e0fb803aa8d2a2}{do\_remove}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ \_chain\_name\ =\ chain\_name;}
+\DoxyCodeLine{00267\ }
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classAsyncTask_a1c8d52b96c627c484a3a1d714ad12637}{jump\_to\_task\_chain}}(manager);}
+\DoxyCodeLine{00269\ }
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it's\ sleeping,\ currently\ being\ serviced,\ or\ something\ else,\ we}}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ can\ just\ change\ the\ chain\_name\ value\ directly.}}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \ \ \_chain\_name\ =\ chain\_name;}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00275\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it\ hasn't\ been\ started\ anywhere,\ we\ can\ just\ change\ the\ chain\_name}}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ \textcolor{comment}{//\ value.}}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \_chain\_name\ =\ chain\_name;}
+\DoxyCodeLine{00279\ \ \ \ \ \}}
+\DoxyCodeLine{00280\ \ \ \}}
+\DoxyCodeLine{00281\ \}}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00295\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAsyncTask_aa41d15df3372be870b6892ad94e2d4d9}{AsyncTask::}}}
+\DoxyCodeLine{00296\ \mbox{\hyperlink{classAsyncTask_aa41d15df3372be870b6892ad94e2d4d9}{set\_sort}}(\textcolor{keywordtype}{int}\ sort)\ \{}
+\DoxyCodeLine{00297\ \ \ \textcolor{keywordflow}{if}\ (sort\ !=\ \_sort)\ \{}
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_manager-\/>\_lock);}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_state\ ==\ S\_active\ \&\&\ \_sort\ >=\ \_chain-\/>\_current\_sort)\ \{}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Changing\ sort\ on\ an\ "{}active"{}\ (i.e.\ \ enqueued)\ task\ means\ removing}}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ it\ and\ re-\/inserting\ it\ into\ the\ queue.}}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classAsyncTask}{AsyncTask}})\ hold\_task\ =\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classAsyncTaskChain}{AsyncTaskChain}}\ *chain\ =\ \_manager-\/>\mbox{\hyperlink{classAsyncTaskManager_a301a0e88488b0bdee7e742f88b5cddcf}{do\_find\_task\_chain}}(\_chain\_name);}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ nassertv(chain\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \ \ chain-\/>\mbox{\hyperlink{classAsyncTaskChain_a1b61cdf68df6ca4be2e0fb803aa8d2a2}{do\_remove}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \ \ \_sort\ =\ sort;}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \ \ chain-\/>\mbox{\hyperlink{classAsyncTaskChain_aaa34be59f9cdd753814f5008f9b57bc8}{do\_add}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it's\ sleeping,\ currently\ being\ serviced,\ or\ something\ else,\ we}}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ can\ just\ change\ the\ sort\ value\ directly.}}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ \_sort\ =\ sort;}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00315\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it\ hasn't\ been\ started\ anywhere,\ we\ can\ just\ change\ the\ sort}}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \textcolor{comment}{//\ value.}}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \_sort\ =\ sort;}
+\DoxyCodeLine{00319\ \ \ \ \ \}}
+\DoxyCodeLine{00320\ \ \ \}}
+\DoxyCodeLine{00321\ \}}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00340\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAsyncTask_a3b161094abc9f018507d6c74c555a50f}{AsyncTask::}}}
+\DoxyCodeLine{00341\ \mbox{\hyperlink{classAsyncTask_a3b161094abc9f018507d6c74c555a50f}{set\_priority}}(\textcolor{keywordtype}{int}\ priority)\ \{}
+\DoxyCodeLine{00342\ \ \ \textcolor{keywordflow}{if}\ (priority\ !=\ \_priority)\ \{}
+\DoxyCodeLine{00343\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_manager-\/>\_lock);}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_state\ ==\ S\_active\ \&\&\ \_sort\ >=\ \_chain-\/>\_current\_sort)\ \{}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Changing\ priority\ on\ an\ "{}active"{}\ (i.e.\ \ enqueued)\ task\ means}}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ removing\ it\ and\ re-\/inserting\ it\ into\ the\ queue.}}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classAsyncTask}{AsyncTask}})\ hold\_task\ =\ \textcolor{keyword}{this};}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classAsyncTaskChain}{AsyncTaskChain}}\ *chain\ =\ \_manager-\/>\mbox{\hyperlink{classAsyncTaskManager_a301a0e88488b0bdee7e742f88b5cddcf}{do\_find\_task\_chain}}(\_chain\_name);}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ nassertv(chain\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \ \ chain-\/>\mbox{\hyperlink{classAsyncTaskChain_a1b61cdf68df6ca4be2e0fb803aa8d2a2}{do\_remove}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \ \ \_priority\ =\ priority;}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \ \ chain-\/>\mbox{\hyperlink{classAsyncTaskChain_aaa34be59f9cdd753814f5008f9b57bc8}{do\_add}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it's\ sleeping,\ currently\ being\ serviced,\ or\ something\ else,\ we}}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ can\ just\ change\ the\ priority\ value\ directly.}}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \_priority\ =\ priority;}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00360\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it\ hasn't\ been\ started\ anywhere,\ we\ can\ just\ change\ the\ priority}}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \textcolor{comment}{//\ value.}}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \_priority\ =\ priority;}
+\DoxyCodeLine{00364\ \ \ \ \ \}}
+\DoxyCodeLine{00365\ \ \ \}}
+\DoxyCodeLine{00366\ \}}
+\DoxyCodeLine{00367\ }
+\DoxyCodeLine{00371\ \textcolor{keywordtype}{void}\ AsyncTask::}
+\DoxyCodeLine{00372\ output(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00373\ \ \ out\ <<\ get\_type();}
+\DoxyCodeLine{00374\ \ \ \textcolor{keywordflow}{if}\ (has\_name())\ \{}
+\DoxyCodeLine{00375\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ get\_name();}
+\DoxyCodeLine{00376\ \ \ \}}
+\DoxyCodeLine{00377\ \}}
+\DoxyCodeLine{00378\ }
+\DoxyCodeLine{00383\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAsyncTask_a1c8d52b96c627c484a3a1d714ad12637}{AsyncTask::}}}
+\DoxyCodeLine{00384\ \mbox{\hyperlink{classAsyncTask_a1c8d52b96c627c484a3a1d714ad12637}{jump\_to\_task\_chain}}(\mbox{\hyperlink{classAsyncTaskManager}{AsyncTaskManager}}\ *manager)\ \{}
+\DoxyCodeLine{00385\ \ \ \mbox{\hyperlink{classAsyncTaskChain}{AsyncTaskChain}}\ *chain\_b\ =\ manager-\/>\mbox{\hyperlink{classAsyncTaskManager_a301a0e88488b0bdee7e742f88b5cddcf}{do\_find\_task\_chain}}(\_chain\_name);}
+\DoxyCodeLine{00386\ \ \ \textcolor{keywordflow}{if}\ (chain\_b\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00387\ \ \ \ \ task\_cat.warning()}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Creating\ implicit\ AsyncTaskChain\ "{}}\ <<\ \_chain\_name}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ for\ "{}}\ <<\ manager-\/>get\_type()\ <<\ \textcolor{stringliteral}{"{}\ "{}}}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ <<\ manager-\/>get\_name()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00391\ \ \ \ \ chain\_b\ =\ manager-\/>\mbox{\hyperlink{classAsyncTaskManager_ac4b6d34438ae6b508e5eb406a153edab}{do\_make\_task\_chain}}(\_chain\_name);}
+\DoxyCodeLine{00392\ \ \ \}}
+\DoxyCodeLine{00393\ \ \ chain\_b-\/>\mbox{\hyperlink{classAsyncTaskChain_aaa34be59f9cdd753814f5008f9b57bc8}{do\_add}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00394\ \}}
+\DoxyCodeLine{00395\ }
+\DoxyCodeLine{00400\ AsyncTask::DoneStatus\ \mbox{\hyperlink{classAsyncTask_a04c0cc4593b09c6c6cbe44ce5d41e41b}{AsyncTask::}}}
+\DoxyCodeLine{00401\ \mbox{\hyperlink{classAsyncTask_a04c0cc4593b09c6c6cbe44ce5d41e41b}{unlock\_and\_do\_task}}()\ \{}
+\DoxyCodeLine{00402\ \ \ nassertr(\_manager\ !=\ \textcolor{keyword}{nullptr},\ DS\_done);}
+\DoxyCodeLine{00403\ \ \ PT(\mbox{\hyperlink{classClockObject}{ClockObject}})\ clock\ =\ \_manager-\/>get\_clock();}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00405\ \ \ \textcolor{comment}{//\ Indicate\ that\ this\ task\ is\ now\ the\ current\ task\ running\ on\ the\ thread.}}
+\DoxyCodeLine{00406\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00407\ \ \ nassertr(current\_thread-\/>\_current\_task\ ==\ \textcolor{keyword}{nullptr},\ DS\_interrupt);}
+\DoxyCodeLine{00408\ }
+\DoxyCodeLine{00409\ \textcolor{preprocessor}{\#ifdef\ \_\_GNUC\_\_}}
+\DoxyCodeLine{00410\ \ \ \_\_attribute\_\_((unused))}
+\DoxyCodeLine{00411\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00412\ \ \ \textcolor{keywordtype}{void}\ *ptr\ =\ AtomicAdjust::compare\_and\_exchange\_ptr}
+\DoxyCodeLine{00413\ \ \ \ \ (current\_thread-\/>\_current\_task,\ \textcolor{keyword}{nullptr},\ (\mbox{\hyperlink{classTypedReferenceCount}{TypedReferenceCount}}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{00414\ }
+\DoxyCodeLine{00415\ \ \ \textcolor{comment}{//\ If\ the\ return\ value\ is\ other\ than\ nullptr,\ someone\ else\ must\ have}}
+\DoxyCodeLine{00416\ \ \ \textcolor{comment}{//\ assigned\ the\ task\ first,\ in\ another\ thread.\ \ That\ shouldn't\ be\ possible.}}
+\DoxyCodeLine{00417\ }
+\DoxyCodeLine{00418\ \ \ \textcolor{comment}{//\ But\ different\ versions\ of\ gcc\ appear\ to\ have\ problems\ compiling\ these}}
+\DoxyCodeLine{00419\ \ \ \textcolor{comment}{//\ assertions\ correctly.}}
+\DoxyCodeLine{00420\ \textcolor{preprocessor}{\#ifndef\ \_\_GNUC\_\_}}
+\DoxyCodeLine{00421\ \ \ nassertr(ptr\ ==\ \textcolor{keyword}{nullptr},\ DS\_interrupt);}
+\DoxyCodeLine{00422\ \ \ nassertr(current\_thread-\/>\_current\_task\ ==\ \textcolor{keyword}{this},\ DS\_interrupt);}
+\DoxyCodeLine{00423\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_\_GNUC\_\_}}
+\DoxyCodeLine{00424\ }
+\DoxyCodeLine{00425\ \ \ \textcolor{comment}{//\ It's\ important\ to\ release\ the\ lock\ while\ the\ task\ is\ being\ serviced.}}
+\DoxyCodeLine{00426\ \ \ \_manager-\/>\_lock.unlock();}
+\DoxyCodeLine{00427\ }
+\DoxyCodeLine{00428\ \ \ \textcolor{keywordtype}{double}\ start\ =\ clock-\/>get\_real\_time();}
+\DoxyCodeLine{00429\ \ \ \_task\_pcollector.start();}
+\DoxyCodeLine{00430\ \ \ DoneStatus\ status\ =\ \mbox{\hyperlink{classAsyncTask_a08ae2950ca5d4fc084bce052827c04c2}{do\_task}}();}
+\DoxyCodeLine{00431\ \ \ \_task\_pcollector.stop();}
+\DoxyCodeLine{00432\ \ \ \textcolor{keywordtype}{double}\ end\ =\ clock-\/>get\_real\_time();}
+\DoxyCodeLine{00433\ }
+\DoxyCodeLine{00434\ \ \ \textcolor{comment}{//\ Now\ reacquire\ the\ lock\ (so\ we\ can\ return\ with\ the\ lock\ held).}}
+\DoxyCodeLine{00435\ \ \ \_manager-\/>\_lock.lock();}
+\DoxyCodeLine{00436\ }
+\DoxyCodeLine{00437\ \ \ \_dt\ =\ end\ -\/\ start;}
+\DoxyCodeLine{00438\ \ \ \_max\_dt\ =\ std::max(\_dt,\ \_max\_dt);}
+\DoxyCodeLine{00439\ \ \ \_total\_dt\ +=\ \_dt;}
+\DoxyCodeLine{00440\ }
+\DoxyCodeLine{00441\ \ \ \_chain-\/>\_time\_in\_frame\ +=\ \_dt;}
+\DoxyCodeLine{00442\ }
+\DoxyCodeLine{00443\ \ \ \textcolor{comment}{//\ Now\ indicate\ that\ this\ is\ no\ longer\ the\ current\ task.}}
+\DoxyCodeLine{00444\ \ \ nassertr(current\_thread-\/>\_current\_task\ ==\ \textcolor{keyword}{this},\ status);}
+\DoxyCodeLine{00445\ }
+\DoxyCodeLine{00446\ \ \ ptr\ =\ AtomicAdjust::compare\_and\_exchange\_ptr}
+\DoxyCodeLine{00447\ \ \ \ \ (current\_thread-\/>\_current\_task,\ (\mbox{\hyperlink{classTypedReferenceCount}{TypedReferenceCount}}\ *)\textcolor{keyword}{this},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00449\ \ \ \textcolor{comment}{//\ If\ the\ return\ value\ is\ other\ than\ this,\ someone\ else\ must\ have\ assigned}}
+\DoxyCodeLine{00450\ \ \ \textcolor{comment}{//\ the\ task\ first,\ in\ another\ thread.\ \ That\ shouldn't\ be\ possible.}}
+\DoxyCodeLine{00451\ }
+\DoxyCodeLine{00452\ \ \ \textcolor{comment}{//\ But\ different\ versions\ of\ gcc\ appear\ to\ have\ problems\ compiling\ these}}
+\DoxyCodeLine{00453\ \ \ \textcolor{comment}{//\ assertions\ correctly.}}
+\DoxyCodeLine{00454\ \textcolor{preprocessor}{\#ifndef\ \_\_GNUC\_\_}}
+\DoxyCodeLine{00455\ \ \ nassertr(ptr\ ==\ \textcolor{keyword}{this},\ DS\_interrupt);}
+\DoxyCodeLine{00456\ \ \ nassertr(current\_thread-\/>\_current\_task\ ==\ \textcolor{keyword}{nullptr},\ DS\_interrupt);}
+\DoxyCodeLine{00457\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_\_GNUC\_\_}}
+\DoxyCodeLine{00458\ }
+\DoxyCodeLine{00459\ \ \ \textcolor{keywordflow}{return}\ status;}
+\DoxyCodeLine{00460\ \}}
+\DoxyCodeLine{00461\ }
+\DoxyCodeLine{00466\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classAsyncTask_ac03bc25267f01a6f86be036721bbe589}{AsyncTask::}}}
+\DoxyCodeLine{00467\ \mbox{\hyperlink{classAsyncTask_ac03bc25267f01a6f86be036721bbe589}{cancel}}()\ \{}
+\DoxyCodeLine{00468\ \ \ \textcolor{keywordtype}{bool}\ result\ =\ \mbox{\hyperlink{classAsyncTask_a98c321fa52ebe8206bc22c3b5a9459ec}{remove}}();}
+\DoxyCodeLine{00469\ \ \ nassertr(done(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00470\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00471\ \}}
+\DoxyCodeLine{00472\ }
+\DoxyCodeLine{00480\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classAsyncTask_a3267dc50cdaf3b980f978dc7adb74b75}{AsyncTask::}}}
+\DoxyCodeLine{00481\ \mbox{\hyperlink{classAsyncTask_a3267dc50cdaf3b980f978dc7adb74b75}{is\_runnable}}()\ \{}
+\DoxyCodeLine{00482\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00483\ \}}
+\DoxyCodeLine{00484\ }
+\DoxyCodeLine{00516\ AsyncTask::DoneStatus\ \mbox{\hyperlink{classAsyncTask_a08ae2950ca5d4fc084bce052827c04c2}{AsyncTask::}}}
+\DoxyCodeLine{00517\ \mbox{\hyperlink{classAsyncTask_a08ae2950ca5d4fc084bce052827c04c2}{do\_task}}()\ \{}
+\DoxyCodeLine{00518\ \ \ \textcolor{keywordflow}{return}\ DS\_done;}
+\DoxyCodeLine{00519\ \}}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00527\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAsyncTask_a4ea0dcbb256e6f3c18b269bb1b3eecf1}{AsyncTask::}}}
+\DoxyCodeLine{00528\ \mbox{\hyperlink{classAsyncTask_a4ea0dcbb256e6f3c18b269bb1b3eecf1}{upon\_birth}}(\mbox{\hyperlink{classAsyncTaskManager}{AsyncTaskManager}}\ *manager)\ \{}
+\DoxyCodeLine{00529\ \ \ \textcolor{comment}{//\ Throw\ a\ generic\ add\ event\ for\ the\ manager.}}
+\DoxyCodeLine{00530\ \ \ \textcolor{keywordtype}{string}\ add\_name\ =\ manager-\/>get\_name()\ +\ \textcolor{stringliteral}{"{}-\/addTask"{}};}
+\DoxyCodeLine{00531\ \ \ \mbox{\hyperlink{classPointerTo}{PT\_Event}}\ \textcolor{keyword}{event}\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classEvent}{Event}}(add\_name);}
+\DoxyCodeLine{00532\ \ \ \textcolor{keyword}{event}-\/>add\_parameter(\mbox{\hyperlink{classEventParameter}{EventParameter}}(\textcolor{keyword}{this}));}
+\DoxyCodeLine{00533\ \ \ throw\_event(event);}
+\DoxyCodeLine{00534\ \}}
+\DoxyCodeLine{00535\ }
+\DoxyCodeLine{00547\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classAsyncTask_aff720e6cdd0912393267af3d9b47a962}{AsyncTask::}}}
+\DoxyCodeLine{00548\ \mbox{\hyperlink{classAsyncTask_aff720e6cdd0912393267af3d9b47a962}{upon\_death}}(\mbox{\hyperlink{classAsyncTaskManager}{AsyncTaskManager}}\ *manager,\ \textcolor{keywordtype}{bool}\ clean\_exit)\ \{}
+\DoxyCodeLine{00549\ \ \ \textcolor{comment}{//NB.\ done\_event\ is\ now\ being\ thrown\ in\ AsyncFuture::notify\_done().}}
+\DoxyCodeLine{00550\ }
+\DoxyCodeLine{00551\ \ \ \textcolor{comment}{//\ Throw\ a\ generic\ remove\ event\ for\ the\ manager.}}
+\DoxyCodeLine{00552\ \ \ \textcolor{keywordflow}{if}\ (manager\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00553\ \ \ \ \ \textcolor{keywordtype}{string}\ remove\_name\ =\ manager-\/>get\_name()\ +\ \textcolor{stringliteral}{"{}-\/removeTask"{}};}
+\DoxyCodeLine{00554\ \ \ \ \ \mbox{\hyperlink{classPointerTo}{PT\_Event}}\ \textcolor{keyword}{event}\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classEvent}{Event}}(remove\_name);}
+\DoxyCodeLine{00555\ \ \ \ \ \textcolor{keyword}{event}-\/>add\_parameter(\mbox{\hyperlink{classEventParameter}{EventParameter}}(\textcolor{keyword}{this}));}
+\DoxyCodeLine{00556\ \ \ \ \ throw\_event(event);}
+\DoxyCodeLine{00557\ \ \ \}}
+\DoxyCodeLine{00558\ \}}
+
+\end{DoxyCode}

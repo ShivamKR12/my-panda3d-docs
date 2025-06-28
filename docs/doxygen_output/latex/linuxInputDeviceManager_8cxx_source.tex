@@ -1,0 +1,341 @@
+\doxysection{linux\+Input\+Device\+Manager.\+cxx}
+\hypertarget{linuxInputDeviceManager_8cxx_source}{}\label{linuxInputDeviceManager_8cxx_source}\index{panda/src/device/linuxInputDeviceManager.cxx@{panda/src/device/linuxInputDeviceManager.cxx}}
+\mbox{\hyperlink{linuxInputDeviceManager_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{linuxInputDeviceManager_8h}{linuxInputDeviceManager.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{throw__event_8h}{throw\_event.h}}"{}}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_LINUX\_INPUT\_H}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{evdevInputDevice_8h}{evdevInputDevice.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{linuxJoystickDevice_8h}{linuxJoystickDevice.h}}"{}}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ <dirent.h>}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ <fcntl.h>}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ <sys/inotify.h>}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <sys/ioctl.h>}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00032\ LinuxInputDeviceManager::}
+\DoxyCodeLine{00033\ LinuxInputDeviceManager()\ \{}
+\DoxyCodeLine{00034\ \ \ \textcolor{comment}{//\ Use\ inotify\ to\ watch\ /dev/input\ for\ hotplugging\ of\ devices.}}
+\DoxyCodeLine{00035\ \ \ \_inotify\_fd\ =\ inotify\_init();}
+\DoxyCodeLine{00036\ \ \ fcntl(\_inotify\_fd,\ F\_SETFL,\ O\_NONBLOCK);}
+\DoxyCodeLine{00037\ \ \ fcntl(\_inotify\_fd,\ F\_SETFD,\ FD\_CLOEXEC);}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \ \ \textcolor{keywordflow}{if}\ (\_inotify\_fd\ <\ 0)\ \{}
+\DoxyCodeLine{00040\ \ \ \ \ device\_cat.error()}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ initializing\ inotify:\ "{}}\ <<\ strerror(errno)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (inotify\_add\_watch(\_inotify\_fd,\ \textcolor{stringliteral}{"{}/dev/input"{}},\ IN\_CREATE\ |\ IN\_ATTRIB\ |\ IN\_DELETE)\ <\ 0)\ \{}
+\DoxyCodeLine{00044\ \ \ \ \ device\_cat.error()}
+\DoxyCodeLine{00045\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ adding\ inotify\ watch\ on\ /dev/input:\ "{}}\ <<\ strerror(errno)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00046\ \ \ \}}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00048\ \ \ \textcolor{comment}{//\ Scan\ /dev/input\ for\ a\ list\ of\ input\ devices.}}
+\DoxyCodeLine{00049\ \ \ DIR\ *dir\ =\ opendir(\textcolor{stringliteral}{"{}/dev/input"{}});}
+\DoxyCodeLine{00050\ \ \ \textcolor{keywordflow}{if}\ (dir)\ \{}
+\DoxyCodeLine{00051\ \ \ \ \ std::vector<size\_t>\ indices;}
+\DoxyCodeLine{00052\ \ \ \ \ dirent\ *entry\ =\ readdir(dir);}
+\DoxyCodeLine{00053\ \ \ \ \ \textcolor{keywordflow}{while}\ (entry\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00054\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ index;}
+\DoxyCodeLine{00055\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (entry-\/>d\_type\ ==\ DT\_CHR\ \&\&\ sscanf(entry-\/>d\_name,\ \textcolor{stringliteral}{"{}event\%zd"{}},\ \&index)\ ==\ 1)\ \{}
+\DoxyCodeLine{00056\ \ \ \ \ \ \ \ \ indices.push\_back(index);}
+\DoxyCodeLine{00057\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00058\ \ \ \ \ \ \ entry\ =\ readdir(dir);}
+\DoxyCodeLine{00059\ \ \ \ \ \}}
+\DoxyCodeLine{00060\ \ \ \ \ closedir(dir);}
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00062\ \ \ \ \ \textcolor{comment}{//\ We'll\ want\ to\ sort\ the\ devices\ by\ index,\ since\ the\ order\ may\ be}}
+\DoxyCodeLine{00063\ \ \ \ \ \textcolor{comment}{//\ meaningful\ (eg.\ for\ the\ Xbox\ wireless\ receiver).}}
+\DoxyCodeLine{00064\ \ \ \ \ \textcolor{keywordflow}{if}\ (indices.empty())\ \{}
+\DoxyCodeLine{00065\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00066\ \ \ \ \ \}}
+\DoxyCodeLine{00067\ \ \ \ \ std::sort(indices.begin(),\ indices.end());}
+\DoxyCodeLine{00068\ \ \ \ \ \_evdev\_devices.resize(indices.back()\ +\ 1,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ index\ :\ indices)\ \{}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ consider\_add\_evdev\_device(index);}
+\DoxyCodeLine{00072\ \ \ \ \ \}}
+\DoxyCodeLine{00073\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00074\ \ \ \ \ device\_cat.error()}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ opening\ directory\ /dev/input:\ "{}}\ <<\ strerror(errno)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00076\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00077\ \ \ \}}
+\DoxyCodeLine{00078\ \}}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00083\ LinuxInputDeviceManager::}
+\DoxyCodeLine{00084\ \string~LinuxInputDeviceManager()\ \{}
+\DoxyCodeLine{00085\ \ \ \textcolor{keywordflow}{if}\ (\_inotify\_fd\ >=\ 0)\ \{}
+\DoxyCodeLine{00086\ \ \ \ \ close(\_inotify\_fd);}
+\DoxyCodeLine{00087\ \ \ \ \ \_inotify\_fd\ =\ -\/1;}
+\DoxyCodeLine{00088\ \ \ \}}
+\DoxyCodeLine{00089\ \}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00097\ \mbox{\hyperlink{classInputDevice}{InputDevice}}\ *LinuxInputDeviceManager::}
+\DoxyCodeLine{00098\ consider\_add\_evdev\_device(\textcolor{keywordtype}{size\_t}\ ev\_index)\ \{}
+\DoxyCodeLine{00099\ \ \ \textcolor{keywordflow}{if}\ (ev\_index\ <\ \_evdev\_devices.size())\ \{}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_evdev\_devices[ev\_index]\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00101\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ already\ have\ this\ device.\ \ FIXME:\ probe\ it\ and\ add\ it\ to\ the}}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ \textcolor{comment}{//\ list\ of\ connected\ devices?}}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00104\ \ \ \ \ \}}
+\DoxyCodeLine{00105\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{comment}{//\ Make\ room\ to\ store\ this\ index.}}
+\DoxyCodeLine{00107\ \ \ \ \ \_evdev\_devices.resize(ev\_index\ +\ 1,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00108\ \ \ \}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ \textcolor{comment}{//\ Check\ if\ we\ can\ directly\ read\ the\ event\ device.}}
+\DoxyCodeLine{00111\ \ \ \textcolor{keywordtype}{char}\ path[64];}
+\DoxyCodeLine{00112\ \ \ sprintf(path,\ \textcolor{stringliteral}{"{}/dev/input/event\%zd"{}},\ ev\_index);}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00114\ \ \ \textcolor{keywordflow}{if}\ (access(path,\ R\_OK)\ ==\ 0)\ \{}
+\DoxyCodeLine{00115\ \ \ \ \ PT(\mbox{\hyperlink{classInputDevice}{InputDevice}})\ device\ =\ \textcolor{keyword}{new}\ EvdevInputDevice(\textcolor{keyword}{this},\ ev\_index);}
+\DoxyCodeLine{00116\ \ \ \ \ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Discovered\ evdev\ input\ device\ "{}}\ <<\ *device\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00119\ \ \ \ \ \}}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00121\ \ \ \ \ \_evdev\_devices[ev\_index]\ =\ device;}
+\DoxyCodeLine{00122\ }
+\DoxyCodeLine{00123\ \ \ \ \ \textcolor{keywordflow}{if}\ (device-\/>is\_connected())\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \_connected\_devices.add\_device(std::move(device));}
+\DoxyCodeLine{00125\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \textcolor{comment}{//\ Wait\ for\ activity\ on\ the\ device\ before\ it\ is\ considered\ connected.}}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \_inactive\_devices.add\_device(std::move(device));}
+\DoxyCodeLine{00128\ \ \ \ \ \}}
+\DoxyCodeLine{00129\ \ \ \ \ \textcolor{keywordflow}{return}\ \_evdev\_devices[ev\_index];}
+\DoxyCodeLine{00130\ \ \ \}}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ \ \ \textcolor{comment}{//\ Nope.\ \ The\ permissions\ haven't\ been\ configured\ to\ allow\ it.\ \ Check\ if\ this}}
+\DoxyCodeLine{00133\ \ \ \textcolor{comment}{//\ corresponds\ to\ a\ /dev/input/jsX\ interface,\ which\ has\ a\ better\ chance\ of}}
+\DoxyCodeLine{00134\ \ \ \textcolor{comment}{//\ having\ read\ permissions\ set,\ but\ doesn't\ export\ all\ of\ the\ features}}
+\DoxyCodeLine{00135\ \ \ \textcolor{comment}{//\ (notably,\ force\ feedback).}}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \textcolor{preprocessor}{\#ifndef\ \_\_FreeBSD\_\_}}
+\DoxyCodeLine{00138\ \ \ \textcolor{comment}{//\ We\ do\ this\ by\ checking\ for\ a\ js\#\ directory\ inside\ the\ sysfs\ directory.}}
+\DoxyCodeLine{00139\ \ \ sprintf(path,\ \textcolor{stringliteral}{"{}/sys/class/input/event\%zd/device"{}},\ ev\_index);}
+\DoxyCodeLine{00140\ }
+\DoxyCodeLine{00141\ \ \ DIR\ *dir\ =\ opendir(path);}
+\DoxyCodeLine{00142\ \ \ \textcolor{keywordflow}{if}\ (dir\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00143\ \ \ \ \ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ opening\ directory\ "{}}\ <<\ path\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ strerror(errno)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00146\ \ \ \ \ \}}
+\DoxyCodeLine{00147\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00148\ \ \ \}}
+\DoxyCodeLine{00149\ }
+\DoxyCodeLine{00150\ \ \ dirent\ *entry\ =\ readdir(dir);}
+\DoxyCodeLine{00151\ \ \ \textcolor{keywordflow}{while}\ (entry\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00152\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ js\_index;}
+\DoxyCodeLine{00153\ \ \ \ \ \textcolor{keywordflow}{if}\ (sscanf(entry-\/>d\_name,\ \textcolor{stringliteral}{"{}js\%zd"{}},\ \&js\_index)\ ==\ 1)\ \{}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \textcolor{comment}{//\ Yes,\ we\ fonud\ a\ corresponding\ js\ device.\ \ Try\ adding\ it.}}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ closedir(dir);}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \mbox{\hyperlink{classInputDevice}{InputDevice}}\ *device\ =\ consider\_add\_js\_device(js\_index);}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (device\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ device\_cat.is\_warning())\ \{}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ seemed\ to\ work.\ \ Display\ a\ warning\ to\ the\ user\ indicating}}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ that\ they\ might\ want\ to\ configure\ udev\ properly.}}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ device\_cat.warning()}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}/dev/input/event"{}}\ <<\ ev\_index\ <<\ \textcolor{stringliteral}{"{}\ is\ not\ readable,\ some\ "{}}}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}features\ will\ be\ unavailable.\(\backslash\)n"{}};}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \_evdev\_devices[ev\_index]\ =\ device;}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ device;}
+\DoxyCodeLine{00167\ \ \ \ \ \}}
+\DoxyCodeLine{00168\ \ \ \ \ entry\ =\ readdir(dir);}
+\DoxyCodeLine{00169\ \ \ \}}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00171\ \ \ closedir(dir);}
+\DoxyCodeLine{00172\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00173\ }
+\DoxyCodeLine{00174\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00175\ \}}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00184\ \mbox{\hyperlink{classInputDevice}{InputDevice}}\ *LinuxInputDeviceManager::}
+\DoxyCodeLine{00185\ consider\_add\_js\_device(\textcolor{keywordtype}{size\_t}\ js\_index)\ \{}
+\DoxyCodeLine{00186\ \ \ \textcolor{keywordtype}{char}\ path[64];}
+\DoxyCodeLine{00187\ \ \ sprintf(path,\ \textcolor{stringliteral}{"{}/dev/input/js\%zd"{}},\ js\_index);}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordflow}{if}\ (access(path,\ R\_OK)\ ==\ 0)\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ PT(LinuxJoystickDevice)\ device\ =\ \textcolor{keyword}{new}\ LinuxJoystickDevice(\textcolor{keyword}{this},\ js\_index);}
+\DoxyCodeLine{00191\ \ \ \ \ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Discovered\ joydev\ input\ device\ "{}}\ <<\ *device\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00194\ \ \ \ \ \}}
+\DoxyCodeLine{00195\ \ \ \ \ \mbox{\hyperlink{classInputDevice}{InputDevice}}\ *device\_p\ =\ device.p();}
+\DoxyCodeLine{00196\ }
+\DoxyCodeLine{00197\ \ \ \ \ \textcolor{keywordflow}{if}\ (device-\/>is\_connected())\ \{}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \_connected\_devices.add\_device(std::move(device));}
+\DoxyCodeLine{00199\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \textcolor{comment}{//\ Wait\ for\ activity\ on\ the\ device\ before\ it\ is\ considered\ connected.}}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \_inactive\_devices.add\_device(std::move(device));}
+\DoxyCodeLine{00202\ \ \ \ \ \}}
+\DoxyCodeLine{00203\ \ \ \ \ \textcolor{keywordflow}{return}\ device\_p;}
+\DoxyCodeLine{00204\ \ \ \}}
+\DoxyCodeLine{00205\ }
+\DoxyCodeLine{00206\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00207\ \}}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00213\ \textcolor{keywordtype}{bool}\ LinuxInputDeviceManager::}
+\DoxyCodeLine{00214\ has\_virtual\_device(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ vendor\_id,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ product\_id)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordtype}{char}\ path[294];}
+\DoxyCodeLine{00216\ \ \ sprintf(path,\ \textcolor{stringliteral}{"{}/sys/devices/virtual/input"{}});}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00218\ \ \ DIR\ *dir\ =\ opendir(path);}
+\DoxyCodeLine{00219\ \ \ \textcolor{keywordflow}{if}\ (dir\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00220\ \ \ \ \ dirent\ *entry\ =\ readdir(dir);}
+\DoxyCodeLine{00221\ \ \ \ \ \textcolor{keywordflow}{while}\ (entry\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (entry-\/>d\_name[0]\ !=\ \textcolor{charliteral}{'i'})\ \{}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ entry\ =\ readdir(dir);}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ FILE\ *f;}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ vendor[5]\ =\ \{0\};}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ sprintf(path,\ \textcolor{stringliteral}{"{}/sys/devices/virtual/input/\%s/id/vendor"{}},\ entry-\/>d\_name);}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ f\ =\ fopen(path,\ \textcolor{stringliteral}{"{}r"{}});}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (f)\ \{}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ fgets(vendor,\ \textcolor{keyword}{sizeof}(vendor),\ f);}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ fclose(f);}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00235\ }
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ product[5]\ =\ \{0\};}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ sprintf(path,\ \textcolor{stringliteral}{"{}/sys/devices/virtual/input/\%s/id/product"{}},\ entry-\/>d\_name);}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ f\ =\ fopen(path,\ \textcolor{stringliteral}{"{}r"{}});}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (f)\ \{}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \ \ fgets(product,\ \textcolor{keyword}{sizeof}(product),\ f);}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ fclose(f);}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (vendor[0]\ \&\&\ std::stoi(std::string(vendor),\ \textcolor{keyword}{nullptr},\ 16)\ ==\ (\textcolor{keywordtype}{int})vendor\_id\ \&\&}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \ \ \ \ product[0]\ \&\&\ std::stoi(std::string(product),\ \textcolor{keyword}{nullptr},\ 16)\ ==\ (\textcolor{keywordtype}{int})product\_id)\ \{}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ closedir(dir);}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00250\ \ \ \ \ \ \ entry\ =\ readdir(dir);}
+\DoxyCodeLine{00251\ \ \ \ \ \}}
+\DoxyCodeLine{00252\ \ \ \ \ closedir(dir);}
+\DoxyCodeLine{00253\ \ \ \}}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00256\ \}}
+\DoxyCodeLine{00257\ }
+\DoxyCodeLine{00262\ \textcolor{keywordtype}{void}\ LinuxInputDeviceManager::}
+\DoxyCodeLine{00263\ update()\ \{}
+\DoxyCodeLine{00264\ \ \ \textcolor{comment}{//\ Check\ for\ any\ devices\ that\ may\ be\ disconnected\ and\ need\ to\ be\ probed\ in}}
+\DoxyCodeLine{00265\ \ \ \textcolor{comment}{//\ order\ to\ see\ whether\ they\ have\ been\ reconnected.}}
+\DoxyCodeLine{00266\ \ \ \mbox{\hyperlink{classInputDeviceSet}{InputDeviceSet}}\ inactive\_devices;}
+\DoxyCodeLine{00267\ \ \ \{}
+\DoxyCodeLine{00268\ \ \ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00269\ \ \ \ \ inactive\_devices\ =\ \_inactive\_devices;}
+\DoxyCodeLine{00270\ \ \ \}}
+\DoxyCodeLine{00271\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ inactive\_devices.size();\ ++i)\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ \mbox{\hyperlink{classInputDevice}{InputDevice}}\ *device\ =\ inactive\_devices[i];}
+\DoxyCodeLine{00273\ \ \ \ \ \textcolor{keywordflow}{if}\ (device\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ !device-\/>is\_connected())\ \{}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ device-\/>\mbox{\hyperlink{classInputDevice_a704001fbbe80cdc3e5ff45b9f9901325}{poll}}();}
+\DoxyCodeLine{00275\ \ \ \ \ \}}
+\DoxyCodeLine{00276\ \ \ \}}
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \textcolor{comment}{//\ We\ use\ inotify\ to\ tell\ us\ whether\ a\ device\ was\ added,\ removed,\ or\ has}}
+\DoxyCodeLine{00279\ \ \ \textcolor{comment}{//\ changed\ permissions\ to\ allow\ us\ to\ access\ it.}}
+\DoxyCodeLine{00280\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ avail\ =\ 0;}
+\DoxyCodeLine{00281\ \ \ ioctl(\_inotify\_fd,\ FIONREAD,\ \&avail);}
+\DoxyCodeLine{00282\ \ \ \textcolor{keywordflow}{if}\ (avail\ ==\ 0)\ \{}
+\DoxyCodeLine{00283\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00284\ \ \ \}}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \textcolor{keywordtype}{char}\ buffer[avail];}
+\DoxyCodeLine{00287\ \ \ \textcolor{keywordtype}{int}\ n\_read\ =\ read(\_inotify\_fd,\ buffer,\ avail);}
+\DoxyCodeLine{00288\ \ \ \textcolor{keywordflow}{if}\ (n\_read\ <\ 0)\ \{}
+\DoxyCodeLine{00289\ \ \ \ \ \textcolor{keywordflow}{if}\ (errno\ ==\ EAGAIN\ ||\ errno\ ==\ EWOULDBLOCK)\ \{}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \textcolor{comment}{//\ No\ data\ available\ for\ now.}}
+\DoxyCodeLine{00291\ }
+\DoxyCodeLine{00292\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ device\_cat.error()\ <<\ \textcolor{stringliteral}{"{}read:\ "{}}\ <<\ strerror(errno)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00294\ \ \ \ \ \}}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00296\ \ \ \}}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00300\ \ \ \textcolor{comment}{//\ Iterate\ over\ the\ events\ in\ the\ buffer.}}
+\DoxyCodeLine{00301\ \ \ \textcolor{keywordtype}{bool}\ removed\_steam\_virtual\_device\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00302\ \ \ \textcolor{keywordtype}{char}\ *ptr\ =\ buffer;}
+\DoxyCodeLine{00303\ \ \ \textcolor{keywordtype}{char}\ *end\ =\ buffer\ +\ avail;}
+\DoxyCodeLine{00304\ \ \ \textcolor{keywordflow}{while}\ (ptr\ <\ end)\ \{}
+\DoxyCodeLine{00305\ \ \ \ \ inotify\_event\ *\textcolor{keyword}{event}\ =\ (inotify\_event\ *)ptr;}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00307\ \ \ \ \ std::string\ name(event-\/>name);}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{keywordflow}{if}\ (event-\/>mask\ \&\ IN\_DELETE)\ \{}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ device\ was\ deleted.\ \ If\ we\ have\ it,\ remove\ it.}}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ index;}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sscanf(event-\/>name,\ \textcolor{stringliteral}{"{}event\%zd"{}},\ \&index)\ ==\ 1)\ \{}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Check\ if\ we\ have\ this\ evdev\ device.\ \ If\ so,\ disconnect\ it.}}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ <\ \_evdev\_devices.size())\ \{}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ \ \ PT(\mbox{\hyperlink{classInputDevice}{InputDevice}})\ device\ =\ \_evdev\_devices[index];}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (device\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \ \ \ \ device-\/>set\_connected(\textcolor{keyword}{false});}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ \ \ \ \ \_evdev\_devices[index]\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ \ \ \ \ \_inactive\_devices.remove\_device(device);}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_connected\_devices.remove\_device(device))\ \{}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ throw\_event(\textcolor{stringliteral}{"{}disconnect-\/device"{}},\ device.p());}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00324\ }
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (device\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ device\_cat.debug()}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Removed\ input\ device\ "{}}\ <<\ *device\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Check\ for\ Steam\ virtual\ device;\ see\ comment\ below.}}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (device-\/>get\_vendor\_id()\ ==\ 0x28de\ \&\&}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ device-\/>get\_product\_id()\ ==\ 0x11ff)\ \{}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ removed\_steam\_virtual\_device\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00338\ }
+\DoxyCodeLine{00339\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (event-\/>mask\ \&\ (IN\_CREATE\ |\ IN\_ATTRIB))\ \{}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ device\ was\ created,\ or\ it\ was\ chmodded\ to\ be\ accessible.\ \ We\ need}}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \textcolor{comment}{//\ to\ check\ for\ the\ latter\ since\ it\ seems\ that\ the\ device\ may\ get\ the}}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \textcolor{comment}{//\ IN\_CREATE\ event\ before\ the\ driver\ gets\ the\ permissions\ set\ properly.}}
+\DoxyCodeLine{00343\ }
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ index;}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sscanf(event-\/>name,\ \textcolor{stringliteral}{"{}event\%zd"{}},\ \&index)\ ==\ 1)\ \{}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classInputDevice}{InputDevice}}\ *device\ =\ consider\_add\_evdev\_device(index);}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (device\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ device-\/>is\_connected())\ \{}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ \ \ throw\_event(\textcolor{stringliteral}{"{}connect-\/device"{}},\ device);}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00351\ \ \ \ \ \}}
+\DoxyCodeLine{00352\ }
+\DoxyCodeLine{00353\ \ \ \ \ ptr\ +=\ \textcolor{keyword}{sizeof}(inotify\_event)\ +\ event-\/>len;}
+\DoxyCodeLine{00354\ \ \ \}}
+\DoxyCodeLine{00355\ }
+\DoxyCodeLine{00356\ \ \ \textcolor{comment}{//\ If\ the\ Steam\ virtual\ device\ was\ just\ disconnected,\ the\ user\ may\ have\ just}}
+\DoxyCodeLine{00357\ \ \ \textcolor{comment}{//\ shut\ down\ Steam,\ and\ we\ need\ to\ reactivate\ the\ real\ Steam\ Controller}}
+\DoxyCodeLine{00358\ \ \ \textcolor{comment}{//\ device\ that\ was\ previously\ suppressed\ by\ Steam.}}
+\DoxyCodeLine{00359\ \ \ \textcolor{keywordflow}{if}\ (removed\_steam\_virtual\_device)\ \{}
+\DoxyCodeLine{00360\ \ \ \ \ inactive\_devices\ =\ \_inactive\_devices;}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ inactive\_devices.size();\ ++i)\ \{}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \mbox{\hyperlink{classInputDevice}{InputDevice}}\ *device\ =\ inactive\_devices[i];}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (device\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ device-\/>is\_of\_type(EvdevInputDevice::get\_class\_type()))\ \{}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \ \ PT(EvdevInputDevice)\ evdev\_device\ =\ (EvdevInputDevice\ *)device;}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (evdev\_device-\/>reactivate\_steam\_controller())\ \{}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ \ \ \_inactive\_devices.remove\_device(device);}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ \ \ \_connected\_devices.add\_device(device);}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ \ \ throw\_event(\textcolor{stringliteral}{"{}connect-\/device"{}},\ device);}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00372\ \ \ \ \ \}}
+\DoxyCodeLine{00373\ \ \ \}}
+\DoxyCodeLine{00374\ \}}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00376\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ PHAVE\_LINUX\_INPUT\_H}}
+
+\end{DoxyCode}

@@ -1,0 +1,697 @@
+\doxysection{particle\+System.\+cxx}
+\hypertarget{particleSystem_8cxx_source}{}\label{particleSystem_8cxx_source}\index{panda/src/particlesystem/particleSystem.cxx@{panda/src/particlesystem/particleSystem.cxx}}
+\mbox{\hyperlink{particleSystem_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ <stdlib.h>}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{luse_8h}{luse.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lmat__ops_8h}{lmat\_ops.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{clockObject_8h}{clockObject.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{physicsManager_8h}{physicsManager.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{physicalNode_8h}{physicalNode.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{nearly__zero_8h}{nearly\_zero.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{transformState_8h}{transformState.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{nodePath_8h}{nodePath.h}}"{}}}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__particlesystem_8h}{config\_particlesystem.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{particleSystem_8h}{particleSystem.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{particleSystemManager_8h}{particleSystemManager.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pointParticleRenderer_8h}{pointParticleRenderer.h}}"{}}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pointParticleFactory_8h}{pointParticleFactory.h}}"{}}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{sphereSurfaceEmitter_8h}{sphereSurfaceEmitter.h}}"{}}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatTimer_8h}{pStatTimer.h}}"{}}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{keyword}{using\ }std::cout;}
+\DoxyCodeLine{00034\ \textcolor{keyword}{using\ }std::endl;}
+\DoxyCodeLine{00035\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ ParticleSystem::\_type\_handle;}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ ParticleSystem::\_update\_collector(\textcolor{stringliteral}{"{}App:Particles:Update"{}});}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00044\ ParticleSystem::}
+\DoxyCodeLine{00045\ ParticleSystem(\textcolor{keywordtype}{int}\ pool\_size)\ :}
+\DoxyCodeLine{00046\ \ \ \mbox{\hyperlink{classPhysical}{Physical}}(pool\_size,\ false)}
+\DoxyCodeLine{00047\ \{}
+\DoxyCodeLine{00048\ \ \ \_birth\_rate\ =\ 0.5f;}
+\DoxyCodeLine{00049\ \ \ \_cur\_birth\_rate\ =\ \_birth\_rate;}
+\DoxyCodeLine{00050\ \ \ \_soft\_birth\_rate\ =\ HUGE\_VAL;}
+\DoxyCodeLine{00051\ \ \ \_tics\_since\_birth\ =\ 0.0;}
+\DoxyCodeLine{00052\ \ \ \_litter\_size\ =\ 1;}
+\DoxyCodeLine{00053\ \ \ \_litter\_spread\ =\ 0;}
+\DoxyCodeLine{00054\ \ \ \_living\_particles\ =\ 0;}
+\DoxyCodeLine{00055\ \ \ \_active\_system\_flag\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00056\ \ \ \_local\_velocity\_flag\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00057\ \ \ \_spawn\_on\_death\_flag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00058\ \ \ \_system\_grows\_older\_flag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00059\ \ \ \_system\_lifespan\ =\ 0.0f;}
+\DoxyCodeLine{00060\ \ \ \_i\_was\_spawned\_flag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00061\ \ \ \_particle\_pool\_size\ =\ 0;}
+\DoxyCodeLine{00062\ \ \ \_floor\_z\ =\ -\/HUGE\_VAL;}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00064\ \ \ \textcolor{comment}{//\ just\ in\ case\ someone\ tries\ to\ do\ something\ that\ requires\ the\ use\ of\ an}}
+\DoxyCodeLine{00065\ \ \ \textcolor{comment}{//\ emitter,\ renderer,\ or\ factory\ before\ they've\ actually\ assigned\ one.\ \ This}}
+\DoxyCodeLine{00066\ \ \ \textcolor{comment}{//\ is\ ok,\ because\ assigning\ them\ (set\_renderer(),\ set\_emitter(),\ etc...)}}
+\DoxyCodeLine{00067\ \ \ \textcolor{comment}{//\ forces\ them\ to\ set\ themselves\ up\ for\ the\ system,\ keeping\ the\ pool\ sizes}}
+\DoxyCodeLine{00068\ \ \ \textcolor{comment}{//\ consistent.}}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ \ \ \_render\_node\_path\ =\ \mbox{\hyperlink{classNodePath}{NodePath}}();}
+\DoxyCodeLine{00071\ \ \ \_render\_parent\ =\ \mbox{\hyperlink{classNodePath}{NodePath}}(\textcolor{stringliteral}{"{}ParticleSystem\ default\ render\ parent"{}});}
+\DoxyCodeLine{00072\ }
+\DoxyCodeLine{00073\ \ \ set\_emitter(\textcolor{keyword}{new}\ \mbox{\hyperlink{classSphereSurfaceEmitter}{SphereSurfaceEmitter}});}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ set\_renderer(\textcolor{keyword}{new}\ \mbox{\hyperlink{classPointParticleRenderer}{PointParticleRenderer}});}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00077\ \ \ \textcolor{comment}{//\ set\_factory(new\ PointParticleFactory);}}
+\DoxyCodeLine{00078\ \ \ \_factory\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classPointParticleFactory}{PointParticleFactory}};}
+\DoxyCodeLine{00079\ \ \ clear\_physics\_objects();}
+\DoxyCodeLine{00080\ }
+\DoxyCodeLine{00081\ \ \ set\_pool\_size(pool\_size);}
+\DoxyCodeLine{00082\ \}}
+\DoxyCodeLine{00083\ }
+\DoxyCodeLine{00087\ ParticleSystem::}
+\DoxyCodeLine{00088\ ParticleSystem(\textcolor{keyword}{const}\ \mbox{\hyperlink{classParticleSystem}{ParticleSystem}}\&\ copy)\ :}
+\DoxyCodeLine{00089\ \ \ \mbox{\hyperlink{classPhysical}{Physical}}(copy),}
+\DoxyCodeLine{00090\ \ \ \_system\_age(0.0f),}
+\DoxyCodeLine{00091\ \ \ \_template\_system\_flag(false)}
+\DoxyCodeLine{00092\ \{}
+\DoxyCodeLine{00093\ \ \ \_birth\_rate\ =\ copy.\_birth\_rate;}
+\DoxyCodeLine{00094\ \ \ \_cur\_birth\_rate\ =\ copy.\_cur\_birth\_rate;}
+\DoxyCodeLine{00095\ \ \ \_litter\_size\ =\ copy.\_litter\_size;}
+\DoxyCodeLine{00096\ \ \ \_litter\_spread\ =\ copy.\_litter\_spread;}
+\DoxyCodeLine{00097\ \ \ \_active\_system\_flag\ =\ copy.\_active\_system\_flag;}
+\DoxyCodeLine{00098\ \ \ \_local\_velocity\_flag\ =\ copy.\_local\_velocity\_flag;}
+\DoxyCodeLine{00099\ \ \ \_spawn\_on\_death\_flag\ =\ copy.\_spawn\_on\_death\_flag;}
+\DoxyCodeLine{00100\ \ \ \_i\_was\_spawned\_flag\ =\ copy.\_i\_was\_spawned\_flag;}
+\DoxyCodeLine{00101\ \ \ \_system\_grows\_older\_flag\ =\ copy.\_system\_grows\_older\_flag;}
+\DoxyCodeLine{00102\ \ \ \_emitter\ =\ copy.\_emitter;}
+\DoxyCodeLine{00103\ \ \ \_renderer\ =\ copy.\_renderer-\/>make\_copy();}
+\DoxyCodeLine{00104\ \ \ \_factory\ =\ copy.\_factory;}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00106\ \ \ \_render\_parent\ =\ copy.\_render\_parent;}
+\DoxyCodeLine{00107\ \ \ \_render\_node\_path\ =\ \_renderer-\/>get\_render\_node\_path();}
+\DoxyCodeLine{00108\ \ \ \_render\_node\_path.reparent\_to(\_render\_parent);}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ \_tics\_since\_birth\ =\ 0.0;}
+\DoxyCodeLine{00111\ \ \ \_system\_lifespan\ =\ copy.\_system\_lifespan;}
+\DoxyCodeLine{00112\ \ \ \_living\_particles\ =\ 0;}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00114\ \ \ set\_pool\_size(copy.\_particle\_pool\_size);}
+\DoxyCodeLine{00115\ \}}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00120\ ParticleSystem::}
+\DoxyCodeLine{00121\ \string~ParticleSystem()\ \{}
+\DoxyCodeLine{00122\ \ \ set\_pool\_size(0);}
+\DoxyCodeLine{00123\ }
+\DoxyCodeLine{00124\ \ \ \textcolor{keywordflow}{if}\ (!\_template\_system\_flag)\ \{}
+\DoxyCodeLine{00125\ \ \ \ \ \_renderer.clear();}
+\DoxyCodeLine{00126\ \ \ \ \ \_render\_node\_path.remove\_node();}
+\DoxyCodeLine{00127\ \ \ \}}
+\DoxyCodeLine{00128\ \}}
+\DoxyCodeLine{00129\ }
+\DoxyCodeLine{00134\ \textcolor{keywordtype}{bool}\ ParticleSystem::}
+\DoxyCodeLine{00135\ birth\_particle()\ \{}
+\DoxyCodeLine{00136\ \ \ \textcolor{keywordtype}{int}\ pool\_index;}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ \textcolor{comment}{//\ make\ sure\ there's\ room\ for\ a\ new\ particle}}
+\DoxyCodeLine{00139\ \ \ \textcolor{keywordflow}{if}\ (\_living\_particles\ >=\ \_particle\_pool\_size)\ \{}
+\DoxyCodeLine{00140\ \textcolor{preprocessor}{\ \ \ \ \#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00141\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_living\_particles\ >\ \_particle\_pool\_size)\ \{}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}\_living\_particles\ >\ \_particle\_pool\_size"{}}\ <<\ endl;}
+\DoxyCodeLine{00143\ \ \ \ \ \}}
+\DoxyCodeLine{00144\ \textcolor{preprocessor}{\ \ \ \ \#endif}}
+\DoxyCodeLine{00145\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00146\ \ \ \}}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \textcolor{preprocessor}{\ \ \#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordflow}{if}\ (0\ ==\ \_free\_particle\_fifo.size())\ \{}
+\DoxyCodeLine{00150\ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}Error:\ \_free\_particle\_fifo\ is\ empty,\ but\ \_living\_particles\ <\ \_particle\_pool\_size"{}}\ <<\ endl;}
+\DoxyCodeLine{00151\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00152\ \ \ \}}
+\DoxyCodeLine{00153\ \textcolor{preprocessor}{\ \ \#endif}}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ pool\_index\ =\ \_free\_particle\_fifo.back();}
+\DoxyCodeLine{00156\ \ \ \_free\_particle\_fifo.pop\_back();}
+\DoxyCodeLine{00157\ }
+\DoxyCodeLine{00158\ \ \ \textcolor{comment}{//\ get\ a\ handle\ on\ our\ particle.}}
+\DoxyCodeLine{00159\ \ \ \mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *bp\ =\ (\mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *)\ \_physics\_objects[pool\_index].p();}
+\DoxyCodeLine{00160\ }
+\DoxyCodeLine{00161\ \ \ \textcolor{comment}{//\ start\ filling\ out\ the\ variables.}}
+\DoxyCodeLine{00162\ \ \ \_factory-\/>populate\_particle(bp);}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00164\ \ \ bp-\/>set\_alive(\textcolor{keyword}{true});}
+\DoxyCodeLine{00165\ \ \ bp-\/>set\_active(\textcolor{keyword}{true});}
+\DoxyCodeLine{00166\ \ \ bp-\/>init();}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \ \ \textcolor{comment}{//\ get\ the\ location\ of\ the\ new\ particle.}}
+\DoxyCodeLine{00169\ \ \ LPoint3\ new\_pos,\ world\_pos;}
+\DoxyCodeLine{00170\ \ \ LVector3\ new\_vel;}
+\DoxyCodeLine{00171\ }
+\DoxyCodeLine{00172\ \ \ \_emitter-\/>generate(new\_pos,\ new\_vel);}
+\DoxyCodeLine{00173\ }
+\DoxyCodeLine{00174\ \ \ \textcolor{comment}{//\ go\ from\ birth\ space\ to\ render\ space}}
+\DoxyCodeLine{00175\ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ physical\_np\ =\ get\_physical\_node\_path();}
+\DoxyCodeLine{00176\ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ render\_np\ =\ \_renderer-\/>get\_render\_node\_path();}
+\DoxyCodeLine{00177\ }
+\DoxyCodeLine{00178\ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ transform\ =\ physical\_np.get\_transform(render\_np);}
+\DoxyCodeLine{00179\ \ \ \textcolor{keyword}{const}\ LMatrix4\ \&birth\_to\_render\_xform\ =\ transform-\/>get\_mat();}
+\DoxyCodeLine{00180\ \ \ world\_pos\ =\ new\_pos\ *\ birth\_to\_render\_xform;}
+\DoxyCodeLine{00181\ }
+\DoxyCodeLine{00182\ \ \ \textcolor{comment}{//\ cout\ <<\ "{}New\ particle\ at\ "{}\ <<\ world\_pos\ <<\ endl;}}
+\DoxyCodeLine{00183\ }
+\DoxyCodeLine{00184\ \ \ \textcolor{comment}{//\ possibly\ transform\ the\ initial\ velocity\ as\ well.}}
+\DoxyCodeLine{00185\ \ \ \textcolor{keywordflow}{if}\ (\_local\_velocity\_flag\ ==\ \textcolor{keyword}{false})}
+\DoxyCodeLine{00186\ \ \ \ \ new\_vel\ =\ new\_vel\ *\ birth\_to\_render\_xform;}
+\DoxyCodeLine{00187\ }
+\DoxyCodeLine{00188\ \ \ bp-\/>reset\_position(world\_pos\textcolor{comment}{/*\ +\ (NORMALIZED\_RAND()\ *\ new\_vel)*/});}
+\DoxyCodeLine{00189\ \ \ bp-\/>set\_velocity(new\_vel);}
+\DoxyCodeLine{00190\ }
+\DoxyCodeLine{00191\ \ \ ++\_living\_particles;}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00193\ \ \ \textcolor{comment}{//\ propogate\ information\ down\ to\ renderer}}
+\DoxyCodeLine{00194\ \ \ \_renderer-\/>birth\_particle(pool\_index);}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00197\ \}}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00202\ \textcolor{keywordtype}{void}\ ParticleSystem::}
+\DoxyCodeLine{00203\ birth\_litter()\ \{}
+\DoxyCodeLine{00204\ \ \ \textcolor{keywordtype}{int}\ litter\_size,\ i;}
+\DoxyCodeLine{00205\ }
+\DoxyCodeLine{00206\ \ \ litter\_size\ =\ \_litter\_size;}
+\DoxyCodeLine{00207\ }
+\DoxyCodeLine{00208\ \ \ \textcolor{keywordflow}{if}\ (\_litter\_spread\ !=\ 0)}
+\DoxyCodeLine{00209\ \ \ \ \ litter\_size\ +=\ I\_SPREAD(\_litter\_spread);}
+\DoxyCodeLine{00210\ }
+\DoxyCodeLine{00211\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ litter\_size;\ ++i)\ \{}
+\DoxyCodeLine{00212\ \ \ \ \ \textcolor{keywordflow}{if}\ (birth\_particle()\ ==\ \textcolor{keyword}{false})}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00214\ \ \ \}}
+\DoxyCodeLine{00215\ \}}
+\DoxyCodeLine{00216\ }
+\DoxyCodeLine{00221\ \textcolor{keywordtype}{void}\ ParticleSystem::}
+\DoxyCodeLine{00222\ spawn\_child\_system(\mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *bp)\ \{}
+\DoxyCodeLine{00223\ \ \ \textcolor{comment}{//\ first,\ make\ sure\ that\ the\ system\ exists\ in\ the\ graph\ via\ a\ physicalnode}}
+\DoxyCodeLine{00224\ \ \ \textcolor{comment}{//\ reference.}}
+\DoxyCodeLine{00225\ \ \ \mbox{\hyperlink{classPhysicalNode}{PhysicalNode}}\ *this\_pn\ =\ get\_physical\_node();}
+\DoxyCodeLine{00226\ \ \ \textcolor{keywordflow}{if}\ (!this\_pn)\ \{}
+\DoxyCodeLine{00227\ \ \ \ \ physics\_cat.error()\ <<\ \textcolor{stringliteral}{"{}ParticleSystem::spawn\_child\_system:\ "{}}}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Spawning\ system\ is\ not\ in\ the\ scene\ graph,"{}}}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ aborting."{}}\ <<\ endl;}
+\DoxyCodeLine{00230\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00231\ \ \ \}}
+\DoxyCodeLine{00232\ }
+\DoxyCodeLine{00233\ \ \ \textcolor{keywordflow}{if}\ (this\_pn-\/>get\_num\_parents()\ ==\ 0)\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ physics\_cat.error()\ <<\ \textcolor{stringliteral}{"{}ParticleSystem::spawn\_child\_system:\ "{}}}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}PhysicalNode\ this\ system\ is\ contained\ in\ "{}}}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}has\ no\ parent,\ aborting."{}}\ <<\ endl;}
+\DoxyCodeLine{00237\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00238\ \ \ \}}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00240\ \ \ \textcolor{keywordflow}{if}\ (\_spawn\_templates.size()\ ==\ 0)\ \{}
+\DoxyCodeLine{00241\ \ \ \ \ physics\_cat.error()\ <<\ \textcolor{stringliteral}{"{}ParticleSystem::spawn\_child\_system:\ "{}}}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}no\ spawn\ templates\ present."{}}\ <<\ endl;}
+\DoxyCodeLine{00243\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00244\ \ \ \}}
+\DoxyCodeLine{00245\ }
+\DoxyCodeLine{00246\ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ physical\_np\ =\ get\_physical\_node\_path();}
+\DoxyCodeLine{00247\ \ \ \mbox{\hyperlink{classNodePath}{NodePath}}\ parent\_np\ =\ physical\_np.get\_parent();}
+\DoxyCodeLine{00248\ }
+\DoxyCodeLine{00249\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *parent\ =\ parent\_np.node();}
+\DoxyCodeLine{00250\ }
+\DoxyCodeLine{00251\ \ \ \textcolor{comment}{//\ handle\ the\ spawn\ templates}}
+\DoxyCodeLine{00252\ \ \ \textcolor{keywordtype}{int}\ new\_ps\_index\ =\ rand()\ \%\ \_spawn\_templates.size();}
+\DoxyCodeLine{00253\ \ \ \mbox{\hyperlink{classParticleSystem}{ParticleSystem}}\ *ps\_template\ =\ \_spawn\_templates[new\_ps\_index];}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \ \ \textcolor{comment}{//\ create\ a\ new\ particle\ system}}
+\DoxyCodeLine{00256\ \ \ PT(\mbox{\hyperlink{classParticleSystem}{ParticleSystem}})\ new\_ps\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classParticleSystem}{ParticleSystem}}(*ps\_template);}
+\DoxyCodeLine{00257\ \ \ new\_ps-\/>\_i\_was\_spawned\_flag\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \textcolor{comment}{//\ first,\ set\ up\ the\ render\ node\ info.}}
+\DoxyCodeLine{00260\ \ \ new\_ps-\/>\_render\_parent\ =\ \_spawn\_render\_node\_path;}
+\DoxyCodeLine{00261\ \ \ new\_ps-\/>\_render\_node\_path\ =\ new\_ps-\/>\_renderer-\/>get\_render\_node\_path();}
+\DoxyCodeLine{00262\ \ \ new\_ps-\/>\_render\_node\_path.reparent\_to(new\_ps-\/>\_render\_parent);}
+\DoxyCodeLine{00263\ }
+\DoxyCodeLine{00264\ \ \ \textcolor{comment}{//\ now\ set\ up\ the\ new\ system's\ PhysicalNode.}}
+\DoxyCodeLine{00265\ \ \ PT(\mbox{\hyperlink{classPhysicalNode}{PhysicalNode}})\ new\_pn\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classPhysicalNode}{PhysicalNode}}(\textcolor{stringliteral}{"{}new\_pn"{}});}
+\DoxyCodeLine{00266\ \ \ new\_pn-\/>add\_physical(new\_ps);}
+\DoxyCodeLine{00267\ }
+\DoxyCodeLine{00268\ \ \ \textcolor{comment}{//\ the\ transform\ on\ the\ new\ child\ has\ to\ represent\ the\ transform\ from\ the}}
+\DoxyCodeLine{00269\ \ \ \textcolor{comment}{//\ current\ system\ up\ to\ its\ parent,\ and\ then\ subsequently\ down\ to\ the\ new}}
+\DoxyCodeLine{00270\ \ \ \textcolor{comment}{//\ child.}}
+\DoxyCodeLine{00271\ \ \ parent-\/>add\_child(new\_pn);}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00273\ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ transform\ =\ physical\_np.get\_transform(parent\_np);}
+\DoxyCodeLine{00274\ \ \ \textcolor{keyword}{const}\ LMatrix4\ \&old\_system\_to\_parent\_xform\ =\ transform-\/>get\_mat();}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00276\ \ \ LMatrix4\ child\_space\_xform\ =\ old\_system\_to\_parent\_xform\ *}
+\DoxyCodeLine{00277\ \ \ \ \ bp-\/>\mbox{\hyperlink{classPhysicsObject_a60c0a9a723c00b5f71e7853cfdb11027}{get\_lcs}}();}
+\DoxyCodeLine{00278\ }
+\DoxyCodeLine{00279\ \ \ new\_pn-\/>set\_transform(TransformState::make\_mat(child\_space\_xform));}
+\DoxyCodeLine{00280\ }
+\DoxyCodeLine{00281\ \ \ \textcolor{comment}{//\ tack\ the\ new\ system\ onto\ the\ managers}}
+\DoxyCodeLine{00282\ \ \ \_manager-\/>attach\_particlesystem(new\_ps);}
+\DoxyCodeLine{00283\ \ \ get\_physics\_manager()-\/>attach\_physical(new\_ps);}
+\DoxyCodeLine{00284\ \}}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00289\ \textcolor{keywordtype}{void}\ ParticleSystem::}
+\DoxyCodeLine{00290\ kill\_particle(\textcolor{keywordtype}{int}\ pool\_index)\ \{}
+\DoxyCodeLine{00291\ \ \ \textcolor{comment}{//\ get\ a\ handle\ on\ our\ particle}}
+\DoxyCodeLine{00292\ \ \ \mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *bp\ =\ (\mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *)\ \_physics\_objects[pool\_index].p();}
+\DoxyCodeLine{00293\ }
+\DoxyCodeLine{00294\ \ \ \textcolor{comment}{//\ create\ a\ new\ system\ where\ this\ one\ died,\ maybe.}}
+\DoxyCodeLine{00295\ \ \ \textcolor{keywordflow}{if}\ (\_spawn\_on\_death\_flag\ ==\ \textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00296\ \ \ \ \ spawn\_child\_system(bp);}
+\DoxyCodeLine{00297\ \ \ \}}
+\DoxyCodeLine{00298\ }
+\DoxyCodeLine{00299\ \ \ \textcolor{comment}{//\ tell\ everyone\ that\ it's\ dead}}
+\DoxyCodeLine{00300\ \ \ bp-\/>set\_alive(\textcolor{keyword}{false});}
+\DoxyCodeLine{00301\ \ \ bp-\/>set\_active(\textcolor{keyword}{false});}
+\DoxyCodeLine{00302\ \ \ bp-\/>die();}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00304\ \ \ \_free\_particle\_fifo.push\_back(pool\_index);}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00306\ \ \ \textcolor{comment}{//\ tell\ renderer}}
+\DoxyCodeLine{00307\ \ \ \_renderer-\/>kill\_particle(pool\_index);}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00309\ \ \ \_living\_particles-\/-\/;}
+\DoxyCodeLine{00310\ \}}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00315\ \textcolor{preprocessor}{\#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00316\ \textcolor{preprocessor}{\#define\ PARTICLE\_SYSTEM\_RESIZE\_POOL\_SENTRIES}}
+\DoxyCodeLine{00317\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00318\ \textcolor{keywordtype}{void}\ ParticleSystem::}
+\DoxyCodeLine{00319\ resize\_pool(\textcolor{keywordtype}{int}\ size)\ \{}
+\DoxyCodeLine{00320\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00321\ \ \ \textcolor{keywordtype}{int}\ delta\ =\ size\ -\/\ \_particle\_pool\_size;}
+\DoxyCodeLine{00322\ \ \ \textcolor{keywordtype}{int}\ po\_delta\ =\ \_particle\_pool\_size\ -\/\ \_physics\_objects.size();}
+\DoxyCodeLine{00323\ }
+\DoxyCodeLine{00324\ \textcolor{preprocessor}{\ \ \#ifdef\ PARTICLE\_SYSTEM\_RESIZE\_POOL\_SENTRIES}}
+\DoxyCodeLine{00325\ \ \ cout\ <<\ \textcolor{stringliteral}{"{}resizing\ particle\ pool\ from\ "{}}\ <<\ \_particle\_pool\_size}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}\ <<\ size\ <<\ endl;}
+\DoxyCodeLine{00327\ \textcolor{preprocessor}{\ \ \#endif}}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00329\ \ \ \textcolor{keywordflow}{if}\ (\_factory.is\_null())\ \{}
+\DoxyCodeLine{00330\ \ \ \ \ particlesystem\_cat.error()\ <<\ \textcolor{stringliteral}{"{}ParticleSystem::resize\_pool"{}}}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ called\ with\ null\ \_factory."{}}\ <<\ endl;}
+\DoxyCodeLine{00332\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00333\ \ \ \}}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00335\ \ \ \textcolor{keywordflow}{if}\ (\_renderer.is\_null())\ \{}
+\DoxyCodeLine{00336\ \ \ \ \ particlesystem\_cat.error()\ <<\ \textcolor{stringliteral}{"{}ParticleSystem::resize\_pool"{}}}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ called\ with\ null\ \_renderer."{}}\ <<\ endl;}
+\DoxyCodeLine{00338\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00339\ \ \ \}}
+\DoxyCodeLine{00340\ }
+\DoxyCodeLine{00341\ \ \ \_particle\_pool\_size\ =\ size;}
+\DoxyCodeLine{00342\ }
+\DoxyCodeLine{00343\ \ \ \textcolor{comment}{//\ make\ sure\ the\ physics\_objects\ array\ is\ OK}}
+\DoxyCodeLine{00344\ \ \ \textcolor{keywordflow}{if}\ (po\_delta)\ \{}
+\DoxyCodeLine{00345\ \ \ \ \ \textcolor{keywordflow}{if}\ (po\_delta\ >\ 0)\ \{}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ po\_delta;\ i++)}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ int\ free\_index\ =\ \_physics\_objects.size();}}
+\DoxyCodeLine{00349\ }
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *new\_particle\ =\ \_factory-\/>alloc\_particle();}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_particle)\ \{}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \ \ \ \ \_factory-\/>populate\_particle(new\_particle);}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \ \ \ \ \_physics\_objects.push\_back(new\_particle);}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00356\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}Error\ allocating\ new\ particle"{}}\ <<\ endl;}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \ \ \_particle\_pool\_size-\/-\/;}
+\DoxyCodeLine{00359\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00362\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00363\ \textcolor{preprocessor}{\ \ \ \ \ \ \#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}physics\_object\ array\ is\ too\ large??"{}}\ <<\ endl;}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \_particle\_pool\_size-\/-\/;}
+\DoxyCodeLine{00366\ \textcolor{preprocessor}{\ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ po\_delta\ =\ -\/po\_delta;}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ po\_delta;\ i++)\ \{}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ delete\_index\ =\ \_physics\_objects.size()-\/1;}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *bp\ =\ (\mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *)\ \_physics\_objects[delete\_index].p();}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bp-\/>get\_alive())\ \{}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \ \ kill\_particle(delete\_index);}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ \ \ \_free\_particle\_fifo.pop\_back();}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpdeque}{pdeque<int>::iterator}}\ i;}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \ \ i\ =\ find(\_free\_particle\_fifo.begin(),\ \_free\_particle\_fifo.end(),\ delete\_index);}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ !=\ \_free\_particle\_fifo.end())\ \{}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \ \ \ \ \_free\_particle\_fifo.erase(i);}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \ \ \_physics\_objects.pop\_back();}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00383\ \ \ \ \ \}}
+\DoxyCodeLine{00384\ \ \ \}}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00386\ \ \ \textcolor{comment}{//\ disregard\ no\ change}}
+\DoxyCodeLine{00387\ \ \ \textcolor{keywordflow}{if}\ (delta\ ==\ 0)}
+\DoxyCodeLine{00388\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \textcolor{comment}{//\ update\ the\ pool}}
+\DoxyCodeLine{00391\ \ \ \textcolor{keywordflow}{if}\ (delta\ >\ 0)\ \{}
+\DoxyCodeLine{00392\ \ \ \ \ \textcolor{comment}{//\ add\ elements}}
+\DoxyCodeLine{00393\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ delta;\ i++)}
+\DoxyCodeLine{00394\ \ \ \ \ \{}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ free\_index\ =\ \_physics\_objects.size();}
+\DoxyCodeLine{00396\ }
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *new\_particle\ =\ \_factory-\/>alloc\_particle();}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_particle)\ \{}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \_factory-\/>populate\_particle(new\_particle);}
+\DoxyCodeLine{00400\ }
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \ \ \_physics\_objects.push\_back(new\_particle);}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \ \ \_free\_particle\_fifo.push\_back(free\_index);}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00404\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}Error\ allocating\ new\ particle"{}}\ <<\ endl;}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \_particle\_pool\_size-\/-\/;}
+\DoxyCodeLine{00407\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00409\ \ \ \ \ \}}
+\DoxyCodeLine{00410\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00411\ \ \ \ \ \textcolor{comment}{//\ subtract\ elements}}
+\DoxyCodeLine{00412\ \ \ \ \ delta\ =\ -\/delta;}
+\DoxyCodeLine{00413\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ delta;\ i++)\ \{}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ delete\_index\ =\ \_physics\_objects.size()-\/1;}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *bp\ =\ (\mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *)\ \_physics\_objects[delete\_index].p();}
+\DoxyCodeLine{00416\ }
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bp-\/>get\_alive())\ \{}
+\DoxyCodeLine{00418\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}WAS\ ALIVE"{}}\ <<\ endl;}
+\DoxyCodeLine{00420\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \ \ kill\_particle(delete\_index);}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \ \ \_free\_particle\_fifo.pop\_back();}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00424\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00425\ \ \ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}WAS\ NOT\ ALIVE"{}}\ <<\ endl;}
+\DoxyCodeLine{00426\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpdeque}{pdeque<int>::iterator}}\ i;}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \ \ i\ =\ find(\_free\_particle\_fifo.begin(),\ \_free\_particle\_fifo.end(),\ delete\_index);}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ !=\ \_free\_particle\_fifo.end())\ \{}
+\DoxyCodeLine{00430\ \ \ \ \ \ \ \ \ \ \ \_free\_particle\_fifo.erase(i);}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00432\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}particle\ not\ found\ in\ free\ FIFO!!!!!!!!"{}}\ <<\ endl;}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00436\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00438\ }
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \_physics\_objects.pop\_back();}
+\DoxyCodeLine{00440\ \ \ \ \ \}}
+\DoxyCodeLine{00441\ \ \ \}}
+\DoxyCodeLine{00442\ }
+\DoxyCodeLine{00443\ \ \ \_renderer-\/>resize\_pool(\_particle\_pool\_size);}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \textcolor{preprocessor}{\ \ \#ifdef\ PARTICLE\_SYSTEM\_RESIZE\_POOL\_SENTRIES}}
+\DoxyCodeLine{00446\ \ \ cout\ <<\ \textcolor{stringliteral}{"{}particle\ pool\ resized"{}}\ <<\ endl;}
+\DoxyCodeLine{00447\ \textcolor{preprocessor}{\ \ \#endif}}
+\DoxyCodeLine{00448\ \}}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00453\ \textcolor{preprocessor}{\#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00454\ \textcolor{comment}{//\ \#define\ PARTICLE\_SYSTEM\_UPDATE\_SENTRIES}}
+\DoxyCodeLine{00455\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00456\ \textcolor{keywordtype}{void}\ ParticleSystem::}
+\DoxyCodeLine{00457\ update(PN\_stdfloat\ dt)\ \{}
+\DoxyCodeLine{00458\ \ \ \mbox{\hyperlink{classPStatTimer}{PStatTimer}}\ t1(\_update\_collector);}
+\DoxyCodeLine{00459\ }
+\DoxyCodeLine{00460\ \ \ \textcolor{keywordtype}{int}\ ttl\_updates\_left\ =\ \_living\_particles;}
+\DoxyCodeLine{00461\ \ \ \textcolor{keywordtype}{int}\ current\_index\ =\ 0,\ index\_counter\ =\ 0;}
+\DoxyCodeLine{00462\ \ \ \mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *bp;}
+\DoxyCodeLine{00463\ \ \ PN\_stdfloat\ age;}
+\DoxyCodeLine{00464\ }
+\DoxyCodeLine{00465\ \textcolor{preprocessor}{\ \ \#ifdef\ PSSANITYCHECK}}
+\DoxyCodeLine{00466\ \ \ \textcolor{comment}{//\ check\ up\ on\ things}}
+\DoxyCodeLine{00467\ \ \ \textcolor{keywordflow}{if}\ (sanity\_check())\ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00468\ \textcolor{preprocessor}{\ \ \#endif}}
+\DoxyCodeLine{00469\ }
+\DoxyCodeLine{00470\ \textcolor{preprocessor}{\ \ \#ifdef\ PARTICLE\_SYSTEM\_UPDATE\_SENTRIES}}
+\DoxyCodeLine{00471\ \ \ cout\ <<\ \textcolor{stringliteral}{"{}UPDATE:\ pool\ size:\ "{}}\ <<\ \_particle\_pool\_size}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ live\ particles:\ "{}}\ <<\ \_living\_particles\ <<\ endl;}
+\DoxyCodeLine{00473\ \textcolor{preprocessor}{\ \ \#endif}}
+\DoxyCodeLine{00474\ }
+\DoxyCodeLine{00475\ \ \ \textcolor{comment}{//\ run\ through\ the\ particle\ array}}
+\DoxyCodeLine{00476\ \ \ \textcolor{keywordflow}{while}\ (ttl\_updates\_left)\ \{}
+\DoxyCodeLine{00477\ \ \ \ \ current\_index\ =\ index\_counter;}
+\DoxyCodeLine{00478\ \ \ \ \ index\_counter++;}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ \textcolor{preprocessor}{\ \ \ \ \#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00481\ \ \ \ \ \textcolor{keywordflow}{if}\ (current\_index\ >=\ \_particle\_pool\_size)\ \{}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}ERROR:\ \_living\_particles\ is\ out\ of\ sync\ (too\ large)"{}}\ <<\ endl;}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}pool\ size:\ "{}}\ <<\ \_particle\_pool\_size}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ live\ particles:\ "{}}\ <<\ \_living\_particles}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ updates\ left:\ "{}}\ <<\ ttl\_updates\_left\ <<\ endl;}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00487\ \ \ \ \ \}}
+\DoxyCodeLine{00488\ \textcolor{preprocessor}{\ \ \ \ \#endif}}
+\DoxyCodeLine{00489\ }
+\DoxyCodeLine{00490\ \ \ \ \ \textcolor{comment}{//\ get\ the\ current\ particle.}}
+\DoxyCodeLine{00491\ \ \ \ \ bp\ =\ (\mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *)\ \_physics\_objects[current\_index].p();}
+\DoxyCodeLine{00492\ }
+\DoxyCodeLine{00493\ \textcolor{preprocessor}{\ \ \ \ \#ifdef\ PSDEBUG}}
+\DoxyCodeLine{00494\ \ \ \ \ \textcolor{keywordflow}{if}\ (!bp)\ \{}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}NULL\ ptr\ at\ index\ "{}}\ <<\ current\_index\ <<\ endl;}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00497\ \ \ \ \ \}}
+\DoxyCodeLine{00498\ \textcolor{preprocessor}{\ \ \ \ \#endif}}
+\DoxyCodeLine{00499\ }
+\DoxyCodeLine{00500\ \ \ \ \ \textcolor{keywordflow}{if}\ (bp-\/>get\_alive()\ ==\ \textcolor{keyword}{false})}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00502\ }
+\DoxyCodeLine{00503\ \ \ \ \ age\ =\ bp-\/>get\_age()\ +\ dt;}
+\DoxyCodeLine{00504\ \ \ \ \ bp-\/>set\_age(age);}
+\DoxyCodeLine{00505\ }
+\DoxyCodeLine{00506\ \ \ \ \ \textcolor{comment}{//\ cerr<<"{}bp-\/>get\_position().get\_z()\ returning}}
+\DoxyCodeLine{00507\ \ \ \ \ \textcolor{comment}{//\ "{}<<bp-\/>get\_position().get\_z()<<endl;}}
+\DoxyCodeLine{00508\ \ \ \ \ \textcolor{keywordflow}{if}\ (age\ >=\ bp-\/>get\_lifespan())\ \{}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ kill\_particle(current\_index);}
+\DoxyCodeLine{00510\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (get\_floor\_z()\ !=\ -\/HUGE\_VAL}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ \ \ \ \ \ \ \&\&\ bp-\/>get\_position().get\_z()\ <=\ get\_floor\_z())\ \{}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \textcolor{comment}{//\ ...the\ particle\ is\ going\ under\ the\ floor.\ \ Maybe\ tell\ the\ particle\ to}}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \textcolor{comment}{//\ bounce:\ bp-\/>bounce()?}}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ kill\_particle(current\_index);}
+\DoxyCodeLine{00515\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ bp-\/>update();}
+\DoxyCodeLine{00517\ \ \ \ \ \}}
+\DoxyCodeLine{00518\ }
+\DoxyCodeLine{00519\ \ \ \ \ \textcolor{comment}{//\ break\ out\ early\ if\ we're\ lucky}}
+\DoxyCodeLine{00520\ \ \ \ \ ttl\_updates\_left-\/-\/;}
+\DoxyCodeLine{00521\ \ \ \}}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00524\ \ \ \textcolor{comment}{//\ generate\ new\ particles\ if\ necessary.}}
+\DoxyCodeLine{00525\ \ \ \_tics\_since\_birth\ +=\ dt;}
+\DoxyCodeLine{00526\ }
+\DoxyCodeLine{00527\ \ \ \textcolor{keywordflow}{while}\ (\_tics\_since\_birth\ >=\ \_cur\_birth\_rate)\ \{}
+\DoxyCodeLine{00528\ \ \ \ \ birth\_litter();}
+\DoxyCodeLine{00529\ \ \ \ \ \_tics\_since\_birth\ -\/=\ \_cur\_birth\_rate;}
+\DoxyCodeLine{00530\ \ \ \}}
+\DoxyCodeLine{00531\ }
+\DoxyCodeLine{00532\ \textcolor{preprocessor}{\ \ \#ifdef\ PARTICLE\_SYSTEM\_UPDATE\_SENTRIES}}
+\DoxyCodeLine{00533\ \ \ cout\ <<\ \textcolor{stringliteral}{"{}particle\ update\ complete"{}}\ <<\ endl;}
+\DoxyCodeLine{00534\ \textcolor{preprocessor}{\ \ \#endif}}
+\DoxyCodeLine{00535\ }
+\DoxyCodeLine{00536\ \}}
+\DoxyCodeLine{00537\ }
+\DoxyCodeLine{00538\ \textcolor{preprocessor}{\#ifdef\ PSSANITYCHECK}}
+\DoxyCodeLine{00543\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00544\ \textcolor{preprocessor}{\#define\ PSSCVERBOSE}}
+\DoxyCodeLine{00545\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00546\ }
+\DoxyCodeLine{00547\ \textcolor{keyword}{class\ }SC\_valuenamepair\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{classReferenceCount}{ReferenceCount}}\ \{}
+\DoxyCodeLine{00548\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00549\ \ \ \textcolor{keywordtype}{int}\ value;}
+\DoxyCodeLine{00550\ \ \ \textcolor{keywordtype}{char}\ *name;}
+\DoxyCodeLine{00551\ \ \ SC\_valuenamepair(\textcolor{keywordtype}{int}\ v,\ \textcolor{keywordtype}{char}\ *s)\ :\ value(v),\ name(s)\ \{\}}
+\DoxyCodeLine{00552\ \};}
+\DoxyCodeLine{00553\ }
+\DoxyCodeLine{00554\ \textcolor{comment}{//\ returns\ 0\ if\ OK,\ \#\ of\ errors\ if\ not\ OK}}
+\DoxyCodeLine{00555\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}\ check\_free\_live\_total\_particles(\mbox{\hyperlink{classpvector}{pvector}}<\ PT(SC\_valuenamepair)\ >\ live\_counts,}
+\DoxyCodeLine{00556\ \ \ \mbox{\hyperlink{classpvector}{pvector}}<\ PT(SC\_valuenamepair)\ >\ dead\_counts,\ \mbox{\hyperlink{classpvector}{pvector}}<\ PT(SC\_valuenamepair)\ >\ total\_counts,}
+\DoxyCodeLine{00557\ \ \ \textcolor{keywordtype}{int}\ print\_all\ =\ 0)\ \{}
+\DoxyCodeLine{00558\ }
+\DoxyCodeLine{00559\ \ \ \textcolor{keywordtype}{int}\ val\ =\ 0;}
+\DoxyCodeLine{00560\ \ \ \textcolor{keywordtype}{int}\ l,\ d,\ t;}
+\DoxyCodeLine{00561\ }
+\DoxyCodeLine{00562\ \ \ \textcolor{keywordflow}{for}(l\ =\ 0;\ l\ <\ live\_counts.size();\ l++)\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ \textcolor{keywordflow}{for}(d\ =\ 0;\ d\ <\ dead\_counts.size();\ d++)\ \{}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \textcolor{keywordflow}{for}(t\ =\ 0;\ t\ <\ total\_counts.size();\ t++)\ \{}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ live\ =\ live\_counts[l]-\/>value;}
+\DoxyCodeLine{00566\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ dead\ =\ dead\_counts[d]-\/>value;}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ total\ =\ total\_counts[t]-\/>value;}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((live\ +\ dead)\ !=\ total)\ \{}
+\DoxyCodeLine{00569\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#ifdef\ PSSCVERBOSE}}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}free/live/total\ count:\ "{}}}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ live\_counts[l]-\/>name\ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ live\ <<\ \textcolor{stringliteral}{"{})\ +\ "{}}}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ dead\_counts[d]-\/>name\ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ dead\ <<\ \textcolor{stringliteral}{"{})\ =\ "{}}}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ live\ +\ dead\ <<\ \textcolor{stringliteral}{"{},\ !=\ "{}}}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ total\_counts[t]-\/>name\ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ total\ <<\ \textcolor{stringliteral}{"{})"{}}}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ endl;}
+\DoxyCodeLine{00576\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \ \ \ \ val++;}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00580\ \ \ \ \ \}}
+\DoxyCodeLine{00581\ \ \ \}}
+\DoxyCodeLine{00582\ }
+\DoxyCodeLine{00583\ \ \ \textcolor{keywordflow}{return}\ val;}
+\DoxyCodeLine{00584\ \}}
+\DoxyCodeLine{00585\ }
+\DoxyCodeLine{00586\ \textcolor{keywordtype}{int}\ ParticleSystem::}
+\DoxyCodeLine{00587\ sanity\_check()\ \{}
+\DoxyCodeLine{00588\ \ \ \textcolor{keywordtype}{int}\ result\ =\ 0;}
+\DoxyCodeLine{00589\ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00590\ \ \ \mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *bp;}
+\DoxyCodeLine{00591\ \ \ \textcolor{keywordtype}{int}\ pool\_size;}
+\DoxyCodeLine{00592\ }
+\DoxyCodeLine{00593\ \ \ \textcolor{comment}{//\ check\ pool\ size}}
+\DoxyCodeLine{00594\ \ \ \textcolor{keywordflow}{if}\ (\_particle\_pool\_size\ !=\ \_physics\_objects.size())\ \{}
+\DoxyCodeLine{00595\ \textcolor{preprocessor}{\ \ \ \ \#ifdef\ PSSCVERBOSE}}
+\DoxyCodeLine{00596\ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}\_particle\_pool\_size\ ("{}}\ <<\ \_particle\_pool\_size}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{})\ !=\ particle\ array\ size\ ("{}}\ <<\ \_physics\_objects.size()\ <<\ \textcolor{stringliteral}{"{})"{}}\ <<\ endl;}
+\DoxyCodeLine{00598\ \textcolor{preprocessor}{\ \ \ \ \#endif}}
+\DoxyCodeLine{00599\ \ \ \ \ result++;}
+\DoxyCodeLine{00600\ \ \ \}}
+\DoxyCodeLine{00601\ \ \ pool\_size\ =\ std::min(\_particle\_pool\_size,\ \_physics\_objects.size());}
+\DoxyCodeLine{00602\ }
+\DoxyCodeLine{00603\ \ \ \textcolor{comment}{//\ find\ out\ how\ many\ particles\ are\ REALLY\ alive\ and\ dead}}
+\DoxyCodeLine{00604\ \ \ \textcolor{keywordtype}{int}\ real\_live\_particle\_count\ =\ 0;}
+\DoxyCodeLine{00605\ \ \ \textcolor{keywordtype}{int}\ real\_dead\_particle\_count\ =\ 0;}
+\DoxyCodeLine{00606\ }
+\DoxyCodeLine{00607\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ \_physics\_objects.size();\ i++)\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ bp\ =\ (\mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *)\ \_physics\_objects[i].p();}
+\DoxyCodeLine{00609\ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{true}\ ==\ bp-\/>get\_alive())\ \{}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ real\_live\_particle\_count++;}
+\DoxyCodeLine{00611\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ real\_dead\_particle\_count++;}
+\DoxyCodeLine{00613\ \ \ \ \ \}}
+\DoxyCodeLine{00614\ \ \ \}}
+\DoxyCodeLine{00615\ }
+\DoxyCodeLine{00616\ \ \ \textcolor{keywordflow}{if}\ (real\_live\_particle\_count\ !=\ \_living\_particles)\ \{}
+\DoxyCodeLine{00617\ \textcolor{preprocessor}{\ \ \ \ \#ifdef\ PSSCVERBOSE}}
+\DoxyCodeLine{00618\ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}manually\ counted\ live\ particle\ count\ ("{}}\ <<\ real\_live\_particle\_count}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{})\ !=\ \_living\_particles\ ("{}}\ <<\ \_living\_particles\ <<\ \textcolor{stringliteral}{"{})"{}}\ <<\ endl;}
+\DoxyCodeLine{00620\ \textcolor{preprocessor}{\ \ \ \ \#endif}}
+\DoxyCodeLine{00621\ \ \ \ \ result++;}
+\DoxyCodeLine{00622\ \ \ \}}
+\DoxyCodeLine{00623\ }
+\DoxyCodeLine{00624\ \ \ \textcolor{keywordflow}{if}\ (real\_dead\_particle\_count\ !=\ \_free\_particle\_fifo.size())\ \{}
+\DoxyCodeLine{00625\ \textcolor{preprocessor}{\ \ \ \ \#ifdef\ PSSCVERBOSE}}
+\DoxyCodeLine{00626\ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}manually\ counted\ dead\ particle\ count\ ("{}}\ <<\ real\_dead\_particle\_count}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{})\ !=\ free\ particle\ fifo\ size\ ("{}}\ <<\ \_free\_particle\_fifo.size()\ <<\ \textcolor{stringliteral}{"{})"{}}\ <<\ endl;}
+\DoxyCodeLine{00628\ \textcolor{preprocessor}{\ \ \ \ \#endif}}
+\DoxyCodeLine{00629\ \ \ \ \ result++;}
+\DoxyCodeLine{00630\ \ \ \}}
+\DoxyCodeLine{00631\ }
+\DoxyCodeLine{00632\ \ \ \textcolor{comment}{//\ check\ the\ free\ particle\ pool}}
+\DoxyCodeLine{00633\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ \_free\_particle\_fifo.size();\ i++)\ \{}
+\DoxyCodeLine{00634\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ \_free\_particle\_fifo[i];}
+\DoxyCodeLine{00635\ }
+\DoxyCodeLine{00636\ \ \ \ \ \textcolor{comment}{//\ check\ that\ we're\ in\ bounds}}
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ >=\ pool\_size)\ \{}
+\DoxyCodeLine{00638\ \textcolor{preprocessor}{\ \ \ \ \ \ \#ifdef\ PSSCVERBOSE}}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}index\ from\ free\ particle\ fifo\ ("{}}\ <<\ index}
+\DoxyCodeLine{00640\ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{})\ is\ too\ large;\ pool\ size\ is\ "{}}\ <<\ pool\_size\ <<\ endl;}
+\DoxyCodeLine{00641\ \textcolor{preprocessor}{\ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ result++;}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00644\ \ \ \ \ \}}
+\DoxyCodeLine{00645\ }
+\DoxyCodeLine{00646\ \ \ \ \ \textcolor{comment}{//\ check\ that\ the\ particle\ is\ indeed\ dead}}
+\DoxyCodeLine{00647\ \ \ \ \ bp\ =\ (\mbox{\hyperlink{classBaseParticle}{BaseParticle}}\ *)\ \_physics\_objects[index].p();}
+\DoxyCodeLine{00648\ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{true}\ ==\ bp-\/>get\_alive())\ \{}
+\DoxyCodeLine{00649\ \textcolor{preprocessor}{\ \ \ \ \ \ \#ifdef\ PSSCVERBOSE}}
+\DoxyCodeLine{00650\ \ \ \ \ \ \ cout\ <<\ \textcolor{stringliteral}{"{}particle\ "{}}\ <<\ index\ <<\ \textcolor{stringliteral}{"{}\ in\ free\ fifo\ is\ not\ dead"{}}\ <<\ endl;}
+\DoxyCodeLine{00651\ \textcolor{preprocessor}{\ \ \ \ \ \ \#endif}}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ result++;}
+\DoxyCodeLine{00653\ \ \ \ \ \}}
+\DoxyCodeLine{00654\ \ \ \}}
+\DoxyCodeLine{00655\ }
+\DoxyCodeLine{00656\ \ \ \textcolor{comment}{//\ check\ the\ numbers\ of\ free\ particles,\ live\ particles,\ and\ total\ particles}}
+\DoxyCodeLine{00657\ \ \ \mbox{\hyperlink{classpvector}{pvector}}<\ PT(SC\_valuenamepair)\ >\ live\_counts;}
+\DoxyCodeLine{00658\ \ \ \mbox{\hyperlink{classpvector}{pvector}}<\ PT(SC\_valuenamepair)\ >\ dead\_counts;}
+\DoxyCodeLine{00659\ \ \ \mbox{\hyperlink{classpvector}{pvector}}<\ PT(SC\_valuenamepair)\ >\ total\_counts;}
+\DoxyCodeLine{00660\ }
+\DoxyCodeLine{00661\ \ \ live\_counts.push\_back(\textcolor{keyword}{new}\ SC\_valuenamepair(real\_live\_particle\_count,\ \textcolor{stringliteral}{"{}real\_live\_particle\_count"{}}));}
+\DoxyCodeLine{00662\ }
+\DoxyCodeLine{00663\ \ \ dead\_counts.push\_back(\textcolor{keyword}{new}\ SC\_valuenamepair(real\_dead\_particle\_count,\ \textcolor{stringliteral}{"{}real\_dead\_particle\_count"{}}));}
+\DoxyCodeLine{00664\ \ \ dead\_counts.push\_back(\textcolor{keyword}{new}\ SC\_valuenamepair(\_free\_particle\_fifo.size(),\ \textcolor{stringliteral}{"{}free\ particle\ fifo\ size"{}}));}
+\DoxyCodeLine{00665\ }
+\DoxyCodeLine{00666\ \ \ total\_counts.push\_back(\textcolor{keyword}{new}\ SC\_valuenamepair(\_particle\_pool\_size,\ \textcolor{stringliteral}{"{}\_particle\_pool\_size"{}}));}
+\DoxyCodeLine{00667\ \ \ total\_counts.push\_back(\textcolor{keyword}{new}\ SC\_valuenamepair(\_physics\_objects.size(),\ \textcolor{stringliteral}{"{}actual\ particle\ pool\ size"{}}));}
+\DoxyCodeLine{00668\ }
+\DoxyCodeLine{00669\ \ \ result\ +=\ check\_free\_live\_total\_particles(live\_counts,\ dead\_counts,\ total\_counts);}
+\DoxyCodeLine{00670\ }
+\DoxyCodeLine{00671\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00672\ \}}
+\DoxyCodeLine{00673\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00674\ }
+\DoxyCodeLine{00678\ \textcolor{keywordtype}{void}\ ParticleSystem::}
+\DoxyCodeLine{00679\ output(ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00680\ \textcolor{preprocessor}{\ \ \#ifndef\ NDEBUG\ }\textcolor{comment}{//[}}
+\DoxyCodeLine{00681\ \ \ out<<\textcolor{stringliteral}{"{}ParticleSystem"{}};}
+\DoxyCodeLine{00682\ \textcolor{preprocessor}{\ \ \#endif\ }\textcolor{comment}{//]\ NDEBUG}}
+\DoxyCodeLine{00683\ \}}
+\DoxyCodeLine{00684\ }
+\DoxyCodeLine{00688\ \textcolor{keywordtype}{void}\ ParticleSystem::}
+\DoxyCodeLine{00689\ write\_free\_particle\_fifo(ostream\ \&out,\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}})\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00690\ \textcolor{preprocessor}{\ \ \#ifndef\ NDEBUG\ }\textcolor{comment}{//[}}
+\DoxyCodeLine{00691\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}});}
+\DoxyCodeLine{00692\ \ \ out<<\textcolor{stringliteral}{"{}"{}}<<\textcolor{stringliteral}{"{}\_free\_particle\_fifo\ ("{}}<<\_free\_particle\_fifo.size()<<\textcolor{stringliteral}{"{}\ forces)\(\backslash\)n"{}};}
+\DoxyCodeLine{00693\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classpdeque}{pdeque<\ int\ >::const\_iterator}}\ i=\_free\_particle\_fifo.begin();}
+\DoxyCodeLine{00694\ \ \ \ \ \ \ \ i\ !=\ \_free\_particle\_fifo.end();}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ \ ++i)\ \{}
+\DoxyCodeLine{00696\ \ \ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<(*i)<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00697\ \ \ \}}
+\DoxyCodeLine{00698\ \textcolor{preprocessor}{\ \ \#endif\ }\textcolor{comment}{//]\ NDEBUG}}
+\DoxyCodeLine{00699\ \}}
+\DoxyCodeLine{00700\ }
+\DoxyCodeLine{00704\ \textcolor{keywordtype}{void}\ ParticleSystem::}
+\DoxyCodeLine{00705\ write\_spawn\_templates(ostream\ \&out,\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}})\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00706\ \textcolor{preprocessor}{\ \ \#ifndef\ NDEBUG\ }\textcolor{comment}{//[}}
+\DoxyCodeLine{00707\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}});}
+\DoxyCodeLine{00708\ \ \ out<<\textcolor{stringliteral}{"{}"{}}<<\textcolor{stringliteral}{"{}\_spawn\_templates\ ("{}}<<\_spawn\_templates.size()<<\textcolor{stringliteral}{"{}\ templates)\(\backslash\)n"{}};}
+\DoxyCodeLine{00709\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classpvector}{pvector}}<\ PT(\mbox{\hyperlink{classParticleSystem}{ParticleSystem}})\ >::const\_iterator\ i=\_spawn\_templates.begin();}
+\DoxyCodeLine{00710\ \ \ \ \ \ \ \ i\ !=\ \_spawn\_templates.end();}
+\DoxyCodeLine{00711\ \ \ \ \ \ \ \ ++i)\ \{}
+\DoxyCodeLine{00712\ \ \ \ \ (*i)-\/>write(out,\ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);}
+\DoxyCodeLine{00713\ \ \ \}}
+\DoxyCodeLine{00714\ \textcolor{preprocessor}{\ \ \#endif\ }\textcolor{comment}{//]\ NDEBUG}}
+\DoxyCodeLine{00715\ \}}
+\DoxyCodeLine{00716\ }
+\DoxyCodeLine{00720\ \textcolor{keywordtype}{void}\ ParticleSystem::}
+\DoxyCodeLine{00721\ write(ostream\ \&out,\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}})\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00722\ \textcolor{preprocessor}{\ \ \#ifndef\ NDEBUG\ }\textcolor{comment}{//[}}
+\DoxyCodeLine{00723\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}});\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}ParticleSystem:\(\backslash\)n"{}};}
+\DoxyCodeLine{00724\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_particle\_pool\_size\ "{}}<<\_particle\_pool\_size<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00725\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_living\_particles\ "{}}<<\_living\_particles<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00726\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_tics\_since\_birth\ "{}}<<\_tics\_since\_birth<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00727\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_litter\_size\ "{}}<<\_litter\_size<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00728\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_litter\_spread\ "{}}<<\_litter\_spread<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00729\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_system\_age\ "{}}<<\_system\_age<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00730\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_system\_lifespan\ "{}}<<\_system\_lifespan<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00731\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_factory\ "{}}<<\_factory<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00732\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_emitter\ "{}}<<\_emitter<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00733\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_renderer\ "{}}<<\_renderer<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00734\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_manager\ "{}}<<\_manager<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00735\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_template\_system\_flag\ "{}}<<\_template\_system\_flag<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00736\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_render\_parent\ "{}}<<\_render\_parent<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00737\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_render\_node\ "{}}<<\_render\_node\_path<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00738\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_active\_system\_flag\ "{}}<<\_active\_system\_flag<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00739\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_local\_velocity\_flag\ "{}}<<\_local\_velocity\_flag<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00740\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_system\_grows\_older\_flag\ "{}}<<\_system\_grows\_older\_flag<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00741\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_spawn\_on\_death\_flag\ "{}}<<\_spawn\_on\_death\_flag<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00742\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_spawn\_render\_node\ "{}}<<\_spawn\_render\_node\_path<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00743\ \ \ out.width(\mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);\ out<<\textcolor{stringliteral}{"{}"{}};\ out<<\textcolor{stringliteral}{"{}\_i\_was\_spawned\_flag\ "{}}<<\_i\_was\_spawned\_flag<<\textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00744\ \ \ write\_free\_particle\_fifo(out,\ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);}
+\DoxyCodeLine{00745\ \ \ write\_spawn\_templates(out,\ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);}
+\DoxyCodeLine{00746\ \ \ \mbox{\hyperlink{classPhysical_a6f4596687dcf3b278a4c1e11e802ece7}{Physical::write}}(out,\ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}+2);}
+\DoxyCodeLine{00747\ \textcolor{preprocessor}{\ \ \#endif\ }\textcolor{comment}{//]\ NDEBUG}}
+\DoxyCodeLine{00748\ \}}
+
+\end{DoxyCode}

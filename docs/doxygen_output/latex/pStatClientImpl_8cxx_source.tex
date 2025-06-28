@@ -1,0 +1,733 @@
+\doxysection{p\+Stat\+Client\+Impl.\+cxx}
+\hypertarget{pStatClientImpl_8cxx_source}{}\label{pStatClientImpl_8cxx_source}\index{panda/src/pstatclient/pStatClientImpl.cxx@{panda/src/pstatclient/pStatClientImpl.cxx}}
+\mbox{\hyperlink{pStatClientImpl_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatClientImpl_8h}{pStatClientImpl.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{comment}{//\ This\ file\ only\ defines\ anything\ if\ DO\_PSTATS\ is\ defined.}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatClient_8h}{pStatClient.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatClientControlMessage_8h}{pStatClientControlMessage.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatServerControlMessage_8h}{pStatServerControlMessage.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatCollector_8h}{pStatCollector.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatThread_8h}{pStatThread.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pstatclient_8h}{config\_pstatclient.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pStatProperties_8h}{pStatProperties.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cmath_8h}{cmath.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{conditionVarWin32Impl_8h}{conditionVarWin32Impl.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{conditionVarPosixImpl_8h}{conditionVarPosixImpl.h}}"{}}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{genericThread_8h}{genericThread.h}}"{}}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{mutexHolder_8h}{mutexHolder.h}}"{}}}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#include\ <winsock2.h>}}
+\DoxyCodeLine{00036\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{windows_8h}{windows.h}}>}}
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \_cswitch\_pcollector(\textcolor{stringliteral}{"{}Context\ Switches"{}});}
+\DoxyCodeLine{00040\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \_cswitch\_sleep\_pcollector(\textcolor{stringliteral}{"{}Context\ Switches:Sleep"{}});}
+\DoxyCodeLine{00041\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \_cswitch\_yield\_pcollector(\textcolor{stringliteral}{"{}Context\ Switches:Yields"{}});}
+\DoxyCodeLine{00042\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \_cswitch\_cvar\_pcollector(\textcolor{stringliteral}{"{}Context\ Switches:Condition\ Variable"{}});}
+\DoxyCodeLine{00043\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \_cswitch\_involuntary\_pcollector(\textcolor{stringliteral}{"{}Context\ Switches:Involuntary"{}});}
+\DoxyCodeLine{00044\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \_wait\_sleep\_pcollector(\textcolor{stringliteral}{"{}Wait:Sleep"{}});}
+\DoxyCodeLine{00045\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \_wait\_yield\_pcollector(\textcolor{stringliteral}{"{}Wait:Yield"{}});}
+\DoxyCodeLine{00046\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ \_wait\_cvar\_pcollector(\textcolor{stringliteral}{"{}Wait:Condition\ Variable"{}});}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00051\ PStatClientImpl::}
+\DoxyCodeLine{00052\ PStatClientImpl(\mbox{\hyperlink{classPStatClient}{PStatClient}}\ *client)\ :}
+\DoxyCodeLine{00053\ \ \ \_clock(\mbox{\hyperlink{classTrueClock}{TrueClock}}::get\_global\_ptr()),}
+\DoxyCodeLine{00054\ \ \ \_delta(0.0),}
+\DoxyCodeLine{00055\ \ \ \_last\_frame(0.0),}
+\DoxyCodeLine{00056\ \ \ \_client(client),}
+\DoxyCodeLine{00057\ \ \ \_reader(this,\ 0),}
+\DoxyCodeLine{00058\ \#if\ defined(HAVE\_THREADS)\ \&\&\ !defined(SIMPLE\_THREADS)}
+\DoxyCodeLine{00059\ \ \ \_writer(this,\ 0),}
+\DoxyCodeLine{00060\ \ \ \_thread\_lock(\textcolor{stringliteral}{"{}PStatsClientImpl::\_thread\_lock"{}}),}
+\DoxyCodeLine{00061\ \ \ \_thread\_cvar(\_thread\_lock)}
+\DoxyCodeLine{00062\ \#else}
+\DoxyCodeLine{00063\ \ \ \_writer(this,\ pstats\_threaded\_write\ ?\ 1\ :\ 0)}
+\DoxyCodeLine{00064\ \#endif}
+\DoxyCodeLine{00065\ \{}
+\DoxyCodeLine{00066\ \textcolor{preprocessor}{\#if\ !defined(HAVE\_THREADS)\ ||\ defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00067\ \ \ \_writer.set\_max\_queue\_size(pstats\_max\_queue\_size);}
+\DoxyCodeLine{00068\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00069\ \ \ \_reader.set\_tcp\_header\_size(4);}
+\DoxyCodeLine{00070\ \ \ \_writer.set\_tcp\_header\_size(4);}
+\DoxyCodeLine{00071\ \ \ \_is\_connected\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00072\ \ \ \_got\_udp\_port\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00073\ \ \ \_collectors\_reported\ =\ 0;}
+\DoxyCodeLine{00074\ \ \ \_threads\_reported\ =\ 0;}
+\DoxyCodeLine{00075\ }
+\DoxyCodeLine{00076\ \ \ \_client\_name\ =\ pstats\_name;}
+\DoxyCodeLine{00077\ \ \ \_max\_rate\ =\ pstats\_max\_rate;}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00079\ \ \ \_tcp\_count\ =\ 1;}
+\DoxyCodeLine{00080\ \ \ \_udp\_count\ =\ 1;}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00082\ \ \ \textcolor{keywordflow}{if}\ (pstats\_tcp\_ratio\ >=\ 1.0f)\ \{}
+\DoxyCodeLine{00083\ \ \ \ \ \_tcp\_count\_factor\ =\ 0.0f;}
+\DoxyCodeLine{00084\ \ \ \ \ \_udp\_count\_factor\ =\ 1.0f;}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00086\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (pstats\_tcp\_ratio\ <=\ 0.0f)\ \{}
+\DoxyCodeLine{00087\ \ \ \ \ \_tcp\_count\_factor\ =\ 1.0f;}
+\DoxyCodeLine{00088\ \ \ \ \ \_udp\_count\_factor\ =\ 0.0f;}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00090\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00091\ \ \ \ \ csincos(pstats\_tcp\_ratio\ *\ (3.14159265f\ /\ 2.0f),}
+\DoxyCodeLine{00092\ \ \ \ \ \ \ \ \ \ \ \ \ \&\_udp\_count\_factor,}
+\DoxyCodeLine{00093\ \ \ \ \ \ \ \ \ \ \ \ \ \&\_tcp\_count\_factor);}
+\DoxyCodeLine{00094\ \ \ \}}
+\DoxyCodeLine{00095\ \}}
+\DoxyCodeLine{00096\ }
+\DoxyCodeLine{00100\ PStatClientImpl::}
+\DoxyCodeLine{00101\ \string~PStatClientImpl()\ \{}
+\DoxyCodeLine{00102\ \ \ nassertv(!\_is\_connected);}
+\DoxyCodeLine{00103\ \}}
+\DoxyCodeLine{00104\ }
+\DoxyCodeLine{00108\ \textcolor{keywordtype}{bool}\ PStatClientImpl::}
+\DoxyCodeLine{00109\ client\_connect(std::string\ hostname,\ \textcolor{keywordtype}{int}\ port)\ \{}
+\DoxyCodeLine{00110\ \ \ nassertr(!\_is\_connected,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \textcolor{keywordflow}{if}\ (hostname.empty())\ \{}
+\DoxyCodeLine{00113\ \ \ \ \ hostname\ =\ pstats\_host;}
+\DoxyCodeLine{00114\ \ \ \}}
+\DoxyCodeLine{00115\ \ \ \textcolor{keywordflow}{if}\ (port\ <\ 0)\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ port\ =\ pstats\_port;}
+\DoxyCodeLine{00117\ \ \ \}}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ \textcolor{keywordflow}{if}\ (!\_server.set\_host(hostname,\ port))\ \{}
+\DoxyCodeLine{00120\ \ \ \ \ pstats\_cat.error()}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unknown\ host:\ "{}}\ <<\ hostname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00122\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00123\ \ \ \}}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \_tcp\_connection\ =\ open\_TCP\_client\_connection(\_server,\ 5000);}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00127\ \ \ \textcolor{keywordflow}{if}\ (\_tcp\_connection.is\_null())\ \{}
+\DoxyCodeLine{00128\ \ \ \ \ pstats\_cat.error()}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ connect\ to\ PStatServer\ at\ "{}}\ <<\ hostname\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ <<\ port\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00131\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00132\ \ \ \}}
+\DoxyCodeLine{00133\ \ \ \textcolor{comment}{//\ Make\ sure\ we're\ not\ queuing\ up\ multiple\ TCP\ sockets-\/-\/we\ expect\ immediate}}
+\DoxyCodeLine{00134\ \ \ \textcolor{comment}{//\ writes\ of\ our\ TCP\ datagrams.}}
+\DoxyCodeLine{00135\ \ \ \_tcp\_connection-\/>set\_collect\_tcp(\textcolor{keyword}{false});}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \ \ \_reader.add\_connection(\_tcp\_connection);}
+\DoxyCodeLine{00138\ \ \ \_is\_connected\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ \ \ \_udp\_connection\ =\ open\_UDP\_connection();}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00142\ \ \ send\_hello();}
+\DoxyCodeLine{00143\ }
+\DoxyCodeLine{00144\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00145\ \ \ MutexDebug::increment\_pstats();}
+\DoxyCodeLine{00146\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ DEBUG\_THREADS}}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \ \ \textcolor{keywordflow}{if}\ (pstats\_thread\_profiling)\ \{}
+\DoxyCodeLine{00149\ \ \ \ \ \textcolor{comment}{//\ Replace\ the\ condition\ variable\ wait\ function\ with\ one\ that\ does\ PStats}}
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{comment}{//\ statistics.}}
+\DoxyCodeLine{00151\ \ \ \ \ \_thread\_profiling\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ \ \ \ \ Thread::\_sleep\_func\ =\ []\ (\textcolor{keywordtype}{double}\ seconds)\ \{}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ thread\_index\ =\ current\_thread-\/>get\_pstats\_index();}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ >=\ 0)\ \{}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatClient}{PStatClient}}\ *client\ =\ PStatClient::get\_global\_pstats();}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ client-\/>start(\_wait\_sleep\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ ThreadImpl::sleep(seconds);}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \ \ client-\/>stop(\_wait\_sleep\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ client-\/>add\_level(\_cswitch\_sleep\_pcollector.get\_index(),\ thread\_index,\ 1);}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ ThreadImpl::sleep(seconds);}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00166\ \ \ \ \ \};}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \ \ \ \ Thread::\_yield\_func\ =\ []\ ()\ \{}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ thread\_index\ =\ current\_thread-\/>get\_pstats\_index();}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ >=\ 0)\ \{}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatClient}{PStatClient}}\ *client\ =\ PStatClient::get\_global\_pstats();}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ client-\/>start(\_wait\_yield\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ ThreadImpl::yield();}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ client-\/>stop(\_wait\_yield\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ client-\/>add\_level(\_cswitch\_yield\_pcollector.get\_index(),\ thread\_index,\ 1);}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ ThreadImpl::yield();}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00181\ \ \ \ \ \};}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00184\ \ \ \ \ ConditionVarWin32Impl::\_wait\_func\ =}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ []\ (\mbox{\hyperlink{struct__RTL__CONDITION__VARIABLE}{PCONDITION\_VARIABLE}}\ cvar,\ \mbox{\hyperlink{struct__RTL__SRWLOCK}{PSRWLOCK}}\ lock,\ DWORD\ time,\ ULONG\ flags)\ \{}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ thread\_index\ =\ current\_thread-\/>get\_pstats\_index();}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \ \ BOOL\ result;}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ >=\ 0)\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatClient}{PStatClient}}\ *client\ =\ PStatClient::get\_global\_pstats();}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \ \ client-\/>start(\_wait\_cvar\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \ \ result\ =\ SleepConditionVariableSRW(cvar,\ lock,\ time,\ flags);}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ \ \ client-\/>stop(\_wait\_cvar\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ \ \ client-\/>add\_level(\_cswitch\_cvar\_pcollector.get\_index(),\ thread\_index,\ 1);}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \ \ \ \ result\ =\ SleepConditionVariableSRW(cvar,\ lock,\ time,\ flags);}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \};}
+\DoxyCodeLine{00201\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00202\ }
+\DoxyCodeLine{00203\ \textcolor{preprocessor}{\#ifdef\ HAVE\_POSIX\_THREADS}}
+\DoxyCodeLine{00204\ \ \ \ \ ConditionVarPosixImpl::\_wait\_func\ =}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ []\ (pthread\_cond\_t\ *cvar,\ pthread\_mutex\_t\ *lock)\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ thread\_index\ =\ current\_thread-\/>get\_pstats\_index();}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ result;}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ >=\ 0)\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatClient}{PStatClient}}\ *client\ =\ PStatClient::get\_global\_pstats();}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ \ \ client-\/>start(\_wait\_cvar\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ \ \ result\ =\ pthread\_cond\_wait(cvar,\ lock);}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ \ \ client-\/>stop(\_wait\_cvar\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \ \ \ \ client-\/>add\_level(\_cswitch\_cvar\_pcollector.get\_index(),\ thread\_index,\ 1);}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \ \ result\ =\ pthread\_cond\_wait(cvar,\ lock);}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ \};}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \ \ \ \ ConditionVarPosixImpl::\_timedwait\_func\ =}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ []\ (pthread\_cond\_t\ *cvar,\ pthread\_mutex\_t\ *lock,}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structtimespec}{timespec}}\ *ts)\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ thread\_index\ =\ current\_thread-\/>get\_pstats\_index();}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ result;}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ >=\ 0)\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatClient}{PStatClient}}\ *client\ =\ PStatClient::get\_global\_pstats();}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ \ \ client-\/>start(\_wait\_cvar\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ \ \ result\ =\ pthread\_cond\_timedwait(cvar,\ lock,\ ts);}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ \ \ client-\/>stop(\_wait\_cvar\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ \ \ client-\/>add\_level(\_cswitch\_cvar\_pcollector.get\_index(),\ thread\_index,\ 1);}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \ \ result\ =\ pthread\_cond\_timedwait(cvar,\ lock,\ ts);}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \};}
+\DoxyCodeLine{00240\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00241\ \ \ \}}
+\DoxyCodeLine{00242\ }
+\DoxyCodeLine{00243\ \ \ \textcolor{comment}{//\ Wait\ for\ the\ server\ hello.}}
+\DoxyCodeLine{00244\ \ \ \textcolor{keywordflow}{while}\ (!\_got\_udp\_port)\ \{}
+\DoxyCodeLine{00245\ \ \ \ \ transmit\_control\_data();}
+\DoxyCodeLine{00246\ \ \ \}}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ !defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00249\ \ \ \textcolor{keywordflow}{if}\ (\_is\_connected\ \&\&\ pstats\_threaded\_write)\ \{}
+\DoxyCodeLine{00250\ \ \ \ \ \_thread\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGenericThread}{GenericThread}}(\textcolor{stringliteral}{"{}PStats"{}},\ \textcolor{stringliteral}{"{}PStats"{}},\ [\textcolor{keyword}{this}]()\ \{}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ this-\/>thread\_main();}
+\DoxyCodeLine{00252\ \ \ \ \ \});}
+\DoxyCodeLine{00253\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_thread-\/>start(TP\_low,\ \textcolor{keyword}{false}))\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \_thread.clear();}
+\DoxyCodeLine{00255\ \ \ \ \ \}}
+\DoxyCodeLine{00256\ \ \ \}}
+\DoxyCodeLine{00257\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \textcolor{keywordflow}{return}\ \_is\_connected;}
+\DoxyCodeLine{00260\ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00265\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00266\ client\_disconnect()\ \{}
+\DoxyCodeLine{00267\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ !defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00268\ \ \ \textcolor{comment}{//\ Tell\ the\ thread\ to\ shut\ itself\ down.\ \ Note\ that\ this\ may\ be\ called\ from}}
+\DoxyCodeLine{00269\ \ \ \textcolor{comment}{//\ the\ thread\ itself,\ so\ we\ shouldn't\ try\ to\ call\ join().}}
+\DoxyCodeLine{00270\ \ \ \_thread\_lock.lock();}
+\DoxyCodeLine{00271\ \ \ \textcolor{keywordflow}{if}\ (\_thread\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ \_thread\_should\_shutdown\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00273\ \ \ \ \ \_thread\_cvar.notify();}
+\DoxyCodeLine{00274\ \ \ \}}
+\DoxyCodeLine{00275\ \ \ \_thread\_lock.unlock();}
+\DoxyCodeLine{00276\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \textcolor{keywordflow}{if}\ (\_thread\_profiling)\ \{}
+\DoxyCodeLine{00279\ \ \ \ \ \textcolor{comment}{//\ Switch\ the\ functions\ back\ to\ what\ they\ were.}}
+\DoxyCodeLine{00280\ \ \ \ \ Thread::\_sleep\_func\ =\ \&ThreadImpl::sleep;}
+\DoxyCodeLine{00281\ \ \ \ \ Thread::\_yield\_func\ =\ \&ThreadImpl::yield;}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00283\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00284\ \ \ \ \ ConditionVarWin32Impl::\_wait\_func\ =\ \&SleepConditionVariableSRW;}
+\DoxyCodeLine{00285\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \textcolor{preprocessor}{\#ifdef\ HAVE\_POSIX\_THREADS}}
+\DoxyCodeLine{00288\ \ \ \ \ ConditionVarPosixImpl::\_wait\_func\ =\ \&pthread\_cond\_wait;}
+\DoxyCodeLine{00289\ \ \ \ \ ConditionVarPosixImpl::\_timedwait\_func\ =\ \&pthread\_cond\_timedwait;}
+\DoxyCodeLine{00290\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00291\ }
+\DoxyCodeLine{00292\ \ \ \ \ \_thread\_profiling\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00293\ \ \ \}}
+\DoxyCodeLine{00294\ }
+\DoxyCodeLine{00295\ \ \ \textcolor{keywordflow}{if}\ (\_is\_connected)\ \{}
+\DoxyCodeLine{00296\ \textcolor{preprocessor}{\#ifdef\ DEBUG\_THREADS}}
+\DoxyCodeLine{00297\ \ \ \ \ MutexDebug::decrement\_pstats();}
+\DoxyCodeLine{00298\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ DEBUG\_THREADS}}
+\DoxyCodeLine{00299\ \ \ \ \ \_reader.remove\_connection(\_tcp\_connection);}
+\DoxyCodeLine{00300\ \ \ \ \ close\_connection(\_tcp\_connection);}
+\DoxyCodeLine{00301\ \ \ \ \ close\_connection(\_udp\_connection);}
+\DoxyCodeLine{00302\ \ \ \}}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00304\ \ \ \_tcp\_connection.clear();}
+\DoxyCodeLine{00305\ \ \ \_udp\_connection.clear();}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00307\ \ \ \_is\_connected\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00308\ \ \ \_got\_udp\_port\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ \_collectors\_reported\ =\ 0;}
+\DoxyCodeLine{00311\ \ \ \_threads\_reported\ =\ 0;}
+\DoxyCodeLine{00312\ \}}
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00319\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00320\ new\_frame(\textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{int}\ frame\_number)\ \{}
+\DoxyCodeLine{00321\ \ \ \textcolor{keywordtype}{double}\ frame\_start\ =\ get\_real\_time();}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00323\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ \_client-\/>\_num\_threads);}
+\DoxyCodeLine{00324\ }
+\DoxyCodeLine{00325\ \ \ PStatClient::InternalThread\ *pthread\ =\ \_client-\/>get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{00326\ \ \ nassertv(pthread\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00327\ }
+\DoxyCodeLine{00328\ \ \ \textcolor{comment}{//\ If\ we're\ the\ main\ thread,\ we\ should\ exchange\ control\ packets\ with\ the}}
+\DoxyCodeLine{00329\ \ \ \textcolor{comment}{//\ server.}}
+\DoxyCodeLine{00330\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ !defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00331\ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ ==\ 0\ \&\&\ \_thread\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00332\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00333\ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ ==\ 0)\ \{}
+\DoxyCodeLine{00334\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00335\ \ \ \ \ transmit\_control\_data();}
+\DoxyCodeLine{00336\ \ \ \}}
+\DoxyCodeLine{00337\ }
+\DoxyCodeLine{00338\ \ \ \textcolor{comment}{//\ If\ we've\ got\ the\ UDP\ port\ by\ the\ time\ the\ frame\ starts,\ it's\ time\ to}}
+\DoxyCodeLine{00339\ \ \ \textcolor{comment}{//\ become\ active\ and\ start\ actually\ tracking\ data.}}
+\DoxyCodeLine{00340\ \ \ \textcolor{keywordflow}{if}\ (\_got\_udp\_port)\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ pthread-\/>\_is\_active\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00342\ \ \ \}}
+\DoxyCodeLine{00343\ }
+\DoxyCodeLine{00344\ \ \ \textcolor{keywordflow}{if}\ (!pthread-\/>\_is\_active)\ \{}
+\DoxyCodeLine{00345\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00346\ \ \ \}}
+\DoxyCodeLine{00347\ }
+\DoxyCodeLine{00348\ \ \ \mbox{\hyperlink{classPStatFrameData}{PStatFrameData}}\ frame\_data;}
+\DoxyCodeLine{00349\ }
+\DoxyCodeLine{00350\ \ \ \textcolor{keywordflow}{if}\ (!pthread-\/>\_frame\_data.is\_empty())\ \{}
+\DoxyCodeLine{00351\ \ \ \ \ \textcolor{comment}{//\ Collector\ 0\ is\ the\ whole\ frame.}}
+\DoxyCodeLine{00352\ \ \ \ \ \_client-\/>stop(0,\ thread\_index,\ frame\_start);}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ \ \ \textcolor{comment}{//\ Fill\ up\ the\ level\ data\ for\ all\ the\ collectors\ who\ have\ level\ data\ for}}
+\DoxyCodeLine{00355\ \ \ \ \ \textcolor{comment}{//\ this\ pthread.}}
+\DoxyCodeLine{00356\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_collectors\ =\ \_client-\/>\_num\_collectors;}
+\DoxyCodeLine{00357\ \ \ \ \ PStatClient::CollectorPointer\ *collectors\ =}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ (PStatClient::CollectorPointer\ *)\_client-\/>\_collectors;}
+\DoxyCodeLine{00359\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_collectors;\ i++)\ \{}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \textcolor{keyword}{const}\ PStatClient::PerThreadData\ \&ptd\ =}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ collectors[i]-\/>\_per\_thread[thread\_index];}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ptd.\_has\_level)\ \{}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \ \ pthread-\/>\_frame\_data.add\_level(i,\ ptd.\_level);}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00365\ \ \ \ \ \}}
+\DoxyCodeLine{00366\ \ \ \ \ pthread-\/>\_frame\_data.swap(frame\_data);}
+\DoxyCodeLine{00367\ \ \ \ \ \textcolor{keywordflow}{if}\ (frame\_number\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ frame\_number\ =\ pthread-\/>\_frame\_number;}
+\DoxyCodeLine{00369\ \ \ \ \ \}}
+\DoxyCodeLine{00370\ }
+\DoxyCodeLine{00371\ \ \ \ \ \textcolor{comment}{//\ Record\ the\ number\ of\ context\ switches\ on\ this\ thread.}}
+\DoxyCodeLine{00372\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_thread\_profiling)\ \{}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ total,\ involuntary;}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classThread}{Thread}})\ thread\ =\ pthread-\/>\_thread.lock();}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ thread-\/>get\_context\_switches(total,\ involuntary))\ \{}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ total\_this\_frame\ =\ total\ -\/\ pthread-\/>\_context\_switches;}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ pthread-\/>\_context\_switches\ =\ total;}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ frame\_data.add\_level(\_cswitch\_pcollector.get\_index(),\ total\_this\_frame);}
+\DoxyCodeLine{00379\ }
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (involuntary\ !=\ 0)\ \{}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ involuntary\_this\_frame\ =\ involuntary\ -\/\ pthread-\/>\_involuntary\_context\_switches;}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \ \ \ \ pthread-\/>\_involuntary\_context\_switches\ =\ involuntary;}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \ \ \ \ frame\_data.add\_level(\_cswitch\_involuntary\_pcollector.get\_index(),\ involuntary\_this\_frame);}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \_client-\/>clear\_level(\_cswitch\_sleep\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \_client-\/>clear\_level(\_cswitch\_yield\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ \_client-\/>clear\_level(\_cswitch\_cvar\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00389\ \ \ \ \ \}}
+\DoxyCodeLine{00390\ \ \ \}}
+\DoxyCodeLine{00391\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_thread\_profiling)\ \{}
+\DoxyCodeLine{00392\ \ \ \ \ \textcolor{comment}{//\ Record\ the\ initial\ number\ of\ context\ switches.}}
+\DoxyCodeLine{00393\ \ \ \ \ PT(\mbox{\hyperlink{classThread}{Thread}})\ thread\ =\ pthread-\/>\_thread.lock();}
+\DoxyCodeLine{00394\ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ thread-\/>get\_context\_switches(pthread-\/>\_context\_switches,}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pthread-\/>\_involuntary\_context\_switches);}
+\DoxyCodeLine{00397\ \ \ \ \ \}}
+\DoxyCodeLine{00398\ \ \ \ \ \_client-\/>clear\_level(\_cswitch\_sleep\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00399\ \ \ \ \ \_client-\/>clear\_level(\_cswitch\_yield\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00400\ \ \ \ \ \_client-\/>clear\_level(\_cswitch\_cvar\_pcollector.get\_index(),\ thread\_index);}
+\DoxyCodeLine{00401\ \ \ \}}
+\DoxyCodeLine{00402\ }
+\DoxyCodeLine{00403\ \ \ pthread-\/>\_frame\_data.clear();}
+\DoxyCodeLine{00404\ \ \ pthread-\/>\_frame\_number\ =\ frame\_number\ +\ 1;}
+\DoxyCodeLine{00405\ \ \ \_client-\/>start(0,\ thread\_index,\ frame\_start);}
+\DoxyCodeLine{00406\ }
+\DoxyCodeLine{00407\ \ \ \textcolor{comment}{//\ Also\ record\ the\ time\ for\ the\ PStats\ operation\ itself.}}
+\DoxyCodeLine{00408\ \ \ \textcolor{keywordtype}{int}\ current\_thread\_index\ =\ Thread::get\_current\_thread()-\/>get\_pstats\_index();}
+\DoxyCodeLine{00409\ \ \ \textcolor{keywordtype}{int}\ pstats\_index\ =\ PStatClient::\_pstats\_pcollector.get\_index();}
+\DoxyCodeLine{00410\ \ \ \_client-\/>start(pstats\_index,\ current\_thread\_index,\ frame\_start);}
+\DoxyCodeLine{00411\ }
+\DoxyCodeLine{00412\ \ \ \textcolor{keywordflow}{if}\ (!frame\_data.is\_empty())\ \{}
+\DoxyCodeLine{00413\ \ \ \ \ enqueue\_frame\_data(thread\_index,\ frame\_number,\ std::move(frame\_data));}
+\DoxyCodeLine{00414\ \ \ \}}
+\DoxyCodeLine{00415\ \ \ \_client-\/>stop(pstats\_index,\ current\_thread\_index,\ get\_real\_time());}
+\DoxyCodeLine{00416\ \}}
+\DoxyCodeLine{00417\ }
+\DoxyCodeLine{00422\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00423\ add\_frame(\textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{int}\ frame\_number,\ \mbox{\hyperlink{classPStatFrameData}{PStatFrameData}}\ \&\&frame\_data)\ \{}
+\DoxyCodeLine{00424\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ \_client-\/>\_num\_threads);}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ PStatClient::InternalThread\ *pthread\ =\ \_client-\/>get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{00427\ \ \ nassertv(pthread\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00428\ }
+\DoxyCodeLine{00429\ \ \ \textcolor{comment}{//\ If\ we're\ the\ main\ thread,\ we\ should\ exchange\ control\ packets\ with\ the}}
+\DoxyCodeLine{00430\ \ \ \textcolor{comment}{//\ server.}}
+\DoxyCodeLine{00431\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ !defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00432\ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ ==\ 0\ \&\&\ \_thread\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00433\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00434\ \ \ \textcolor{keywordflow}{if}\ (thread\_index\ ==\ 0)\ \{}
+\DoxyCodeLine{00435\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00436\ \ \ \ \ transmit\_control\_data();}
+\DoxyCodeLine{00437\ \ \ \}}
+\DoxyCodeLine{00438\ }
+\DoxyCodeLine{00439\ \ \ \textcolor{comment}{//\ If\ we've\ got\ the\ UDP\ port\ by\ the\ time\ the\ frame\ starts,\ it's\ time\ to}}
+\DoxyCodeLine{00440\ \ \ \textcolor{comment}{//\ become\ active\ and\ start\ actually\ tracking\ data.}}
+\DoxyCodeLine{00441\ \ \ \textcolor{keywordflow}{if}\ (\_got\_udp\_port)\ \{}
+\DoxyCodeLine{00442\ \ \ \ \ pthread-\/>\_is\_active\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00443\ \ \ \}}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \ \ \textcolor{keywordflow}{if}\ (!pthread-\/>\_is\_active)\ \{}
+\DoxyCodeLine{00446\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00447\ \ \ \}}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00449\ \ \ \textcolor{comment}{//\ Also\ record\ the\ time\ for\ the\ PStats\ operation\ itself.}}
+\DoxyCodeLine{00450\ \ \ \textcolor{keywordtype}{int}\ current\_thread\_index\ =\ Thread::get\_current\_thread()-\/>get\_pstats\_index();}
+\DoxyCodeLine{00451\ \ \ \textcolor{keywordtype}{int}\ pstats\_index\ =\ PStatClient::\_pstats\_pcollector.get\_index();}
+\DoxyCodeLine{00452\ \ \ \_client-\/>start(pstats\_index,\ current\_thread\_index);}
+\DoxyCodeLine{00453\ }
+\DoxyCodeLine{00454\ \ \ enqueue\_frame\_data(thread\_index,\ frame\_number,\ std::move(frame\_data));}
+\DoxyCodeLine{00455\ \ \ \_client-\/>stop(pstats\_index,\ current\_thread\_index);}
+\DoxyCodeLine{00456\ \}}
+\DoxyCodeLine{00457\ }
+\DoxyCodeLine{00461\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00462\ remove\_thread(\textcolor{keywordtype}{int}\ thread\_index)\ \{}
+\DoxyCodeLine{00463\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ \_client-\/>\_num\_threads);}
+\DoxyCodeLine{00464\ }
+\DoxyCodeLine{00465\ \ \ \mbox{\hyperlink{classPStatClientControlMessage}{PStatClientControlMessage}}\ message;}
+\DoxyCodeLine{00466\ \ \ message.\_type\ =\ PStatClientControlMessage::T\_expire\_thread;}
+\DoxyCodeLine{00467\ \ \ message.\_first\_thread\_index\ =\ thread\_index;}
+\DoxyCodeLine{00468\ }
+\DoxyCodeLine{00469\ \ \ \mbox{\hyperlink{classDatagram}{Datagram}}\ datagram;}
+\DoxyCodeLine{00470\ \ \ message.encode(datagram);}
+\DoxyCodeLine{00471\ \ \ \_writer.send(datagram,\ \_tcp\_connection,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00472\ \}}
+\DoxyCodeLine{00473\ }
+\DoxyCodeLine{00478\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00479\ enqueue\_frame\_data(\textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{int}\ frame\_number,}
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classPStatFrameData}{PStatFrameData}}\ \&\&frame\_data)\ \{}
+\DoxyCodeLine{00481\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ !defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00482\ \ \ \textcolor{keywordflow}{if}\ (\_thread\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00483\ \ \ \ \ \textcolor{keywordtype}{int}\ max\_size\ =\ pstats\_max\_queue\_size;}
+\DoxyCodeLine{00484\ \ \ \ \ \_thread\_lock.lock();}
+\DoxyCodeLine{00485\ \ \ \ \ \textcolor{keywordflow}{if}\ (max\_size\ <\ 0\ ||\ \_frame\_queue.size()\ <\ (\textcolor{keywordtype}{size\_t})max\_size)\ \{}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ \_frame\_queue.emplace\_back(thread\_index,\ frame\_number);}
+\DoxyCodeLine{00487\ \ \ \ \ \ \ frame\_data.swap(\_frame\_queue.back().\_frame\_data);}
+\DoxyCodeLine{00488\ \ \ \ \ \}}
+\DoxyCodeLine{00489\ \ \ \ \ \_thread\_cvar.notify();}
+\DoxyCodeLine{00490\ \ \ \ \ \_thread\_lock.unlock();}
+\DoxyCodeLine{00491\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00492\ \ \ \}}
+\DoxyCodeLine{00493\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00494\ }
+\DoxyCodeLine{00495\ \ \ \textcolor{comment}{//\ We\ don't\ have\ a\ thread,\ so\ transmit\ it\ directly.}}
+\DoxyCodeLine{00496\ \ \ \textcolor{keywordflow}{if}\ (\_is\_connected)\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ transmit\_frame\_data(thread\_index,\ frame\_number,\ frame\_data);}
+\DoxyCodeLine{00498\ \ \ \}}
+\DoxyCodeLine{00499\ \}}
+\DoxyCodeLine{00500\ }
+\DoxyCodeLine{00501\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ !defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00505\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00506\ thread\_main()\ \{}
+\DoxyCodeLine{00507\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_thread\_lock);}
+\DoxyCodeLine{00508\ \ \ transmit\_control\_data();}
+\DoxyCodeLine{00509\ }
+\DoxyCodeLine{00510\ \ \ \textcolor{keywordflow}{while}\ (!\_thread\_should\_shutdown)\ \{}
+\DoxyCodeLine{00511\ \ \ \ \ \textcolor{keywordflow}{while}\ (\_frame\_queue.empty()\ \&\&\ !\_thread\_should\_shutdown)\ \{}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \_thread\_cvar.wait();}
+\DoxyCodeLine{00513\ \ \ \ \ \}}
+\DoxyCodeLine{00514\ }
+\DoxyCodeLine{00515\ \ \ \ \ \textcolor{keywordflow}{while}\ (!\_frame\_queue.empty())\ \{}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \textcolor{comment}{//\ Dequeue\ up\ to\ 8\ at\ a\ time,\ to\ decrease\ the\ amount\ of\ times\ we\ need\ to}}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \textcolor{comment}{//\ hold\ the\ lock.}}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ QueuedFrame\ frames[8];}
+\DoxyCodeLine{00519\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_frames\ =\ 0;}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (!\_frame\_queue.empty()\ \&\&\ num\_frames\ <\ 8)\ \{}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \ \ QueuedFrame\ \&qf\ =\ \_frame\_queue.front();}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \ \ frames[num\_frames].\_thread\_index\ =\ qf.\_thread\_index;}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \ \ frames[num\_frames].\_frame\_number\ =\ qf.\_frame\_number;}
+\DoxyCodeLine{00525\ \ \ \ \ \ \ \ \ frames[num\_frames].\_frame\_data.swap(qf.\_frame\_data);}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \ \ ++num\_frames;}
+\DoxyCodeLine{00527\ \ \ \ \ \ \ \ \ \_frame\_queue.pop\_front();}
+\DoxyCodeLine{00528\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ \_thread\_lock.unlock();}
+\DoxyCodeLine{00530\ }
+\DoxyCodeLine{00531\ \ \ \ \ \ \ transmit\_control\_data();}
+\DoxyCodeLine{00532\ }
+\DoxyCodeLine{00533\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_frames\ >\ 0)\ \{}
+\DoxyCodeLine{00534\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_frames;\ ++i)\ \{}
+\DoxyCodeLine{00535\ \ \ \ \ \ \ \ \ \ \ QueuedFrame\ \&qf\ =\ frames[i];}
+\DoxyCodeLine{00536\ \ \ \ \ \ \ \ \ \ \ transmit\_frame\_data(qf.\_thread\_index,\ qf.\_frame\_number,\ qf.\_frame\_data);}
+\DoxyCodeLine{00537\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00539\ }
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \_thread\_lock.lock();}
+\DoxyCodeLine{00541\ \ \ \ \ \}}
+\DoxyCodeLine{00542\ \ \ \}}
+\DoxyCodeLine{00543\ }
+\DoxyCodeLine{00544\ \ \ \_thread\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00545\ \}}
+\DoxyCodeLine{00546\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00547\ }
+\DoxyCodeLine{00552\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00553\ transmit\_frame\_data(\textcolor{keywordtype}{int}\ thread\_index,\ \textcolor{keywordtype}{int}\ frame\_number,}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatFrameData}{PStatFrameData}}\ \&frame\_data)\ \{}
+\DoxyCodeLine{00555\ \ \ nassertv(thread\_index\ >=\ 0\ \&\&\ thread\_index\ <\ \_client-\/>\_num\_threads);}
+\DoxyCodeLine{00556\ \ \ PStatClient::InternalThread\ *thread\ =\ \_client-\/>get\_thread\_ptr(thread\_index);}
+\DoxyCodeLine{00557\ \ \ nassertv(thread\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00558\ }
+\DoxyCodeLine{00559\ \ \ \textcolor{keywordflow}{if}\ (\_is\_connected\ \&\&\ thread-\/>\_is\_active)\ \{}
+\DoxyCodeLine{00560\ }
+\DoxyCodeLine{00561\ \ \ \ \ \textcolor{comment}{//\ We\ don't\ want\ to\ send\ too\ many\ packets\ in\ a\ hurry\ and\ flood\ the\ server.}}
+\DoxyCodeLine{00562\ \ \ \ \ \textcolor{comment}{//\ Check\ that\ enough\ time\ has\ elapsed\ for\ us\ to\ send\ a\ new\ packet.\ \ If}}
+\DoxyCodeLine{00563\ \ \ \ \ \textcolor{comment}{//\ not,\ we'll\ drop\ this\ packet\ on\ the\ floor\ and\ send\ a\ new\ one\ next\ time}}
+\DoxyCodeLine{00564\ \ \ \ \ \textcolor{comment}{//\ around.}}
+\DoxyCodeLine{00565\ \ \ \ \ \textcolor{keywordtype}{double}\ now\ =\ get\_real\_time();}
+\DoxyCodeLine{00566\ \ \ \ \ \textcolor{keywordflow}{if}\ (now\ >=\ thread-\/>\_next\_packet)\ \{}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ don't\ want\ to\ send\ more\ than\ \_max\_rate\ UDP-\/size\ packets\ per}}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \textcolor{comment}{//\ second,\ per\ thread.}}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ packet\_delay\ =\ 1.0\ /\ \_max\_rate;}
+\DoxyCodeLine{00570\ }
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \textcolor{comment}{//\ Send\ new\ data.}}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \mbox{\hyperlink{classNetDatagram}{NetDatagram}}\ datagram;}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ always\ start\ with\ a\ zero\ byte,\ to\ differentiate\ it\ from\ a\ control}}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \textcolor{comment}{//\ message.}}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ datagram.add\_uint8(0);}
+\DoxyCodeLine{00576\ }
+\DoxyCodeLine{00577\ \ \ \ \ \ \ datagram.add\_uint16(thread\_index);}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ datagram.add\_uint32(frame\_number);}
+\DoxyCodeLine{00579\ }
+\DoxyCodeLine{00580\ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ sent;}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!frame\_data.\mbox{\hyperlink{classPStatFrameData_a30625b2111853466757f032f5f8df045}{write\_datagram}}(datagram,\ \_client))\ \{}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Too\ many\ events\ to\ fit\ in\ a\ single\ datagram.\ \ Maybe\ it\ was\ a\ long}}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ frame\ load\ or\ something.\ \ Just\ drop\ the\ datagram.}}
+\DoxyCodeLine{00585\ \ \ \ \ \ \ \ \ sent\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00586\ }
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_writer.is\_valid\_for\_udp(datagram))\ \{}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_udp\_count\ *\ \_udp\_count\_factor\ <\ \_tcp\_count\ *\ \_tcp\_count\_factor)\ \{}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Send\ this\ one\ as\ a\ UDP\ packet.}}
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \ \ \ \ nassertv(\_got\_udp\_port);}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \ \ \ \ sent\ =\ \_writer.send(datagram,\ \_udp\_connection,\ \_server);}
+\DoxyCodeLine{00592\ \ \ \ \ \ \ \ \ \ \ \_udp\_count++;}
+\DoxyCodeLine{00593\ }
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_udp\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Wraparound!}}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \ \ \ \ \ \ \_udp\_count\ =\ 1;}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ \ \ \ \ \_tcp\_count\ =\ 1;}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00599\ }
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Send\ this\ one\ as\ a\ TCP\ packet.}}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \ \ \ \ sent\ =\ \_writer.send(datagram,\ \_tcp\_connection);}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \ \ \ \ \_tcp\_count++;}
+\DoxyCodeLine{00604\ }
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_tcp\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Wraparound!}}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ \ \ \ \ \_udp\_count\ =\ 1;}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \ \ \ \ \ \ \_tcp\_count\ =\ 1;}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00611\ }
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \ \ sent\ =\ \_writer.send(datagram,\ \_tcp\_connection);}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ our\ packets\ are\ so\ large\ that\ we\ must\ ship\ them\ via\ TCP,\ then}}
+\DoxyCodeLine{00615\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ artificially\ slow\ down\ the\ packet\ rate\ even\ further.}}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ packet\_ratio\ =}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \ \ \ \ (datagram.get\_length()\ +\ maximum\_udp\_datagram\ -\/\ 1)\ /}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \ \ \ \ maximum\_udp\_datagram;}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \ \ packet\_delay\ *=\ (double)packet\_ratio;}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00621\ }
+\DoxyCodeLine{00622\ \ \ \ \ \ \ thread-\/>\_next\_packet\ =\ now\ +\ packet\_delay;}
+\DoxyCodeLine{00623\ }
+\DoxyCodeLine{00624\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!sent)\ \{}
+\DoxyCodeLine{00625\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pstats\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00626\ \ \ \ \ \ \ \ \ \ \ pstats\_cat.debug()}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ send\ packet.\(\backslash\)n"{}};}
+\DoxyCodeLine{00628\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00630\ \ \ \ \ \}}
+\DoxyCodeLine{00631\ \ \ \}}
+\DoxyCodeLine{00632\ \}}
+\DoxyCodeLine{00633\ }
+\DoxyCodeLine{00638\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00639\ transmit\_control\_data()\ \{}
+\DoxyCodeLine{00640\ \ \ \textcolor{comment}{//\ Check\ for\ new\ messages\ from\ the\ server.}}
+\DoxyCodeLine{00641\ \ \ \textcolor{keywordflow}{while}\ (\_is\_connected\ \&\&\ \_reader.data\_available())\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ \mbox{\hyperlink{classNetDatagram}{NetDatagram}}\ datagram;}
+\DoxyCodeLine{00643\ }
+\DoxyCodeLine{00644\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_reader.get\_data(datagram))\ \{}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \mbox{\hyperlink{classPStatServerControlMessage}{PStatServerControlMessage}}\ message;}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (message.decode(datagram))\ \{}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ \ \ handle\_server\_control\_message(message);}
+\DoxyCodeLine{00648\ }
+\DoxyCodeLine{00649\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00650\ \ \ \ \ \ \ \ \ pstats\_cat.error()}
+\DoxyCodeLine{00651\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Got\ unexpected\ message\ from\ server.\(\backslash\)n"{}};}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00653\ \ \ \ \ \}}
+\DoxyCodeLine{00654\ \ \ \}}
+\DoxyCodeLine{00655\ }
+\DoxyCodeLine{00656\ \ \ \textcolor{keywordflow}{if}\ (\_is\_connected)\ \{}
+\DoxyCodeLine{00657\ \ \ \ \ report\_new\_collectors();}
+\DoxyCodeLine{00658\ \ \ \ \ report\_new\_threads();}
+\DoxyCodeLine{00659\ \ \ \}}
+\DoxyCodeLine{00660\ \}}
+\DoxyCodeLine{00661\ }
+\DoxyCodeLine{00662\ }
+\DoxyCodeLine{00666\ std::string\ PStatClientImpl::}
+\DoxyCodeLine{00667\ get\_hostname()\ \{}
+\DoxyCodeLine{00668\ \ \ \textcolor{keywordflow}{if}\ (\_hostname.empty())\ \{}
+\DoxyCodeLine{00669\ \ \ \ \ \textcolor{keywordtype}{char}\ temp\_buff[1024];}
+\DoxyCodeLine{00670\ \ \ \ \ \textcolor{keywordflow}{if}\ (gethostname(temp\_buff,\ 1024)\ ==\ 0)\ \{}
+\DoxyCodeLine{00671\ \ \ \ \ \ \ \_hostname\ =\ temp\_buff;}
+\DoxyCodeLine{00672\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00673\ \ \ \ \ \ \ \_hostname\ =\ \textcolor{stringliteral}{"{}unknown"{}};}
+\DoxyCodeLine{00674\ \ \ \ \ \}}
+\DoxyCodeLine{00675\ \ \ \}}
+\DoxyCodeLine{00676\ \ \ \textcolor{keywordflow}{return}\ \_hostname;}
+\DoxyCodeLine{00677\ \}}
+\DoxyCodeLine{00678\ }
+\DoxyCodeLine{00682\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00683\ send\_hello()\ \{}
+\DoxyCodeLine{00684\ \ \ nassertv(\_is\_connected);}
+\DoxyCodeLine{00685\ }
+\DoxyCodeLine{00686\ \ \ \mbox{\hyperlink{classPStatClientControlMessage}{PStatClientControlMessage}}\ message;}
+\DoxyCodeLine{00687\ \ \ message.\_type\ =\ PStatClientControlMessage::T\_hello;}
+\DoxyCodeLine{00688\ \ \ message.\_client\_hostname\ =\ get\_hostname();}
+\DoxyCodeLine{00689\ \ \ message.\_client\_progname\ =\ \_client\_name;}
+\DoxyCodeLine{00690\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00691\ \ \ message.\_client\_pid\ =\ GetCurrentProcessId();}
+\DoxyCodeLine{00692\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00693\ \ \ message.\_client\_pid\ =\ getpid();}
+\DoxyCodeLine{00694\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00695\ \ \ message.\_major\_version\ =\ \mbox{\hyperlink{pStatProperties_8cxx_ab00b89028fc41b776b4ffb6347e38d72}{get\_current\_pstat\_major\_version}}();}
+\DoxyCodeLine{00696\ \ \ message.\_minor\_version\ =\ \mbox{\hyperlink{pStatProperties_8cxx_ab1e70386bfc0561d952141050b5185a3}{get\_current\_pstat\_minor\_version}}();}
+\DoxyCodeLine{00697\ }
+\DoxyCodeLine{00698\ }
+\DoxyCodeLine{00699\ \ \ \mbox{\hyperlink{classDatagram}{Datagram}}\ datagram;}
+\DoxyCodeLine{00700\ \ \ message.encode(datagram);}
+\DoxyCodeLine{00701\ \ \ \_writer.send(datagram,\ \_tcp\_connection,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00702\ \}}
+\DoxyCodeLine{00703\ }
+\DoxyCodeLine{00708\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00709\ report\_new\_collectors()\ \{}
+\DoxyCodeLine{00710\ \ \ \textcolor{comment}{//\ Empirically,\ we\ determined\ that\ you\ can't\ send\ more\ than\ about\ 1400}}
+\DoxyCodeLine{00711\ \ \ \textcolor{comment}{//\ collectors\ at\ once\ without\ exceeding\ the\ 64K\ limit\ on\ a\ single\ datagram.}}
+\DoxyCodeLine{00712\ \ \ \textcolor{comment}{//\ So\ we\ limit\ ourselves\ here\ to\ sending\ only\ half\ that\ many.}}
+\DoxyCodeLine{00713\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ max\_collectors\_at\_once\ =\ 700;}
+\DoxyCodeLine{00714\ }
+\DoxyCodeLine{00715\ \ \ \textcolor{keywordflow}{while}\ (\_is\_connected\ \&\&\ \_collectors\_reported\ <\ \_client-\/>\_num\_collectors)\ \{}
+\DoxyCodeLine{00716\ \ \ \ \ \mbox{\hyperlink{classPStatClientControlMessage}{PStatClientControlMessage}}\ message;}
+\DoxyCodeLine{00717\ \ \ \ \ message.\_type\ =\ PStatClientControlMessage::T\_define\_collectors;}
+\DoxyCodeLine{00718\ \ \ \ \ \textcolor{keywordtype}{int}\ i\ =\ 0;}
+\DoxyCodeLine{00719\ \ \ \ \ \textcolor{keywordflow}{while}\ (\_collectors\_reported\ <\ \_client-\/>\_num\_collectors\ \&\&}
+\DoxyCodeLine{00720\ \ \ \ \ \ \ \ \ \ \ \ i\ <\ max\_collectors\_at\_once)\ \{}
+\DoxyCodeLine{00721\ \ \ \ \ \ \ message.\_collectors.push\_back(\_client-\/>get\_collector\_def(\_collectors\_reported));}
+\DoxyCodeLine{00722\ \ \ \ \ \ \ \_collectors\_reported++;}
+\DoxyCodeLine{00723\ \ \ \ \ \ \ i++;}
+\DoxyCodeLine{00724\ \ \ \ \ \}}
+\DoxyCodeLine{00725\ }
+\DoxyCodeLine{00726\ \ \ \ \ \mbox{\hyperlink{classDatagram}{Datagram}}\ datagram;}
+\DoxyCodeLine{00727\ \ \ \ \ message.encode(datagram);}
+\DoxyCodeLine{00728\ \ \ \ \ \_writer.send(datagram,\ \_tcp\_connection,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00729\ \ \ \}}
+\DoxyCodeLine{00730\ \}}
+\DoxyCodeLine{00731\ }
+\DoxyCodeLine{00736\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00737\ report\_new\_threads()\ \{}
+\DoxyCodeLine{00738\ \ \ \textcolor{keywordflow}{while}\ (\_is\_connected\ \&\&\ \_threads\_reported\ <\ \_client-\/>\_num\_threads)\ \{}
+\DoxyCodeLine{00739\ \ \ \ \ \mbox{\hyperlink{classPStatClientControlMessage}{PStatClientControlMessage}}\ message;}
+\DoxyCodeLine{00740\ \ \ \ \ message.\_type\ =\ PStatClientControlMessage::T\_define\_threads;}
+\DoxyCodeLine{00741\ \ \ \ \ message.\_first\_thread\_index\ =\ \_threads\_reported;}
+\DoxyCodeLine{00742\ \ \ \ \ PStatClient::ThreadPointer\ *threads\ =}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ (PStatClient::ThreadPointer\ *)\_client-\/>\_threads;}
+\DoxyCodeLine{00744\ \ \ \ \ \textcolor{keywordflow}{while}\ (\_threads\_reported\ <\ \_client-\/>\_num\_threads)\ \{}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (threads[\_threads\_reported]\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ \ \ message.\_names.push\_back(threads[\_threads\_reported]-\/>\_name);}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ \ \ message.\_names.push\_back(std::string());}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \_threads\_reported++;}
+\DoxyCodeLine{00751\ \ \ \ \ \}}
+\DoxyCodeLine{00752\ }
+\DoxyCodeLine{00753\ \ \ \ \ \mbox{\hyperlink{classDatagram}{Datagram}}\ datagram;}
+\DoxyCodeLine{00754\ \ \ \ \ message.encode(datagram);}
+\DoxyCodeLine{00755\ \ \ \ \ \_writer.send(datagram,\ \_tcp\_connection,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00756\ \ \ \}}
+\DoxyCodeLine{00757\ \}}
+\DoxyCodeLine{00758\ }
+\DoxyCodeLine{00763\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00764\ handle\_server\_control\_message(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPStatServerControlMessage}{PStatServerControlMessage}}\ \&message)\ \{}
+\DoxyCodeLine{00765\ \ \ \textcolor{keywordflow}{switch}\ (message.\_type)\ \{}
+\DoxyCodeLine{00766\ \ \ \textcolor{keywordflow}{case}\ PStatServerControlMessage::T\_hello:}
+\DoxyCodeLine{00767\ \ \ \ \ pstats\_cat.info()}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Connected\ to\ "{}}\ <<\ message.\_server\_progname\ <<\ \textcolor{stringliteral}{"{}\ on\ "{}}}
+\DoxyCodeLine{00769\ \ \ \ \ \ \ <<\ message.\_server\_hostname\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00770\ }
+\DoxyCodeLine{00771\ \ \ \ \ \_server.set\_port(message.\_udp\_port);}
+\DoxyCodeLine{00772\ \ \ \ \ \_got\_udp\_port\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00773\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00774\ }
+\DoxyCodeLine{00775\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00776\ \ \ \ \ pstats\_cat.error()}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ control\ message\ received\ from\ server.\(\backslash\)n"{}};}
+\DoxyCodeLine{00778\ \ \ \}}
+\DoxyCodeLine{00779\ \}}
+\DoxyCodeLine{00780\ }
+\DoxyCodeLine{00784\ \textcolor{keywordtype}{void}\ PStatClientImpl::}
+\DoxyCodeLine{00785\ connection\_reset(\textcolor{keyword}{const}\ PT(\mbox{\hyperlink{classConnection}{Connection}})\ \&connection,\ \textcolor{keywordtype}{bool})\ \{}
+\DoxyCodeLine{00786\ \ \ \textcolor{keywordflow}{if}\ (connection\ ==\ \_tcp\_connection)\ \{}
+\DoxyCodeLine{00787\ \ \ \ \ client\_disconnect();}
+\DoxyCodeLine{00788\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (connection\ ==\ \_udp\_connection)\ \{}
+\DoxyCodeLine{00789\ \ \ \ \ pstats\_cat.warning()}
+\DoxyCodeLine{00790\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Trouble\ sending\ UDP;\ switching\ to\ TCP\ only.\(\backslash\)n"{}};}
+\DoxyCodeLine{00791\ \ \ \ \ \_tcp\_count\_factor\ =\ 0.0f;}
+\DoxyCodeLine{00792\ \ \ \ \ \_udp\_count\_factor\ =\ 1.0f;}
+\DoxyCodeLine{00793\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00794\ \ \ \ \ pstats\_cat.warning()}
+\DoxyCodeLine{00795\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Ignoring\ spurious\ connection\_reset()\ message\(\backslash\)n"{}};}
+\DoxyCodeLine{00796\ \ \ \}}
+\DoxyCodeLine{00797\ \}}
+\DoxyCodeLine{00798\ }
+\DoxyCodeLine{00799\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ DO\_PSTATS}}
+
+\end{DoxyCode}

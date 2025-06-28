@@ -1,0 +1,687 @@
+\doxysection{x11\+Graphics\+Pipe.\+cxx}
+\hypertarget{x11GraphicsPipe_8cxx_source}{}\label{x11GraphicsPipe_8cxx_source}\index{panda/src/x11display/x11GraphicsPipe.cxx@{panda/src/x11display/x11GraphicsPipe.cxx}}
+\mbox{\hyperlink{x11GraphicsPipe_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{x11GraphicsPipe_8h}{x11GraphicsPipe.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{x11GraphicsWindow_8h}{x11GraphicsWindow.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__x11display_8h}{config\_x11display.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{frameBufferProperties_8h}{frameBufferProperties.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{displayInformation_8h}{displayInformation.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pstrtod_8h}{pstrtod.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ <dlfcn.h>}}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ x11GraphicsPipe::\_type\_handle;}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{keywordtype}{bool}\ x11GraphicsPipe::\_error\_handlers\_installed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00026\ x11GraphicsPipe::ErrorHandlerFunc\ *x11GraphicsPipe::\_prev\_error\_handler;}
+\DoxyCodeLine{00027\ x11GraphicsPipe::IOErrorHandlerFunc\ *x11GraphicsPipe::\_prev\_io\_error\_handler;}
+\DoxyCodeLine{00028\ \textcolor{keywordtype}{bool}\ x11GraphicsPipe::\_x\_error\_messages\_enabled\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00029\ \textcolor{keywordtype}{int}\ x11GraphicsPipe::\_x\_error\_count\ =\ 0;}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \mbox{\hyperlink{classLightReMutex}{LightReMutex}}\ x11GraphicsPipe::\_x\_mutex;}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00036\ x11GraphicsPipe::}
+\DoxyCodeLine{00037\ x11GraphicsPipe(\textcolor{keyword}{const}\ std::string\ \&display)\ :}
+\DoxyCodeLine{00038\ \ \ \_xcursor\_size(-\/1),}
+\DoxyCodeLine{00039\ \ \ \_have\_xrandr(false),}
+\DoxyCodeLine{00040\ \ \ \_XF86DGADirectVideo(nullptr)\ \{}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ \ \ std::string\ display\_spec\ =\ display;}
+\DoxyCodeLine{00043\ \ \ \textcolor{keywordflow}{if}\ (display\_spec.empty())\ \{}
+\DoxyCodeLine{00044\ \ \ \ \ display\_spec\ =\ display\_cfg;}
+\DoxyCodeLine{00045\ \ \ \}}
+\DoxyCodeLine{00046\ \ \ \textcolor{keywordflow}{if}\ (display\_spec.empty())\ \{}
+\DoxyCodeLine{00047\ \ \ \ \ display\_spec\ =\ ExecutionEnvironment::get\_environment\_variable(\textcolor{stringliteral}{"{}DISPLAY"{}});}
+\DoxyCodeLine{00048\ \ \ \}}
+\DoxyCodeLine{00049\ \ \ \textcolor{keywordflow}{if}\ (display\_spec.empty())\ \{}
+\DoxyCodeLine{00050\ \ \ \ \ display\_spec\ =\ \textcolor{stringliteral}{"{}:0.0"{}};}
+\DoxyCodeLine{00051\ \ \ \}}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \ \ \textcolor{comment}{//\ Store\ the\ current\ locale,\ so\ that\ we\ can\ restore\ it\ later.}}
+\DoxyCodeLine{00054\ \ \ std::string\ saved\_locale;}
+\DoxyCodeLine{00055\ \ \ \textcolor{keywordtype}{char}\ *saved\_locale\_p\ =\ setlocale(LC\_ALL,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00056\ \ \ \textcolor{keywordflow}{if}\ (saved\_locale\_p\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00057\ \ \ \ \ saved\_locale\ =\ saved\_locale\_p;}
+\DoxyCodeLine{00058\ \ \ \}}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00060\ \ \ \textcolor{comment}{//\ The\ X\ docs\ say\ we\ should\ do\ this\ to\ get\ international\ character\ support}}
+\DoxyCodeLine{00061\ \ \ \textcolor{comment}{//\ from\ the\ keyboard.}}
+\DoxyCodeLine{00062\ \ \ setlocale(LC\_ALL,\ \textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00064\ \ \ \textcolor{comment}{//\ But\ it's\ important\ that\ we\ use\ the\ "{}C"{}\ locale\ for\ numeric\ formatting,}}
+\DoxyCodeLine{00065\ \ \ \textcolor{comment}{//\ since\ all\ of\ the\ internal\ Panda\ code\ assumes\ this-\/-\/we\ need\ a\ decimal}}
+\DoxyCodeLine{00066\ \ \ \textcolor{comment}{//\ point\ to\ mean\ a\ decimal\ point.}}
+\DoxyCodeLine{00067\ \ \ setlocale(LC\_NUMERIC,\ \textcolor{stringliteral}{"{}C"{}});}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00069\ \ \ \textcolor{comment}{//\ Also\ save\ the\ startup\ ID.\ \ We\ are\ required\ to\ unset\ it\ by\ the\ FreeDesktop}}
+\DoxyCodeLine{00070\ \ \ \textcolor{comment}{//\ specification\ so\ that\ it\ is\ not\ propagated\ to\ child\ processes.}}
+\DoxyCodeLine{00071\ \ \ \{}
+\DoxyCodeLine{00072\ \ \ \ \ \textcolor{keywordtype}{char}\ *startup\_id\ =\ getenv(\textcolor{stringliteral}{"{}DESKTOP\_STARTUP\_ID"{}});}
+\DoxyCodeLine{00073\ \ \ \ \ \textcolor{keywordflow}{if}\ (startup\_id\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00074\ \ \ \ \ \ \ \_startup\_id.assign(startup\_id);}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Got\ desktop\ startup\ ID\ "{}}\ <<\ \_startup\_id\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ unsetenv(\textcolor{stringliteral}{"{}DESKTOP\_STARTUP\_ID"{}});}
+\DoxyCodeLine{00080\ \ \ \ \ \}}
+\DoxyCodeLine{00081\ \ \ \}}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00083\ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00084\ \ \ \_supported\_types\ =\ OT\_window\ |\ OT\_buffer\ |\ OT\_texture\_buffer;}
+\DoxyCodeLine{00085\ \ \ \_display\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00086\ \ \ \_screen\ =\ 0;}
+\DoxyCodeLine{00087\ \ \ \_root\ =\ (X11\_Window)\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00088\ \ \ \_im\ =\ (XIM)\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00089\ \ \ \_hidden\_cursor\ =\ None;}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \ \ \textcolor{comment}{//\ According\ to\ the\ documentation,\ we\ should\ call\ this\ before\ making\ any}}
+\DoxyCodeLine{00092\ \ \ \textcolor{comment}{//\ other\ Xlib\ calls\ if\ we\ wish\ to\ use\ the\ Xlib\ locking\ system.}}
+\DoxyCodeLine{00093\ \ \ \textcolor{keywordflow}{if}\ (x\_init\_threads)\ \{}
+\DoxyCodeLine{00094\ \ \ \ \ XInitThreads();}
+\DoxyCodeLine{00095\ \ \ \}}
+\DoxyCodeLine{00096\ }
+\DoxyCodeLine{00097\ \ \ install\_error\_handlers();}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \_display\ =\ XOpenDisplay(display\_spec.c\_str());}
+\DoxyCodeLine{00100\ \ \ \textcolor{keywordflow}{if}\ (!\_display)\ \{}
+\DoxyCodeLine{00101\ \ \ \ \ x11display\_cat.error()}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ open\ display\ \(\backslash\)"{}"{}}\ <<\ display\_spec\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00103\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00104\ \ \ \ \ \_screen\ =\ None;}
+\DoxyCodeLine{00105\ \ \ \ \ \_root\ =\ None;}
+\DoxyCodeLine{00106\ \ \ \ \ \_display\_width\ =\ 0;}
+\DoxyCodeLine{00107\ \ \ \ \ \_display\_height\ =\ 0;}
+\DoxyCodeLine{00108\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00109\ \ \ \}}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ \textcolor{keywordflow}{if}\ (!XSupportsLocale())\ \{}
+\DoxyCodeLine{00112\ \ \ \ \ x11display\_cat.warning()}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}X\ does\ not\ support\ locale\ "{}}\ <<\ setlocale(LC\_ALL,\ \textcolor{keyword}{nullptr})\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00114\ \ \ \}}
+\DoxyCodeLine{00115\ \ \ XSetLocaleModifiers(\textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00117\ \ \ \_screen\ =\ DefaultScreen(\_display);}
+\DoxyCodeLine{00118\ \ \ \_root\ =\ RootWindow(\_display,\ \_screen);}
+\DoxyCodeLine{00119\ \ \ \_display\_width\ =\ DisplayWidth(\_display,\ \_screen);}
+\DoxyCodeLine{00120\ \ \ \_display\_height\ =\ DisplayHeight(\_display,\ \_screen);}
+\DoxyCodeLine{00121\ \ \ \_is\_valid\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00122\ }
+\DoxyCodeLine{00123\ \ \ \textcolor{comment}{//\ Dynamically\ load\ the\ xf86dga\ extension.}}
+\DoxyCodeLine{00124\ \ \ \textcolor{keywordtype}{void}\ *xf86dga\ =\ dlopen(\textcolor{stringliteral}{"{}libXxf86dga.so.1"{}},\ RTLD\_NOW\ |\ RTLD\_LOCAL);}
+\DoxyCodeLine{00125\ \ \ \textcolor{keywordflow}{if}\ (xf86dga\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00126\ \ \ \ \ pfn\_XF86DGAQueryVersion\ \_XF86DGAQueryVersion\ =\ (pfn\_XF86DGAQueryVersion)dlsym(xf86dga,\ \textcolor{stringliteral}{"{}XF86DGAQueryVersion"{}});}
+\DoxyCodeLine{00127\ \ \ \ \ \_XF86DGADirectVideo\ =\ (pfn\_XF86DGADirectVideo)dlsym(xf86dga,\ \textcolor{stringliteral}{"{}XF86DGADirectVideo"{}});}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00129\ \ \ \ \ \textcolor{keywordtype}{int}\ major\_ver,\ minor\_ver;}
+\DoxyCodeLine{00130\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_XF86DGAQueryVersion\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_XF86DGADirectVideo\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00131\ \ \ \ \ \ \ x11display\_cat.warning()}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}libXxf86dga.so.1\ does\ not\ provide\ required\ functions;\ relative\ mouse\ mode\ may\ not\ work.\(\backslash\)n"{}};}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!\_XF86DGAQueryVersion(\_display,\ \&major\_ver,\ \&minor\_ver))\ \{}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \_XF86DGADirectVideo\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00136\ \ \ \ \ \}}
+\DoxyCodeLine{00137\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00138\ \ \ \ \ \_XF86DGADirectVideo\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00139\ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}cannot\ dlopen\ libXxf86dga.so.1;\ relative\ mouse\ mode\ may\ not\ work.\(\backslash\)n"{}};}
+\DoxyCodeLine{00142\ \ \ \ \ \}}
+\DoxyCodeLine{00143\ \ \ \}}
+\DoxyCodeLine{00144\ }
+\DoxyCodeLine{00145\ \ \ \textcolor{comment}{//\ Dynamically\ load\ the\ XCursor\ extension.}}
+\DoxyCodeLine{00146\ \ \ \textcolor{keywordtype}{void}\ *xcursor\ =\ dlopen(\textcolor{stringliteral}{"{}libXcursor.so.1"{}},\ RTLD\_NOW\ |\ RTLD\_LOCAL);}
+\DoxyCodeLine{00147\ \ \ \textcolor{keywordflow}{if}\ (xcursor\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00148\ \ \ \ \ pfn\_XcursorGetDefaultSize\ \_XcursorGetDefaultSize\ =\ (pfn\_XcursorGetDefaultSize)dlsym(xcursor,\ \textcolor{stringliteral}{"{}XcursorGetDefaultSize"{}});}
+\DoxyCodeLine{00149\ \ \ \ \ \_XcursorXcFileLoadImages\ =\ (pfn\_XcursorXcFileLoadImages)dlsym(xcursor,\ \textcolor{stringliteral}{"{}XcursorXcFileLoadImages"{}});}
+\DoxyCodeLine{00150\ \ \ \ \ \_XcursorImagesLoadCursor\ =\ (pfn\_XcursorImagesLoadCursor)dlsym(xcursor,\ \textcolor{stringliteral}{"{}XcursorImagesLoadCursor"{}});}
+\DoxyCodeLine{00151\ \ \ \ \ \_XcursorImagesDestroy\ =\ (pfn\_XcursorImagesDestroy)dlsym(xcursor,\ \textcolor{stringliteral}{"{}XcursorImagesDestroy"{}});}
+\DoxyCodeLine{00152\ \ \ \ \ \_XcursorImageCreate\ =\ (pfn\_XcursorImageCreate)dlsym(xcursor,\ \textcolor{stringliteral}{"{}XcursorImageCreate"{}});}
+\DoxyCodeLine{00153\ \ \ \ \ \_XcursorImageLoadCursor\ =\ (pfn\_XcursorImageLoadCursor)dlsym(xcursor,\ \textcolor{stringliteral}{"{}XcursorImageLoadCursor"{}});}
+\DoxyCodeLine{00154\ \ \ \ \ \_XcursorImageDestroy\ =\ (pfn\_XcursorImageDestroy)dlsym(xcursor,\ \textcolor{stringliteral}{"{}XcursorImageDestroy"{}});}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00156\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_XcursorGetDefaultSize\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_XcursorXcFileLoadImages\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \_XcursorImagesLoadCursor\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_XcursorImagesDestroy\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ \_XcursorImageCreate\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_XcursorImageLoadCursor\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \_XcursorImageDestroy\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \_xcursor\_size\ =\ -\/1;}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ x11display\_cat.warning()}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}libXcursor.so.1\ does\ not\ provide\ required\ functions;\ cursor\ changing\ will\ not\ work.\(\backslash\)n"{}};}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00164\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (x\_cursor\_size.get\_value()\ >=\ 0)\ \{}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \_xcursor\_size\ =\ x\_cursor\_size;}
+\DoxyCodeLine{00166\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \_xcursor\_size\ =\ \_XcursorGetDefaultSize(\_display);}
+\DoxyCodeLine{00168\ \ \ \ \ \}}
+\DoxyCodeLine{00169\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00170\ \ \ \ \ \_xcursor\_size\ =\ -\/1;}
+\DoxyCodeLine{00171\ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}cannot\ dlopen\ libXcursor.so.1;\ cursor\ changing\ will\ not\ work.\(\backslash\)n"{}};}
+\DoxyCodeLine{00174\ \ \ \ \ \}}
+\DoxyCodeLine{00175\ \ \ \}}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00177\ \ \ \textcolor{comment}{//\ Dynamically\ load\ the\ XRandr\ extension.}}
+\DoxyCodeLine{00178\ \ \ \textcolor{keywordtype}{void}\ *xrandr\ =\ dlopen(\textcolor{stringliteral}{"{}libXrandr.so.2"{}},\ RTLD\_NOW\ |\ RTLD\_LOCAL);}
+\DoxyCodeLine{00179\ \ \ \textcolor{keywordflow}{if}\ (xrandr\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00180\ \ \ \ \ pfn\_XRRQueryExtension\ \_XRRQueryExtension\ =\ (pfn\_XRRQueryExtension)dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRQueryExtension"{}});}
+\DoxyCodeLine{00181\ \ \ \ \ pfn\_XRRQueryVersion\ \_XRRQueryVersion\ =\ (pfn\_XRRQueryVersion)dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRQueryVersion"{}});}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ \ \ \ \ \_XRRSizes\ =\ (pfn\_XRRSizes)dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRSizes"{}});}
+\DoxyCodeLine{00184\ \ \ \ \ \_XRRRates\ =\ (pfn\_XRRRates)dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRRates"{}});}
+\DoxyCodeLine{00185\ \ \ \ \ \_XRRGetScreenInfo\ =\ (pfn\_XRRGetScreenInfo)dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRGetScreenInfo"{}});}
+\DoxyCodeLine{00186\ \ \ \ \ \_XRRConfigCurrentConfiguration\ =\ (pfn\_XRRConfigCurrentConfiguration)dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRConfigCurrentConfiguration"{}});}
+\DoxyCodeLine{00187\ \ \ \ \ \_XRRSetScreenConfig\ =\ (pfn\_XRRSetScreenConfig)dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRSetScreenConfig"{}});}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \ \ \ \ \textcolor{keywordtype}{int}\ event,\ error,\ major,\ minor;}
+\DoxyCodeLine{00190\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_XRRQueryExtension\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_XRRSizes\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_XRRRates\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \_XRRGetScreenInfo\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_XRRConfigCurrentConfiguration\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \_XRRSetScreenConfig\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_XRRQueryVersion\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \_have\_xrandr\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ x11display\_cat.warning()}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}libXrandr.so.2\ does\ not\ provide\ required\ functions;\ resolution\ setting\ will\ not\ work.\(\backslash\)n"{}};}
+\DoxyCodeLine{00196\ \ \ \ \ \}}
+\DoxyCodeLine{00197\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_XRRQueryExtension(\_display,\ \&event,\ \&error)\ \&\&}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \ \ \ \ \ \ \ \_XRRQueryVersion(\_display,\ \&major,\ \&minor))\ \{}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \_have\_xrandr\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Found\ RandR\ extension\ "{}}\ <<\ major\ <<\ \textcolor{stringliteral}{"{}."{}}\ <<\ minor\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (major\ >\ 1\ ||\ (major\ ==\ 1\ \&\&\ minor\ >=\ 2))\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (major\ >\ 1\ ||\ (major\ ==\ 1\ \&\&\ minor\ >=\ 3))\ \{}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \ \ \_XRRGetScreenResourcesCurrent\ =\ (pfn\_XRRGetScreenResources)}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \ \ \ \ dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRGetScreenResourcesCurrent"{}});}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Fall\ back\ to\ this\ slower\ version.}}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ \ \ \_XRRGetScreenResourcesCurrent\ =\ (pfn\_XRRGetScreenResources)}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ \ \ \ \ dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRGetScreenResources"{}});}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ \_XRRFreeScreenResources\ =\ (pfn\_XRRFreeScreenResources)dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRFreeScreenResources"{}});}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \_XRRGetCrtcInfo\ =\ (pfn\_XRRGetCrtcInfo)dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRGetCrtcInfo"{}});}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \_XRRFreeCrtcInfo\ =\ (pfn\_XRRFreeCrtcInfo)dlsym(xrandr,\ \textcolor{stringliteral}{"{}XRRFreeCrtcInfo"{}});}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ \_XRRGetScreenResourcesCurrent\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ \ \ \_XRRFreeScreenResources\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \ \ \_XRRGetCrtcInfo\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \_XRRFreeCrtcInfo\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00224\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \_have\_xrandr\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}RandR\ extension\ not\ supported;\ resolution\ setting\ will\ not\ work.\(\backslash\)n"{}};}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00230\ \ \ \ \ \}}
+\DoxyCodeLine{00231\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00232\ \ \ \ \ \_have\_xrandr\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00233\ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}cannot\ dlopen\ libXrandr.so.2;\ resolution\ setting\ will\ not\ work.\(\backslash\)n"{}};}
+\DoxyCodeLine{00236\ \ \ \ \ \}}
+\DoxyCodeLine{00237\ \ \ \}}
+\DoxyCodeLine{00238\ }
+\DoxyCodeLine{00239\ \ \ \textcolor{comment}{//\ Dynamically\ load\ the\ XInput2\ extension.}}
+\DoxyCodeLine{00240\ \ \ \textcolor{keywordtype}{int}\ ev,\ err;}
+\DoxyCodeLine{00241\ \ \ \textcolor{keywordflow}{if}\ (XQueryExtension(\_display,\ \textcolor{stringliteral}{"{}XInputExtension"{}},\ \&\_xi\_opcode,\ \&ev,\ \&err))\ \{}
+\DoxyCodeLine{00242\ \ \ \ \ \textcolor{keywordtype}{void}\ *xi\ =\ dlopen(\textcolor{stringliteral}{"{}libXi.so.6"{}},\ RTLD\_NOW\ |\ RTLD\_LOCAL);}
+\DoxyCodeLine{00243\ \ \ \ \ \textcolor{keywordflow}{if}\ (xi\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ pfn\_XIQueryVersion\ \_XIQueryVersion\ =\ (pfn\_XIQueryVersion)dlsym(xi,\ \textcolor{stringliteral}{"{}XIQueryVersion"{}});}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \_XISelectEvents\ =\ (pfn\_XISelectEvents)dlsym(xi,\ \textcolor{stringliteral}{"{}XISelectEvents"{}});}
+\DoxyCodeLine{00246\ }
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ major\_ver\ =\ 2,\ minor\_ver\ =\ 0;}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_XIQueryVersion\ ==\ \textcolor{keyword}{nullptr}\ ||\ \_XISelectEvents\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \ \ x11display\_cat.warning()}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}libXi.so.6\ does\ not\ provide\ required\ functions;\ relative\ mouse\ mode\ will\ not\ work.\(\backslash\)n"{}};}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \ \ \_XISelectEvents\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ dlclose(xi);}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_XIQueryVersion(\_display,\ \&major\_ver,\ \&minor\_ver)\ ==\ Success)\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Found\ XInput\ extension\ "{}}\ <<\ major\_ver\ <<\ \textcolor{stringliteral}{"{}."{}}\ <<\ minor\_ver\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00259\ }
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}XInput2\ extension\ not\ supported;\ relative\ mouse\ mode\ will\ not\ work.\(\backslash\)n"{}};}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \ \ \_XISelectEvents\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ dlclose(xi);}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00268\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \_XISelectEvents\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}cannot\ dlopen\ libXi.so.1;\ relative\ mouse\ mode\ will\ not\ work.\(\backslash\)n"{}};}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00274\ \ \ \ \ \}}
+\DoxyCodeLine{00275\ \ \ \}}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00277\ \ \ \textcolor{comment}{//\ Use\ Xrandr\ to\ fill\ in\ the\ supported\ resolution\ list.}}
+\DoxyCodeLine{00278\ \ \ \textcolor{keywordflow}{if}\ (\_have\_xrandr)\ \{}
+\DoxyCodeLine{00279\ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ XRRGetScreenResources,\ we\ prefer\ that.\ \ It\ seems\ to\ be\ more}}
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{comment}{//\ reliable\ than\ XRRSizes\ in\ multi-\/monitor\ set-\/ups.}}
+\DoxyCodeLine{00281\ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{auto}\ res\ =\ get\_screen\_resources())\ \{}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ XRRScreenResources\ to\ obtain\ display\ modes\(\backslash\)n"{}};}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \textcolor{comment}{//\ Query\ current\ configuration,\ we\ just\ grab\ the\ first\ CRTC\ for\ now,}}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \textcolor{comment}{//\ since\ we\ don't\ have\ a\ way\ to\ represent\ multiple\ monitors.}}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ RRMode\ current\_mode\_id\ =\ 0;}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (res-\/>ncrtc\ >\ 0)\ \{}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{auto}\ info\ =\ get\_crtc\_info(res.get(),\ res-\/>crtcs[0]))\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \ \ \ \ current\_mode\_id\ =\ info-\/>mode;}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00295\ }
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \_display\_information-\/>\_total\_display\_modes\ =\ res-\/>nmode;}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \_display\_information-\/>\_display\_mode\_array\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{structDisplayMode}{DisplayMode}}[res-\/>nmode];}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ res-\/>nmode;\ ++i)\ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{struct__XRRModeInfo}{XRRModeInfo}}\ \&mode\ =\ res-\/>modes[i];}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (mode.id\ ==\ current\_mode\_id)\ \{}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \ \ \ \ \_display\_information-\/>\_current\_display\_mode\_index\ =\ i;}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structDisplayMode}{DisplayMode}}\ *dm\ =\ \_display\_information-\/>\_display\_mode\_array\ +\ i;}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \ \ dm-\/>width\ =\ mode.width;}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \ \ dm-\/>height\ =\ mode.height;}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \ \ dm-\/>bits\_per\_pixel\ =\ -\/1;}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \ \ dm-\/>fullscreen\_only\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00310\ }
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (mode.hTotal\ \&\&\ mode.vTotal)\ \{}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \ \ dm-\/>refresh\_rate\ =\ (double)mode.dotClock\ /}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ \ \ \ \ ((\textcolor{keywordtype}{double})mode.hTotal\ *\ (double)mode.vTotal);}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ \ \ dm-\/>refresh\_rate\ =\ 0;}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00318\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Using\ XRRSizes\ and\ XRRRates\ to\ obtain\ display\ modes\(\backslash\)n"{}};}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00323\ }
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_sizes,\ num\_rates;}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \mbox{\hyperlink{structXRRScreenSize}{XRRScreenSize}}\ *xrrs;}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ xrrs\ =\ \_XRRSizes(\_display,\ 0,\ \&num\_sizes);}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \_display\_information-\/>\_total\_display\_modes\ =\ 0;}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_sizes;\ ++i)\ \{}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \ \ \_XRRRates(\_display,\ 0,\ i,\ \&num\_rates);}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ \_display\_information-\/>\_total\_display\_modes\ +=\ num\_rates;}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \textcolor{keywordtype}{short}\ *rates;}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \textcolor{keywordtype}{short}\ counter\ =\ 0;}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \_display\_information-\/>\_display\_mode\_array\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{structDisplayMode}{DisplayMode}}[\_display\_information-\/>\_total\_display\_modes];}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_sizes;\ ++i)\ \{}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ num\_rates;}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ rates\ =\ \_XRRRates(\_display,\ 0,\ i,\ \&num\_rates);}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ j\ =\ 0;\ j\ <\ num\_rates;\ ++j)\ \{}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structDisplayMode}{DisplayMode}}*\ dm\ =\ \_display\_information-\/>\_display\_mode\_array\ +\ counter;}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ \ \ dm-\/>width\ =\ xrrs[i].width;}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ \ \ dm-\/>height\ =\ xrrs[i].height;}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ \ \ dm-\/>refresh\_rate\ =\ rates[j];}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \ \ \ \ dm-\/>bits\_per\_pixel\ =\ -\/1;}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ \ \ dm-\/>fullscreen\_only\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \ \ ++counter;}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00349\ \ \ \ \ \}}
+\DoxyCodeLine{00350\ \ \ \}}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ \ \ \textcolor{comment}{//\ Connect\ to\ an\ input\ method\ for\ supporting\ international\ text\ entry.}}
+\DoxyCodeLine{00353\ \ \ \_im\ =\ XOpenIM(\_display,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00354\ \ \ \textcolor{keywordflow}{if}\ (\_im\ ==\ (XIM)\textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ \textcolor{comment}{//\ Fall\ back\ to\ internal\ input\ method.}}
+\DoxyCodeLine{00356\ \ \ \ \ XSetLocaleModifiers(\textcolor{stringliteral}{"{}@im=none"{}});}
+\DoxyCodeLine{00357\ \ \ \ \ \_im\ =\ XOpenIM(\_display,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00358\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_im\ ==\ (XIM)\textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ x11display\_cat.warning()}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ open\ input\ method.\(\backslash\)n"{}};}
+\DoxyCodeLine{00361\ \ \ \ \ \}}
+\DoxyCodeLine{00362\ \ \ \}}
+\DoxyCodeLine{00363\ }
+\DoxyCodeLine{00364\ \ \ \textcolor{comment}{//\ What\ styles\ does\ the\ current\ input\ method\ support?}}
+\DoxyCodeLine{00365\ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00366\ \textcolor{comment}{\ \ XIMStyles\ *im\_supported\_styles;}}
+\DoxyCodeLine{00367\ \textcolor{comment}{\ \ XGetIMValues(\_im,\ XNQueryInputStyle,\ \&im\_supported\_styles,\ NULL);}}
+\DoxyCodeLine{00368\ \textcolor{comment}{}}
+\DoxyCodeLine{00369\ \textcolor{comment}{\ \ for\ (int\ i\ =\ 0;\ i\ <\ im\_supported\_styles-\/>count\_styles;\ i++)\ \{}}
+\DoxyCodeLine{00370\ \textcolor{comment}{\ \ \ \ XIMStyle\ style\ =\ im\_supported\_styles-\/>supported\_styles[i];}}
+\DoxyCodeLine{00371\ \textcolor{comment}{\ \ \ \ cerr\ <<\ "{}style\ "{}\ <<\ i\ <<\ "{}.\ "{}\ <<\ hex\ <<\ style\ <<\ dec\ <<\ "{}\(\backslash\)n"{};}}
+\DoxyCodeLine{00372\ \textcolor{comment}{\ \ \}}}
+\DoxyCodeLine{00373\ \textcolor{comment}{}}
+\DoxyCodeLine{00374\ \textcolor{comment}{\ \ XFree(im\_supported\_styles);}}
+\DoxyCodeLine{00375\ \textcolor{comment}{\ \ */}}
+\DoxyCodeLine{00376\ }
+\DoxyCodeLine{00377\ \ \ \textcolor{comment}{//\ Restore\ the\ previous\ locale.}}
+\DoxyCodeLine{00378\ \ \ \textcolor{keywordflow}{if}\ (!saved\_locale.empty())\ \{}
+\DoxyCodeLine{00379\ \ \ \ \ setlocale(LC\_ALL,\ saved\_locale.c\_str());}
+\DoxyCodeLine{00380\ \ \ \}}
+\DoxyCodeLine{00381\ }
+\DoxyCodeLine{00382\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *dpi\ =\ XGetDefault(\_display,\ \textcolor{stringliteral}{"{}Xft"{}},\ \textcolor{stringliteral}{"{}dpi"{}});}
+\DoxyCodeLine{00383\ \ \ \textcolor{keywordflow}{if}\ (dpi\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00384\ \ \ \ \ \textcolor{keywordtype}{char}\ *endptr\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00385\ \ \ \ \ \textcolor{keywordtype}{double}\ result\ =\ \mbox{\hyperlink{pstrtod_8cxx_a56a0a667e95c33305fe987d7ea5c08eb}{pstrtod}}(dpi,\ \&endptr);}
+\DoxyCodeLine{00386\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0\ \&\&\ !cnan(result)\ \&\&\ endptr[0]\ ==\ \textcolor{charliteral}{'\(\backslash\)0'})\ \{}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ result\ /=\ 96;}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ set\_detected\_display\_zoom(result);}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Determined\ display\ zoom\ to\ be\ "{}}\ <<\ result}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ based\ on\ specified\ Xft.dpi\ "{}}\ <<\ dpi\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00395\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ x11display\_cat.warning()}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ determine\ display\ zoom\ because\ Xft.dpi\ is\ invalid:\ "{}}}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ <<\ dpi\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00399\ \ \ \ \ \}}
+\DoxyCodeLine{00400\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00401\ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ determine\ display\ zoom\ because\ Xft.dpi\ was\ not\ set.\(\backslash\)n"{}};}
+\DoxyCodeLine{00403\ \ \ \}}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00405\ \ \ \textcolor{comment}{//\ Get\ some\ X\ atom\ numbers.}}
+\DoxyCodeLine{00406\ \ \ \_utf8\_string\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}UTF8\_STRING"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00407\ \ \ \_wm\_delete\_window\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}WM\_DELETE\_WINDOW"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00408\ \ \ \_net\_startup\_id\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_STARTUP\_ID"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00409\ \ \ \_net\_startup\_info\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_STARTUP\_INFO"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00410\ \ \ \_net\_startup\_info\_begin\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_STARTUP\_INFO\_BEGIN"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00411\ \ \ \_net\_wm\_bypass\_compositor\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_BYPASS\_COMPOSITOR"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00412\ \ \ \_net\_wm\_name\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_NAME"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00413\ \ \ \_net\_wm\_pid\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_PID"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00414\ \ \ \_net\_wm\_ping\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_PING"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00415\ \ \ \_net\_wm\_state\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_STATE"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00416\ \ \ \_net\_wm\_state\_above\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_STATE\_ABOVE"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00417\ \ \ \_net\_wm\_state\_add\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_STATE\_ADD"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00418\ \ \ \_net\_wm\_state\_below\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_STATE\_BELOW"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00419\ \ \ \_net\_wm\_state\_fullscreen\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_STATE\_FULLSCREEN"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00420\ \ \ \_net\_wm\_state\_maximized\_horz\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_STATE\_MAXIMIZED\_HORZ"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00421\ \ \ \_net\_wm\_state\_maximized\_vert\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_STATE\_MAXIMIZED\_VERT"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00422\ \ \ \_net\_wm\_state\_remove\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_STATE\_REMOVE"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00423\ \ \ \_net\_wm\_window\_type\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_WINDOW\_TYPE"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00424\ \ \ \_net\_wm\_window\_type\_fullscreen\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_WINDOW\_TYPE\_FULLSCREEN"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00425\ \ \ \_net\_wm\_window\_type\_splash\ =\ XInternAtom(\_display,\ \textcolor{stringliteral}{"{}\_NET\_WM\_WINDOW\_TYPE\_SPLASH"{}},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00426\ \}}
+\DoxyCodeLine{00427\ }
+\DoxyCodeLine{00431\ x11GraphicsPipe::}
+\DoxyCodeLine{00432\ \string~x11GraphicsPipe()\ \{}
+\DoxyCodeLine{00433\ \ \ release\_hidden\_cursor();}
+\DoxyCodeLine{00434\ \ \ \textcolor{keywordflow}{if}\ (\_im)\ \{}
+\DoxyCodeLine{00435\ \ \ \ \ XCloseIM(\_im);}
+\DoxyCodeLine{00436\ \ \ \}}
+\DoxyCodeLine{00437\ \ \ \textcolor{keywordflow}{if}\ (\_display)\ \{}
+\DoxyCodeLine{00438\ \ \ \ \ XCloseDisplay(\_display);}
+\DoxyCodeLine{00439\ \ \ \}}
+\DoxyCodeLine{00440\ \}}
+\DoxyCodeLine{00441\ }
+\DoxyCodeLine{00447\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classx11GraphicsPipe_a375bf4c3362d5e4b9b902a724a98fc45}{x11GraphicsPipe::}}}
+\DoxyCodeLine{00448\ \mbox{\hyperlink{classx11GraphicsPipe_a375bf4c3362d5e4b9b902a724a98fc45}{send\_startup\_notification}}()\ \{}
+\DoxyCodeLine{00449\ \ \ \textcolor{keywordflow}{if}\ (\_sent\_startup\_notification\ ||\ \_startup\_id.empty())\ \{}
+\DoxyCodeLine{00450\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00451\ \ \ \}}
+\DoxyCodeLine{00452\ }
+\DoxyCodeLine{00453\ \ \ \textcolor{comment}{//\ Allocate\ enough\ room\ for\ the\ message,\ with\ room\ for\ escape\ characters.}}
+\DoxyCodeLine{00454\ \ \ \textcolor{keywordtype}{char}\ *message\ =\ (\textcolor{keywordtype}{char}\ *)alloca(\_startup\_id.size()\ *\ 2\ +\ 14);}
+\DoxyCodeLine{00455\ \ \ memcpy(message,\ \textcolor{stringliteral}{"{}remove:\ ID=\(\backslash\)"{}"{}},\ 12);}
+\DoxyCodeLine{00456\ }
+\DoxyCodeLine{00457\ \ \ \textcolor{keywordtype}{char}\ *p\ =\ message\ +\ 12;}
+\DoxyCodeLine{00458\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{char}\ c\ :\ \_startup\_id)\ \{}
+\DoxyCodeLine{00459\ \ \ \ \ \textcolor{keywordflow}{if}\ (c\ ==\ \textcolor{charliteral}{'"{}'}\ ||\ c\ ==\ \textcolor{charliteral}{'\(\backslash\)\(\backslash\)'})\ \{}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ *p++\ =\ \textcolor{charliteral}{'\(\backslash\)\(\backslash\)'};}
+\DoxyCodeLine{00461\ \ \ \ \ \}}
+\DoxyCodeLine{00462\ \ \ \ \ *p++\ =\ c;}
+\DoxyCodeLine{00463\ \ \ \}}
+\DoxyCodeLine{00464\ \ \ *p++\ =\ \textcolor{charliteral}{'\(\backslash\)"{}'};}
+\DoxyCodeLine{00465\ \ \ *p++\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00466\ }
+\DoxyCodeLine{00467\ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Sending\ startup\ info\ message:\ "{}}\ <<\ message\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00470\ \ \ \}}
+\DoxyCodeLine{00471\ }
+\DoxyCodeLine{00472\ \ \ \textcolor{comment}{//\ It\ doesn't\ *strictly*\ seem\ to\ be\ necessary\ to\ create\ a\ window\ for\ this}}
+\DoxyCodeLine{00473\ \ \ \textcolor{comment}{//\ (just\ passing\ in\ the\ root\ window\ works\ too)\ but\ the\ spec\ says\ we\ should}}
+\DoxyCodeLine{00474\ \ \ \textcolor{comment}{//\ and\ GTK\ does\ it\ too,\ so\ why\ not?}}
+\DoxyCodeLine{00475\ \ \ XSetWindowAttributes\ attrs;}
+\DoxyCodeLine{00476\ \ \ attrs.override\_redirect\ =\ True;}
+\DoxyCodeLine{00477\ \ \ attrs.event\_mask\ =\ PropertyChangeMask\ |\ StructureNotifyMask;}
+\DoxyCodeLine{00478\ \ \ X11\_Window\ xwin\ =\ XCreateWindow(\_display,\ \_root,\ -\/100,\ -\/100,\ 1,\ 1,\ 0,}
+\DoxyCodeLine{00479\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ CopyFromParent,\ CopyFromParent,\ CopyFromParent,}
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ CWOverrideRedirect\ |\ CWEventMask,\ \&attrs);}
+\DoxyCodeLine{00481\ }
+\DoxyCodeLine{00482\ \ \ XEvent\ xevent;}
+\DoxyCodeLine{00483\ \ \ xevent.xclient.type\ =\ ClientMessage;}
+\DoxyCodeLine{00484\ \ \ xevent.xclient.message\_type\ =\ \_net\_startup\_info\_begin;}
+\DoxyCodeLine{00485\ \ \ xevent.xclient.display\ =\ \_display;}
+\DoxyCodeLine{00486\ \ \ xevent.xclient.window\ =\ xwin;}
+\DoxyCodeLine{00487\ \ \ xevent.xclient.format\ =\ 8;}
+\DoxyCodeLine{00488\ }
+\DoxyCodeLine{00489\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *src\ =\ message;}
+\DoxyCodeLine{00490\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *src\_end\ =\ message\ +\ strlen(message)\ +\ 1;}
+\DoxyCodeLine{00491\ }
+\DoxyCodeLine{00492\ \ \ \textcolor{keywordtype}{char}\ *dest,\ *dest\_end;}
+\DoxyCodeLine{00493\ \ \ \textcolor{keywordflow}{while}\ (src\ !=\ src\_end)\ \{}
+\DoxyCodeLine{00494\ \ \ \ \ dest\ =\ \&xevent.xclient.data.b[0];}
+\DoxyCodeLine{00495\ \ \ \ \ dest\_end\ =\ dest\ +\ 20;}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00497\ \ \ \ \ \textcolor{keywordflow}{while}\ (dest\ !=\ dest\_end\ \&\&\ src\ !=\ src\_end)\ \{}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ *dest\ =\ *src;}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ ++dest;}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ ++src;}
+\DoxyCodeLine{00501\ \ \ \ \ \}}
+\DoxyCodeLine{00502\ }
+\DoxyCodeLine{00503\ \ \ \ \ \textcolor{keywordflow}{while}\ (dest\ !=\ dest\_end)\ \{}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ *dest\ =\ \textcolor{charliteral}{'\(\backslash\)0'};}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ ++dest;}
+\DoxyCodeLine{00506\ \ \ \ \ \}}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00508\ \ \ \ \ XSendEvent(\_display,\ \_root,\ False,\ PropertyChangeMask,\ \&xevent);}
+\DoxyCodeLine{00509\ \ \ \ \ xevent.xclient.message\_type\ =\ \_net\_startup\_info;}
+\DoxyCodeLine{00510\ \ \ \}}
+\DoxyCodeLine{00511\ }
+\DoxyCodeLine{00512\ \ \ XDestroyWindow(\_display,\ xwin);}
+\DoxyCodeLine{00513\ \ \ XFlush(\_display);}
+\DoxyCodeLine{00514\ }
+\DoxyCodeLine{00515\ \ \ \_sent\_startup\_notification\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00516\ \}}
+\DoxyCodeLine{00517\ }
+\DoxyCodeLine{00521\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classx11GraphicsPipe_a6d3807601db858634770de1c2cf42073}{x11GraphicsPipe::}}}
+\DoxyCodeLine{00522\ \mbox{\hyperlink{classx11GraphicsPipe_a6d3807601db858634770de1c2cf42073}{enable\_raw\_mouse}}()\ \{}
+\DoxyCodeLine{00523\ \ \ \textcolor{keywordflow}{if}\ (\_num\_raw\_mouse\_windows\ >\ 0)\ \{}
+\DoxyCodeLine{00524\ \ \ \ \ \textcolor{comment}{//\ Already\ enabled\ by\ another\ window.}}
+\DoxyCodeLine{00525\ \ \ \ \ ++\_num\_raw\_mouse\_windows;}
+\DoxyCodeLine{00526\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00527\ \ \ \}}
+\DoxyCodeLine{00528\ \ \ \textcolor{keywordflow}{if}\ (\_XISelectEvents\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00529\ \ \ \ \ \mbox{\hyperlink{structXIEventMask}{XIEventMask}}\ event\_mask;}
+\DoxyCodeLine{00530\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ mask[XIMaskLen(XI\_RawMotion)]\ =\ \{0\};}
+\DoxyCodeLine{00531\ }
+\DoxyCodeLine{00532\ \ \ \ \ event\_mask.deviceid\ =\ XIAllMasterDevices;}
+\DoxyCodeLine{00533\ \ \ \ \ event\_mask.mask\_len\ =\ \textcolor{keyword}{sizeof}(mask);}
+\DoxyCodeLine{00534\ \ \ \ \ event\_mask.mask\ =\ mask;}
+\DoxyCodeLine{00535\ \ \ \ \ XISetMask(mask,\ XI\_RawMotion);}
+\DoxyCodeLine{00536\ }
+\DoxyCodeLine{00537\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_XISelectEvents(\_display,\ \_root,\ \&event\_mask,\ 1)\ ==\ Success)\ \{}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_info())\ \{}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \ \ x11display\_cat.info()}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Enabled\ raw\ mouse\ events\ using\ XInput2\ extension\(\backslash\)n"{}};}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00542\ \ \ \ \ \ \ ++\_num\_raw\_mouse\_windows;}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00544\ \ \ \ \ \}}
+\DoxyCodeLine{00545\ \ \ \}}
+\DoxyCodeLine{00546\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00547\ \}}
+\DoxyCodeLine{00548\ }
+\DoxyCodeLine{00552\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classx11GraphicsPipe_a45e6982669025763d93a881cebd48404}{x11GraphicsPipe::}}}
+\DoxyCodeLine{00553\ \mbox{\hyperlink{classx11GraphicsPipe_a45e6982669025763d93a881cebd48404}{disable\_raw\_mouse}}()\ \{}
+\DoxyCodeLine{00554\ \ \ \textcolor{keywordflow}{if}\ (-\/-\/\_num\_raw\_mouse\_windows\ ==\ 0)\ \{}
+\DoxyCodeLine{00555\ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00557\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Disabling\ raw\ mouse\ events\ using\ XInput2\ extension\(\backslash\)n"{}};}
+\DoxyCodeLine{00558\ \ \ \ \ \}}
+\DoxyCodeLine{00559\ }
+\DoxyCodeLine{00560\ \ \ \ \ \mbox{\hyperlink{structXIEventMask}{XIEventMask}}\ event\_mask;}
+\DoxyCodeLine{00561\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ mask[]\ =\ \{0\};}
+\DoxyCodeLine{00562\ }
+\DoxyCodeLine{00563\ \ \ \ \ event\_mask.deviceid\ =\ XIAllMasterDevices;}
+\DoxyCodeLine{00564\ \ \ \ \ event\_mask.mask\_len\ =\ \textcolor{keyword}{sizeof}(mask);}
+\DoxyCodeLine{00565\ \ \ \ \ event\_mask.mask\ =\ mask;}
+\DoxyCodeLine{00566\ }
+\DoxyCodeLine{00567\ \ \ \ \ \_XISelectEvents(\_display,\ \_root,\ \&event\_mask,\ 1);}
+\DoxyCodeLine{00568\ \ \ \}}
+\DoxyCodeLine{00569\ \}}
+\DoxyCodeLine{00570\ }
+\DoxyCodeLine{00574\ std::unique\_ptr<XRRScreenResources,\ pfn\_XRRFreeScreenResources>\ \mbox{\hyperlink{classx11GraphicsPipe_a38bd0f126e487765c0cb7d4b1fd663e4}{x11GraphicsPipe::}}}
+\DoxyCodeLine{00575\ \mbox{\hyperlink{classx11GraphicsPipe_a38bd0f126e487765c0cb7d4b1fd663e4}{get\_screen\_resources}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00576\ \ \ \mbox{\hyperlink{struct__XRRScreenResources}{XRRScreenResources}}\ *res\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00577\ }
+\DoxyCodeLine{00578\ \ \ \textcolor{keywordflow}{if}\ (\_have\_xrandr\ \&\&\ \_XRRGetScreenResourcesCurrent\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00579\ \ \ \ \ res\ =\ \_XRRGetScreenResourcesCurrent(\_display,\ \_root);}
+\DoxyCodeLine{00580\ \ \ \}}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ \textcolor{keywordflow}{return}\ std::unique\_ptr<XRRScreenResources,\ pfn\_XRRFreeScreenResources>(res,\ \_XRRFreeScreenResources);}
+\DoxyCodeLine{00583\ \}}
+\DoxyCodeLine{00584\ }
+\DoxyCodeLine{00588\ std::unique\_ptr<XRRCrtcInfo,\ pfn\_XRRFreeCrtcInfo>\ \mbox{\hyperlink{classx11GraphicsPipe_a3bb370fe7e99184e4a934b489e1209c9}{x11GraphicsPipe::}}}
+\DoxyCodeLine{00589\ \mbox{\hyperlink{classx11GraphicsPipe_a3bb370fe7e99184e4a934b489e1209c9}{get\_crtc\_info}}(\mbox{\hyperlink{struct__XRRScreenResources}{XRRScreenResources}}\ *res,\ RRCrtc\ crtc)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00590\ \ \ \mbox{\hyperlink{struct__XRRCrtcInfo}{XRRCrtcInfo}}\ *info\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00591\ }
+\DoxyCodeLine{00592\ \ \ \textcolor{keywordflow}{if}\ (\_have\_xrandr\ \&\&\ \_XRRGetCrtcInfo\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00593\ \ \ \ \ info\ =\ \_XRRGetCrtcInfo(\_display,\ res,\ crtc);}
+\DoxyCodeLine{00594\ \ \ \}}
+\DoxyCodeLine{00595\ }
+\DoxyCodeLine{00596\ \ \ \textcolor{keywordflow}{return}\ std::unique\_ptr<XRRCrtcInfo,\ pfn\_XRRFreeCrtcInfo>(info,\ \_XRRFreeCrtcInfo);}
+\DoxyCodeLine{00597\ \}}
+\DoxyCodeLine{00598\ }
+\DoxyCodeLine{00606\ RRCrtc\ \mbox{\hyperlink{classx11GraphicsPipe_a4589b542448712f7ebed38ee174bacdc}{x11GraphicsPipe::}}}
+\DoxyCodeLine{00607\ \mbox{\hyperlink{classx11GraphicsPipe_a4589b542448712f7ebed38ee174bacdc}{find\_fullscreen\_crtc}}(\textcolor{keyword}{const}\ LPoint2i\ \&point,}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \&x,\ \textcolor{keywordtype}{int}\ \&y,\ \textcolor{keywordtype}{int}\ \&width,\ \textcolor{keywordtype}{int}\ \&height)\ \{}
+\DoxyCodeLine{00609\ \ \ x\ =\ 0;}
+\DoxyCodeLine{00610\ \ \ y\ =\ 0;}
+\DoxyCodeLine{00611\ \ \ width\ =\ DisplayWidth(\_display,\ \_screen);}
+\DoxyCodeLine{00612\ \ \ height\ =\ DisplayHeight(\_display,\ \_screen);}
+\DoxyCodeLine{00613\ }
+\DoxyCodeLine{00614\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{auto}\ res\ =\ \mbox{\hyperlink{classx11GraphicsPipe_a38bd0f126e487765c0cb7d4b1fd663e4}{get\_screen\_resources}}())\ \{}
+\DoxyCodeLine{00615\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ res-\/>ncrtc;\ ++i)\ \{}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ RRCrtc\ crtc\ =\ res-\/>crtcs[i];}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{auto}\ info\ =\ \mbox{\hyperlink{classx11GraphicsPipe_a3bb370fe7e99184e4a934b489e1209c9}{get\_crtc\_info}}(res.get(),\ crtc))\ \{}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (point[0]\ >=\ info-\/>x\ \&\&\ point[0]\ <\ info-\/>x\ +\ (\textcolor{keywordtype}{int})info-\/>width\ \&\&}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \ \ \ \ \ \ point[1]\ >=\ info-\/>y\ \&\&\ point[1]\ <\ info-\/>y\ +\ (\textcolor{keywordtype}{int})info-\/>height)\ \{}
+\DoxyCodeLine{00620\ }
+\DoxyCodeLine{00621\ \ \ \ \ \ \ \ \ \ \ x\ =\ info-\/>x;}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \ \ \ \ y\ =\ info-\/>y;}
+\DoxyCodeLine{00623\ \ \ \ \ \ \ \ \ \ \ width\ =\ (int)info-\/>width;}
+\DoxyCodeLine{00624\ \ \ \ \ \ \ \ \ \ \ height\ =\ (int)info-\/>height;}
+\DoxyCodeLine{00625\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ crtc;}
+\DoxyCodeLine{00626\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00628\ \ \ \ \ \}}
+\DoxyCodeLine{00629\ \ \ \}}
+\DoxyCodeLine{00630\ }
+\DoxyCodeLine{00631\ \ \ \textcolor{keywordflow}{return}\ None;}
+\DoxyCodeLine{00632\ \}}
+\DoxyCodeLine{00633\ }
+\DoxyCodeLine{00639\ GraphicsPipe::PreferredWindowThread}
+\DoxyCodeLine{00640\ \mbox{\hyperlink{classx11GraphicsPipe_a728040ef65715e232d787eec8c3122a0}{x11GraphicsPipe::get\_preferred\_window\_thread}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00641\ \ \ \textcolor{comment}{//\ Actually,\ since\ we're\ creating\ the\ graphics\ context\ in\ open\_window()\ now,}}
+\DoxyCodeLine{00642\ \ \ \textcolor{comment}{//\ it\ appears\ we\ need\ to\ ensure\ the\ open\_window()\ call\ is\ performed\ in\ the}}
+\DoxyCodeLine{00643\ \ \ \textcolor{comment}{//\ draw\ thread\ for\ now,\ even\ though\ X\ wants\ all\ of\ its\ calls\ to\ be\ single-\/}}
+\DoxyCodeLine{00644\ \ \ \textcolor{comment}{//\ threaded.}}
+\DoxyCodeLine{00645\ }
+\DoxyCodeLine{00646\ \ \ \textcolor{comment}{//\ This\ means\ that\ all\ X\ windows\ may\ have\ to\ be\ handled\ by\ the\ same\ draw}}
+\DoxyCodeLine{00647\ \ \ \textcolor{comment}{//\ thread,\ which\ we\ didn't\ intend\ (though\ the\ global\ \_x\_mutex\ may\ allow\ them}}
+\DoxyCodeLine{00648\ \ \ \textcolor{comment}{//\ to\ be\ technically\ served\ by\ different\ threads,\ even\ though\ the\ actual\ X}}
+\DoxyCodeLine{00649\ \ \ \textcolor{comment}{//\ calls\ will\ be\ serialized).\ \ There\ might\ be\ a\ better\ way.}}
+\DoxyCodeLine{00650\ }
+\DoxyCodeLine{00651\ \ \ \textcolor{keywordflow}{return}\ PWT\_draw;}
+\DoxyCodeLine{00652\ \}}
+\DoxyCodeLine{00653\ }
+\DoxyCodeLine{00658\ \textcolor{keywordtype}{void}\ x11GraphicsPipe::}
+\DoxyCodeLine{00659\ make\_hidden\_cursor()\ \{}
+\DoxyCodeLine{00660\ \ \ nassertv(\_hidden\_cursor\ ==\ None);}
+\DoxyCodeLine{00661\ }
+\DoxyCodeLine{00662\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ x\_size,\ y\_size;}
+\DoxyCodeLine{00663\ \ \ XQueryBestCursor(\_display,\ \_root,\ 1,\ 1,\ \&x\_size,\ \&y\_size);}
+\DoxyCodeLine{00664\ }
+\DoxyCodeLine{00665\ \ \ Pixmap\ empty\ =\ XCreatePixmap(\_display,\ \_root,\ x\_size,\ y\_size,\ 1);}
+\DoxyCodeLine{00666\ }
+\DoxyCodeLine{00667\ \ \ XColor\ black;}
+\DoxyCodeLine{00668\ \ \ memset(\&black,\ 0,\ \textcolor{keyword}{sizeof}(black));}
+\DoxyCodeLine{00669\ }
+\DoxyCodeLine{00670\ \ \ \_hidden\_cursor\ =\ XCreatePixmapCursor(\_display,\ empty,\ empty,}
+\DoxyCodeLine{00671\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \&black,\ \&black,\ x\_size,\ y\_size);}
+\DoxyCodeLine{00672\ \ \ XFreePixmap(\_display,\ empty);}
+\DoxyCodeLine{00673\ \}}
+\DoxyCodeLine{00674\ }
+\DoxyCodeLine{00679\ \textcolor{keywordtype}{void}\ x11GraphicsPipe::}
+\DoxyCodeLine{00680\ release\_hidden\_cursor()\ \{}
+\DoxyCodeLine{00681\ \ \ \textcolor{keywordflow}{if}\ (\_hidden\_cursor\ !=\ None)\ \{}
+\DoxyCodeLine{00682\ \ \ \ \ XFreeCursor(\_display,\ \_hidden\_cursor);}
+\DoxyCodeLine{00683\ \ \ \ \ \_hidden\_cursor\ =\ None;}
+\DoxyCodeLine{00684\ \ \ \}}
+\DoxyCodeLine{00685\ \}}
+\DoxyCodeLine{00686\ }
+\DoxyCodeLine{00694\ \textcolor{keywordtype}{void}\ x11GraphicsPipe::}
+\DoxyCodeLine{00695\ install\_error\_handlers()\ \{}
+\DoxyCodeLine{00696\ \ \ \textcolor{keywordflow}{if}\ (\_error\_handlers\_installed)\ \{}
+\DoxyCodeLine{00697\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00698\ \ \ \}}
+\DoxyCodeLine{00699\ }
+\DoxyCodeLine{00700\ \ \ \_prev\_error\_handler\ =\ (ErrorHandlerFunc\ *)XSetErrorHandler(error\_handler);}
+\DoxyCodeLine{00701\ \ \ \_prev\_io\_error\_handler\ =\ (IOErrorHandlerFunc\ *)XSetIOErrorHandler(io\_error\_handler);}
+\DoxyCodeLine{00702\ \ \ \_error\_handlers\_installed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00703\ \}}
+\DoxyCodeLine{00704\ }
+\DoxyCodeLine{00708\ \textcolor{keywordtype}{int}\ x11GraphicsPipe::}
+\DoxyCodeLine{00709\ error\_handler(X11\_Display\ *display,\ XErrorEvent\ *error)\ \{}
+\DoxyCodeLine{00710\ \ \ ++\_x\_error\_count;}
+\DoxyCodeLine{00711\ }
+\DoxyCodeLine{00712\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ msg\_len\ =\ 80;}
+\DoxyCodeLine{00713\ \ \ \textcolor{keywordtype}{char}\ msg[msg\_len];}
+\DoxyCodeLine{00714\ \ \ XGetErrorText(display,\ error-\/>error\_code,\ msg,\ msg\_len);}
+\DoxyCodeLine{00715\ }
+\DoxyCodeLine{00716\ \ \ \textcolor{keywordflow}{if}\ (!\_x\_error\_messages\_enabled)\ \{}
+\DoxyCodeLine{00717\ \ \ \ \ \textcolor{keywordflow}{if}\ (x11display\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00718\ \ \ \ \ \ \ x11display\_cat.debug()}
+\DoxyCodeLine{00719\ \ \ \ \ \ \ \ \ <<\ msg\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00720\ \ \ \ \ \}}
+\DoxyCodeLine{00721\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00722\ \ \ \}}
+\DoxyCodeLine{00723\ }
+\DoxyCodeLine{00724\ \ \ x11display\_cat.error()}
+\DoxyCodeLine{00725\ \ \ \ \ <<\ msg\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00727\ \ \ \textcolor{keywordflow}{if}\ (x\_error\_abort)\ \{}
+\DoxyCodeLine{00728\ \ \ \ \ abort();}
+\DoxyCodeLine{00729\ \ \ \}}
+\DoxyCodeLine{00730\ }
+\DoxyCodeLine{00731\ \ \ \textcolor{comment}{//\ We\ return\ to\ allow\ the\ application\ to\ continue\ running,\ unlike\ the}}
+\DoxyCodeLine{00732\ \ \ \textcolor{comment}{//\ default\ X\ error\ handler\ which\ exits.}}
+\DoxyCodeLine{00733\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00734\ \}}
+\DoxyCodeLine{00735\ }
+\DoxyCodeLine{00739\ \textcolor{keywordtype}{int}\ x11GraphicsPipe::}
+\DoxyCodeLine{00740\ io\_error\_handler(X11\_Display\ *display)\ \{}
+\DoxyCodeLine{00741\ \ \ x11display\_cat.fatal()}
+\DoxyCodeLine{00742\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}X\ fatal\ error\ on\ display\ "{}}\ <<\ (\textcolor{keywordtype}{void}\ *)display\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00743\ }
+\DoxyCodeLine{00744\ \ \ \textcolor{comment}{//\ Unfortunately,\ we\ can't\ continue\ from\ this\ function,\ even\ if\ we\ promise}}
+\DoxyCodeLine{00745\ \ \ \textcolor{comment}{//\ never\ to\ use\ X\ again.\ \ We're\ supposed\ to\ terminate\ without\ returning,\ and}}
+\DoxyCodeLine{00746\ \ \ \textcolor{comment}{//\ if\ we\ do\ return,\ the\ caller\ will\ exit\ anyway.\ \ Sigh.\ \ Very\ poor\ design\ on}}
+\DoxyCodeLine{00747\ \ \ \textcolor{comment}{//\ X's\ part.}}
+\DoxyCodeLine{00748\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00749\ \}}
+
+\end{DoxyCode}

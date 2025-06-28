@@ -1,0 +1,200 @@
+\doxysection{socket\+Stream.\+cxx}
+\hypertarget{socketStream_8cxx_source}{}\label{socketStream_8cxx_source}\index{panda/src/downloader/socketStream.cxx@{panda/src/downloader/socketStream.cxx}}
+\mbox{\hyperlink{socketStream_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{socketStream_8h}{socketStream.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagram_8h}{datagram.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagramIterator_8h}{datagramIterator.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{httpChannel_8h}{httpChannel.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__downloader_8h}{config\_downloader.h}}"{}}}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00025\ SSReader::}
+\DoxyCodeLine{00026\ SSReader(std::istream\ *stream)\ :\ \_istream(stream)\ \{}
+\DoxyCodeLine{00027\ \ \ \_data\_expected\ =\ 0;}
+\DoxyCodeLine{00028\ \ \ \_tcp\_header\_size\ =\ tcp\_header\_size;}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#ifdef\ SIMULATE\_NETWORK\_DELAY}}
+\DoxyCodeLine{00031\ \ \ \_delay\_active\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00032\ \ \ \_min\_delay\ =\ 0.0;}
+\DoxyCodeLine{00033\ \ \ \_delay\_variance\ =\ 0.0;}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SIMULATE\_NETWORK\_DELAY}}
+\DoxyCodeLine{00035\ \}}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00040\ SSReader::}
+\DoxyCodeLine{00041\ \string~SSReader()\ \{}
+\DoxyCodeLine{00042\ \}}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00050\ \textcolor{keywordtype}{bool}\ SSReader::}
+\DoxyCodeLine{00051\ do\_receive\_datagram(\mbox{\hyperlink{classDatagram}{Datagram}}\ \&dg)\ \{}
+\DoxyCodeLine{00052\ \ \ \textcolor{keywordflow}{if}\ (\_tcp\_header\_size\ ==\ 0)\ \{}
+\DoxyCodeLine{00053\ \ \ \ \ \_data\_expected\ =\ \_data\_so\_far.size();}
+\DoxyCodeLine{00054\ \ \ \}}
+\DoxyCodeLine{00055\ \ \ \textcolor{keywordflow}{if}\ (\_data\_expected\ ==\ 0)\ \{}
+\DoxyCodeLine{00056\ \ \ \ \ \textcolor{comment}{//\ Read\ the\ first\ two\ bytes:\ the\ datagram\ length.}}
+\DoxyCodeLine{00057\ \ \ \ \ \textcolor{keywordflow}{while}\ ((\textcolor{keywordtype}{int})\_data\_so\_far.size()\ <\ \_tcp\_header\_size)\ \{}
+\DoxyCodeLine{00058\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ ch\ =\ \_istream-\/>get();}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ch\ ==\ EOF\ ||\ \_istream-\/>fail())\ \{}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \_istream-\/>clear();}
+\DoxyCodeLine{00061\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00062\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00063\ \ \ \ \ \ \ \_data\_so\_far.push\_back((\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})ch);}
+\DoxyCodeLine{00064\ \ \ \ \ \}}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \ \ \ \ \mbox{\hyperlink{classDatagram}{Datagram}}\ header(\_data\_so\_far);}
+\DoxyCodeLine{00067\ \ \ \ \ \mbox{\hyperlink{classDatagramIterator}{DatagramIterator}}\ di(header);}
+\DoxyCodeLine{00068\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_tcp\_header\_size\ ==\ 2)\ \{}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ \_data\_expected\ =\ di.get\_uint16();}
+\DoxyCodeLine{00070\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_tcp\_header\_size\ ==\ 4)\ \{}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \_data\_expected\ =\ di.get\_uint32();}
+\DoxyCodeLine{00072\ \ \ \ \ \}}
+\DoxyCodeLine{00073\ \ \ \ \ \_data\_so\_far.erase(\_data\_so\_far.begin(),\ \_data\_so\_far.begin()\ +\ \_tcp\_header\_size);}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_data\_expected\ ==\ 0)\ \{}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \textcolor{comment}{//\ Empty\ datagram.}}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ dg.clear();}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00079\ \ \ \ \ \}}
+\DoxyCodeLine{00080\ \ \ \}}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00082\ \ \ \textcolor{comment}{//\ Read\ the\ next\ n\ bytes\ until\ the\ datagram\ is\ filled.}}
+\DoxyCodeLine{00083\ }
+\DoxyCodeLine{00084\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 1024;}
+\DoxyCodeLine{00085\ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{00086\ }
+\DoxyCodeLine{00087\ \ \ \textcolor{keywordtype}{size\_t}\ read\_count\ =\ std::min(\_data\_expected\ -\/\ \_data\_so\_far.size(),\ buffer\_size);}
+\DoxyCodeLine{00088\ \ \ \_istream-\/>read(buffer,\ read\_count);}
+\DoxyCodeLine{00089\ \ \ \textcolor{keywordtype}{size\_t}\ count\ =\ \_istream-\/>gcount();}
+\DoxyCodeLine{00090\ \ \ \textcolor{keywordflow}{while}\ (count\ !=\ 0)\ \{}
+\DoxyCodeLine{00091\ \ \ \ \ \_data\_so\_far.insert(\_data\_so\_far.end(),\ buffer,\ buffer\ +\ count);}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00093\ \ \ \ \ read\_count\ =\ std::min(\_data\_expected\ -\/\ \_data\_so\_far.size(),}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ buffer\_size);}
+\DoxyCodeLine{00095\ \ \ \ \ \_istream-\/>read(buffer,\ read\_count);}
+\DoxyCodeLine{00096\ \ \ \ \ count\ =\ \_istream-\/>gcount();}
+\DoxyCodeLine{00097\ \ \ \}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \textcolor{keywordflow}{if}\ (\_data\_so\_far.size()\ <\ \_data\_expected)\ \{}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{comment}{//\ Not\ yet\ here.\ \ Clear\ the\ istream\ error\ flag\ and\ return\ false\ to}}
+\DoxyCodeLine{00101\ \ \ \ \ \textcolor{comment}{//\ indicate\ more\ coming.}}
+\DoxyCodeLine{00102\ \ \ \ \ \_istream-\/>clear();}
+\DoxyCodeLine{00103\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00104\ \ \ \}}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00106\ \ \ dg.clear();}
+\DoxyCodeLine{00107\ \ \ dg.append\_data(\_data\_so\_far);}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \ \ \_data\_expected\ =\ 0;}
+\DoxyCodeLine{00110\ \ \ \_data\_so\_far.clear();}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00113\ \}}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \textcolor{preprocessor}{\#ifdef\ SIMULATE\_NETWORK\_DELAY}}
+\DoxyCodeLine{00126\ \textcolor{keywordtype}{void}\ SSReader::}
+\DoxyCodeLine{00127\ start\_delay(\textcolor{keywordtype}{double}\ min\_delay,\ \textcolor{keywordtype}{double}\ max\_delay)\ \{}
+\DoxyCodeLine{00128\ \ \ \_min\_delay\ =\ min\_delay;}
+\DoxyCodeLine{00129\ \ \ \_delay\_variance\ =\ std::max(max\_delay\ -\/\ min\_delay,\ 0.0);}
+\DoxyCodeLine{00130\ \ \ \_delay\_active\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00131\ \}}
+\DoxyCodeLine{00132\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SIMULATE\_NETWORK\_DELAY}}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \textcolor{preprocessor}{\#ifdef\ SIMULATE\_NETWORK\_DELAY}}
+\DoxyCodeLine{00140\ \textcolor{keywordtype}{void}\ SSReader::}
+\DoxyCodeLine{00141\ stop\_delay()\ \{}
+\DoxyCodeLine{00142\ \ \ \_delay\_active\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00143\ \}}
+\DoxyCodeLine{00144\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SIMULATE\_NETWORK\_DELAY}}
+\DoxyCodeLine{00145\ }
+\DoxyCodeLine{00146\ \textcolor{preprocessor}{\#ifdef\ SIMULATE\_NETWORK\_DELAY}}
+\DoxyCodeLine{00150\ \textcolor{keywordtype}{void}\ SSReader::}
+\DoxyCodeLine{00151\ delay\_datagram(\textcolor{keyword}{const}\ \mbox{\hyperlink{classDatagram}{Datagram}}\ \&datagram)\ \{}
+\DoxyCodeLine{00152\ \ \ nassertv(\_delay\_active);}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00154\ \ \ \textcolor{keywordtype}{double}\ now\ =\ TrueClock::get\_global\_ptr()-\/>get\_short\_time();}
+\DoxyCodeLine{00155\ \ \ \textcolor{keywordtype}{double}\ reveal\_time\ =\ now\ +\ \_min\_delay;}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00157\ \ \ \textcolor{keywordflow}{if}\ (\_delay\_variance\ >\ 0.0)\ \{}
+\DoxyCodeLine{00158\ \ \ \ \ reveal\_time\ +=\ \_delay\_variance\ *\ ((double)rand()\ /\ (double)RAND\_MAX);}
+\DoxyCodeLine{00159\ \ \ \}}
+\DoxyCodeLine{00160\ \ \ \_delayed.push\_back(DelayedDatagram());}
+\DoxyCodeLine{00161\ \ \ DelayedDatagram\ \&dd\ =\ \_delayed.back();}
+\DoxyCodeLine{00162\ \ \ dd.\_reveal\_time\ =\ reveal\_time;}
+\DoxyCodeLine{00163\ \ \ dd.\_datagram\ =\ datagram;}
+\DoxyCodeLine{00164\ \}}
+\DoxyCodeLine{00165\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SIMULATE\_NETWORK\_DELAY}}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00167\ \textcolor{preprocessor}{\#ifdef\ SIMULATE\_NETWORK\_DELAY}}
+\DoxyCodeLine{00172\ \textcolor{keywordtype}{bool}\ SSReader::}
+\DoxyCodeLine{00173\ get\_delayed(\mbox{\hyperlink{classDatagram}{Datagram}}\ \&datagram)\ \{}
+\DoxyCodeLine{00174\ \ \ \textcolor{keywordflow}{if}\ (\_delayed.empty())\ \{}
+\DoxyCodeLine{00175\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00176\ \ \ \}}
+\DoxyCodeLine{00177\ \ \ \textcolor{keyword}{const}\ DelayedDatagram\ \&dd\ =\ \_delayed.front();}
+\DoxyCodeLine{00178\ \ \ \textcolor{keywordflow}{if}\ (\_delay\_active)\ \{}
+\DoxyCodeLine{00179\ \ \ \ \ \textcolor{keywordtype}{double}\ now\ =\ TrueClock::get\_global\_ptr()-\/>get\_short\_time();}
+\DoxyCodeLine{00180\ \ \ \ \ \textcolor{keywordflow}{if}\ (dd.\_reveal\_time\ >\ now)\ \{}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \textcolor{comment}{//\ Not\ yet.}}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00183\ \ \ \ \ \}}
+\DoxyCodeLine{00184\ \ \ \}}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00186\ \ \ datagram\ =\ dd.\_datagram;}
+\DoxyCodeLine{00187\ \ \ \_delayed.pop\_front();}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00190\ \}}
+\DoxyCodeLine{00191\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SIMULATE\_NETWORK\_DELAY}}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00196\ SSWriter::}
+\DoxyCodeLine{00197\ SSWriter(std::ostream\ *stream)\ :\ \_ostream(stream)\ \{}
+\DoxyCodeLine{00198\ \ \ \_collect\_tcp\ =\ collect\_tcp;}
+\DoxyCodeLine{00199\ \ \ \_collect\_tcp\_interval\ =\ collect\_tcp\_interval;}
+\DoxyCodeLine{00200\ \ \ \_queued\_data\_start\ =\ 0.0;}
+\DoxyCodeLine{00201\ \ \ \_tcp\_header\_size\ =\ tcp\_header\_size;}
+\DoxyCodeLine{00202\ \}}
+\DoxyCodeLine{00203\ }
+\DoxyCodeLine{00207\ SSWriter::}
+\DoxyCodeLine{00208\ \string~SSWriter()\ \{}
+\DoxyCodeLine{00209\ \}}
+\DoxyCodeLine{00210\ }
+\DoxyCodeLine{00216\ \textcolor{keywordtype}{bool}\ SSWriter::}
+\DoxyCodeLine{00217\ send\_datagram(\textcolor{keyword}{const}\ \mbox{\hyperlink{classDatagram}{Datagram}}\ \&dg)\ \{}
+\DoxyCodeLine{00218\ \ \ \mbox{\hyperlink{classDatagram}{Datagram}}\ header;}
+\DoxyCodeLine{00219\ \ \ \textcolor{keywordflow}{if}\ (\_tcp\_header\_size\ ==\ 2)\ \{}
+\DoxyCodeLine{00220\ \ \ \ \ \textcolor{keywordflow}{if}\ (dg.get\_length()\ >=\ 0x10000)\ \{}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ downloader\_cat.error()}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Attempt\ to\ send\ TCP\ datagram\ of\ "{}}\ <<\ dg.get\_length()}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ bytes-\/-\/too\ long!\(\backslash\)n"{}};}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}Datagram\ too\ long"{}});}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00226\ \ \ \ \ \}}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00228\ \ \ \ \ header.add\_uint16(dg.get\_length());}
+\DoxyCodeLine{00229\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_tcp\_header\_size\ ==\ 4)\ \{}
+\DoxyCodeLine{00230\ \ \ \ \ header.add\_uint32(dg.get\_length());}
+\DoxyCodeLine{00231\ \ \ \}}
+\DoxyCodeLine{00232\ }
+\DoxyCodeLine{00233\ \ \ \textcolor{comment}{//\ These\ two\ writes\ don't\ generate\ two\ socket\ calls,\ because\ the\ socket}}
+\DoxyCodeLine{00234\ \ \ \textcolor{comment}{//\ stream\ is\ always\ buffered.}}
+\DoxyCodeLine{00235\ \ \ \_ostream-\/>write((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)header.get\_data(),\ header.get\_length());}
+\DoxyCodeLine{00236\ \ \ \_ostream-\/>write((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)dg.get\_data(),\ dg.get\_length());}
+\DoxyCodeLine{00237\ }
+\DoxyCodeLine{00238\ \ \ \textcolor{comment}{//\ Now\ flush\ the\ buffer\ immediately,\ forcing\ the\ data\ to\ be\ sent\ (unless}}
+\DoxyCodeLine{00239\ \ \ \textcolor{comment}{//\ collect-\/tcp\ mode\ is\ in\ effect).}}
+\DoxyCodeLine{00240\ \ \ flush();}
+\DoxyCodeLine{00241\ }
+\DoxyCodeLine{00242\ \ \ \textcolor{keywordflow}{return}\ !is\_closed();}
+\DoxyCodeLine{00243\ \}}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00248\ ISocketStream::}
+\DoxyCodeLine{00249\ \string~ISocketStream()\ \{}
+\DoxyCodeLine{00250\ \ \ \textcolor{comment}{//\ This\ should\ already\ have\ been\ cleared\ by\ the\ subclass\ destructor.}}
+\DoxyCodeLine{00251\ \ \ nassertv(\_channel\ ==\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00252\ \}}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+
+\end{DoxyCode}

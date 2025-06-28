@@ -1,0 +1,783 @@
+\doxysection{glx\+Graphics\+State\+Guardian.\+cxx}
+\hypertarget{glxGraphicsStateGuardian_8cxx_source}{}\label{glxGraphicsStateGuardian_8cxx_source}\index{panda/src/glxdisplay/glxGraphicsStateGuardian.cxx@{panda/src/glxdisplay/glxGraphicsStateGuardian.cxx}}
+\mbox{\hyperlink{glxGraphicsStateGuardian_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{glxGraphicsStateGuardian_8h}{glxGraphicsStateGuardian.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__glxdisplay_8h}{config\_glxdisplay.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__glgsg_8h}{config\_glgsg.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{lightReMutexHolder_8h}{lightReMutexHolder.h}}"{}}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ <dlfcn.h>}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ glxGraphicsStateGuardian::\_type\_handle;}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00029\ glxGraphicsStateGuardian::}
+\DoxyCodeLine{00030\ glxGraphicsStateGuardian(\mbox{\hyperlink{classGraphicsEngine}{GraphicsEngine}}\ *engine,\ \mbox{\hyperlink{classGraphicsPipe}{GraphicsPipe}}\ *pipe,}
+\DoxyCodeLine{00031\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classglxGraphicsStateGuardian}{glxGraphicsStateGuardian}}\ *share\_with)\ :}
+\DoxyCodeLine{00032\ \ \ \mbox{\hyperlink{classPosixGraphicsStateGuardian}{PosixGraphicsStateGuardian}}(engine,\ pipe)}
+\DoxyCodeLine{00033\ \{}
+\DoxyCodeLine{00034\ \ \ \_share\_context=\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00035\ \ \ \_context=\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00036\ \ \ \_display=\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00037\ \ \ \_screen=0;}
+\DoxyCodeLine{00038\ \ \ \_visual=\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00039\ \ \ \_visuals=\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00040\ \ \ \_fbconfig=\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00041\ \ \ \_context\_has\_pbuffer\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00042\ \ \ \_context\_has\_pixmap\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00043\ \ \ \_slow\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \ \ \_supports\_swap\_control\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00046\ \ \ \_supports\_fbconfig\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00047\ \ \ \_supports\_pbuffer\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00048\ \ \ \_uses\_sgix\_pbuffer\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \ \ \textcolor{keywordflow}{if}\ (share\_with\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00051\ \ \ \ \ \_prepared\_objects\ =\ share\_with-\/>get\_prepared\_objects();}
+\DoxyCodeLine{00052\ \ \ \ \ \_share\_context\ =\ share\_with-\/>\_context;}
+\DoxyCodeLine{00053\ \ \ \}}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00055\ \ \ \_checked\_get\_proc\_address\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00056\ \ \ \_glXGetProcAddress\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00057\ \ \ \_temp\_context\ =\ (GLXContext)\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00058\ \ \ \_temp\_xwindow\ =\ (X11\_Window)\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00059\ \ \ \_temp\_colormap\ =\ (Colormap)\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00060\ \}}
+\DoxyCodeLine{00061\ }
+\DoxyCodeLine{00065\ glxGraphicsStateGuardian::}
+\DoxyCodeLine{00066\ \string~glxGraphicsStateGuardian()\ \{}
+\DoxyCodeLine{00067\ \ \ \textcolor{comment}{//\ Actually,\ the\ lock\ might\ have\ already\ destructed,\ so\ we\ can't\ reliably}}
+\DoxyCodeLine{00068\ \ \ \textcolor{comment}{//\ grab\ the\ X11\ lock\ here.}}
+\DoxyCodeLine{00069\ \ \ \textcolor{comment}{//LightReMutexHolder\ holder(glxGraphicsPipe::\_x\_mutex);}}
+\DoxyCodeLine{00070\ \ \ destroy\_temp\_xwindow();}
+\DoxyCodeLine{00071\ \ \ \textcolor{keywordflow}{if}\ (\_visuals\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00072\ \ \ \ \ XFree(\_visuals);}
+\DoxyCodeLine{00073\ \ \ \}}
+\DoxyCodeLine{00074\ \ \ \textcolor{keywordflow}{if}\ (\_context\ !=\ (GLXContext)\textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00075\ \ \ \ \ glXDestroyContext(\_display,\ \_context);}
+\DoxyCodeLine{00076\ \ \ \ \ \_context\ =\ (GLXContext)\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00077\ \ \ \}}
+\DoxyCodeLine{00078\ \}}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00083\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classglxGraphicsStateGuardian_a425b383506024bae3fc16026f8e4c319}{glxGraphicsStateGuardian::}}}
+\DoxyCodeLine{00084\ \mbox{\hyperlink{classglxGraphicsStateGuardian_a425b383506024bae3fc16026f8e4c319}{get\_properties}}(\mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ \&properties,\ XVisualInfo\ *visual)\ \{}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00086\ \ \ \textcolor{keywordtype}{int}\ use\_gl,\ render\_mode,\ double\_buffer,\ stereo,}
+\DoxyCodeLine{00087\ \ \ \ \ red\_size,\ green\_size,\ blue\_size,}
+\DoxyCodeLine{00088\ \ \ \ \ alpha\_size,\ ared\_size,\ agreen\_size,\ ablue\_size,\ aalpha\_size,}
+\DoxyCodeLine{00089\ \ \ \ \ depth\_size,\ stencil\_size;}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_USE\_GL,\ \&use\_gl);}
+\DoxyCodeLine{00092\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_RGBA,\ \&render\_mode);}
+\DoxyCodeLine{00093\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_DOUBLEBUFFER,\ \&double\_buffer);}
+\DoxyCodeLine{00094\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_STEREO,\ \&stereo);}
+\DoxyCodeLine{00095\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_RED\_SIZE,\ \&red\_size);}
+\DoxyCodeLine{00096\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_GREEN\_SIZE,\ \&green\_size);}
+\DoxyCodeLine{00097\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_BLUE\_SIZE,\ \&blue\_size);}
+\DoxyCodeLine{00098\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_ALPHA\_SIZE,\ \&alpha\_size);}
+\DoxyCodeLine{00099\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_ACCUM\_RED\_SIZE,\ \&ared\_size);}
+\DoxyCodeLine{00100\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_ACCUM\_GREEN\_SIZE,\ \&agreen\_size);}
+\DoxyCodeLine{00101\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_ACCUM\_BLUE\_SIZE,\ \&ablue\_size);}
+\DoxyCodeLine{00102\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_ACCUM\_ALPHA\_SIZE,\ \&aalpha\_size);}
+\DoxyCodeLine{00103\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_DEPTH\_SIZE,\ \&depth\_size);}
+\DoxyCodeLine{00104\ \ \ glXGetConfig(\_display,\ visual,\ GLX\_STENCIL\_SIZE,\ \&stencil\_size);}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00106\ \ \ properties.clear();}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00108\ \ \ \textcolor{keywordflow}{if}\ (use\_gl\ ==\ 0)\ \{}
+\DoxyCodeLine{00109\ \ \ \ \ \textcolor{comment}{//\ If\ we\ return\ a\ set\ of\ properties\ without\ setting\ either\ rgb\_color\ or}}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{comment}{//\ indexed\_color,\ then\ this\ indicates\ a\ visual\ that's\ no\ good\ for\ any\ kind}}
+\DoxyCodeLine{00111\ \ \ \ \ \textcolor{comment}{//\ of\ rendering.}}
+\DoxyCodeLine{00112\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00113\ \ \ \}}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \ \ \textcolor{keywordflow}{if}\ (double\_buffer)\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ properties.set\_back\_buffers(1);}
+\DoxyCodeLine{00117\ \ \ \}}
+\DoxyCodeLine{00118\ \ \ \textcolor{keywordflow}{if}\ (stereo)\ \{}
+\DoxyCodeLine{00119\ \ \ \ \ properties.set\_stereo(1);}
+\DoxyCodeLine{00120\ \ \ \}}
+\DoxyCodeLine{00121\ \ \ \textcolor{keywordflow}{if}\ (render\_mode)\ \{}
+\DoxyCodeLine{00122\ \ \ \ \ properties.set\_rgb\_color(1);}
+\DoxyCodeLine{00123\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ properties.set\_indexed\_color(1);}
+\DoxyCodeLine{00125\ \ \ \}}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00127\ \ \ properties.set\_rgba\_bits(red\_size,\ green\_size,\ blue\_size,\ alpha\_size);}
+\DoxyCodeLine{00128\ \ \ properties.set\_stencil\_bits(stencil\_size);}
+\DoxyCodeLine{00129\ \ \ properties.set\_depth\_bits(depth\_size);}
+\DoxyCodeLine{00130\ \ \ properties.set\_accum\_bits(ared\_size+agreen\_size+ablue\_size+aalpha\_size);}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ \ \ \textcolor{comment}{//\ Set\ both\ hardware\ and\ software\ bits,\ indicating\ not-\/yet-\/known.}}
+\DoxyCodeLine{00133\ \ \ properties.set\_force\_software(1);}
+\DoxyCodeLine{00134\ \ \ properties.set\_force\_hardware(1);}
+\DoxyCodeLine{00135\ \}}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00140\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classglxGraphicsStateGuardian_a51e14937f7a446d4f2e966323151d11b}{glxGraphicsStateGuardian::}}}
+\DoxyCodeLine{00141\ \mbox{\hyperlink{classglxGraphicsStateGuardian_a51e14937f7a446d4f2e966323151d11b}{get\_properties\_advanced}}(\mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ \&properties,}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ \&context\_has\_pbuffer,\ \textcolor{keywordtype}{bool}\ \&context\_has\_pixmap,}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ \&slow,\ GLXFBConfig\ config)\ \{}
+\DoxyCodeLine{00144\ \ \ properties.clear();}
+\DoxyCodeLine{00145\ }
+\DoxyCodeLine{00146\ \ \ \textcolor{keywordflow}{if}\ (\_supports\_fbconfig)\ \{}
+\DoxyCodeLine{00147\ \ \ \ \ \textcolor{comment}{//\ Now\ update\ our\ framebuffer\_mode\ and\ bit\ depth\ appropriately.}}
+\DoxyCodeLine{00148\ \ \ \ \ \textcolor{keywordtype}{int}\ render\_type,\ double\_buffer,\ stereo,\ red\_size,\ green\_size,\ blue\_size,}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ alpha\_size,\ ared\_size,\ agreen\_size,\ ablue\_size,\ aalpha\_size,}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ depth\_size,\ stencil\_size,\ samples,\ drawable\_type,\ caveat,\ srgb\_capable;}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00152\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_RENDER\_TYPE,\ \&render\_type);}
+\DoxyCodeLine{00153\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_DOUBLEBUFFER,\ \&double\_buffer);}
+\DoxyCodeLine{00154\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_STEREO,\ \&stereo);}
+\DoxyCodeLine{00155\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_RED\_SIZE,\ \&red\_size);}
+\DoxyCodeLine{00156\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_GREEN\_SIZE,\ \&green\_size);}
+\DoxyCodeLine{00157\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_BLUE\_SIZE,\ \&blue\_size);}
+\DoxyCodeLine{00158\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_ALPHA\_SIZE,\ \&alpha\_size);}
+\DoxyCodeLine{00159\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_ACCUM\_RED\_SIZE,\ \&ared\_size);}
+\DoxyCodeLine{00160\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_ACCUM\_GREEN\_SIZE,\ \&agreen\_size);}
+\DoxyCodeLine{00161\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_ACCUM\_BLUE\_SIZE,\ \&ablue\_size);}
+\DoxyCodeLine{00162\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_ACCUM\_ALPHA\_SIZE,\ \&aalpha\_size);}
+\DoxyCodeLine{00163\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_DEPTH\_SIZE,\ \&depth\_size);}
+\DoxyCodeLine{00164\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_STENCIL\_SIZE,\ \&stencil\_size);}
+\DoxyCodeLine{00165\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_SAMPLES,\ \&samples);}
+\DoxyCodeLine{00166\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_DRAWABLE\_TYPE,\ \&drawable\_type);}
+\DoxyCodeLine{00167\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_CONFIG\_CAVEAT,\ \&caveat);}
+\DoxyCodeLine{00168\ \ \ \ \ \_glXGetFBConfigAttrib(\_display,\ config,\ GLX\_FRAMEBUFFER\_SRGB\_CAPABLE\_EXT,\ \&srgb\_capable);}
+\DoxyCodeLine{00169\ }
+\DoxyCodeLine{00170\ \ \ \ \ context\_has\_pbuffer\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00171\ \ \ \ \ \textcolor{keywordflow}{if}\ ((drawable\_type\ \&\ GLX\_PBUFFER\_BIT)!=0)\ \{}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ context\_has\_pbuffer\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00173\ \ \ \ \ \}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00175\ \ \ \ \ context\_has\_pixmap\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00176\ \ \ \ \ \textcolor{keywordflow}{if}\ ((drawable\_type\ \&\ GLX\_PIXMAP\_BIT)!=0)\ \{}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ context\_has\_pixmap\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00178\ \ \ \ \ \}}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00180\ \ \ \ \ slow\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00181\ \ \ \ \ \textcolor{keywordflow}{if}\ (caveat\ ==\ GLX\_SLOW\_CONFIG)\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ slow\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00183\ \ \ \ \ \}}
+\DoxyCodeLine{00184\ }
+\DoxyCodeLine{00185\ \ \ \ \ \textcolor{keywordflow}{if}\ ((drawable\_type\ \&\ GLX\_WINDOW\_BIT)==0)\ \{}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ insist\ on\ having\ a\ context\ that\ will\ support\ an\ onscreen\ window.}}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00188\ \ \ \ \ \}}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00190\ \ \ \ \ \textcolor{keywordflow}{if}\ (double\_buffer)\ \{}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ properties.set\_back\_buffers(1);}
+\DoxyCodeLine{00192\ \ \ \ \ \}}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keywordflow}{if}\ (stereo)\ \{}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ properties.set\_stereo(\textcolor{keyword}{true});}
+\DoxyCodeLine{00196\ \ \ \ \ \}}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00198\ \ \ \ \ \textcolor{keywordflow}{if}\ (srgb\_capable)\ \{}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ properties.set\_srgb\_color(\textcolor{keyword}{true});}
+\DoxyCodeLine{00200\ \ \ \ \ \}}
+\DoxyCodeLine{00201\ }
+\DoxyCodeLine{00202\ \ \ \ \ \textcolor{keywordflow}{if}\ ((render\_type\ \&\ GLX\_RGBA\_BIT)!=0)\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ properties.set\_rgb\_color(\textcolor{keyword}{true});}
+\DoxyCodeLine{00204\ \ \ \ \ \}}
+\DoxyCodeLine{00205\ \ \ \ \ \textcolor{keywordflow}{if}\ ((render\_type\ \&\ GLX\_COLOR\_INDEX\_BIT)!=0)\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ properties.set\_indexed\_color(\textcolor{keyword}{true});}
+\DoxyCodeLine{00207\ \ \ \ \ \}}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00209\ \ \ \ \ properties.set\_rgba\_bits(red\_size,\ green\_size,\ blue\_size,\ alpha\_size);}
+\DoxyCodeLine{00210\ \ \ \ \ properties.set\_stencil\_bits(stencil\_size);}
+\DoxyCodeLine{00211\ \ \ \ \ properties.set\_depth\_bits(depth\_size);}
+\DoxyCodeLine{00212\ \ \ \ \ properties.set\_accum\_bits(ared\_size+agreen\_size+ablue\_size+aalpha\_size);}
+\DoxyCodeLine{00213\ \ \ \ \ properties.set\_multisamples(samples);}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \ \ \textcolor{comment}{//\ Set\ both\ hardware\ and\ software\ bits,\ indicating\ not-\/yet-\/known.}}
+\DoxyCodeLine{00216\ \ \ \ \ properties.set\_force\_software(1);}
+\DoxyCodeLine{00217\ \ \ \ \ properties.set\_force\_hardware(1);}
+\DoxyCodeLine{00218\ \ \ \}}
+\DoxyCodeLine{00219\ \}}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00225\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classglxGraphicsStateGuardian_abcc98c17affa1e61532bac6a002cc29a}{glxGraphicsStateGuardian::}}}
+\DoxyCodeLine{00226\ \mbox{\hyperlink{classglxGraphicsStateGuardian_abcc98c17affa1e61532bac6a002cc29a}{choose\_pixel\_format}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ \&properties,}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ X11\_Display\ *display,}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ screen,\ \textcolor{keywordtype}{bool}\ need\_pbuffer,\ \textcolor{keywordtype}{bool}\ need\_pixmap)\ \{}
+\DoxyCodeLine{00229\ }
+\DoxyCodeLine{00230\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(glxGraphicsPipe::\_x\_mutex);}
+\DoxyCodeLine{00231\ \ \ \_display\ =\ display;}
+\DoxyCodeLine{00232\ \ \ \_screen\ =\ screen;}
+\DoxyCodeLine{00233\ \ \ \_context\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00234\ \ \ \_fbconfig\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00235\ \ \ \_visual\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00236\ \ \ \textcolor{keywordflow}{if}\ (\_visuals\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ XFree(\_visuals);}
+\DoxyCodeLine{00238\ \ \ \ \ \_visuals\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00239\ \ \ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ \_fbprops.clear();}
+\DoxyCodeLine{00242\ }
+\DoxyCodeLine{00243\ \ \ \textcolor{comment}{//\ First,\ attempt\ to\ create\ a\ context\ using\ the\ XVisual\ interface.\ \ We\ need}}
+\DoxyCodeLine{00244\ \ \ \textcolor{comment}{//\ this\ before\ we\ can\ query\ the\ FBConfig\ interface,\ because\ we\ need\ an}}
+\DoxyCodeLine{00245\ \ \ \textcolor{comment}{//\ OpenGL\ context\ to\ get\ the\ required\ extension\ function\ pointers.}}
+\DoxyCodeLine{00246\ \ \ destroy\_temp\_xwindow();}
+\DoxyCodeLine{00247\ \ \ choose\_temp\_visual(properties);}
+\DoxyCodeLine{00248\ \ \ \textcolor{keywordflow}{if}\ (\_temp\_context\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00249\ \ \ \ \ \textcolor{comment}{//\ No\ good.}}
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00251\ \ \ \}}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ \textcolor{comment}{//\ Now\ we\ have\ to\ initialize\ the\ context\ so\ we\ can\ query\ its\ capabilities}}
+\DoxyCodeLine{00254\ \ \ \textcolor{comment}{//\ and\ extensions.\ \ This\ also\ means\ creating\ a\ temporary\ window,\ so\ we\ have}}
+\DoxyCodeLine{00255\ \ \ \textcolor{comment}{//\ something\ to\ bind\ the\ context\ to\ and\ make\ it\ current.}}
+\DoxyCodeLine{00256\ \ \ init\_temp\_context();}
+\DoxyCodeLine{00257\ }
+\DoxyCodeLine{00258\ \ \ \textcolor{keywordflow}{if}\ (!\_supports\_fbconfig)\ \{}
+\DoxyCodeLine{00259\ \ \ \ \ \textcolor{comment}{//\ We\ have\ a\ good\ OpenGL\ context,\ but\ it\ doesn't\ support\ the\ FBConfig}}
+\DoxyCodeLine{00260\ \ \ \ \ \textcolor{comment}{//\ interface,\ so\ we'll\ stop\ there.}}
+\DoxyCodeLine{00261\ \ \ \ \ glxdisplay\_cat.debug()}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ <<\textcolor{stringliteral}{"{}\ No\ FBConfig\ supported;\ using\ XVisual\ only.\(\backslash\)n"{}}}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ <<\ \_fbprops\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00265\ \ \ \ \ \_context\ =\ \_temp\_context;}
+\DoxyCodeLine{00266\ \ \ \ \ \_temp\_context\ =\ (GLXContext)\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00267\ }
+\DoxyCodeLine{00268\ \ \ \ \ \textcolor{comment}{//\ By\ convention,\ every\ indirect\ XVisual\ that\ can\ render\ to\ a\ window\ can}}
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{comment}{//\ also\ render\ to\ a\ GLXPixmap.\ \ Direct\ visuals\ we're\ not\ as\ sure\ about.}}
+\DoxyCodeLine{00270\ \ \ \ \ \_context\_has\_pixmap\ =\ !glXIsDirect(\_display,\ \_context);}
+\DoxyCodeLine{00271\ }
+\DoxyCodeLine{00272\ \ \ \ \ \textcolor{comment}{//\ Pbuffers\ aren't\ supported\ at\ all\ with\ the\ XVisual\ interface.}}
+\DoxyCodeLine{00273\ \ \ \ \ \_context\_has\_pbuffer\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00274\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00275\ \ \ \}}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00277\ \ \ \textcolor{comment}{//\ The\ OpenGL\ context\ supports\ the\ FBConfig\ interface,\ so\ we\ can\ use\ that}}
+\DoxyCodeLine{00278\ \ \ \textcolor{comment}{//\ more\ advanced\ interface\ to\ choose\ the\ actual\ window\ format\ we'll\ use.}}
+\DoxyCodeLine{00279\ \ \ \textcolor{comment}{//\ FBConfig\ provides\ for\ more\ options\ than\ the\ older\ XVisual\ interface,\ so}}
+\DoxyCodeLine{00280\ \ \ \textcolor{comment}{//\ we'd\ much\ rather\ use\ it\ if\ it's\ available.}}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \ \ \textcolor{keywordtype}{int}\ best\_quality\ =\ 0;}
+\DoxyCodeLine{00283\ \ \ \textcolor{keywordtype}{int}\ best\_result\ =\ 0;}
+\DoxyCodeLine{00284\ \ \ \mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ best\_props;}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \textcolor{keywordtype}{int}\ render\_type\ =\ GLX\_RGBA\_TYPE;}
+\DoxyCodeLine{00287\ \ \ \textcolor{keywordflow}{if}\ (properties.get\_indexed\_color())\ \{}
+\DoxyCodeLine{00288\ \ \ \ \ render\_type\ =\ GLX\_COLOR\_INDEX\_TYPE;}
+\DoxyCodeLine{00289\ \ \ \}}
+\DoxyCodeLine{00290\ }
+\DoxyCodeLine{00291\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ max\_attrib\_list\ =\ 32;}
+\DoxyCodeLine{00292\ \ \ \textcolor{keywordtype}{int}\ attrib\_list[max\_attrib\_list];}
+\DoxyCodeLine{00293\ \ \ \textcolor{keywordtype}{int}\ n\ =\ 0;}
+\DoxyCodeLine{00294\ \ \ attrib\_list[n++]\ =\ GLX\_STEREO;}
+\DoxyCodeLine{00295\ \ \ attrib\_list[n++]\ =\ GLX\_DONT\_CARE;}
+\DoxyCodeLine{00296\ \ \ attrib\_list[n++]\ =\ GLX\_RENDER\_TYPE;}
+\DoxyCodeLine{00297\ \ \ attrib\_list[n++]\ =\ GLX\_DONT\_CARE;}
+\DoxyCodeLine{00298\ \ \ attrib\_list[n++]\ =\ GLX\_DRAWABLE\_TYPE;}
+\DoxyCodeLine{00299\ \ \ attrib\_list[n++]\ =\ GLX\_DONT\_CARE;}
+\DoxyCodeLine{00300\ \ \ attrib\_list[n]\ =\ (int)None;}
+\DoxyCodeLine{00301\ }
+\DoxyCodeLine{00302\ \ \ \textcolor{keywordtype}{int}\ num\_configs\ =\ 0;}
+\DoxyCodeLine{00303\ \ \ GLXFBConfig\ *configs\ =}
+\DoxyCodeLine{00304\ \ \ \ \ \_glXChooseFBConfig(\_display,\ \_screen,\ attrib\_list,\ \&num\_configs);}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00306\ \ \ \textcolor{keywordflow}{if}\ (configs\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00307\ \ \ \ \ \textcolor{keywordtype}{bool}\ context\_has\_pbuffer,\ context\_has\_pixmap,\ slow;}
+\DoxyCodeLine{00308\ \ \ \ \ \textcolor{keywordtype}{int}\ quality,\ i;}
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ num\_configs;\ ++i)\ \{}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ fbprops;}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \mbox{\hyperlink{classglxGraphicsStateGuardian_a51e14937f7a446d4f2e966323151d11b}{get\_properties\_advanced}}(fbprops,\ context\_has\_pbuffer,\ context\_has\_pixmap,}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ slow,\ configs[i]);}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ quality\ =\ fbprops.get\_quality(properties);}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((quality\ >\ 0)\&\&(slow))\ quality\ -\/=\ 10000000;}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (glxdisplay\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *pbuffertext\ =\ context\_has\_pbuffer\ ?\ \textcolor{stringliteral}{"{}\ (pbuffer)"{}}\ :\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *pixmaptext\ =\ context\_has\_pixmap\ ?\ \textcolor{stringliteral}{"{}\ (pixmap)"{}}\ :\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *slowtext\ =\ slow\ ?\ \textcolor{stringliteral}{"{}\ (slow)"{}}\ :\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ glxdisplay\_cat.debug()}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ \ \ <<\ i\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ fbprops\ <<\ \textcolor{stringliteral}{"{}\ quality="{}}\ <<\ quality\ <<\ pbuffertext}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \ \ <<\ pixmaptext\ <<\ slowtext\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (need\_pbuffer\ \&\&\ !context\_has\_pbuffer)\ \{}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (need\_pixmap\ \&\&\ !context\_has\_pixmap)\ \{}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (quality\ >\ best\_quality)\ \{}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ best\_quality\ =\ quality;}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \ \ best\_result\ =\ i;}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ best\_props\ =\ fbprops;}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00335\ \ \ \ \ \}}
+\DoxyCodeLine{00336\ \ \ \}}
+\DoxyCodeLine{00337\ }
+\DoxyCodeLine{00338\ \ \ \textcolor{keywordflow}{if}\ (best\_quality\ >\ 0)\ \{}
+\DoxyCodeLine{00339\ \ \ \ \ \_fbconfig\ =\ configs[best\_result];}
+\DoxyCodeLine{00340\ }
+\DoxyCodeLine{00341\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glXCreateContextAttribs\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \textcolor{comment}{//\ NB.\ \ This\ is\ a\ wholly\ different\ type\ of\ attrib\ list\ than\ below,\ the}}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \textcolor{comment}{//\ same\ values\ are\ not\ used!}}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ n\ =\ 0;}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ attrib\_list[n++]\ =\ GLX\_RENDER\_TYPE;}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ attrib\_list[n++]\ =\ render\_type;}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gl\_version.get\_num\_words()\ >\ 0)\ \{}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ attrib\_list[n++]\ =\ GLX\_CONTEXT\_MAJOR\_VERSION\_ARB;}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ attrib\_list[n++]\ =\ gl\_version[0];}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gl\_version.get\_num\_words()\ >\ 1)\ \{}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \ \ \ \ attrib\_list[n++]\ =\ GLX\_CONTEXT\_MINOR\_VERSION\_ARB;}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \ \ \ \ attrib\_list[n++]\ =\ gl\_version[1];}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ flags\ =\ 0;}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gl\_debug)\ \{}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ flags\ |=\ GLX\_CONTEXT\_DEBUG\_BIT\_ARB;}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gl\_forward\_compatible)\ \{}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ flags\ |=\ GLX\_CONTEXT\_FORWARD\_COMPATIBLE\_BIT\_ARB;}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gl\_version.get\_num\_words()\ ==\ 0\ ||\ gl\_version[0]\ <\ 2)\ \{}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \ \ \ \ glxdisplay\_cat.error()}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}gl-\/forward-\/compatible\ requires\ gl-\/version\ >=\ 3\ 0\(\backslash\)n"{}};}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (flags\ !=\ 0)\ \{}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ attrib\_list[n++]\ =\ GLX\_CONTEXT\_FLAGS\_ARB;}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ attrib\_list[n++]\ =\ flags;}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ attrib\_list[n]\ =\ None;}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \_context\ =\ \_glXCreateContextAttribs(\_display,\ \_fbconfig,\ \_share\_context,}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_TRUE,\ attrib\_list);}
+\DoxyCodeLine{00373\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \_context\ =}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ \_glXCreateNewContext(\_display,\ \_fbconfig,\ render\_type,\ \_share\_context,}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GL\_TRUE);}
+\DoxyCodeLine{00377\ \ \ \ \ \}}
+\DoxyCodeLine{00378\ }
+\DoxyCodeLine{00379\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_context)\ \{}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ mark\_new();}
+\DoxyCodeLine{00381\ }
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_visuals\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \ \ XFree(\_visuals);}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ \_visuals\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \_visuals\ =\ \_glXGetVisualFromFBConfig(\_display,\ \_fbconfig);}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \_visual\ =\ \_visuals;}
+\DoxyCodeLine{00388\ }
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_visual)\ \{}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classglxGraphicsStateGuardian_a51e14937f7a446d4f2e966323151d11b}{get\_properties\_advanced}}(\_fbprops,\ \_context\_has\_pbuffer,\ \_context\_has\_pixmap,}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_slow,\ \_fbconfig);}
+\DoxyCodeLine{00392\ }
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!properties.get\_srgb\_color())\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \ \ \_fbprops.set\_srgb\_color(\textcolor{keyword}{false});}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00396\ }
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (glxdisplay\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ \ \ glxdisplay\_cat.debug()}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Selected\ context\ "{}}\ <<\ best\_result\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ \_fbprops\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ \ \ glxdisplay\_cat.debug()}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}context\_has\_pbuffer\ =\ "{}}\ <<\ \_context\_has\_pbuffer}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ context\_has\_pixmap\ =\ "{}}\ <<\ \_context\_has\_pixmap\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00407\ \ \ \ \ \}}
+\DoxyCodeLine{00408\ \ \ \ \ \textcolor{comment}{//\ This\ really\ shouldn't\ happen,\ so\ I'm\ not\ too\ careful\ about\ cleanup.}}
+\DoxyCodeLine{00409\ \ \ \ \ glxdisplay\_cat.error()}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ create\ FBConfig\ context!\(\backslash\)n"{}};}
+\DoxyCodeLine{00411\ \ \ \ \ \_fbconfig\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00412\ \ \ \ \ \_context\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00413\ \ \ \ \ \_visual\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00414\ \ \ \ \ \_visuals\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00415\ \ \ \}}
+\DoxyCodeLine{00416\ }
+\DoxyCodeLine{00417\ \ \ glxdisplay\_cat.warning()}
+\DoxyCodeLine{00418\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ suitable\ FBConfig\ contexts\ available;\ using\ XVisual\ only.\(\backslash\)n"{}}}
+\DoxyCodeLine{00419\ \ \ \ \ <<\ \_fbprops\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00421\ \ \ \_context\ =\ \_temp\_context;}
+\DoxyCodeLine{00422\ \ \ \_temp\_context\ =\ (GLXContext)\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00423\ }
+\DoxyCodeLine{00424\ \ \ \textcolor{comment}{//\ By\ convention,\ every\ indirect\ XVisual\ that\ can\ render\ to\ a\ window\ can}}
+\DoxyCodeLine{00425\ \ \ \textcolor{comment}{//\ also\ render\ to\ a\ GLXPixmap.\ \ Direct\ visuals\ we're\ not\ as\ sure\ about.}}
+\DoxyCodeLine{00426\ \ \ \_context\_has\_pixmap\ =\ !glXIsDirect(\_display,\ \_context);}
+\DoxyCodeLine{00427\ }
+\DoxyCodeLine{00428\ \ \ \textcolor{comment}{//\ Pbuffers\ aren't\ supported\ at\ all\ with\ the\ XVisual\ interface.}}
+\DoxyCodeLine{00429\ \ \ \_context\_has\_pbuffer\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00430\ \}}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00436\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classglxGraphicsStateGuardian_a71b6ab6bc5fea575fa8817babcbbb154}{glxGraphicsStateGuardian::}}}
+\DoxyCodeLine{00437\ \mbox{\hyperlink{classglxGraphicsStateGuardian_a71b6ab6bc5fea575fa8817babcbbb154}{glx\_is\_at\_least\_version}}(\textcolor{keywordtype}{int}\ major\_version,\ \textcolor{keywordtype}{int}\ minor\_version)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00438\ \ \ \textcolor{keywordflow}{if}\ (\_glx\_version\_major\ <\ major\_version)\ \{}
+\DoxyCodeLine{00439\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00440\ \ \ \}}
+\DoxyCodeLine{00441\ \ \ \textcolor{keywordflow}{if}\ (\_glx\_version\_major\ >\ major\_version)\ \{}
+\DoxyCodeLine{00442\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00443\ \ \ \}}
+\DoxyCodeLine{00444\ \ \ \textcolor{keywordflow}{if}\ (\_glx\_version\_minor\ <\ minor\_version)\ \{}
+\DoxyCodeLine{00445\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00446\ \ \ \}}
+\DoxyCodeLine{00447\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00448\ \}}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00453\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classglxGraphicsStateGuardian_acd1fc789b498fcadc0499afafe9a1028}{glxGraphicsStateGuardian::}}}
+\DoxyCodeLine{00454\ \mbox{\hyperlink{classglxGraphicsStateGuardian_acd1fc789b498fcadc0499afafe9a1028}{gl\_flush}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00455\ \ \ \textcolor{comment}{//\ This\ call\ requires\ synchronization\ with\ X.}}
+\DoxyCodeLine{00456\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(glxGraphicsPipe::\_x\_mutex);}
+\DoxyCodeLine{00457\ \ \ PosixGraphicsStateGuardian::gl\_flush();}
+\DoxyCodeLine{00458\ \}}
+\DoxyCodeLine{00459\ }
+\DoxyCodeLine{00463\ GLenum\ \mbox{\hyperlink{classglxGraphicsStateGuardian_a169332cf5496846b0ad2199df50ceb45}{glxGraphicsStateGuardian::}}}
+\DoxyCodeLine{00464\ \mbox{\hyperlink{classglxGraphicsStateGuardian_a169332cf5496846b0ad2199df50ceb45}{gl\_get\_error}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00465\ \ \ \textcolor{comment}{//\ This\ call\ requires\ synchronization\ with\ X.}}
+\DoxyCodeLine{00466\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(glxGraphicsPipe::\_x\_mutex);}
+\DoxyCodeLine{00467\ \ \ \textcolor{keywordflow}{return}\ PosixGraphicsStateGuardian::gl\_get\_error();}
+\DoxyCodeLine{00468\ \}}
+\DoxyCodeLine{00469\ }
+\DoxyCodeLine{00473\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classglxGraphicsStateGuardian_ad4b6184cd028d7b8ce8b204406845e46}{glxGraphicsStateGuardian::}}}
+\DoxyCodeLine{00474\ \mbox{\hyperlink{classglxGraphicsStateGuardian_ad4b6184cd028d7b8ce8b204406845e46}{query\_gl\_version}}()\ \{}
+\DoxyCodeLine{00475\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(glxGraphicsPipe::\_x\_mutex);}
+\DoxyCodeLine{00476\ \ \ PosixGraphicsStateGuardian::query\_gl\_version();}
+\DoxyCodeLine{00477\ }
+\DoxyCodeLine{00478\ \ \ show\_glx\_client\_string(\textcolor{stringliteral}{"{}GLX\_VENDOR"{}},\ GLX\_VENDOR);}
+\DoxyCodeLine{00479\ \ \ show\_glx\_client\_string(\textcolor{stringliteral}{"{}GLX\_VERSION"{}},\ GLX\_VERSION);}
+\DoxyCodeLine{00480\ \ \ show\_glx\_server\_string(\textcolor{stringliteral}{"{}GLX\_VENDOR"{}},\ GLX\_VENDOR);}
+\DoxyCodeLine{00481\ \ \ show\_glx\_server\_string(\textcolor{stringliteral}{"{}GLX\_VERSION"{}},\ GLX\_VERSION);}
+\DoxyCodeLine{00482\ }
+\DoxyCodeLine{00483\ \ \ glXQueryVersion(\_display,\ \&\_glx\_version\_major,\ \&\_glx\_version\_minor);}
+\DoxyCodeLine{00484\ }
+\DoxyCodeLine{00485\ \ \ \textcolor{comment}{//\ We\ output\ to\ glgsg\_cat\ instead\ of\ glxdisplay\_cat,\ since\ this\ is\ where\ the}}
+\DoxyCodeLine{00486\ \ \ \textcolor{comment}{//\ GL\ version\ has\ been\ output,\ and\ it's\ nice\ to\ see\ the\ two\ of\ these}}
+\DoxyCodeLine{00487\ \ \ \textcolor{comment}{//\ together.}}
+\DoxyCodeLine{00488\ \ \ \textcolor{keywordflow}{if}\ (glgsg\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00489\ \ \ \ \ glgsg\_cat.debug()}
+\DoxyCodeLine{00490\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}GLX\_VERSION\ =\ "{}}\ <<\ \_glx\_version\_major\ <<\ \textcolor{stringliteral}{"{}."{}}\ <<\ \_glx\_version\_minor}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00492\ \ \ \}}
+\DoxyCodeLine{00493\ \}}
+\DoxyCodeLine{00494\ }
+\DoxyCodeLine{00500\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classglxGraphicsStateGuardian_a92623f56c9d5599dabef2fd701059e36}{glxGraphicsStateGuardian::}}}
+\DoxyCodeLine{00501\ \mbox{\hyperlink{classglxGraphicsStateGuardian_a92623f56c9d5599dabef2fd701059e36}{get\_extra\_extensions}}()\ \{}
+\DoxyCodeLine{00502\ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(glxGraphicsPipe::\_x\_mutex);}
+\DoxyCodeLine{00503\ \ \ save\_extensions(glXQueryExtensionsString(\_display,\ \_screen));}
+\DoxyCodeLine{00504\ \}}
+\DoxyCodeLine{00505\ }
+\DoxyCodeLine{00512\ \textcolor{keywordtype}{void}\ *\mbox{\hyperlink{classglxGraphicsStateGuardian_abe4fc4a173bc631b4c364945140355f6}{glxGraphicsStateGuardian::}}}
+\DoxyCodeLine{00513\ \mbox{\hyperlink{classglxGraphicsStateGuardian_abe4fc4a173bc631b4c364945140355f6}{do\_get\_extension\_func}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *name)\ \{}
+\DoxyCodeLine{00514\ \ \ nassertr(name\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00515\ }
+\DoxyCodeLine{00516\ \ \ \textcolor{keywordflow}{if}\ (glx\_get\_proc\_address)\ \{}
+\DoxyCodeLine{00517\ \ \ \ \ \mbox{\hyperlink{classLightReMutexHolder}{LightReMutexHolder}}\ holder(glxGraphicsPipe::\_x\_mutex);}
+\DoxyCodeLine{00518\ }
+\DoxyCodeLine{00519\ \ \ \ \ \textcolor{comment}{//\ First,\ check\ if\ we\ have\ glXGetProcAddress\ available.\ \ This\ will\ be}}
+\DoxyCodeLine{00520\ \ \ \ \ \textcolor{comment}{//\ superior\ if\ we\ can\ get\ it.}}
+\DoxyCodeLine{00521\ }
+\DoxyCodeLine{00522\ \textcolor{preprocessor}{\#if\ defined(LINK\_IN\_GLXGETPROCADDRESS)\ \&\&\ defined(HAVE\_GLXGETPROCADDRESS)}}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ are\ confident\ the\ system\ headers\ defined\ it,\ we\ can\ call\ it}}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \textcolor{comment}{//\ directly.\ \ This\ is\ more\ reliable\ than\ trying\ to\ determine\ its\ address}}
+\DoxyCodeLine{00525\ \ \ \ \ \ \ \textcolor{comment}{//\ dynamically,\ but\ it\ may\ make\ libpandagl.so\ fail\ to\ load\ if\ the\ symbol}}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \textcolor{comment}{//\ isn't\ in\ the\ runtime\ library.}}
+\DoxyCodeLine{00527\ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{void}\ *)glXGetProcAddress((\textcolor{keyword}{const}\ GLubyte\ *)name);}
+\DoxyCodeLine{00528\ }
+\DoxyCodeLine{00529\ \textcolor{preprocessor}{\#elif\ defined(LINK\_IN\_GLXGETPROCADDRESS)\ \&\&\ defined(HAVE\_GLXGETPROCADDRESSARB)}}
+\DoxyCodeLine{00530\ \ \ \ \ \textcolor{comment}{//\ The\ ARB\ extension\ version\ is\ OK\ too.\ \ Sometimes\ the\ prototype\ isn't}}
+\DoxyCodeLine{00531\ \ \ \ \ \textcolor{comment}{//\ supplied\ for\ some\ reason.}}
+\DoxyCodeLine{00532\ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{void}\ *)glXGetProcAddressARB((\textcolor{keyword}{const}\ GLubyte\ *)name);}
+\DoxyCodeLine{00533\ }
+\DoxyCodeLine{00534\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00535\ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ we\ have\ to\ fiddle\ around\ with\ the\ dynamic\ runtime.}}
+\DoxyCodeLine{00536\ }
+\DoxyCodeLine{00537\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_checked\_get\_proc\_address)\ \{}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *funcName\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00539\ }
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classglxGraphicsStateGuardian_a71b6ab6bc5fea575fa8817babcbbb154}{glx\_is\_at\_least\_version}}(1,\ 4))\ \{}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \ \ funcName\ =\ \textcolor{stringliteral}{"{}glXGetProcAddress"{}};}
+\DoxyCodeLine{00542\ }
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (has\_extension(\textcolor{stringliteral}{"{}GLX\_ARB\_get\_proc\_address"{}}))\ \{}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \ \ funcName\ =\ \textcolor{stringliteral}{"{}glXGetProcAddressARB"{}};}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00546\ }
+\DoxyCodeLine{00547\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (funcName\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00548\ \ \ \ \ \ \ \ \ \_glXGetProcAddress\ =\ (PFNGLXGETPROCADDRESSPROC)\mbox{\hyperlink{classPosixGraphicsStateGuardian_a271ce054bd2b2b5e21d6394e3454fea8}{get\_system\_func}}(funcName);}
+\DoxyCodeLine{00549\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glXGetProcAddress\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00550\ \ \ \ \ \ \ \ \ \ \ glxdisplay\_cat.warning()}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ load\ function\ "{}}\ <<\ funcName}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ GL\ extensions\ may\ be\ unavailable.\(\backslash\)n"{}};}
+\DoxyCodeLine{00553\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00555\ }
+\DoxyCodeLine{00556\ \ \ \ \ \ \ \_checked\_get\_proc\_address\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00557\ \ \ \ \ \}}
+\DoxyCodeLine{00558\ }
+\DoxyCodeLine{00559\ \ \ \ \ \textcolor{comment}{//\ Use\ glxGetProcAddress()\ if\ we've\ got\ it;\ it\ should\ be\ more\ robust.}}
+\DoxyCodeLine{00560\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glXGetProcAddress\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00561\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{void}\ *)\_glXGetProcAddress((\textcolor{keyword}{const}\ GLubyte\ *)name);}
+\DoxyCodeLine{00562\ \ \ \ \ \}}
+\DoxyCodeLine{00563\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ HAVE\_GLXGETPROCADDRESS}}
+\DoxyCodeLine{00564\ \ \ \}}
+\DoxyCodeLine{00565\ }
+\DoxyCodeLine{00566\ \ \ \textcolor{comment}{//\ Otherwise,\ fall\ back\ to\ the\ OS-\/provided\ calls.}}
+\DoxyCodeLine{00567\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classPosixGraphicsStateGuardian_a5142230fbf54c95759af398d59277020}{PosixGraphicsStateGuardian::do\_get\_extension\_func}}(name);}
+\DoxyCodeLine{00568\ \}}
+\DoxyCodeLine{00569\ }
+\DoxyCodeLine{00573\ \textcolor{keywordtype}{void}\ glxGraphicsStateGuardian::}
+\DoxyCodeLine{00574\ query\_glx\_extensions()\ \{}
+\DoxyCodeLine{00575\ \ \ \_supports\_swap\_control\ =\ has\_extension(\textcolor{stringliteral}{"{}GLX\_SGI\_swap\_control"{}});}
+\DoxyCodeLine{00576\ }
+\DoxyCodeLine{00577\ \ \ \textcolor{keywordflow}{if}\ (\_supports\_swap\_control)\ \{}
+\DoxyCodeLine{00578\ \ \ \ \ \_glXSwapIntervalSGI\ =}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ (PFNGLXSWAPINTERVALSGIPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXSwapIntervalSGI"{}});}
+\DoxyCodeLine{00580\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glXSwapIntervalSGI\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ glxdisplay\_cat.error()}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Driver\ claims\ to\ support\ GLX\_SGI\_swap\_control\ extension,\ but\ does\ not\ define\ all\ functions.\(\backslash\)n"{}};}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \_supports\_swap\_control\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00584\ \ \ \ \ \}}
+\DoxyCodeLine{00585\ \ \ \}}
+\DoxyCodeLine{00586\ }
+\DoxyCodeLine{00587\ \ \ \textcolor{keywordflow}{if}\ (\_supports\_swap\_control)\ \{}
+\DoxyCodeLine{00588\ \ \ \ \ \textcolor{comment}{//\ Set\ the\ video-\/sync\ setting\ up\ front,\ if\ we\ have\ the\ extension\ that}}
+\DoxyCodeLine{00589\ \ \ \ \ \textcolor{comment}{//\ supports\ it.}}
+\DoxyCodeLine{00590\ \ \ \ \ \_glXSwapIntervalSGI(sync\_video\ ?\ 1\ :\ 0);}
+\DoxyCodeLine{00591\ \ \ \}}
+\DoxyCodeLine{00592\ }
+\DoxyCodeLine{00593\ \ \ \textcolor{keywordflow}{if}\ (glx\_support\_fbconfig)\ \{}
+\DoxyCodeLine{00594\ \ \ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classglxGraphicsStateGuardian_a71b6ab6bc5fea575fa8817babcbbb154}{glx\_is\_at\_least\_version}}(1,\ 3))\ \{}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ glx\ 1.3\ or\ better,\ we\ have\ the\ FBConfig\ interface.}}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \_supports\_fbconfig\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00597\ }
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \_glXChooseFBConfig\ =}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \ \ (PFNGLXCHOOSEFBCONFIGPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXChooseFBConfig"{}});}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \_glXCreateNewContext\ =}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ (PFNGLXCREATENEWCONTEXTPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXCreateNewContext"{}});}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \_glXGetVisualFromFBConfig\ =}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \ \ (PFNGLXGETVISUALFROMFBCONFIGPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXGetVisualFromFBConfig"{}});}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \_glXGetFBConfigAttrib\ =}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \ \ (PFNGLXGETFBCONFIGATTRIBPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXGetFBConfigAttrib"{}});}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \_glXCreatePixmap\ =}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ (PFNGLXCREATEPIXMAPPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXCreatePixmap"{}});}
+\DoxyCodeLine{00608\ }
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glXChooseFBConfig\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \ \ \ \ \_glXCreateNewContext\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ \ \ \_glXGetVisualFromFBConfig\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ \ \ \_glXGetFBConfigAttrib\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \ \ \ \ \_glXCreatePixmap\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ \ \ glxdisplay\_cat.error()}
+\DoxyCodeLine{00615\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Driver\ claims\ to\ support\ GLX\_fbconfig\ extension,\ but\ does\ not\ define\ all\ functions.\(\backslash\)n"{}};}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ \ \ \_supports\_fbconfig\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00618\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (has\_extension(\textcolor{stringliteral}{"{}GLX\_SGIX\_fbconfig"{}}))\ \{}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \textcolor{comment}{//\ Or\ maybe\ we\ have\ the\ old\ SGIX\ extension\ for\ FBConfig.\ \ This\ is\ the}}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ \textcolor{comment}{//\ same,\ but\ the\ function\ names\ are\ different-\/-\/we\ just\ remap\ them\ to\ the}}
+\DoxyCodeLine{00621\ \ \ \ \ \ \ \textcolor{comment}{//\ same\ function\ pointers.}}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \_supports\_fbconfig\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00623\ }
+\DoxyCodeLine{00624\ \ \ \ \ \ \ \_glXChooseFBConfig\ =}
+\DoxyCodeLine{00625\ \ \ \ \ \ \ \ \ (PFNGLXCHOOSEFBCONFIGPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXChooseFBConfigSGIX"{}});}
+\DoxyCodeLine{00626\ \ \ \ \ \ \ \_glXCreateNewContext\ =}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \ \ (PFNGLXCREATENEWCONTEXTPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXCreateContextWithConfigSGIX"{}});}
+\DoxyCodeLine{00628\ \ \ \ \ \ \ \_glXGetVisualFromFBConfig\ =}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ \ \ (PFNGLXGETVISUALFROMFBCONFIGPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXGetVisualFromFBConfigSGIX"{}});}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \_glXGetFBConfigAttrib\ =}
+\DoxyCodeLine{00631\ \ \ \ \ \ \ \ \ (PFNGLXGETFBCONFIGATTRIBPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXGetFBConfigAttribSGIX"{}});}
+\DoxyCodeLine{00632\ \ \ \ \ \ \ \_glXCreatePixmap\ =}
+\DoxyCodeLine{00633\ \ \ \ \ \ \ \ \ (PFNGLXCREATEPIXMAPPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXCreateGLXPixmapWithConfigSGIX"{}});}
+\DoxyCodeLine{00634\ }
+\DoxyCodeLine{00635\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glXChooseFBConfig\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00636\ \ \ \ \ \ \ \ \ \ \ \_glXCreateNewContext\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00637\ \ \ \ \ \ \ \ \ \ \ \_glXGetVisualFromFBConfig\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \ \ \ \ \_glXGetFBConfigAttrib\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \ \ \ \ \_glXCreatePixmap\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00640\ \ \ \ \ \ \ \ \ glxdisplay\_cat.error()}
+\DoxyCodeLine{00641\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Driver\ claims\ to\ support\ GLX\_SGIX\_fbconfig\ extension,\ but\ does\ not\ define\ all\ functions.\(\backslash\)n"{}};}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ \ \ \_supports\_fbconfig\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00644\ \ \ \ \ \}}
+\DoxyCodeLine{00645\ }
+\DoxyCodeLine{00646\ \ \ \ \ \textcolor{keywordflow}{if}\ (\mbox{\hyperlink{classglxGraphicsStateGuardian_a71b6ab6bc5fea575fa8817babcbbb154}{glx\_is\_at\_least\_version}}(1,\ 3))\ \{}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ glx\ 1.3\ or\ better,\ we\ have\ the\ PBuffer\ interface.}}
+\DoxyCodeLine{00648\ \ \ \ \ \ \ \_supports\_pbuffer\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00649\ \ \ \ \ \ \ \_uses\_sgix\_pbuffer\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00650\ }
+\DoxyCodeLine{00651\ \ \ \ \ \ \ \_glXCreatePbuffer\ =}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \ \ (PFNGLXCREATEPBUFFERPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXCreatePbuffer"{}});}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \_glXCreateGLXPbufferSGIX\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ \_glXDestroyPbuffer\ =}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ \ \ (PFNGLXDESTROYPBUFFERPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXDestroyPbuffer"{}});}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glXCreatePbuffer\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \ \ \ \ \_glXDestroyPbuffer\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \ \ glxdisplay\_cat.error()}
+\DoxyCodeLine{00659\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Driver\ claims\ to\ support\ GLX\_pbuffer\ extension,\ but\ does\ not\ define\ all\ functions.\(\backslash\)n"{}};}
+\DoxyCodeLine{00660\ \ \ \ \ \ \ \ \ \_supports\_pbuffer\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00661\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00662\ }
+\DoxyCodeLine{00663\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (has\_extension(\textcolor{stringliteral}{"{}GLX\_SGIX\_pbuffer"{}}))\ \{}
+\DoxyCodeLine{00664\ \ \ \ \ \ \ \textcolor{comment}{//\ Or\ maybe\ we\ have\ the\ old\ SGIX\ extension\ for\ PBuffers.}}
+\DoxyCodeLine{00665\ \ \ \ \ \ \ \_uses\_sgix\_pbuffer\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00666\ }
+\DoxyCodeLine{00667\ \ \ \ \ \ \ \textcolor{comment}{//\ CreatePbuffer\ has\ a\ different\ form\ between\ SGIX\ and\ 1.3,\ however,\ so}}
+\DoxyCodeLine{00668\ \ \ \ \ \ \ \textcolor{comment}{//\ we\ must\ treat\ it\ specially.\ \ But\ we\ can\ use\ the\ same\ function\ pointer}}
+\DoxyCodeLine{00669\ \ \ \ \ \ \ \textcolor{comment}{//\ for\ DestroyPbuffer.}}
+\DoxyCodeLine{00670\ \ \ \ \ \ \ \_glXCreatePbuffer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00671\ \ \ \ \ \ \ \_glXCreateGLXPbufferSGIX\ =}
+\DoxyCodeLine{00672\ \ \ \ \ \ \ \ \ (PFNGLXCREATEGLXPBUFFERSGIXPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXCreateGLXPbufferSGIX"{}});}
+\DoxyCodeLine{00673\ \ \ \ \ \ \ \_glXDestroyPbuffer\ =}
+\DoxyCodeLine{00674\ \ \ \ \ \ \ \ \ (PFNGLXDESTROYPBUFFERPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXDestroyGLXPbufferSGIX"{}});}
+\DoxyCodeLine{00675\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_glXCreateGLXPbufferSGIX\ ==\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{00676\ \ \ \ \ \ \ \ \ \ \ \_glXDestroyPbuffer\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00677\ \ \ \ \ \ \ \ \ glxdisplay\_cat.error()}
+\DoxyCodeLine{00678\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Driver\ claims\ to\ support\ GLX\_SGIX\_pbuffer\ extension,\ but\ does\ not\ define\ all\ functions.\(\backslash\)n"{}};}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ \ \ \_supports\_pbuffer\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00680\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00681\ \ \ \ \ \}}
+\DoxyCodeLine{00682\ }
+\DoxyCodeLine{00683\ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_extension(\textcolor{stringliteral}{"{}GLX\_ARB\_create\_context"{}}))\ \{}
+\DoxyCodeLine{00684\ \ \ \ \ \ \ \_glXCreateContextAttribs\ =}
+\DoxyCodeLine{00685\ \ \ \ \ \ \ \ \ (PFNGLXCREATECONTEXTATTRIBSARBPROC)get\_extension\_func(\textcolor{stringliteral}{"{}glXCreateContextAttribsARB"{}});}
+\DoxyCodeLine{00686\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00687\ \ \ \ \ \ \ \_glXCreateContextAttribs\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00688\ \ \ \ \ \}}
+\DoxyCodeLine{00689\ \ \ \}}
+\DoxyCodeLine{00690\ }
+\DoxyCodeLine{00691\ \ \ \textcolor{keywordflow}{if}\ (glxdisplay\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00692\ \ \ \ \ glxdisplay\_cat.debug()}
+\DoxyCodeLine{00693\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}supports\_swap\_control\ =\ "{}}\ <<\ \_supports\_swap\_control\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00694\ \ \ \ \ glxdisplay\_cat.debug()}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}supports\_fbconfig\ =\ "{}}\ <<\ \_supports\_fbconfig\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00696\ \ \ \ \ glxdisplay\_cat.debug()}
+\DoxyCodeLine{00697\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}supports\_pbuffer\ =\ "{}}\ <<\ \_supports\_pbuffer}
+\DoxyCodeLine{00698\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ sgix\ =\ "{}}\ <<\ \_uses\_sgix\_pbuffer\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00699\ \ \ \}}
+\DoxyCodeLine{00700\ }
+\DoxyCodeLine{00701\ \ \ \textcolor{comment}{//\ If\ "{}Mesa"{}\ is\ present,\ assume\ software.\ \ However,\ if\ "{}Mesa\ DRI"{}\ is\ found,}}
+\DoxyCodeLine{00702\ \ \ \textcolor{comment}{//\ it's\ actually\ a\ Mesa-\/based\ OpenGL\ layer\ running\ over\ a\ hardware\ driver.}}
+\DoxyCodeLine{00703\ \ \ \textcolor{keywordflow}{if}\ (\_gl\_renderer.find(\textcolor{stringliteral}{"{}Mesa"{}})\ !=\ string::npos\ \&\&}
+\DoxyCodeLine{00704\ \ \ \ \ \ \ \_gl\_renderer.find(\textcolor{stringliteral}{"{}Mesa\ DRI"{}})\ ==\ string::npos)\ \{}
+\DoxyCodeLine{00705\ \ \ \ \ \textcolor{comment}{//\ It's\ Mesa,\ therefore\ probably\ a\ software\ context.}}
+\DoxyCodeLine{00706\ \ \ \ \ \_fbprops.set\_force\_software(1);}
+\DoxyCodeLine{00707\ \ \ \ \ \_fbprops.set\_force\_hardware(0);}
+\DoxyCodeLine{00708\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00709\ \ \ \ \ \_fbprops.set\_force\_hardware(1);}
+\DoxyCodeLine{00710\ \ \ \ \ \_fbprops.set\_force\_software(0);}
+\DoxyCodeLine{00711\ \ \ \}}
+\DoxyCodeLine{00712\ \}}
+\DoxyCodeLine{00713\ }
+\DoxyCodeLine{00717\ \textcolor{keywordtype}{void}\ glxGraphicsStateGuardian::}
+\DoxyCodeLine{00718\ show\_glx\_client\_string(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name,\ \textcolor{keywordtype}{int}\ \textcolor{keywordtype}{id})\ \{}
+\DoxyCodeLine{00719\ \ \ \textcolor{keywordflow}{if}\ (glgsg\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00720\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *text\ =\ glXGetClientString(\_display,\ \textcolor{keywordtype}{id});}
+\DoxyCodeLine{00721\ \ \ \ \ \textcolor{keywordflow}{if}\ (text\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00722\ \ \ \ \ \ \ glgsg\_cat.debug()}
+\DoxyCodeLine{00723\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ query\ "{}}\ <<\ name\ <<\ \textcolor{stringliteral}{"{}\ (client)\(\backslash\)n"{}};}
+\DoxyCodeLine{00724\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00725\ \ \ \ \ \ \ glgsg\_cat.debug()}
+\DoxyCodeLine{00726\ \ \ \ \ \ \ \ \ <<\ name\ <<\ \textcolor{stringliteral}{"{}\ (client)\ =\ "{}}\ <<\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)text\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00727\ \ \ \ \ \}}
+\DoxyCodeLine{00728\ \ \ \}}
+\DoxyCodeLine{00729\ \}}
+\DoxyCodeLine{00730\ }
+\DoxyCodeLine{00734\ \textcolor{keywordtype}{void}\ glxGraphicsStateGuardian::}
+\DoxyCodeLine{00735\ show\_glx\_server\_string(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&name,\ \textcolor{keywordtype}{int}\ \textcolor{keywordtype}{id})\ \{}
+\DoxyCodeLine{00736\ \ \ \textcolor{keywordflow}{if}\ (glgsg\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00737\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *text\ =\ glXQueryServerString(\_display,\ \_screen,\ \textcolor{keywordtype}{id});}
+\DoxyCodeLine{00738\ \ \ \ \ \textcolor{keywordflow}{if}\ (text\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00739\ \ \ \ \ \ \ glgsg\_cat.debug()}
+\DoxyCodeLine{00740\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ query\ "{}}\ <<\ name\ <<\ \textcolor{stringliteral}{"{}\ (server)\(\backslash\)n"{}};}
+\DoxyCodeLine{00741\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00742\ \ \ \ \ \ \ glgsg\_cat.debug()}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ \ \ <<\ name\ <<\ \textcolor{stringliteral}{"{}\ (server)\ =\ "{}}\ <<\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)text\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00744\ \ \ \ \ \}}
+\DoxyCodeLine{00745\ \ \ \}}
+\DoxyCodeLine{00746\ \}}
+\DoxyCodeLine{00747\ }
+\DoxyCodeLine{00754\ \textcolor{keywordtype}{void}\ glxGraphicsStateGuardian::}
+\DoxyCodeLine{00755\ choose\_temp\_visual(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ \&properties)\ \{}
+\DoxyCodeLine{00756\ \ \ nassertv(\_temp\_context\ ==\ (GLXContext)\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00757\ }
+\DoxyCodeLine{00758\ \ \ \textcolor{keywordtype}{int}\ best\_quality\ =\ 0;}
+\DoxyCodeLine{00759\ \ \ \textcolor{keywordtype}{int}\ best\_result\ =\ 0;}
+\DoxyCodeLine{00760\ \ \ \mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ best\_props;}
+\DoxyCodeLine{00761\ }
+\DoxyCodeLine{00762\ \ \ \textcolor{comment}{//\ Scan\ available\ visuals.}}
+\DoxyCodeLine{00763\ \ \ \textcolor{keywordflow}{if}\ (\_visuals\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00764\ \ \ \ \ XFree(\_visuals);}
+\DoxyCodeLine{00765\ \ \ \ \ \_visuals\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00766\ \ \ \}}
+\DoxyCodeLine{00767\ \ \ \textcolor{keywordtype}{int}\ nvisuals\ =\ 0;}
+\DoxyCodeLine{00768\ \ \ \_visuals\ =\ XGetVisualInfo(\_display,\ 0,\ \textcolor{keyword}{nullptr},\ \&nvisuals);}
+\DoxyCodeLine{00769\ \ \ \textcolor{keywordflow}{if}\ (\_visuals\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00770\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ nvisuals;\ i++)\ \{}
+\DoxyCodeLine{00771\ \ \ \ \ \ \ \mbox{\hyperlink{classFrameBufferProperties}{FrameBufferProperties}}\ fbprops;}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \mbox{\hyperlink{classglxGraphicsStateGuardian_a425b383506024bae3fc16026f8e4c319}{get\_properties}}(fbprops,\ \_visuals\ +\ i);}
+\DoxyCodeLine{00773\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ quality\ =\ fbprops.get\_quality(properties);}
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (quality\ >\ best\_quality)\ \{}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ \ \ best\_quality\ =\ quality;}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ \ \ best\_result\ =\ i;}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \ \ best\_props\ =\ fbprops;}
+\DoxyCodeLine{00778\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00779\ \ \ \ \ \}}
+\DoxyCodeLine{00780\ \ \ \}}
+\DoxyCodeLine{00781\ }
+\DoxyCodeLine{00782\ \ \ \textcolor{keywordflow}{if}\ (best\_quality\ >\ 0)\ \{}
+\DoxyCodeLine{00783\ \ \ \ \ \_visual\ =\ \_visuals\ +\ best\_result;}
+\DoxyCodeLine{00784\ \ \ \ \ \_temp\_context\ =\ glXCreateContext(\_display,\ \_visual,\ None,\ GL\_TRUE);}
+\DoxyCodeLine{00785\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_temp\_context)\ \{}
+\DoxyCodeLine{00786\ \ \ \ \ \ \ \_fbprops\ =\ best\_props;}
+\DoxyCodeLine{00787\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00788\ \ \ \ \ \}}
+\DoxyCodeLine{00789\ \ \ \}}
+\DoxyCodeLine{00790\ }
+\DoxyCodeLine{00791\ \ \ glxdisplay\_cat.error()}
+\DoxyCodeLine{00792\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ find\ a\ usable\ pixel\ format.\(\backslash\)n"{}};}
+\DoxyCodeLine{00793\ \}}
+\DoxyCodeLine{00794\ }
+\DoxyCodeLine{00799\ \textcolor{keywordtype}{void}\ glxGraphicsStateGuardian::}
+\DoxyCodeLine{00800\ init\_temp\_context()\ \{}
+\DoxyCodeLine{00801\ \ \ \mbox{\hyperlink{classx11GraphicsPipe}{x11GraphicsPipe}}\ *x11\_pipe;}
+\DoxyCodeLine{00802\ \ \ DCAST\_INTO\_V(x11\_pipe,\ get\_pipe());}
+\DoxyCodeLine{00803\ \ \ X11\_Window\ root\_window\ =\ x11\_pipe-\/>get\_root();}
+\DoxyCodeLine{00804\ }
+\DoxyCodeLine{00805\ \ \ \textcolor{comment}{//\ Assume\ everyone\ uses\ TrueColor\ or\ DirectColor\ these\ days.}}
+\DoxyCodeLine{00806\ \ \ Visual\ *visual\ =\ \_visual-\/>visual;}
+\DoxyCodeLine{00807\ \ \ nassertv(visual-\/>c\_class\ ==\ DirectColor\ ||\ visual-\/>c\_class\ ==\ TrueColor);}
+\DoxyCodeLine{00808\ \ \ \_temp\_colormap\ =\ XCreateColormap(\_display,\ root\_window,}
+\DoxyCodeLine{00809\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ visual,\ AllocNone);}
+\DoxyCodeLine{00810\ \ \ XSetWindowAttributes\ wa;}
+\DoxyCodeLine{00811\ \ \ wa.colormap\ =\ \_temp\_colormap;}
+\DoxyCodeLine{00812\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ attrib\_mask\ =\ CWColormap;}
+\DoxyCodeLine{00813\ }
+\DoxyCodeLine{00814\ \ \ \_temp\_xwindow\ =\ XCreateWindow}
+\DoxyCodeLine{00815\ \ \ \ \ (\_display,\ root\_window,\ 0,\ 0,\ 100,\ 100,}
+\DoxyCodeLine{00816\ \ \ \ \ \ 0,\ \_visual-\/>depth,\ InputOutput,}
+\DoxyCodeLine{00817\ \ \ \ \ \ visual,\ attrib\_mask,\ \&wa);}
+\DoxyCodeLine{00818\ \ \ \textcolor{keywordflow}{if}\ (\_temp\_xwindow\ ==\ (X11\_Window)\textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00819\ \ \ \ \ glxdisplay\_cat.error()}
+\DoxyCodeLine{00820\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ create\ temporary\ window\ for\ context\(\backslash\)n"{}};}
+\DoxyCodeLine{00821\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00822\ \ \ \}}
+\DoxyCodeLine{00823\ }
+\DoxyCodeLine{00824\ \ \ \textcolor{comment}{//\ Now\ use\ it\ to\ query\ the\ available\ GLX\ features.}}
+\DoxyCodeLine{00825\ \ \ glXMakeCurrent(\_display,\ \_temp\_xwindow,\ \_temp\_context);}
+\DoxyCodeLine{00826\ \ \ \mbox{\hyperlink{classglxGraphicsStateGuardian_ad4b6184cd028d7b8ce8b204406845e46}{query\_gl\_version}}();}
+\DoxyCodeLine{00827\ \ \ \mbox{\hyperlink{classglxGraphicsStateGuardian_a92623f56c9d5599dabef2fd701059e36}{get\_extra\_extensions}}();}
+\DoxyCodeLine{00828\ \ \ query\_glx\_extensions();}
+\DoxyCodeLine{00829\ \}}
+\DoxyCodeLine{00830\ }
+\DoxyCodeLine{00834\ \textcolor{keywordtype}{void}\ glxGraphicsStateGuardian::}
+\DoxyCodeLine{00835\ destroy\_temp\_xwindow()\ \{}
+\DoxyCodeLine{00836\ \ \ glXMakeCurrent(\_display,\ None,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00837\ }
+\DoxyCodeLine{00838\ \ \ \textcolor{keywordflow}{if}\ (\_temp\_colormap\ !=\ (Colormap)\textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00839\ \ \ \ \ XFreeColormap(\_display,\ \_temp\_colormap);}
+\DoxyCodeLine{00840\ \ \ \ \ \_temp\_colormap\ =\ (Colormap)\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00841\ \ \ \}}
+\DoxyCodeLine{00842\ \ \ \textcolor{keywordflow}{if}\ (\_temp\_xwindow\ !=\ (X11\_Window)\textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00843\ \ \ \ \ XDestroyWindow(\_display,\ \_temp\_xwindow);}
+\DoxyCodeLine{00844\ \ \ \ \ \_temp\_xwindow\ =\ (X11\_Window)\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00845\ \ \ \}}
+\DoxyCodeLine{00846\ }
+\DoxyCodeLine{00847\ \ \ \textcolor{keywordflow}{if}\ (\_temp\_context\ !=\ (GLXContext)\textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00848\ \ \ \ \ glXDestroyContext(\_display,\ \_temp\_context);}
+\DoxyCodeLine{00849\ \ \ \ \ \_temp\_context\ =\ (GLXContext)\textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00850\ \ \ \}}
+\DoxyCodeLine{00851\ \}}
+
+\end{DoxyCode}

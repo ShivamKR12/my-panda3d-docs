@@ -1,0 +1,776 @@
+\doxysection{pnm-\/image-\/filter.cxx}
+\hypertarget{pnm-image-filter_8cxx_source}{}\label{pnm-image-filter_8cxx_source}\index{panda/src/pnmimage/pnm-\/image-\/filter.cxx@{panda/src/pnmimage/pnm-\/image-\/filter.cxx}}
+\mbox{\hyperlink{pnm-image-filter_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00012\ \textcolor{comment}{//\ The\ functions\ in\ this\ module\ support\ spatial\ filtering\ of\ an\ image\ by}}
+\DoxyCodeLine{00013\ \textcolor{comment}{//\ convolution\ with\ an\ (almost)\ arbitrary\ kernel.\ \ There\ are\ a\ broad\ class\ of}}
+\DoxyCodeLine{00014\ \textcolor{comment}{//\ image\ filters\ to\ which\ this\ principle\ applies,\ including\ box\ filtering,}}
+\DoxyCodeLine{00015\ \textcolor{comment}{//\ Bartlett,\ and\ Gaussian.}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{comment}{//\ This\ particular\ approach\ breaks\ the\ 2-\/d\ kernel\ into\ two\ 1-\/d\ kernels,\ which}}
+\DoxyCodeLine{00018\ \textcolor{comment}{//\ improves\ performance\ at\ the\ expense\ of\ limiting\ the\ types\ of\ filters\ that}}
+\DoxyCodeLine{00019\ \textcolor{comment}{//\ may\ be\ applied.\ \ In\ general,\ any\ of\ the\ square-\/based\ kernels\ are\ still}}
+\DoxyCodeLine{00020\ \textcolor{comment}{//\ applicable;\ the\ only\ circle-\/based\ kernel\ that\ still\ works\ with\ this}}
+\DoxyCodeLine{00021\ \textcolor{comment}{//\ approach\ is\ Gaussian.\ \ Furthermore,\ the\ implementation\ assume\ that\ the}}
+\DoxyCodeLine{00022\ \textcolor{comment}{//\ kernel\ is\ symmetric\ about\ zero.}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{comment}{//\ The\ image\ is\ filtered\ first\ along\ one\ axis,\ then\ along\ the\ other.\ \ This}}
+\DoxyCodeLine{00025\ \textcolor{comment}{//\ decreases\ the\ complexity\ of\ the\ convolution\ operation:\ it\ is\ faster\ to}}
+\DoxyCodeLine{00026\ \textcolor{comment}{//\ convolve\ twice\ with\ a\ one-\/dimensional\ kernel\ than\ once\ with\ a\ two-\/}}
+\DoxyCodeLine{00027\ \textcolor{comment}{//\ dimensional\ kernel.\ \ In\ the\ interim,\ a\ temporary\ matrix\ of\ type\ StoreType}}
+\DoxyCodeLine{00028\ \textcolor{comment}{//\ (a\ numeric\ type,\ described\ below)\ is\ built\ which\ contains\ the\ results\ from}}
+\DoxyCodeLine{00029\ \textcolor{comment}{//\ the\ first\ convolution.\ \ The\ entire\ process\ is\ then\ repeated\ for\ each}}
+\DoxyCodeLine{00030\ \textcolor{comment}{//\ channel\ in\ the\ image.}}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pandabase_8h}{pandabase.h}}"{}}}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{math_8h}{math.h}}>}}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cmath_8h}{cmath.h}}"{}}}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmImage_8h}{pnmImage.h}}"{}}}
+\DoxyCodeLine{00038\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pfmFile_8h}{pfmFile.h}}"{}}}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \textcolor{keyword}{using\ }std::max;}
+\DoxyCodeLine{00041\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \textcolor{comment}{//\ WorkType\ is\ an\ abstraction\ that\ allows\ the\ filtering\ process\ to\ be}}
+\DoxyCodeLine{00044\ \textcolor{comment}{//\ recompiled\ to\ use\ either\ floating-\/point\ or\ integer\ arithmetic.\ \ On\ SGI}}
+\DoxyCodeLine{00045\ \textcolor{comment}{//\ machines,\ there\ doesn't\ seem\ to\ be\ much\ of\ a\ performance\ difference-\/-\/\ if}}
+\DoxyCodeLine{00046\ \textcolor{comment}{//\ anything,\ the\ integer\ arithmetic\ is\ slower-\/-\/though\ certainly\ other}}
+\DoxyCodeLine{00047\ \textcolor{comment}{//\ architectures\ may\ differ.}}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \textcolor{comment}{//\ A\ StoreType\ is\ a\ numeric\ type\ that\ is\ used\ to\ store\ the\ intermediate\ values}}
+\DoxyCodeLine{00050\ \textcolor{comment}{//\ of\ the\ filtering\ computation;\ temporary\ calculations\ are\ performed\ using}}
+\DoxyCodeLine{00051\ \textcolor{comment}{//\ WorkTypes.\ \ source\_max\ represents\ the\ largest\ value\ that\ will\ be\ stored\ in}}
+\DoxyCodeLine{00052\ \textcolor{comment}{//\ a\ StoreType,\ while\ filter\_max\ represents\ the\ largest\ value\ that\ will}}
+\DoxyCodeLine{00053\ \textcolor{comment}{//\ multiplied\ by\ it\ as\ a\ weighted\ filter\ (source\_max\ *\ filter\_max\ must\ fit}}
+\DoxyCodeLine{00054\ \textcolor{comment}{//\ comfortably\ within\ a\ WorkType,\ with\ room\ to\ spare).}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \textcolor{comment}{//\ Floating-\/point\ arithmetic\ is\ slightly\ faster\ and\ slightly\ more\ precise,\ but}}
+\DoxyCodeLine{00057\ \textcolor{comment}{//\ the\ main\ reason\ to\ use\ it\ is\ that\ it\ is\ conceptually\ easy\ to\ understand.}}
+\DoxyCodeLine{00058\ \textcolor{comment}{//\ All\ values\ are\ scaled\ in\ the\ range\ 0..1,\ as\ they\ should\ be.}}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00060\ \textcolor{comment}{//\ The\ biggest\ reason\ to\ use\ integer\ arithmetic\ is\ space.\ \ A\ table\ of}}
+\DoxyCodeLine{00061\ \textcolor{comment}{//\ StoreTypes\ must\ be\ allocated\ to\ match\ the\ size\ of\ the\ image.\ \ On\ an\ SGI,}}
+\DoxyCodeLine{00062\ \textcolor{comment}{//\ sizeof(float)\ is\ 4,\ while\ sizeof(short)\ is\ 2\ and\ sizeof(char)\ is,\ of}}
+\DoxyCodeLine{00063\ \textcolor{comment}{//\ course,\ 1.\ \ Since\ the\ source\ precision\ is\ probably\ 8\ bits\ anyway\ (there\ are}}
+\DoxyCodeLine{00064\ \textcolor{comment}{//\ usually\ 8\ bits\ per\ channel),\ it\ doesn't\ cost\ any\ precision\ at\ all\ to\ use}}
+\DoxyCodeLine{00065\ \textcolor{comment}{//\ shorts,\ and\ not\ very\ much\ to\ use\ chars.}}
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00067\ \textcolor{comment}{//\ To\ use\ double-\/precision\ floating\ point,\ 8\ bytes:\ (strictly\ for\ the}}
+\DoxyCodeLine{00068\ \textcolor{comment}{//\ neurotic)}}
+\DoxyCodeLine{00069\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00070\ \textcolor{comment}{typedef\ double\ WorkType;}}
+\DoxyCodeLine{00071\ \textcolor{comment}{typedef\ double\ StoreType;}}
+\DoxyCodeLine{00072\ \textcolor{comment}{static\ const\ WorkType\ source\_max\ =\ 1.0;}}
+\DoxyCodeLine{00073\ \textcolor{comment}{static\ const\ WorkType\ filter\_max\ =\ 1.0;}}
+\DoxyCodeLine{00074\ \textcolor{comment}{*/}}
+\DoxyCodeLine{00075\ }
+\DoxyCodeLine{00076\ \textcolor{comment}{//\ To\ use\ single-\/precision\ floating\ point,\ 4\ bytes:}}
+\DoxyCodeLine{00077\ \textcolor{keyword}{typedef}\ \textcolor{keywordtype}{float}\ WorkType;}
+\DoxyCodeLine{00078\ \textcolor{keyword}{typedef}\ \textcolor{keywordtype}{float}\ StoreType;}
+\DoxyCodeLine{00079\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ WorkType\ source\_max\ =\ 1.0f;}
+\DoxyCodeLine{00080\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ WorkType\ filter\_max\ =\ 1.0f;}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00082\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00083\ \textcolor{comment}{//\ To\ use\ 16-\/bit\ integer\ arithmetic,\ 2\ bytes:}}
+\DoxyCodeLine{00084\ \textcolor{comment}{typedef\ unsigned\ long\ WorkType;}}
+\DoxyCodeLine{00085\ \textcolor{comment}{typedef\ unsigned\ short\ StoreType;}}
+\DoxyCodeLine{00086\ \textcolor{comment}{static\ const\ WorkType\ source\_max\ =\ 65535;}}
+\DoxyCodeLine{00087\ \textcolor{comment}{static\ const\ WorkType\ filter\_max\ =\ 255;}}
+\DoxyCodeLine{00088\ \textcolor{comment}{*/}}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00090\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00091\ \textcolor{comment}{//\ To\ use\ 8-\/bit\ integer\ arithmetic,\ 1\ byte:}}
+\DoxyCodeLine{00092\ \textcolor{comment}{typedef\ unsigned\ long\ WorkType;}}
+\DoxyCodeLine{00093\ \textcolor{comment}{typedef\ unsigned\ char\ StoreType;}}
+\DoxyCodeLine{00094\ \textcolor{comment}{static\ const\ WorkType\ source\_max\ =\ 255;}}
+\DoxyCodeLine{00095\ \textcolor{comment}{static\ const\ WorkType\ filter\_max\ =\ 255;}}
+\DoxyCodeLine{00096\ \textcolor{comment}{*/}}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00098\ \textcolor{comment}{//\ filter\_row()\ filters\ a\ single\ row\ by\ convolving\ with\ a\ one-\/dimensional}}
+\DoxyCodeLine{00099\ \textcolor{comment}{//\ kernel\ filter.\ \ The\ kernel\ is\ defined\ by\ an\ array\ of\ weights\ in\ filter[],}}
+\DoxyCodeLine{00100\ \textcolor{comment}{//\ where\ the\ ith\ element\ of\ filter\ corresponds\ to\ abs(d\ *\ scale),\ if}}
+\DoxyCodeLine{00101\ \textcolor{comment}{//\ scale>1.0,\ and\ abs(d),\ if\ scale<=1.0,\ where\ d\ is\ the\ offset\ from\ the\ center}}
+\DoxyCodeLine{00102\ \textcolor{comment}{//\ and\ varies\ from\ -\/filter\_width\ to\ filter\_width.}}
+\DoxyCodeLine{00103\ }
+\DoxyCodeLine{00104\ \textcolor{comment}{//\ Note\ that\ filter\_width\ is\ not\ necessarily\ the\ length\ of\ the\ array;\ it\ is}}
+\DoxyCodeLine{00105\ \textcolor{comment}{//\ the\ radius\ of\ interest\ of\ the\ filter\ function.\ \ The\ array\ may\ need\ to\ be}}
+\DoxyCodeLine{00106\ \textcolor{comment}{//\ larger\ (by\ a\ factor\ of\ scale),\ to\ adequately\ cover\ all\ the\ values.}}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00108\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00109\ filter\_row(StoreType\ dest[],\ \textcolor{keywordtype}{int}\ dest\_len,}
+\DoxyCodeLine{00110\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ StoreType\ source[],\ \textcolor{keywordtype}{int}\ source\_len,}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ scale,\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \ ==\ dest\_len\ /\ source\_len}}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ WorkType\ filter[],}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ filter\_width,}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ actual\_width)\ \{}
+\DoxyCodeLine{00115\ \ \ \textcolor{comment}{//\ If\ we\ are\ expanding\ the\ row\ (scale\ >\ 1.0),\ we\ need\ to\ look\ at\ a}}
+\DoxyCodeLine{00116\ \ \ \textcolor{comment}{//\ fractional\ granularity.\ \ Hence,\ we\ scale\ our\ filter\ index\ by\ scale.\ \ If}}
+\DoxyCodeLine{00117\ \ \ \textcolor{comment}{//\ we\ are\ compressing\ (scale\ <\ 1.0),\ we\ don't\ need\ to\ fiddle\ with\ the\ filter}}
+\DoxyCodeLine{00118\ \ \ \textcolor{comment}{//\ index,\ so\ we\ leave\ it\ at\ one.}}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordtype}{float}\ iscale;}
+\DoxyCodeLine{00121\ \ \ \textcolor{keywordflow}{if}\ (scale\ <\ 1.0f)\ \{}
+\DoxyCodeLine{00122\ \ \ \ \ iscale\ =\ 1.0f;}
+\DoxyCodeLine{00123\ \ \ \ \ filter\_width\ /=\ scale;}
+\DoxyCodeLine{00124\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00125\ \ \ \ \ iscale\ =\ scale;}
+\DoxyCodeLine{00126\ \ \ \}}
+\DoxyCodeLine{00127\ }
+\DoxyCodeLine{00128\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ dest\_x\ =\ 0;\ dest\_x\ <\ dest\_len;\ dest\_x++)\ \{}
+\DoxyCodeLine{00129\ \ \ \ \ \textcolor{comment}{//\ The\ additional\ offset\ of\ 0.5\ keeps\ the\ pixel\ centered.}}
+\DoxyCodeLine{00130\ \ \ \ \ \textcolor{keywordtype}{float}\ center\ =\ (dest\_x\ +\ 0.5f)\ /\ scale\ -\/\ 0.5f;}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ \ \ \ \ \textcolor{comment}{//\ left\ and\ right\ are\ the\ starting\ and\ ending\ ranges\ of\ the\ radius\ of}}
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{comment}{//\ interest\ of\ the\ filter\ function.\ \ We\ need\ to\ apply\ the\ filter\ to\ each}}
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{comment}{//\ value\ in\ this\ range.}}
+\DoxyCodeLine{00135\ \ \ \ \ \textcolor{keywordtype}{int}\ left\ =\ max((\textcolor{keywordtype}{int})cfloor(center\ -\/\ filter\_width),\ 0);}
+\DoxyCodeLine{00136\ \ \ \ \ \textcolor{keywordtype}{int}\ right\ =\ min((\textcolor{keywordtype}{int})cceil(center\ +\ filter\_width),\ source\_len\ -\/\ 1);}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ \ \ \textcolor{comment}{//\ right\_center\ is\ the\ point\ just\ to\ the\ right\ of\ the\ center.\ \ This\ allows}}
+\DoxyCodeLine{00139\ \ \ \ \ \textcolor{comment}{//\ us\ to\ flip\ the\ sign\ of\ the\ offset\ when\ we\ cross\ the\ center\ point.}}
+\DoxyCodeLine{00140\ \ \ \ \ \textcolor{keywordtype}{int}\ right\_center\ =\ (int)cceil(center);}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00142\ \ \ \ \ WorkType\ net\_weight\ =\ 0;}
+\DoxyCodeLine{00143\ \ \ \ \ WorkType\ net\_value\ =\ 0;}
+\DoxyCodeLine{00144\ }
+\DoxyCodeLine{00145\ \ \ \ \ \textcolor{keywordtype}{int}\ index,\ source\_x;}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00147\ \ \ \ \ \textcolor{comment}{//\ This\ loop\ is\ broken\ into\ two\ pieces-\/-\/the\ left\ of\ center\ and\ the\ right}}
+\DoxyCodeLine{00148\ \ \ \ \ \textcolor{comment}{//\ of\ center-\/-\/so\ we\ don't\ have\ to\ incur\ the\ overhead\ of\ calling\ fabs()}}
+\DoxyCodeLine{00149\ \ \ \ \ \textcolor{comment}{//\ each\ time\ through\ the\ loop.}}
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{keywordflow}{for}\ (source\_x\ =\ left;\ source\_x\ <\ right\_center;\ source\_x++)\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ index\ =\ (int)cfloor(iscale\ *\ (center\ -\/\ source\_x)\ +\ 0.5f);}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ nassertv(index\ >=\ 0\ \&\&\ index\ <\ actual\_width);}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ net\_value\ +=\ filter[index]\ *\ source[source\_x];}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ net\_weight\ +=\ filter[index];}
+\DoxyCodeLine{00155\ \ \ \ \ \}}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{keywordflow}{for}\ (;\ source\_x\ <=\ right;\ source\_x++)\ \{}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ index\ =\ (int)cfloor(iscale\ *\ (source\_x\ -\/\ center)\ +\ 0.5f);}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ nassertv(index\ >=\ 0\ \&\&\ index\ <\ actual\_width);}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ net\_value\ +=\ filter[index]\ *\ source[source\_x];}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ net\_weight\ +=\ filter[index];}
+\DoxyCodeLine{00162\ \ \ \ \ \}}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00164\ \ \ \ \ \textcolor{keywordflow}{if}\ (net\_weight\ >\ 0)\ \{}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ dest[dest\_x]\ =\ (StoreType)(net\_value\ /\ net\_weight);}
+\DoxyCodeLine{00166\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ dest[dest\_x]\ =\ 0;}
+\DoxyCodeLine{00168\ \ \ \ \ \}}
+\DoxyCodeLine{00169\ \ \ \}}
+\DoxyCodeLine{00170\ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00171\ \}}
+\DoxyCodeLine{00172\ }
+\DoxyCodeLine{00173\ \textcolor{comment}{//\ As\ above,\ but\ we\ also\ accept\ an\ array\ of\ weight\ values\ per\ element,\ to}}
+\DoxyCodeLine{00174\ \textcolor{comment}{//\ support\ scaling\ a\ sparse\ array\ (as\ in\ a\ PfmFile).}}
+\DoxyCodeLine{00175\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00176\ filter\_sparse\_row(StoreType\ dest[],\ StoreType\ dest\_weight[],\ \textcolor{keywordtype}{int}\ dest\_len,}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ StoreType\ source[],\ \textcolor{keyword}{const}\ StoreType\ source\_weight[],\ \textcolor{keywordtype}{int}\ source\_len,}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ scale,\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \ ==\ dest\_len\ /\ source\_len}}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ WorkType\ filter[],}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ filter\_width,}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ actual\_width)\ \{}
+\DoxyCodeLine{00182\ \ \ \textcolor{comment}{//\ If\ we\ are\ expanding\ the\ row\ (scale\ >\ 1.0),\ we\ need\ to\ look\ at\ a}}
+\DoxyCodeLine{00183\ \ \ \textcolor{comment}{//\ fractional\ granularity.\ \ Hence,\ we\ scale\ our\ filter\ index\ by\ scale.\ \ If}}
+\DoxyCodeLine{00184\ \ \ \textcolor{comment}{//\ we\ are\ compressing\ (scale\ <\ 1.0),\ we\ don't\ need\ to\ fiddle\ with\ the\ filter}}
+\DoxyCodeLine{00185\ \ \ \textcolor{comment}{//\ index,\ so\ we\ leave\ it\ at\ one.}}
+\DoxyCodeLine{00186\ }
+\DoxyCodeLine{00187\ \ \ \textcolor{keywordtype}{float}\ iscale;}
+\DoxyCodeLine{00188\ \ \ \textcolor{keywordflow}{if}\ (scale\ <\ 1.0f)\ \{}
+\DoxyCodeLine{00189\ \ \ \ \ iscale\ =\ 1.0f;}
+\DoxyCodeLine{00190\ \ \ \ \ filter\_width\ /=\ scale;}
+\DoxyCodeLine{00191\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00192\ \ \ \ \ iscale\ =\ scale;}
+\DoxyCodeLine{00193\ \ \ \}}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00195\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ dest\_x\ =\ 0;\ dest\_x\ <\ dest\_len;\ dest\_x++)\ \{}
+\DoxyCodeLine{00196\ \ \ \ \ \textcolor{comment}{//\ The\ additional\ offset\ of\ 0.5\ keeps\ the\ pixel\ centered.}}
+\DoxyCodeLine{00197\ \ \ \ \ \textcolor{keywordtype}{float}\ center\ =\ (dest\_x\ +\ 0.5f)\ /\ scale\ -\/\ 0.5f;}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00199\ \ \ \ \ \textcolor{comment}{//\ left\ and\ right\ are\ the\ starting\ and\ ending\ ranges\ of\ the\ radius\ of}}
+\DoxyCodeLine{00200\ \ \ \ \ \textcolor{comment}{//\ interest\ of\ the\ filter\ function.\ \ We\ need\ to\ apply\ the\ filter\ to\ each}}
+\DoxyCodeLine{00201\ \ \ \ \ \textcolor{comment}{//\ value\ in\ this\ range.}}
+\DoxyCodeLine{00202\ \ \ \ \ \textcolor{keywordtype}{int}\ left\ =\ max((\textcolor{keywordtype}{int})cfloor(center\ -\/\ filter\_width),\ 0);}
+\DoxyCodeLine{00203\ \ \ \ \ \textcolor{keywordtype}{int}\ right\ =\ min((\textcolor{keywordtype}{int})cceil(center\ +\ filter\_width),\ source\_len\ -\/\ 1);}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00205\ \ \ \ \ \textcolor{comment}{//\ right\_center\ is\ the\ point\ just\ to\ the\ right\ of\ the\ center.\ \ This\ allows}}
+\DoxyCodeLine{00206\ \ \ \ \ \textcolor{comment}{//\ us\ to\ flip\ the\ sign\ of\ the\ offset\ when\ we\ cross\ the\ center\ point.}}
+\DoxyCodeLine{00207\ \ \ \ \ \textcolor{keywordtype}{int}\ right\_center\ =\ (int)cceil(center);}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00209\ \ \ \ \ WorkType\ net\_weight\ =\ 0;}
+\DoxyCodeLine{00210\ \ \ \ \ WorkType\ net\_value\ =\ 0;}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00212\ \ \ \ \ \textcolor{keywordtype}{int}\ index,\ source\_x;}
+\DoxyCodeLine{00213\ }
+\DoxyCodeLine{00214\ \ \ \ \ \textcolor{comment}{//\ This\ loop\ is\ broken\ into\ two\ pieces-\/-\/the\ left\ of\ center\ and\ the\ right}}
+\DoxyCodeLine{00215\ \ \ \ \ \textcolor{comment}{//\ of\ center-\/-\/so\ we\ don't\ have\ to\ incur\ the\ overhead\ of\ calling\ fabs()}}
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{comment}{//\ each\ time\ through\ the\ loop.}}
+\DoxyCodeLine{00217\ \ \ \ \ \textcolor{keywordflow}{for}\ (source\_x\ =\ left;\ source\_x\ <\ right\_center;\ source\_x++)\ \{}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ index\ =\ (int)cfloor(iscale\ *\ (center\ -\/\ source\_x)\ +\ 0.5f);}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ nassertv(index\ >=\ 0\ \&\&\ index\ <\ actual\_width);}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ net\_value\ +=\ filter[index]\ *\ source[source\_x]\ *\ source\_weight[source\_x];}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ net\_weight\ +=\ filter[index]\ *\ source\_weight[source\_x];}
+\DoxyCodeLine{00222\ \ \ \ \ \}}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00224\ \ \ \ \ \textcolor{keywordflow}{for}\ (;\ source\_x\ <=\ right;\ source\_x++)\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ index\ =\ (int)cfloor(iscale\ *\ (source\_x\ -\/\ center)\ +\ 0.5f);}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ nassertv(index\ >=\ 0\ \&\&\ index\ <\ actual\_width);}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ net\_value\ +=\ filter[index]\ *\ source[source\_x]\ *\ source\_weight[source\_x];}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ net\_weight\ +=\ filter[index]\ *\ source\_weight[source\_x];}
+\DoxyCodeLine{00229\ \ \ \ \ \}}
+\DoxyCodeLine{00230\ }
+\DoxyCodeLine{00231\ \ \ \ \ \textcolor{keywordflow}{if}\ (net\_weight\ >\ 0)\ \{}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ dest[dest\_x]\ =\ (StoreType)(net\_value\ /\ net\_weight);}
+\DoxyCodeLine{00233\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ dest[dest\_x]\ =\ 0;}
+\DoxyCodeLine{00235\ \ \ \ \ \}}
+\DoxyCodeLine{00236\ \ \ \ \ dest\_weight[dest\_x]\ =\ (StoreType)net\_weight;}
+\DoxyCodeLine{00237\ \ \ \}}
+\DoxyCodeLine{00238\ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00239\ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ }
+\DoxyCodeLine{00242\ \textcolor{comment}{//\ The\ various\ filter\ functions\ are\ called\ before\ each\ axis\ scaling\ to\ build}}
+\DoxyCodeLine{00243\ \textcolor{comment}{//\ an\ kernel\ array\ suitable\ for\ the\ given\ scaling\ factor.\ \ Given\ a\ scaling}}
+\DoxyCodeLine{00244\ \textcolor{comment}{//\ ratio\ of\ the\ axis\ (dest\_len\ \ source\_len),\ and\ a\ width\ parameter\ supplied\ by}}
+\DoxyCodeLine{00245\ \textcolor{comment}{//\ the\ user,\ they\ must\ build\ an\ array\ of\ filter\ values\ (described\ above)\ and}}
+\DoxyCodeLine{00246\ \textcolor{comment}{//\ also\ set\ the\ radius\ of\ interest\ of\ the\ filter\ function.}}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \textcolor{comment}{//\ The\ values\ of\ the\ elements\ of\ filter\ must\ completely\ cover\ the\ range}}
+\DoxyCodeLine{00249\ \textcolor{comment}{//\ 0..filter\_max;\ the\ array\ must\ have\ enough\ elements\ to\ include\ all\ indices}}
+\DoxyCodeLine{00250\ \textcolor{comment}{//\ corresponding\ to\ values\ in\ the\ range\ -\/filter\_width\ to\ filter\_width.}}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \textcolor{keyword}{typedef}\ \textcolor{keywordtype}{void}\ FilterFunction(\textcolor{keywordtype}{float}\ scale,\ \textcolor{keywordtype}{float}\ width,}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ WorkType\ *\&filter,\ \textcolor{keywordtype}{float}\ \&filter\_width,\ \textcolor{keywordtype}{int}\ \&actual\_width);}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00256\ box\_filter\_impl(\textcolor{keywordtype}{float}\ scale,\ \textcolor{keywordtype}{float}\ width,}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ WorkType\ *\&filter,\ \textcolor{keywordtype}{float}\ \&filter\_width,}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \&actual\_width)\ \{}
+\DoxyCodeLine{00259\ \ \ \textcolor{keywordtype}{float}\ fscale;}
+\DoxyCodeLine{00260\ \ \ \textcolor{keywordflow}{if}\ (scale\ <\ 1.0)\ \{}
+\DoxyCodeLine{00261\ \ \ \ \ \textcolor{comment}{//\ If\ we\ are\ compressing\ the\ image,\ we\ want\ to\ expand\ the\ range\ of\ the}}
+\DoxyCodeLine{00262\ \ \ \ \ \textcolor{comment}{//\ filter\ function\ to\ prevent\ dropping\ below\ the\ Nyquist\ rate.\ \ Hence,\ we}}
+\DoxyCodeLine{00263\ \ \ \ \ \textcolor{comment}{//\ divide\ by\ scale.}}
+\DoxyCodeLine{00264\ \ \ \ \ fscale\ =\ 1.0\ /\ scale;}
+\DoxyCodeLine{00265\ }
+\DoxyCodeLine{00266\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00267\ \ \ \ \ \textcolor{comment}{//\ If\ we\ are\ expanding\ the\ image,\ we\ want\ to\ increase\ the\ granularity\ of}}
+\DoxyCodeLine{00268\ \ \ \ \ \textcolor{comment}{//\ the\ filter\ function\ since\ we\ will\ need\ to\ access\ fractional\ cel\ values.}}
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{comment}{//\ Hence,\ we\ multiply\ by\ scale.}}
+\DoxyCodeLine{00270\ \ \ \ \ fscale\ =\ scale;}
+\DoxyCodeLine{00271\ \ \ \}}
+\DoxyCodeLine{00272\ \ \ filter\_width\ =\ width;}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \ \ \textcolor{comment}{//\ It\ seems\ we\ need\ a\ buffer\ of\ two\ extra\ values\ in\ the\ filter\ array}}
+\DoxyCodeLine{00275\ \ \ \textcolor{comment}{//\ to\ allow\ room\ for\ all\ calculations\ (especially\ including\ the\ 1/2}}
+\DoxyCodeLine{00276\ \ \ \textcolor{comment}{//\ pixel\ offset).}}
+\DoxyCodeLine{00277\ \ \ actual\_width\ =\ (int)cceil((filter\_width\ +\ 1)\ *\ fscale)\ +\ 2;}
+\DoxyCodeLine{00278\ }
+\DoxyCodeLine{00279\ \ \ filter\ =\ (WorkType\ *)PANDA\_MALLOC\_ARRAY(actual\_width\ *\ \textcolor{keyword}{sizeof}(WorkType));}
+\DoxyCodeLine{00280\ }
+\DoxyCodeLine{00281\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ actual\_width;\ i++)\ \{}
+\DoxyCodeLine{00282\ \ \ \ \ filter[i]\ =\ (i\ <=\ filter\_width\ *\ fscale)\ ?\ filter\_max\ :\ 0;}
+\DoxyCodeLine{00283\ \ \ \}}
+\DoxyCodeLine{00284\ \}}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00287\ gaussian\_filter\_impl(\textcolor{keywordtype}{float}\ scale,\ \textcolor{keywordtype}{float}\ width,}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ WorkType\ *\&filter,\ \textcolor{keywordtype}{float}\ \&filter\_width,}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \&actual\_width)\ \{}
+\DoxyCodeLine{00290\ \ \ \textcolor{keywordtype}{float}\ fscale;}
+\DoxyCodeLine{00291\ \ \ \textcolor{keywordflow}{if}\ (scale\ <\ 1.0)\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{comment}{//\ If\ we\ are\ compressing\ the\ image,\ we\ want\ to\ expand\ the\ range\ of\ the}}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{comment}{//\ filter\ function\ to\ prevent\ dropping\ below\ the\ Nyquist\ rate.\ \ Hence,\ we}}
+\DoxyCodeLine{00294\ \ \ \ \ \textcolor{comment}{//\ divide\ by\ scale\ (to\ make\ fscale\ larger).}}
+\DoxyCodeLine{00295\ \ \ \ \ fscale\ =\ 1.0\ /\ scale;}
+\DoxyCodeLine{00296\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{comment}{//\ If\ we\ are\ expanding\ the\ image,\ we\ want\ to\ increase\ the\ granularity\ of}}
+\DoxyCodeLine{00299\ \ \ \ \ \textcolor{comment}{//\ the\ filter\ function\ since\ we\ will\ need\ to\ access\ fractional\ cel\ values.}}
+\DoxyCodeLine{00300\ \ \ \ \ \textcolor{comment}{//\ Hence,\ we\ multiply\ by\ scale\ (to\ make\ fscale\ larger).}}
+\DoxyCodeLine{00301\ \ \ \ \ fscale\ =\ scale;}
+\DoxyCodeLine{00302\ \ \ \}}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00304\ \ \ \textcolor{keywordtype}{float}\ sigma\ =\ width/2;}
+\DoxyCodeLine{00305\ \ \ filter\_width\ =\ 3.0\ *\ sigma;}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00307\ \ \ \textcolor{comment}{//\ It\ seems\ we\ need\ a\ buffer\ of\ two\ extra\ values\ in\ the\ filter\ array}}
+\DoxyCodeLine{00308\ \ \ \textcolor{comment}{//\ to\ allow\ room\ for\ all\ calculations\ (especially\ including\ the\ 1/2}}
+\DoxyCodeLine{00309\ \ \ \textcolor{comment}{//\ pixel\ offset).}}
+\DoxyCodeLine{00310\ \ \ actual\_width\ =\ (int)cceil((filter\_width\ +\ 1)\ *\ fscale)\ +\ 2;}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \textcolor{comment}{//\ G(x,\ y)\ =\ (1(2\ pi\ sigma\string^2))\ *\ exp(\ -\/\ (x\string^2\ +\ y\string^2)\ \ (2\ sigma\string^2))}}
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00314\ \ \ \textcolor{comment}{//\ (We\ can\ throw\ away\ the\ initial\ factor,\ since\ these\ weights\ will\ all\ be}}
+\DoxyCodeLine{00315\ \ \ \textcolor{comment}{//\ normalized;\ and\ we're\ only\ computing\ a\ 1-\/dimensional\ function,\ so\ we\ can}}
+\DoxyCodeLine{00316\ \ \ \textcolor{comment}{//\ ignore\ the\ y\string^2.)}}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00318\ \ \ filter\ =\ (WorkType\ *)PANDA\_MALLOC\_ARRAY(actual\_width\ *\ \textcolor{keyword}{sizeof}(WorkType));}
+\DoxyCodeLine{00319\ \ \ \textcolor{keywordtype}{float}\ div\ =\ 2\ *\ sigma\ *\ sigma;}
+\DoxyCodeLine{00320\ }
+\DoxyCodeLine{00321\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ actual\_width;\ i++)\ \{}
+\DoxyCodeLine{00322\ \ \ \ \ \textcolor{keywordtype}{float}\ x\ =\ i\ /\ fscale;}
+\DoxyCodeLine{00323\ \ \ \ \ filter[i]\ =\ (WorkType)(filter\_max\ *\ exp(-\/x*x\ /\ div));}
+\DoxyCodeLine{00324\ \ \ \ \ \textcolor{comment}{//\ The\ highest\ value\ of\ the\ exp\ function\ in\ this\ range\ is\ always\ 1.0,\ at}}
+\DoxyCodeLine{00325\ \ \ \ \ \textcolor{comment}{//\ index\ value\ 0.\ \ Thus,\ we\ scale\ the\ whole\ range\ by\ filter\_max,\ to}}
+\DoxyCodeLine{00326\ \ \ \ \ \textcolor{comment}{//\ produce\ a\ filter\ in\ the\ range\ [0..filter\_max].}}
+\DoxyCodeLine{00327\ \ \ \}}
+\DoxyCodeLine{00328\ \}}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00330\ }
+\DoxyCodeLine{00331\ \textcolor{comment}{//\ We\ have\ a\ function,\ defined\ in\ pnm-\/image-\/filter-\/core.cxx,\ that\ will\ scale}}
+\DoxyCodeLine{00332\ \textcolor{comment}{//\ an\ image\ in\ both\ X\ and\ Y\ directions\ for\ a\ particular\ channel,\ by\ setting\ up}}
+\DoxyCodeLine{00333\ \textcolor{comment}{//\ the\ temporary\ matrix\ appropriately\ and\ calling\ the\ above\ functions.}}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00335\ \textcolor{comment}{//\ What\ we\ really\ need\ is\ a\ series\ of\ such\ functions,\ one\ for\ each\ channel,}}
+\DoxyCodeLine{00336\ \textcolor{comment}{//\ and\ also\ one\ to\ scale\ by\ X\ first,\ and\ one\ to\ scale\ by\ Y\ first.\ \ This\ sounds}}
+\DoxyCodeLine{00337\ \textcolor{comment}{//\ a\ lot\ like\ a\ C++\ template:\ we\ want\ to\ compile\ the\ same\ function\ several}}
+\DoxyCodeLine{00338\ \textcolor{comment}{//\ times\ to\ work\ on\ slightly\ different\ sorts\ of\ things\ each\ time.\ \ However,}}
+\DoxyCodeLine{00339\ \textcolor{comment}{//\ the\ things\ we\ want\ to\ vary\ are\ the\ particular\ member\ functions\ of\ PNMImage}}
+\DoxyCodeLine{00340\ \textcolor{comment}{//\ that\ we\ call\ (e.g.\ \ Red(),\ Green(),\ etc.),\ and\ we\ can't\ declare\ a\ template}}
+\DoxyCodeLine{00341\ \textcolor{comment}{//\ of\ member\ functions,\ only\ of\ types.}}
+\DoxyCodeLine{00342\ }
+\DoxyCodeLine{00343\ \textcolor{comment}{//\ It's\ doable\ using\ templates.\ \ It\ would\ involve\ the\ declaration\ of\ lots\ of}}
+\DoxyCodeLine{00344\ \textcolor{comment}{//\ silly\ little\ functor\ objects.\ \ This\ is\ much\ more\ compact\ and\ no\ more}}
+\DoxyCodeLine{00345\ \textcolor{comment}{//\ difficult\ to\ read.}}
+\DoxyCodeLine{00346\ }
+\DoxyCodeLine{00347\ \textcolor{comment}{//\ The\ function\ in\ pnm-\/image-\/filter-\/core.cxx\ uses\ macros\ to\ access\ the\ member}}
+\DoxyCodeLine{00348\ \textcolor{comment}{//\ functions\ of\ PNMImage.\ \ Hence,\ we\ only\ need\ to\ redefine\ those\ macros\ with}}
+\DoxyCodeLine{00349\ \textcolor{comment}{//\ each\ instance\ of\ the\ function\ to\ cause\ each\ instance\ to\ operate\ on\ the}}
+\DoxyCodeLine{00350\ \textcolor{comment}{//\ correct\ member.}}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ }
+\DoxyCodeLine{00353\ \textcolor{comment}{//\ These\ instances\ scale\ by\ X\ first,\ then\ by\ Y.}}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00355\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_red\_xy}}
+\DoxyCodeLine{00356\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PNMImage}}
+\DoxyCodeLine{00357\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_x\_size}}
+\DoxyCodeLine{00358\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_y\_size}}
+\DoxyCodeLine{00359\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_red(a,\ b)}}
+\DoxyCodeLine{00360\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_red(a,\ b,\ v)}}
+\DoxyCodeLine{00361\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00362\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00363\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00364\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00365\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00366\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00367\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00369\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_green\_xy}}
+\DoxyCodeLine{00370\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PNMImage}}
+\DoxyCodeLine{00371\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_x\_size}}
+\DoxyCodeLine{00372\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_y\_size}}
+\DoxyCodeLine{00373\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_green(a,\ b)}}
+\DoxyCodeLine{00374\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_green(a,\ b,\ v)}}
+\DoxyCodeLine{00375\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00376\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00377\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00378\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00379\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00380\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00381\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00382\ }
+\DoxyCodeLine{00383\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_blue\_xy}}
+\DoxyCodeLine{00384\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PNMImage}}
+\DoxyCodeLine{00385\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_x\_size}}
+\DoxyCodeLine{00386\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_y\_size}}
+\DoxyCodeLine{00387\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_blue(a,\ b)}}
+\DoxyCodeLine{00388\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_blue(a,\ b,\ v)}}
+\DoxyCodeLine{00389\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00390\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00391\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00392\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00393\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00394\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00395\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00396\ }
+\DoxyCodeLine{00397\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_gray\_xy}}
+\DoxyCodeLine{00398\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PNMImage}}
+\DoxyCodeLine{00399\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_x\_size}}
+\DoxyCodeLine{00400\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_y\_size}}
+\DoxyCodeLine{00401\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_bright(a,\ b)}}
+\DoxyCodeLine{00402\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_xel(a,\ b,\ v)}}
+\DoxyCodeLine{00403\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00404\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00405\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00406\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00407\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00408\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00409\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00410\ }
+\DoxyCodeLine{00411\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_alpha\_xy}}
+\DoxyCodeLine{00412\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PNMImage}}
+\DoxyCodeLine{00413\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_x\_size}}
+\DoxyCodeLine{00414\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_y\_size}}
+\DoxyCodeLine{00415\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_alpha(a,\ b)}}
+\DoxyCodeLine{00416\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_alpha(a,\ b,\ v)}}
+\DoxyCodeLine{00417\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00418\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00419\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00420\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00421\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00422\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00423\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00424\ }
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \textcolor{comment}{//\ These\ instances\ scale\ by\ Y\ first,\ then\ by\ X.}}
+\DoxyCodeLine{00427\ }
+\DoxyCodeLine{00428\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_red\_yx}}
+\DoxyCodeLine{00429\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PNMImage}}
+\DoxyCodeLine{00430\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_y\_size}}
+\DoxyCodeLine{00431\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_x\_size}}
+\DoxyCodeLine{00432\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_red(b,\ a)}}
+\DoxyCodeLine{00433\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_red(b,\ a,\ v)}}
+\DoxyCodeLine{00434\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00435\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00436\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00437\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00438\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00439\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00440\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00441\ }
+\DoxyCodeLine{00442\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_green\_yx}}
+\DoxyCodeLine{00443\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PNMImage}}
+\DoxyCodeLine{00444\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_y\_size}}
+\DoxyCodeLine{00445\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_x\_size}}
+\DoxyCodeLine{00446\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_green(b,\ a)}}
+\DoxyCodeLine{00447\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_green(b,\ a,\ v)}}
+\DoxyCodeLine{00448\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00449\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00450\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00451\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00452\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00453\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00454\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00456\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_blue\_yx}}
+\DoxyCodeLine{00457\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PNMImage}}
+\DoxyCodeLine{00458\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_y\_size}}
+\DoxyCodeLine{00459\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_x\_size}}
+\DoxyCodeLine{00460\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_blue(b,\ a)}}
+\DoxyCodeLine{00461\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_blue(b,\ a,\ v)}}
+\DoxyCodeLine{00462\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00463\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00464\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00465\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00466\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00467\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00468\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00469\ }
+\DoxyCodeLine{00470\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_gray\_yx}}
+\DoxyCodeLine{00471\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PNMImage}}
+\DoxyCodeLine{00472\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_y\_size}}
+\DoxyCodeLine{00473\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_x\_size}}
+\DoxyCodeLine{00474\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_bright(b,\ a)}}
+\DoxyCodeLine{00475\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_xel(b,\ a,\ v)}}
+\DoxyCodeLine{00476\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00477\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00478\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00479\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00480\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00481\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00482\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00483\ }
+\DoxyCodeLine{00484\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_alpha\_yx}}
+\DoxyCodeLine{00485\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PNMImage}}
+\DoxyCodeLine{00486\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_y\_size}}
+\DoxyCodeLine{00487\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_x\_size}}
+\DoxyCodeLine{00488\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_alpha(b,\ a)}}
+\DoxyCodeLine{00489\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_alpha(b,\ a,\ v)}}
+\DoxyCodeLine{00490\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00491\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00492\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00493\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00494\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00495\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00496\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00497\ }
+\DoxyCodeLine{00498\ }
+\DoxyCodeLine{00499\ \textcolor{comment}{//\ filter\_image\ pulls\ everything\ together,\ and\ filters\ one\ image\ into\ another.}}
+\DoxyCodeLine{00500\ \textcolor{comment}{//\ Both\ images\ can\ be\ the\ same\ with\ no\ ill\ effects.}}
+\DoxyCodeLine{00501\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00502\ filter\_image(\mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&dest,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&source,}
+\DoxyCodeLine{00503\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ width,\ FilterFunction\ *make\_filter)\ \{}
+\DoxyCodeLine{00504\ }
+\DoxyCodeLine{00505\ \ \ \textcolor{comment}{//\ We\ want\ to\ scale\ by\ the\ smallest\ destination\ axis\ first,\ for\ a\ slight}}
+\DoxyCodeLine{00506\ \ \ \textcolor{comment}{//\ performance\ gain.}}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00508\ \ \ \textcolor{comment}{//\ In\ the\ PNMImage\ case\ (unlike\ the\ PfmFile\ case),\ the\ channel\ parameter\ is}}
+\DoxyCodeLine{00509\ \ \ \textcolor{comment}{//\ not\ used.\ \ We\ *could*\ use\ it\ to\ avoid\ the\ replication\ of\ quite\ so\ many}}
+\DoxyCodeLine{00510\ \ \ \textcolor{comment}{//\ functions,\ but\ we\ replicate\ them\ anyway,\ for\ another\ tiny\ performance}}
+\DoxyCodeLine{00511\ \ \ \textcolor{comment}{//\ gain.}}
+\DoxyCodeLine{00512\ }
+\DoxyCodeLine{00513\ \ \ \textcolor{keywordflow}{if}\ (dest.get\_x\_size()\ <=\ dest.get\_y\_size())\ \{}
+\DoxyCodeLine{00514\ \ \ \ \ \textcolor{keywordflow}{if}\ (dest.is\_grayscale()\ ||\ source.is\_grayscale())\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ filter\_gray\_xy(dest,\ source,\ width,\ make\_filter,\ 0);}
+\DoxyCodeLine{00516\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ filter\_red\_xy(dest,\ source,\ width,\ make\_filter,\ 0);}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ filter\_green\_xy(dest,\ source,\ width,\ make\_filter,\ 0);}
+\DoxyCodeLine{00519\ \ \ \ \ \ \ filter\_blue\_xy(dest,\ source,\ width,\ make\_filter,\ 0);}
+\DoxyCodeLine{00520\ \ \ \ \ \}}
+\DoxyCodeLine{00521\ }
+\DoxyCodeLine{00522\ \ \ \ \ \textcolor{keywordflow}{if}\ (dest.has\_alpha()\ \&\&\ source.has\_alpha())\ \{}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ filter\_alpha\_xy(dest,\ source,\ width,\ make\_filter,\ 0);}
+\DoxyCodeLine{00524\ \ \ \ \ \}}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00526\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00527\ \ \ \ \ \textcolor{keywordflow}{if}\ (dest.is\_grayscale()\ ||\ source.is\_grayscale())\ \{}
+\DoxyCodeLine{00528\ \ \ \ \ \ \ filter\_gray\_yx(dest,\ source,\ width,\ make\_filter,\ 0);}
+\DoxyCodeLine{00529\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ filter\_red\_yx(dest,\ source,\ width,\ make\_filter,\ 0);}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ filter\_green\_yx(dest,\ source,\ width,\ make\_filter,\ 0);}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ filter\_blue\_yx(dest,\ source,\ width,\ make\_filter,\ 0);}
+\DoxyCodeLine{00533\ \ \ \ \ \}}
+\DoxyCodeLine{00534\ }
+\DoxyCodeLine{00535\ \ \ \ \ \textcolor{keywordflow}{if}\ (dest.has\_alpha()\ \&\&\ source.has\_alpha())\ \{}
+\DoxyCodeLine{00536\ \ \ \ \ \ \ filter\_alpha\_yx(dest,\ source,\ width,\ make\_filter,\ 0);}
+\DoxyCodeLine{00537\ \ \ \ \ \}}
+\DoxyCodeLine{00538\ \ \ \}}
+\DoxyCodeLine{00539\ \}}
+\DoxyCodeLine{00540\ }
+\DoxyCodeLine{00547\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00548\ box\_filter\_from(\textcolor{keywordtype}{float}\ width,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy)\ \{}
+\DoxyCodeLine{00549\ \ \ filter\_image(*\textcolor{keyword}{this},\ copy,\ width,\ \&box\_filter\_impl);}
+\DoxyCodeLine{00550\ \}}
+\DoxyCodeLine{00551\ }
+\DoxyCodeLine{00558\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00559\ gaussian\_filter\_from(\textcolor{keywordtype}{float}\ width,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&copy)\ \{}
+\DoxyCodeLine{00560\ \ \ filter\_image(*\textcolor{keyword}{this},\ copy,\ width,\ \&gaussian\_filter\_impl);}
+\DoxyCodeLine{00561\ \}}
+\DoxyCodeLine{00562\ }
+\DoxyCodeLine{00563\ \textcolor{comment}{//\ Now\ we\ do\ it\ again,\ this\ time\ for\ PfmFile.\ \ In\ this\ case\ we\ also\ need\ to}}
+\DoxyCodeLine{00564\ \textcolor{comment}{//\ support\ the\ sparse\ variants,\ since\ PfmFiles\ can\ be\ incomplete.\ \ However,\ we}}
+\DoxyCodeLine{00565\ \textcolor{comment}{//\ don't\ need\ to\ have\ a\ different\ function\ for\ each\ channel.}}
+\DoxyCodeLine{00566\ }
+\DoxyCodeLine{00567\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_pfm\_xy}}
+\DoxyCodeLine{00568\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PfmFile}}
+\DoxyCodeLine{00569\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_x\_size}}
+\DoxyCodeLine{00570\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_y\_size}}
+\DoxyCodeLine{00571\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_channel(a,\ b,\ channel)}}
+\DoxyCodeLine{00572\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_channel(a,\ b,\ channel,\ v)}}
+\DoxyCodeLine{00573\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00574\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00575\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00576\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00577\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00578\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00579\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00580\ }
+\DoxyCodeLine{00581\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_pfm\_yx}}
+\DoxyCodeLine{00582\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PfmFile}}
+\DoxyCodeLine{00583\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_y\_size}}
+\DoxyCodeLine{00584\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_x\_size}}
+\DoxyCodeLine{00585\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_channel(b,\ a,\ channel)}}
+\DoxyCodeLine{00586\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_channel(b,\ a,\ channel,\ v)}}
+\DoxyCodeLine{00587\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-core_8cxx}{pnm-\/image-\/filter-\/core.cxx}}"{}}}
+\DoxyCodeLine{00588\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00589\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00590\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00591\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00592\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00593\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00594\ }
+\DoxyCodeLine{00595\ }
+\DoxyCodeLine{00596\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_pfm\_sparse\_xy}}
+\DoxyCodeLine{00597\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PfmFile}}
+\DoxyCodeLine{00598\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_x\_size}}
+\DoxyCodeLine{00599\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_y\_size}}
+\DoxyCodeLine{00600\ \textcolor{preprocessor}{\#define\ HASVAL(a,\ b)\ has\_point(a,\ b)}}
+\DoxyCodeLine{00601\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_channel(a,\ b,\ channel)}}
+\DoxyCodeLine{00602\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_channel(a,\ b,\ channel,\ v)}}
+\DoxyCodeLine{00603\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-sparse-core_8cxx}{pnm-\/image-\/filter-\/sparse-\/core.cxx}}"{}}}
+\DoxyCodeLine{00604\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00605\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00606\ \textcolor{preprocessor}{\#undef\ HASVAL}}
+\DoxyCodeLine{00607\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00608\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00609\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00610\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00611\ }
+\DoxyCodeLine{00612\ \textcolor{preprocessor}{\#define\ FUNCTION\_NAME\ filter\_pfm\_sparse\_yx}}
+\DoxyCodeLine{00613\ \textcolor{preprocessor}{\#define\ IMAGETYPE\ PfmFile}}
+\DoxyCodeLine{00614\ \textcolor{preprocessor}{\#define\ ASIZE\ get\_y\_size}}
+\DoxyCodeLine{00615\ \textcolor{preprocessor}{\#define\ BSIZE\ get\_x\_size}}
+\DoxyCodeLine{00616\ \textcolor{preprocessor}{\#define\ HASVAL(a,\ b)\ has\_point(b,\ a)}}
+\DoxyCodeLine{00617\ \textcolor{preprocessor}{\#define\ GETVAL(a,\ b,\ channel)\ get\_channel(b,\ a,\ channel)}}
+\DoxyCodeLine{00618\ \textcolor{preprocessor}{\#define\ SETVAL(a,\ b,\ channel,\ v)\ set\_channel(b,\ a,\ channel,\ v)}}
+\DoxyCodeLine{00619\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnm-image-filter-sparse-core_8cxx}{pnm-\/image-\/filter-\/sparse-\/core.cxx}}"{}}}
+\DoxyCodeLine{00620\ \textcolor{preprocessor}{\#undef\ SETVAL}}
+\DoxyCodeLine{00621\ \textcolor{preprocessor}{\#undef\ GETVAL}}
+\DoxyCodeLine{00622\ \textcolor{preprocessor}{\#undef\ HASVAL}}
+\DoxyCodeLine{00623\ \textcolor{preprocessor}{\#undef\ BSIZE}}
+\DoxyCodeLine{00624\ \textcolor{preprocessor}{\#undef\ ASIZE}}
+\DoxyCodeLine{00625\ \textcolor{preprocessor}{\#undef\ IMAGETYPE}}
+\DoxyCodeLine{00626\ \textcolor{preprocessor}{\#undef\ FUNCTION\_NAME}}
+\DoxyCodeLine{00627\ }
+\DoxyCodeLine{00628\ }
+\DoxyCodeLine{00629\ \textcolor{comment}{//\ filter\_image\ pulls\ everything\ together,\ and\ filters\ one\ image\ into\ another.}}
+\DoxyCodeLine{00630\ \textcolor{comment}{//\ Both\ images\ can\ be\ the\ same\ with\ no\ ill\ effects.}}
+\DoxyCodeLine{00631\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00632\ filter\_image(\mbox{\hyperlink{classPfmFile}{PfmFile}}\ \&dest,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPfmFile}{PfmFile}}\ \&source,}
+\DoxyCodeLine{00633\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ width,\ FilterFunction\ *make\_filter)\ \{}
+\DoxyCodeLine{00634\ \ \ \textcolor{keywordtype}{int}\ num\_channels\ =\ min(dest.get\_num\_channels(),\ source.get\_num\_channels());}
+\DoxyCodeLine{00635\ }
+\DoxyCodeLine{00636\ \ \ \textcolor{keywordflow}{if}\ (source.has\_no\_data\_value())\ \{}
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{comment}{//\ We\ need\ to\ use\ the\ sparse\ variant.}}
+\DoxyCodeLine{00638\ \ \ \ \ \textcolor{keywordflow}{if}\ (dest.get\_x\_size()\ <=\ dest.get\_y\_size())\ \{}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ci\ =\ 0;\ ci\ <\ num\_channels;\ ++ci)\ \{}
+\DoxyCodeLine{00640\ \ \ \ \ \ \ \ \ filter\_pfm\_sparse\_xy(dest,\ source,\ width,\ make\_filter,\ ci);}
+\DoxyCodeLine{00641\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00642\ }
+\DoxyCodeLine{00643\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ci\ =\ 0;\ ci\ <\ num\_channels;\ ++ci)\ \{}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \ \ filter\_pfm\_sparse\_yx(dest,\ source,\ width,\ make\_filter,\ ci);}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00647\ \ \ \ \ \}}
+\DoxyCodeLine{00648\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00649\ \ \ \ \ \textcolor{comment}{//\ We\ can\ use\ the\ slightly\ faster\ fully-\/specified\ variant.}}
+\DoxyCodeLine{00650\ \ \ \ \ \textcolor{keywordflow}{if}\ (dest.get\_x\_size()\ <=\ dest.get\_y\_size())\ \{}
+\DoxyCodeLine{00651\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ci\ =\ 0;\ ci\ <\ num\_channels;\ ++ci)\ \{}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \ \ filter\_pfm\_xy(dest,\ source,\ width,\ make\_filter,\ ci);}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00654\ }
+\DoxyCodeLine{00655\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ci\ =\ 0;\ ci\ <\ num\_channels;\ ++ci)\ \{}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \ \ filter\_pfm\_yx(dest,\ source,\ width,\ make\_filter,\ ci);}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00659\ \ \ \ \ \}}
+\DoxyCodeLine{00660\ \ \ \}}
+\DoxyCodeLine{00661\ \}}
+\DoxyCodeLine{00662\ }
+\DoxyCodeLine{00669\ \textcolor{keywordtype}{void}\ PfmFile::}
+\DoxyCodeLine{00670\ box\_filter\_from(\textcolor{keywordtype}{float}\ width,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPfmFile}{PfmFile}}\ \&copy)\ \{}
+\DoxyCodeLine{00671\ \ \ filter\_image(*\textcolor{keyword}{this},\ copy,\ width,\ \&box\_filter\_impl);}
+\DoxyCodeLine{00672\ \}}
+\DoxyCodeLine{00673\ }
+\DoxyCodeLine{00680\ \textcolor{keywordtype}{void}\ PfmFile::}
+\DoxyCodeLine{00681\ gaussian\_filter\_from(\textcolor{keywordtype}{float}\ width,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classPfmFile}{PfmFile}}\ \&copy)\ \{}
+\DoxyCodeLine{00682\ \ \ filter\_image(*\textcolor{keyword}{this},\ copy,\ width,\ \&gaussian\_filter\_impl);}
+\DoxyCodeLine{00683\ \}}
+\DoxyCodeLine{00684\ }
+\DoxyCodeLine{00685\ \textcolor{comment}{//\ The\ following\ functions\ are\ support\ for\ quick\_box\_filter().}}
+\DoxyCodeLine{00686\ }
+\DoxyCodeLine{00687\ \textcolor{keyword}{static}\ INLINE\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00688\ box\_filter\_xel(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&img,}
+\DoxyCodeLine{00689\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y,\ \textcolor{keywordtype}{float}\ x\_contrib,\ \textcolor{keywordtype}{float}\ y\_contrib,}
+\DoxyCodeLine{00690\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ LColorf\ \&\mbox{\hyperlink{structcolor}{color}},\ \textcolor{keywordtype}{float}\ \&pixel\_count)\ \{}
+\DoxyCodeLine{00691\ }
+\DoxyCodeLine{00692\ \ \ \textcolor{keywordtype}{float}\ contrib\ =\ x\_contrib\ *\ y\_contrib;}
+\DoxyCodeLine{00693\ \ \ \mbox{\hyperlink{structcolor}{color}}\ +=\ img.get\_xel\_a(x,\ y)\ *\ contrib;}
+\DoxyCodeLine{00694\ \ \ pixel\_count\ +=\ contrib;}
+\DoxyCodeLine{00695\ \}}
+\DoxyCodeLine{00696\ }
+\DoxyCodeLine{00697\ \textcolor{keyword}{static}\ INLINE\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00698\ box\_filter\_line(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&image,}
+\DoxyCodeLine{00699\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ x0,\ \textcolor{keywordtype}{int}\ y,\ \textcolor{keywordtype}{float}\ x1,\ \textcolor{keywordtype}{float}\ y\_contrib,}
+\DoxyCodeLine{00700\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ LColorf\ \&\mbox{\hyperlink{structcolor}{color}},\ \textcolor{keywordtype}{float}\ \&pixel\_count)\ \{}
+\DoxyCodeLine{00701\ \ \ \textcolor{keywordtype}{int}\ x\ =\ (int)x0;}
+\DoxyCodeLine{00702\ \ \ \textcolor{comment}{//\ Get\ the\ first\ (partial)\ xel}}
+\DoxyCodeLine{00703\ \ \ box\_filter\_xel(image,\ x,\ y,\ (\textcolor{keywordtype}{float})(x+1)-\/x0,\ y\_contrib,}
+\DoxyCodeLine{00704\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}},\ pixel\_count);}
+\DoxyCodeLine{00705\ }
+\DoxyCodeLine{00706\ \ \ \textcolor{keywordtype}{int}\ x\_last\ =\ (int)x1;}
+\DoxyCodeLine{00707\ \ \ \textcolor{keywordflow}{if}\ (x\ <\ x\_last)\ \{}
+\DoxyCodeLine{00708\ \ \ \ \ x++;}
+\DoxyCodeLine{00709\ \ \ \ \ \textcolor{keywordflow}{while}\ (x\ <\ x\_last)\ \{}
+\DoxyCodeLine{00710\ \ \ \ \ \ \ \textcolor{comment}{//\ Get\ each\ consecutive\ (complete)\ xel}}
+\DoxyCodeLine{00711\ \ \ \ \ \ \ box\_filter\_xel(image,\ x,\ y,\ 1.0f,\ y\_contrib,}
+\DoxyCodeLine{00712\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}},\ pixel\_count);}
+\DoxyCodeLine{00713\ \ \ \ \ \ \ x++;}
+\DoxyCodeLine{00714\ \ \ \ \ \}}
+\DoxyCodeLine{00715\ }
+\DoxyCodeLine{00716\ \ \ \ \ \textcolor{comment}{//\ Get\ the\ final\ (partial)\ xel}}
+\DoxyCodeLine{00717\ \ \ \ \ \textcolor{keywordtype}{float}\ x\_contrib\ =\ x1\ -\/\ (float)x\_last;}
+\DoxyCodeLine{00718\ \ \ \ \ \textcolor{keywordflow}{if}\ (x\_contrib\ >\ 0.0001f\ \&\&\ x\ <\ image.get\_x\_size())\ \{}
+\DoxyCodeLine{00719\ \ \ \ \ \ \ box\_filter\_xel(image,\ x,\ y,\ x\_contrib,\ y\_contrib,}
+\DoxyCodeLine{00720\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}},\ pixel\_count);}
+\DoxyCodeLine{00721\ \ \ \ \ \}}
+\DoxyCodeLine{00722\ \ \ \}}
+\DoxyCodeLine{00723\ \}}
+\DoxyCodeLine{00724\ }
+\DoxyCodeLine{00725\ \textcolor{keyword}{static}\ LColorf}
+\DoxyCodeLine{00726\ box\_filter\_region(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&image,}
+\DoxyCodeLine{00727\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ x0,\ \textcolor{keywordtype}{float}\ y0,\ \textcolor{keywordtype}{float}\ x1,\ \textcolor{keywordtype}{float}\ y1)\ \{}
+\DoxyCodeLine{00728\ \ \ LColorf\ \mbox{\hyperlink{structcolor}{color}}\ =\ LColorf::zero();}
+\DoxyCodeLine{00729\ \ \ \textcolor{keywordtype}{float}\ pixel\_count\ =\ 0.0f;}
+\DoxyCodeLine{00730\ }
+\DoxyCodeLine{00731\ \ \ assert(y0\ >=\ 0\ \&\&\ y1\ >=\ 0);}
+\DoxyCodeLine{00732\ }
+\DoxyCodeLine{00733\ \ \ \textcolor{keywordtype}{int}\ y\ =\ (int)y0;}
+\DoxyCodeLine{00734\ \ \ \textcolor{comment}{//\ Get\ the\ first\ (partial)\ row}}
+\DoxyCodeLine{00735\ \ \ box\_filter\_line(image,\ x0,\ y,\ x1,\ (\textcolor{keywordtype}{float})(y+1)-\/y0,}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}},\ pixel\_count);}
+\DoxyCodeLine{00737\ }
+\DoxyCodeLine{00738\ \ \ \textcolor{keywordtype}{int}\ y\_last\ =\ (int)y1;}
+\DoxyCodeLine{00739\ \ \ \textcolor{keywordflow}{if}\ (y\ <\ y\_last)\ \{}
+\DoxyCodeLine{00740\ \ \ \ \ y++;}
+\DoxyCodeLine{00741\ \ \ \ \ \textcolor{keywordflow}{while}\ (y\ <\ y\_last)\ \{}
+\DoxyCodeLine{00742\ \ \ \ \ \ \ \textcolor{comment}{//\ Get\ each\ consecutive\ (complete)\ row}}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ box\_filter\_line(image,\ x0,\ y,\ x1,\ 1.0f,}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}},\ pixel\_count);}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ y++;}
+\DoxyCodeLine{00746\ \ \ \ \ \}}
+\DoxyCodeLine{00747\ }
+\DoxyCodeLine{00748\ \ \ \ \ \textcolor{comment}{//\ Get\ the\ final\ (partial)\ row}}
+\DoxyCodeLine{00749\ \ \ \ \ \textcolor{keywordtype}{float}\ y\_contrib\ =\ y1\ -\/\ (float)y\_last;}
+\DoxyCodeLine{00750\ \ \ \ \ \textcolor{keywordflow}{if}\ (y\_contrib\ >\ 0.0001f\ \&\&\ y\ <\ image.get\_y\_size())\ \{}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ box\_filter\_line(image,\ x0,\ y,\ x1,\ y\_contrib,}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}},\ pixel\_count);}
+\DoxyCodeLine{00753\ \ \ \ \ \}}
+\DoxyCodeLine{00754\ \ \ \}}
+\DoxyCodeLine{00755\ }
+\DoxyCodeLine{00756\ \ \ \textcolor{comment}{//\ cerr\ <<\ pixel\_count\ <<\ "{}\(\backslash\)n"{};}}
+\DoxyCodeLine{00757\ \ \ \mbox{\hyperlink{structcolor}{color}}\ /=\ pixel\_count;}
+\DoxyCodeLine{00758\ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{structcolor}{color}};}
+\DoxyCodeLine{00759\ \}}
+\DoxyCodeLine{00760\ }
+\DoxyCodeLine{00769\ \textcolor{keywordtype}{void}\ PNMImage::}
+\DoxyCodeLine{00770\ quick\_filter\_from(\textcolor{keyword}{const}\ \mbox{\hyperlink{classPNMImage}{PNMImage}}\ \&from,\ \textcolor{keywordtype}{int}\ xborder,\ \textcolor{keywordtype}{int}\ yborder)\ \{}
+\DoxyCodeLine{00771\ \ \ \textcolor{keywordtype}{int}\ from\_xs\ =\ from.get\_x\_size();}
+\DoxyCodeLine{00772\ \ \ \textcolor{keywordtype}{int}\ from\_ys\ =\ from.get\_y\_size();}
+\DoxyCodeLine{00773\ }
+\DoxyCodeLine{00774\ \ \ \textcolor{keywordtype}{int}\ to\_xs\ =\ get\_x\_size()\ -\/\ xborder;}
+\DoxyCodeLine{00775\ \ \ \textcolor{keywordtype}{int}\ to\_ys\ =\ get\_y\_size()\ -\/\ yborder;}
+\DoxyCodeLine{00776\ }
+\DoxyCodeLine{00777\ \ \ \textcolor{keywordtype}{int}\ to\_xoff\ =\ xborder\ /\ 2;}
+\DoxyCodeLine{00778\ \ \ \textcolor{keywordtype}{int}\ to\_yoff\ =\ yborder\ /\ 2;}
+\DoxyCodeLine{00779\ }
+\DoxyCodeLine{00780\ \ \ \textcolor{keywordtype}{float}\ from\_x0,\ from\_x1,\ from\_y0,\ from\_y1;}
+\DoxyCodeLine{00781\ \ \ \textcolor{keywordtype}{int}\ to\_x,\ to\_y;}
+\DoxyCodeLine{00782\ }
+\DoxyCodeLine{00783\ \ \ \textcolor{keywordtype}{float}\ x\_scale\ =\ (float)from\_xs\ /\ (\textcolor{keywordtype}{float})to\_xs;}
+\DoxyCodeLine{00784\ \ \ \textcolor{keywordtype}{float}\ y\_scale\ =\ (float)from\_ys\ /\ (\textcolor{keywordtype}{float})to\_ys;}
+\DoxyCodeLine{00785\ }
+\DoxyCodeLine{00786\ \ \ LColorf\ \mbox{\hyperlink{structcolor}{color}};}
+\DoxyCodeLine{00787\ }
+\DoxyCodeLine{00788\ \ \ from\_y0\ =\ max(0,\ -\/to\_yoff)\ *\ y\_scale;}
+\DoxyCodeLine{00789\ \ \ \textcolor{keywordflow}{for}\ (to\_y\ =\ max(0,\ -\/to\_yoff);}
+\DoxyCodeLine{00790\ \ \ \ \ \ \ \ to\_y\ <\ min(to\_ys,\ get\_y\_size()-\/to\_yoff);}
+\DoxyCodeLine{00791\ \ \ \ \ \ \ \ to\_y++)\ \{}
+\DoxyCodeLine{00792\ \ \ \ \ from\_y1\ =\ (to\_y+1)\ *\ y\_scale;}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00794\ \ \ \ \ from\_x0\ =\ max(0,\ -\/to\_xoff)\ *\ x\_scale;}
+\DoxyCodeLine{00795\ \ \ \ \ \textcolor{keywordflow}{for}\ (to\_x\ =\ max(0,\ -\/to\_xoff);}
+\DoxyCodeLine{00796\ \ \ \ \ \ \ \ \ \ to\_x\ <\ min(to\_xs,\ get\_x\_size()-\/to\_xoff);}
+\DoxyCodeLine{00797\ \ \ \ \ \ \ \ \ \ to\_x++)\ \{}
+\DoxyCodeLine{00798\ \ \ \ \ \ \ from\_x1\ =\ (to\_x+1)\ *\ x\_scale;}
+\DoxyCodeLine{00799\ }
+\DoxyCodeLine{00800\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ the\ box\ from\ (from\_x0,\ from\_y0)\ -\/\ (from\_x1,\ from\_y1)\ but\ not}}
+\DoxyCodeLine{00801\ \ \ \ \ \ \ \textcolor{comment}{//\ including\ (from\_x1,\ from\_y1)\ maps\ to\ the\ pixel\ (to\_x,\ to\_y).}}
+\DoxyCodeLine{00802\ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}\ =\ box\_filter\_region(from,}
+\DoxyCodeLine{00803\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ from\_x0,\ from\_y0,\ from\_x1,\ from\_y1);}
+\DoxyCodeLine{00804\ }
+\DoxyCodeLine{00805\ \ \ \ \ \ \ set\_xel\_a(to\_xoff\ +\ to\_x,\ to\_yoff\ +\ to\_y,\ \mbox{\hyperlink{structcolor}{color}});}
+\DoxyCodeLine{00806\ }
+\DoxyCodeLine{00807\ \ \ \ \ \ \ from\_x0\ =\ from\_x1;}
+\DoxyCodeLine{00808\ \ \ \ \ \}}
+\DoxyCodeLine{00809\ \ \ \ \ from\_y0\ =\ from\_y1;}
+\DoxyCodeLine{00810\ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00811\ \ \ \}}
+\DoxyCodeLine{00812\ \}}
+
+\end{DoxyCode}

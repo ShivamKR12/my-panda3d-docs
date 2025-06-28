@@ -1,0 +1,538 @@
+\doxysection{true\+Clock.\+cxx}
+\hypertarget{trueClock_8cxx_source}{}\label{trueClock_8cxx_source}\index{panda/src/express/trueClock.cxx@{panda/src/express/trueClock.cxx}}
+\mbox{\hyperlink{trueClock_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{trueClock_8h}{trueClock.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__express_8h}{config\_express.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{numeric__types_8h}{numeric\_types.h}}"{}}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{math_8h}{math.h}}>}\ \ \textcolor{comment}{//\ for\ fabs()}}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ \textcolor{keyword}{using\ }std::max;}
+\DoxyCodeLine{00021\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \mbox{\hyperlink{classTrueClock}{TrueClock}}\ *TrueClock::\_global\_ptr\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \textcolor{comment}{//\ The\ Win32\ implementation.}}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ <sys/timeb.h>}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#ifndef\ WIN32\_LEAN\_AND\_MEAN}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#define\ WIN32\_LEAN\_AND\_MEAN\ 1}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{windows_8h}{windows.h}}>}}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00035\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ \_0001\ =\ 1.0\ /\ 1000.0;}
+\DoxyCodeLine{00036\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ \_00000001\ =\ 1.0\ /\ 10000000.0;}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \textcolor{comment}{//\ This\ is\ the\ interval\ of\ time,\ in\ seconds,\ over\ which\ to\ measure\ the\ high-\/}}
+\DoxyCodeLine{00039\ \textcolor{comment}{//\ precision\ clock\ rate\ vs.\ \ the\ time-\/of-\/day\ rate,\ when\ paranoid-\/clock\ is\ in}}
+\DoxyCodeLine{00040\ \textcolor{comment}{//\ effect.\ \ Reducing\ it\ makes\ the\ clock\ respond\ more\ quickly\ to\ changes\ in}}
+\DoxyCodeLine{00041\ \textcolor{comment}{//\ rate,\ but\ setting\ it\ too\ small\ may\ introduce\ erratic\ behavior,\ especially}}
+\DoxyCodeLine{00042\ \textcolor{comment}{//\ if\ the\ user\ has\ ntp\ configured.}}
+\DoxyCodeLine{00043\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ paranoid\_clock\_interval\ =\ 3.0;}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \textcolor{comment}{//\ It\ will\ be\ considered\ a\ clock\ jump\ error\ if\ either\ the\ high-\/precision\ clock}}
+\DoxyCodeLine{00046\ \textcolor{comment}{//\ or\ the\ time-\/of-\/day\ clock\ change\ by\ this\ number\ of\ seconds\ without\ the\ other}}
+\DoxyCodeLine{00047\ \textcolor{comment}{//\ jumping\ by\ a\ similar\ amount.}}
+\DoxyCodeLine{00048\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ paranoid\_clock\_jump\_error\ =\ 2.0;}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \textcolor{comment}{//\ If\ the\ we\ detect\ a\ clock\ jump\ error\ but\ the\ corrected\ clock\ skew\ is}}
+\DoxyCodeLine{00051\ \textcolor{comment}{//\ currently\ more\ than\ this\ amount,\ we\ hack\ the\ clock\ scale\ to\ try\ to}}
+\DoxyCodeLine{00052\ \textcolor{comment}{//\ compensate.}}
+\DoxyCodeLine{00053\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ paranoid\_clock\_jump\_error\_max\_delta\ =\ 1.0;}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00055\ \textcolor{comment}{//\ If\ the\ measured\ time\_scale\ appears\ to\ change\ by\ more\ than\ this\ factor,\ it}}
+\DoxyCodeLine{00056\ \textcolor{comment}{//\ will\ be\ reported\ to\ the\ log.\ \ Changes\ to\ time\_scale\ less\ than\ this\ factor}}
+\DoxyCodeLine{00057\ \textcolor{comment}{//\ are\ assumed\ to\ be\ within\ the\ margin\ of\ error.}}
+\DoxyCodeLine{00058\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ paranoid\_clock\_report\_scale\_factor\ =\ 0.1;}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00060\ \textcolor{comment}{//\ If\ the\ high-\/precision\ clock,\ after\ applying\ time\_scale\ correction,\ is\ still}}
+\DoxyCodeLine{00061\ \textcolor{comment}{//\ more\ than\ this\ number\ of\ seconds\ above\ or\ below\ the\ time-\/of-\/day\ clock,\ it}}
+\DoxyCodeLine{00062\ \textcolor{comment}{//\ will\ be\ sped\ up\ or\ slowed\ down\ slightly\ until\ it\ is\ back\ in\ sync.}}
+\DoxyCodeLine{00063\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ paranoid\_clock\_chase\_threshold\ =\ 0.5;}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ \textcolor{comment}{//\ This\ is\ the\ minimum\ factor\ by\ which\ the\ high-\/precision\ clock\ will\ be\ sped}}
+\DoxyCodeLine{00066\ \textcolor{comment}{//\ up\ or\ slowed\ down\ when\ it\ gets\ out\ of\ sync\ by\ paranoid-\/clock-\/chase-\/}}
+\DoxyCodeLine{00067\ \textcolor{comment}{//\ threshold.}}
+\DoxyCodeLine{00068\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{double}\ paranoid\_clock\_chase\_factor\ =\ 0.1;}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00073\ \textcolor{keywordtype}{double}\ TrueClock::}
+\DoxyCodeLine{00074\ get\_long\_time()\ \{}
+\DoxyCodeLine{00075\ \ \ \textcolor{keywordtype}{int}\ tc\ =\ GetTickCount();}
+\DoxyCodeLine{00076\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{double})(tc\ -\/\ \_init\_tc)\ *\ \_0001;}
+\DoxyCodeLine{00077\ \}}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00082\ \textcolor{keywordtype}{double}\ TrueClock::}
+\DoxyCodeLine{00083\ get\_short\_raw\_time()\ \{}
+\DoxyCodeLine{00084\ \ \ \textcolor{keywordtype}{double}\ time;}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00086\ \ \ \textcolor{keywordflow}{if}\ (\_has\_high\_res)\ \{}
+\DoxyCodeLine{00087\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00088\ \textcolor{comment}{\ *\ Use\ the\ high-\/resolution\ clock.\ \ This\ is\ of\ questionable\ value,\ since\ (a)\ on}}
+\DoxyCodeLine{00089\ \textcolor{comment}{\ *\ some\ OS's\ and\ hardware,\ the\ low\ 24\ bits\ can\ occasionally\ roll\ over\ without}}
+\DoxyCodeLine{00090\ \textcolor{comment}{\ *\ setting\ the\ carry\ bit,\ causing\ the\ time\ to\ jump\ backwards,\ and\ (b)}}
+\DoxyCodeLine{00091\ \textcolor{comment}{\ *\ reportedly\ it\ can\ set\ the\ carry\ bit\ incorrectly\ sometimes,\ causing\ the\ time}}
+\DoxyCodeLine{00092\ \textcolor{comment}{\ *\ to\ jump\ forwards,\ and\ (c)\ even\ when\ it\ doesn't\ do\ that,\ it's\ not\ very}}
+\DoxyCodeLine{00093\ \textcolor{comment}{\ *\ accurate\ and\ seems\ to\ lose\ seconds\ of\ time\ per\ hour,\ and\ (d)\ someone\ could}}
+\DoxyCodeLine{00094\ \textcolor{comment}{\ *\ be\ running\ a\ program\ such\ as\ Speed\ Gear\ which\ munges\ this\ value\ anyway.}}
+\DoxyCodeLine{00095\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00096\ \ \ \ \ int64\_t\ count;}
+\DoxyCodeLine{00097\ \ \ \ \ QueryPerformanceCounter((LARGE\_INTEGER\ *)\&count);}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \ \ time\ =\ (double)(count\ -\/\ \_init\_count)\ *\ \_recip\_frequency;}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00102\ \ \ \ \ \textcolor{comment}{//\ No\ high-\/resolution\ clock;\ return\ the\ best\ information\ we\ have.\ \ This}}
+\DoxyCodeLine{00103\ \ \ \ \ \textcolor{comment}{//\ doesn't\ suffer\ from\ the\ rollover\ problems\ that\ QueryPerformanceCounter}}
+\DoxyCodeLine{00104\ \ \ \ \ \textcolor{comment}{//\ does,\ but\ it's\ not\ very\ precise-\/-\/only\ precise\ to\ 50ms\ on\ Win98,\ and}}
+\DoxyCodeLine{00105\ \ \ \ \ \textcolor{comment}{//\ 10ms\ on\ XP-\/based\ systems-\/-\/and\ Speed\ Gear\ still\ munges\ it.}}
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{keywordtype}{int}\ tc\ =\ GetTickCount();}
+\DoxyCodeLine{00107\ \ \ \ \ time\ =\ (double)(tc\ -\/\ \_init\_tc)\ *\ \_0001;}
+\DoxyCodeLine{00108\ \ \ \}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ \textcolor{keywordflow}{return}\ time;}
+\DoxyCodeLine{00111\ \}}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00116\ \textcolor{keywordtype}{bool}\ TrueClock::}
+\DoxyCodeLine{00117\ set\_cpu\_affinity(uint32\_t\ mask)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00118\ \ \ DWORD\ proc\_mask;}
+\DoxyCodeLine{00119\ \ \ DWORD\ sys\_mask;}
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{if}\ (GetProcessAffinityMask(GetCurrentProcess(),\ (PDWORD\_PTR)\&proc\_mask,\ (PDWORD\_PTR)\&sys\_mask))\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ \textcolor{comment}{//\ make\ sure\ we\ don't\ reference\ CPUs\ that\ don't\ exist}}
+\DoxyCodeLine{00122\ \ \ \ \ proc\_mask\ =\ mask\ \&\ sys\_mask;}
+\DoxyCodeLine{00123\ \ \ \ \ \textcolor{keywordflow}{if}\ (proc\_mask)\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ SetProcessAffinityMask(GetCurrentProcess(),\ proc\_mask)\ !=\ 0;}
+\DoxyCodeLine{00125\ \ \ \ \ \}}
+\DoxyCodeLine{00126\ \ \ \}}
+\DoxyCodeLine{00127\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00128\ \}}
+\DoxyCodeLine{00129\ }
+\DoxyCodeLine{00133\ TrueClock::}
+\DoxyCodeLine{00134\ TrueClock()\ \{}
+\DoxyCodeLine{00135\ \ \ \_error\_count\ =\ 0;}
+\DoxyCodeLine{00136\ \ \ \_has\_high\_res\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ \_time\_scale\ =\ 1.0;}
+\DoxyCodeLine{00139\ \ \ \_time\_offset\ =\ 0.0;}
+\DoxyCodeLine{00140\ \ \ \_tod\_offset\ =\ 0.0;}
+\DoxyCodeLine{00141\ \ \ \_time\_scale\_changed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00142\ \ \ \_last\_reported\_time\_scale\ =\ 1.0;}
+\DoxyCodeLine{00143\ \ \ \_report\_time\_scale\_time\ =\ 0.0;}
+\DoxyCodeLine{00144\ }
+\DoxyCodeLine{00145\ \ \ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}\ lock\_to\_one\_cpu}
+\DoxyCodeLine{00146\ \ \ \ \ (\textcolor{stringliteral}{"{}lock-\/to-\/one-\/cpu"{}},\ \textcolor{keyword}{false},}
+\DoxyCodeLine{00147\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}Set\ this\ to\ true\ if\ you\ want\ the\ entire\ process\ to\ use\ one\ "{}}}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}CPU,\ even\ on\ multi-\/core\ and\ multi-\/CPU\ workstations.\ This\ is\ "{}}}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}mainly\ a\ hack\ to\ solve\ a\ bug\ in\ which\ QueryPerformanceCounter\ "{}}}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}returns\ inconsistent\ results\ on\ multi-\/core\ machines.\ "{}}));}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00152\ \ \ \textcolor{keywordflow}{if}\ (lock\_to\_one\_cpu)\ \{}
+\DoxyCodeLine{00153\ \ \ \ \ set\_cpu\_affinity(0x01);}
+\DoxyCodeLine{00154\ \ \ \}}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00156\ \ \ \textcolor{keywordflow}{if}\ (get\_use\_high\_res\_clock())\ \{}
+\DoxyCodeLine{00157\ \ \ \ \ int64\_t\ int\_frequency;}
+\DoxyCodeLine{00158\ \ \ \ \ \_has\_high\_res\ =}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ (QueryPerformanceFrequency((LARGE\_INTEGER\ *)\&int\_frequency)\ !=\ 0);}
+\DoxyCodeLine{00160\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_has\_high\_res)\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (int\_frequency\ <=\ 0)\ \{}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ clock\_cat.error()}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}TrueClock::get\_real\_time()\ -\/\ frequency\ is\ negative!"{}}\ <<\ std::endl;}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ \_has\_high\_res\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00165\ }
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \_frequency\ =\ (double)int\_frequency;}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \_recip\_frequency\ =\ 1.0\ /\ \_frequency;}
+\DoxyCodeLine{00169\ }
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ QueryPerformanceCounter((LARGE\_INTEGER\ *)\&\_init\_count);}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00172\ \ \ \ \ \}}
+\DoxyCodeLine{00173\ \ \ \}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00175\ \ \ \textcolor{comment}{//\ Also\ store\ the\ initial\ tick\ count.\ \ We'll\ need\ this\ for\ get\_long\_time(),}}
+\DoxyCodeLine{00176\ \ \ \textcolor{comment}{//\ as\ well\ as\ for\ get\_short\_time()\ if\ we're\ not\ using\ the\ high\ resolution}}
+\DoxyCodeLine{00177\ \ \ \textcolor{comment}{//\ clock.}}
+\DoxyCodeLine{00178\ \ \ \_init\_tc\ =\ GetTickCount();}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00180\ \ \ \textcolor{comment}{//\ And\ we\ will\ need\ the\ current\ time\ of\ day\ to\ cross-\/check\ either\ of\ the}}
+\DoxyCodeLine{00181\ \ \ \textcolor{comment}{//\ above\ clocks\ if\ paranoid-\/clock\ is\ enabled.}}
+\DoxyCodeLine{00182\ \ \ GetSystemTimeAsFileTime((FILETIME\ *)\&\_init\_tod);}
+\DoxyCodeLine{00183\ }
+\DoxyCodeLine{00184\ \ \ \_chase\_clock\ =\ CC\_keep\_even;}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00186\ \ \ \textcolor{comment}{//\ In\ case\ we'll\ be\ cross-\/checking\ the\ clock,\ we'd\ better\ start\ out\ with\ at}}
+\DoxyCodeLine{00187\ \ \ \textcolor{comment}{//\ least\ one\ timestamp,\ so\ we'll\ know\ if\ the\ clock\ jumps\ just\ after\ startup.}}
+\DoxyCodeLine{00188\ \ \ \_timestamps.push\_back(Timestamp(0.0,\ 0.0));}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00190\ \ \ \textcolor{keywordflow}{if}\ (!\_has\_high\_res)\ \{}
+\DoxyCodeLine{00191\ \ \ \ \ clock\_cat.warning()}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ high\ resolution\ clock\ available."{}}\ <<\ std::endl;}
+\DoxyCodeLine{00193\ \ \ \}}
+\DoxyCodeLine{00194\ \}}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00214\ \textcolor{keywordtype}{double}\ TrueClock::}
+\DoxyCodeLine{00215\ correct\_time(\textcolor{keywordtype}{double}\ time)\ \{}
+\DoxyCodeLine{00216\ \ \ \textcolor{comment}{//\ First,\ get\ the\ current\ time\ of\ day\ measurement.}}
+\DoxyCodeLine{00217\ \ \ uint64\_t\ int\_tod;}
+\DoxyCodeLine{00218\ \ \ GetSystemTimeAsFileTime((FILETIME\ *)\&int\_tod);}
+\DoxyCodeLine{00219\ \ \ \textcolor{keywordtype}{double}\ tod\ =\ (double)(int\_tod\ -\/\ \_init\_tod)\ *\ \_00000001;}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00221\ \ \ nassertr(!\_timestamps.empty(),\ time);}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00223\ \ \ \textcolor{comment}{//\ Make\ sure\ we\ didn't\ experience\ a\ sudden\ jump\ from\ the\ last\ measurement.}}
+\DoxyCodeLine{00224\ \ \ \textcolor{keywordtype}{double}\ time\_delta\ =\ (time\ -\/\ \_timestamps.back().\_time)\ *\ \_time\_scale;}
+\DoxyCodeLine{00225\ \ \ \textcolor{keywordtype}{double}\ tod\_delta\ =\ (tod\ -\/\ \_timestamps.back().\_tod);}
+\DoxyCodeLine{00226\ }
+\DoxyCodeLine{00227\ \ \ \textcolor{keywordflow}{if}\ (time\_delta\ <\ -\/0.0001\ ||}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ fabs(time\_delta\ -\/\ tod\_delta)\ >\ paranoid\_clock\_jump\_error)\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ \textcolor{comment}{//\ A\ step\ backward\ in\ the\ high-\/precision\ clock,\ or\ more\ than\ a\ small\ jump}}
+\DoxyCodeLine{00230\ \ \ \ \ \textcolor{comment}{//\ on\ only\ one\ of\ the\ clocks,\ is\ cause\ for\ alarm.\ \ We\ allow\ a\ trivial\ step}}
+\DoxyCodeLine{00231\ \ \ \ \ \textcolor{comment}{//\ backward\ in\ the\ high-\/precision\ clock,\ since\ this\ does\ appear\ to\ happen}}
+\DoxyCodeLine{00232\ \ \ \ \ \textcolor{comment}{//\ in\ a\ threaded\ environment.}}
+\DoxyCodeLine{00233\ }
+\DoxyCodeLine{00234\ \ \ \ \ \textcolor{keywordflow}{if}\ (clock\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ clock\_cat.debug()}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Clock\ error\ detected;\ elapsed\ time\ "{}}\ <<\ time\_delta}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}s\ on\ high-\/resolution\ counter,\ and\ "{}}\ <<\ tod\_delta}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}s\ on\ time-\/of-\/day\ clock.\(\backslash\)n"{}};}
+\DoxyCodeLine{00239\ \ \ \ \ \}}
+\DoxyCodeLine{00240\ \ \ \ \ ++\_error\_count;}
+\DoxyCodeLine{00241\ }
+\DoxyCodeLine{00242\ \ \ \ \ \textcolor{comment}{//\ If\ both\ are\ negative,\ we\ call\ it\ 0.\ \ If\ one\ is\ negative,\ we\ trust\ the}}
+\DoxyCodeLine{00243\ \ \ \ \ \textcolor{comment}{//\ other\ one\ (up\ to\ paranoid\_clock\_jump\_error).\ \ If\ both\ are\ nonnegative,}}
+\DoxyCodeLine{00244\ \ \ \ \ \textcolor{comment}{//\ we\ trust\ the\ smaller\ of\ the\ two.}}
+\DoxyCodeLine{00245\ \ \ \ \ \textcolor{keywordtype}{double}\ time\_adjust\ =\ 0.0;}
+\DoxyCodeLine{00246\ \ \ \ \ \textcolor{keywordtype}{double}\ tod\_adjust\ =\ 0.0;}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{keywordflow}{if}\ (time\_delta\ <\ 0.0\ \&\&\ tod\ <\ 0.0)\ \{}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \textcolor{comment}{//\ Trust\ neither.}}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ time\_adjust\ =\ -\/time\_delta;}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ tod\_adjust\ =\ -\/tod\_delta;}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (time\_delta\ <\ 0.0\ ||\ (tod\_delta\ >=\ 0.0\ \&\&\ tod\_delta\ <\ time\_delta))\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \textcolor{comment}{//\ Trust\ tod,\ up\ to\ a\ point.}}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ new\_tod\_delta\ =\ min(tod\_delta,\ paranoid\_clock\_jump\_error);}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ time\_adjust\ =\ new\_tod\_delta\ -\/\ time\_delta;}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ tod\_adjust\ =\ new\_tod\_delta\ -\/\ tod\_delta;}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \textcolor{comment}{//\ Trust\ time,\ up\ to\ a\ point.}}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ new\_time\_delta\ =\ min(time\_delta,\ paranoid\_clock\_jump\_error);}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ time\_adjust\ =\ new\_time\_delta\ -\/\ time\_delta;}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ tod\_adjust\ =\ new\_time\_delta\ -\/\ tod\_delta;}
+\DoxyCodeLine{00264\ \ \ \ \ \}}
+\DoxyCodeLine{00265\ }
+\DoxyCodeLine{00266\ \ \ \ \ \_time\_offset\ +=\ time\_adjust;}
+\DoxyCodeLine{00267\ \ \ \ \ time\_delta\ +=\ time\_adjust;}
+\DoxyCodeLine{00268\ \ \ \ \ \_tod\_offset\ +=\ tod\_adjust;}
+\DoxyCodeLine{00269\ \ \ \ \ tod\_delta\ +=\ tod\_adjust;}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \ \ \ \ \textcolor{comment}{//\ Apply\ the\ adjustments\ to\ the\ timestamp\ queue.\ \ We\ could\ just\ completely}}
+\DoxyCodeLine{00272\ \ \ \ \ \textcolor{comment}{//\ empty\ the\ timestamp\ queue,\ but\ that\ makes\ it\ hard\ to\ catch\ up\ if\ we\ are}}
+\DoxyCodeLine{00273\ \ \ \ \ \textcolor{comment}{//\ getting\ lots\ of\ these\ "{}momentary"{}\ errors\ in\ a\ row.}}
+\DoxyCodeLine{00274\ \ \ \ \ Timestamps::iterator\ ti;}
+\DoxyCodeLine{00275\ \ \ \ \ \textcolor{keywordflow}{for}\ (ti\ =\ \_timestamps.begin();\ ti\ !=\ \_timestamps.end();\ ++ti)\ \{}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ (*ti).\_time\ -\/=\ time\_adjust\ /\ \_time\_scale;}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ (*ti).\_tod\ -\/=\ tod\_adjust;}
+\DoxyCodeLine{00278\ \ \ \ \ \}}
+\DoxyCodeLine{00279\ }
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{comment}{//\ And\ now\ we\ can\ record\ this\ timestamp,\ which\ is\ now\ consistent\ with\ the}}
+\DoxyCodeLine{00281\ \ \ \ \ \textcolor{comment}{//\ previous\ timestamps\ in\ the\ queue.}}
+\DoxyCodeLine{00282\ \ \ \ \ \_timestamps.push\_back(Timestamp(time,\ tod));}
+\DoxyCodeLine{00283\ }
+\DoxyCodeLine{00284\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00285\ \textcolor{comment}{\ *\ Detecting\ and\ filtering\ this\ kind\ of\ momentary\ error\ can\ help\ protect\ us}}
+\DoxyCodeLine{00286\ \textcolor{comment}{\ *\ from\ legitimate\ problems\ cause\ by\ OS\ or\ BIOS\ bugs\ (which\ might\ introduce}}
+\DoxyCodeLine{00287\ \textcolor{comment}{\ *\ errors\ into\ the\ high\ precision\ clock),\ or\ from\ sudden\ changes\ to\ the\ time-\/}}
+\DoxyCodeLine{00288\ \textcolor{comment}{\ *\ of-\/day\ by\ the\ user,\ but\ we\ have\ to\ be\ careful\ because\ if\ the\ user\ uses\ a}}
+\DoxyCodeLine{00289\ \textcolor{comment}{\ *\ Speed\ Gear-\/type\ program\ to\ speed\ up\ the\ clock\ by\ an\ extreme\ amount,\ it\ can}}
+\DoxyCodeLine{00290\ \textcolor{comment}{\ *\ look\ like\ a\ lot\ of\ such\ "{}momentary"{}\ errors\ in\ a\ row-\/-\/and\ if\ we\ throw\ them}}
+\DoxyCodeLine{00291\ \textcolor{comment}{\ *\ all\ out,\ we\ won't\ compute\ \_time\_scale\ correctly.\ \ To\ avoid\ this,\ we\ hack}}
+\DoxyCodeLine{00292\ \textcolor{comment}{\ *\ \_time\_scale\ here\ if\ we\ seem\ to\ be\ getting\ out\ of\ sync.}}
+\DoxyCodeLine{00293\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00294\ \ \ \ \ \textcolor{keywordtype}{double}\ corrected\_time\ =\ time\ *\ \_time\_scale\ +\ \_time\_offset;}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordtype}{double}\ corrected\_tod\ =\ tod\ +\ \_tod\_offset;}
+\DoxyCodeLine{00296\ \ \ \ \ \textcolor{keywordflow}{if}\ (corrected\_time\ -\/\ corrected\_tod\ >\ paranoid\_clock\_jump\_error\_max\_delta\ \&\&}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \ \ \_time\_scale\ >\ 0.00001)\ \{}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ clock\_cat.info()}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Force-\/adjusting\ time\_scale\ to\ catch\ up\ to\ errors.\(\backslash\)n"{}};}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ set\_time\_scale(time,\ \_time\_scale\ *\ 0.5);}
+\DoxyCodeLine{00301\ \ \ \ \ \}}
+\DoxyCodeLine{00302\ }
+\DoxyCodeLine{00303\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (tod\_delta\ <\ 0.0)\ \{}
+\DoxyCodeLine{00304\ \ \ \ \ \textcolor{comment}{//\ A\ small\ backwards\ jump\ on\ the\ time-\/of-\/day\ clock\ is\ not\ a\ concern,\ since}}
+\DoxyCodeLine{00305\ \ \ \ \ \textcolor{comment}{//\ this\ is\ technically\ allowed\ with\ ntp\ enabled.\ \ We\ simply\ ignore\ the}}
+\DoxyCodeLine{00306\ \ \ \ \ \textcolor{comment}{//\ event.}}
+\DoxyCodeLine{00307\ }
+\DoxyCodeLine{00308\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{comment}{//\ Ok,\ we\ don't\ think\ there\ was\ a\ sudden\ jump,\ so\ carry\ on.}}
+\DoxyCodeLine{00310\ }
+\DoxyCodeLine{00311\ \ \ \ \ \textcolor{comment}{//\ The\ timestamp\ queue\ here\ records\ the\ measured\ timestamps\ over\ the\ past}}
+\DoxyCodeLine{00312\ \ \ \ \ \textcolor{comment}{//\ \_priority\_interval\ seconds.\ \ Its\ main\ purpose\ is\ to\ keep\ a\ running}}
+\DoxyCodeLine{00313\ \ \ \ \ \textcolor{comment}{//\ observation\ of\ \_time\_scale,\ so\ we\ can\ detect\ runtime\ changes\ of\ the}}
+\DoxyCodeLine{00314\ \ \ \ \ \textcolor{comment}{//\ clock's\ scale,\ for\ instance\ if\ the\ user\ is\ using\ a\ program\ like\ Speed}}
+\DoxyCodeLine{00315\ \ \ \ \ \textcolor{comment}{//\ Gear\ and\ pulls\ the\ slider\ during\ runtime.}}
+\DoxyCodeLine{00316\ }
+\DoxyCodeLine{00317\ \ \ \ \ \textcolor{comment}{//\ Consider\ the\ oldest\ timestamp\ in\ our\ queue.}}
+\DoxyCodeLine{00318\ \ \ \ \ Timestamp\ oldest\ =\ \_timestamps.front();}
+\DoxyCodeLine{00319\ \ \ \ \ \textcolor{keywordtype}{double}\ time\_age\ =\ (time\ -\/\ oldest.\_time);}
+\DoxyCodeLine{00320\ \ \ \ \ \textcolor{keywordtype}{double}\ tod\_age\ =\ (tod\ -\/\ oldest.\_tod);}
+\DoxyCodeLine{00321\ }
+\DoxyCodeLine{00322\ \ \ \ \ \textcolor{keywordtype}{double}\ keep\_interval\ =\ paranoid\_clock\_interval;}
+\DoxyCodeLine{00323\ }
+\DoxyCodeLine{00324\ \ \ \ \ \textcolor{keywordflow}{if}\ (tod\_age\ >\ keep\_interval\ /\ 2.0\ \&\&\ time\_age\ >\ 0.0)\ \{}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \textcolor{comment}{//\ Adjust\ the\ \_time\_scale\ value\ to\ match\ the\ ratio\ between\ the\ elapsed}}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \textcolor{comment}{//\ time\ on\ the\ high-\/resolution\ clock,\ and\ the\ time-\/of-\/day\ clock.}}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ new\_time\_scale\ =\ tod\_age\ /\ time\_age;}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \textcolor{comment}{//\ When\ we\ adjust\ \_time\_scale,\ we\ have\ to\ be\ careful\ to\ adjust}}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \textcolor{comment}{//\ \_time\_offset\ at\ the\ same\ time,\ so\ we\ don't\ introduce\ a\ sudden\ jump\ in}}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \textcolor{comment}{//\ time.}}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ set\_time\_scale(time,\ new\_time\_scale);}
+\DoxyCodeLine{00333\ }
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \textcolor{comment}{//\ Check\ to\ see\ if\ the\ time\ scale\ has\ changed\ significantly\ since\ we}}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \textcolor{comment}{//\ last\ reported\ it.}}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ ratio\ =\ \_time\_scale\ /\ \_last\_reported\_time\_scale;}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (fabs(ratio\ -\/\ 1.0)\ >\ paranoid\_clock\_report\_scale\_factor)\ \{}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ \_time\_scale\_changed\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ \_last\_reported\_time\_scale\ =\ \_time\_scale;}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Actually\ report\ it\ a\ little\ bit\ later,\ to\ give\ the\ time\ scale\ a}}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ chance\ to\ settle\ down.}}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ \_report\_time\_scale\_time\ =\ tod\ +\ \_tod\_offset\ +\ keep\_interval;}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (clock\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \ \ \ \ clock\_cat.debug()}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Will\ report\ time\ scale,\ now\ "{}}\ <<\ 100.0\ /\ \_time\_scale}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\%,\ tod\_age\ =\ "{}}\ <<\ tod\_age\ <<\ \textcolor{stringliteral}{"{},\ time\_age\ =\ "{}}\ <<\ time\_age}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ ratio\ =\ "{}}\ <<\ ratio\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00350\ \ \ \ \ \}}
+\DoxyCodeLine{00351\ }
+\DoxyCodeLine{00352\ \ \ \ \ \textcolor{comment}{//\ Clean\ out\ old\ entries\ in\ the\ timestamps\ queue.}}
+\DoxyCodeLine{00353\ \ \ \ \ \textcolor{keywordflow}{if}\ (tod\_age\ >\ keep\_interval)\ \{}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (!\_timestamps.empty()\ \&\&}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ \ \ \ \ \ tod\ -\/\ \_timestamps.front().\_tod\ >\ keep\_interval)\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \_timestamps.pop\_front();}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00358\ \ \ \ \ \}}
+\DoxyCodeLine{00359\ }
+\DoxyCodeLine{00360\ \ \ \ \ \textcolor{comment}{//\ Record\ this\ timestamp.}}
+\DoxyCodeLine{00361\ \ \ \ \ \_timestamps.push\_back(Timestamp(time,\ tod));}
+\DoxyCodeLine{00362\ \ \ \}}
+\DoxyCodeLine{00363\ }
+\DoxyCodeLine{00364\ \ \ \textcolor{keywordtype}{double}\ corrected\_time\ =\ time\ *\ \_time\_scale\ +\ \_time\_offset;}
+\DoxyCodeLine{00365\ \ \ \textcolor{keywordtype}{double}\ corrected\_tod\ =\ tod\ +\ \_tod\_offset;}
+\DoxyCodeLine{00366\ }
+\DoxyCodeLine{00367\ \ \ \textcolor{keywordflow}{if}\ (\_time\_scale\_changed\ \&\&\ corrected\_tod\ >=\ \_report\_time\_scale\_time)\ \{}
+\DoxyCodeLine{00368\ \ \ \ \ \textcolor{keywordtype}{double}\ percent\ =\ 100.0\ /\ \_time\_scale;}
+\DoxyCodeLine{00369\ \ \ \ \ \textcolor{comment}{//\ Round\ percent\ to\ the\ nearest\ 5\%\ to\ reduce\ confusion\ in\ the\ logs.}}
+\DoxyCodeLine{00370\ \ \ \ \ percent\ =\ floor(percent\ /\ 20.0\ +\ 0.5)\ *\ 20.0;}
+\DoxyCodeLine{00371\ \ \ \ \ clock\_cat.info()}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Clock\ appears\ to\ be\ running\ at\ "{}}\ <<\ percent\ <<\ \textcolor{stringliteral}{"{}\%\ real\ time.\(\backslash\)n"{}};}
+\DoxyCodeLine{00373\ \ \ \ \ \_last\_reported\_time\_scale\ =\ \_time\_scale;}
+\DoxyCodeLine{00374\ \ \ \ \ \_time\_scale\_changed\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00375\ \ \ \}}
+\DoxyCodeLine{00376\ }
+\DoxyCodeLine{00377\ \ \ \textcolor{comment}{//\ By\ the\ time\ we\ get\ here,\ we\ have\ a\ corrected\_time\ and\ a\ corrected\_tod}}
+\DoxyCodeLine{00378\ \ \ \textcolor{comment}{//\ value,\ both\ of\ which\ should\ be\ advancing\ at\ about\ the\ same\ rate.}}
+\DoxyCodeLine{00379\ \ \ \textcolor{comment}{//\ However,\ there\ might\ be\ accumulated\ skew\ between\ them,\ since\ there\ is}}
+\DoxyCodeLine{00380\ \ \ \textcolor{comment}{//\ some\ lag\ in\ the\ above\ algorithm\ that\ corrects\ the\ \_time\_scale,\ and\ clock}}
+\DoxyCodeLine{00381\ \ \ \textcolor{comment}{//\ skew\ can\ accumulate\ while\ the\ algorithm\ is\ catching\ up.}}
+\DoxyCodeLine{00382\ }
+\DoxyCodeLine{00383\ \ \ \textcolor{comment}{//\ Therefore,\ we\ have\ one\ more\ line\ of\ defense:\ we\ check\ at\ this\ point\ for}}
+\DoxyCodeLine{00384\ \ \ \textcolor{comment}{//\ skew,\ and\ correct\ for\ it\ by\ slowing\ the\ clock\ down\ or\ speeding\ it\ up\ a}}
+\DoxyCodeLine{00385\ \ \ \textcolor{comment}{//\ bit\ as\ needed,\ until\ we\ even\ out\ the\ clocks\ again.\ \ Rather\ than\ adjusting}}
+\DoxyCodeLine{00386\ \ \ \textcolor{comment}{//\ the\ clock\ speed\ with\ \_time\_scale\ here,\ we\ simply\ slide\ \_time\_offset}}
+\DoxyCodeLine{00387\ \ \ \textcolor{comment}{//\ forward\ and\ back\ as\ needed-\/-\/that\ way\ we\ don't\ interfere\ with\ the\ above}}
+\DoxyCodeLine{00388\ \ \ \textcolor{comment}{//\ algorithm,\ which\ is\ trying\ to\ compute\ \_time\_scale\ accurately.}}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \textcolor{keywordflow}{switch}\ (\_chase\_clock)\ \{}
+\DoxyCodeLine{00391\ \ \ \textcolor{keywordflow}{case}\ CC\_slow\_down:}
+\DoxyCodeLine{00392\ \ \ \ \ \textcolor{keywordflow}{if}\ (corrected\_time\ <\ corrected\_tod)\ \{}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ caught\ up.}}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \_chase\_clock\ =\ CC\_keep\_even;}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (clock\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ clock\_cat.debug()}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Clock\ back\ down\ to\ real\ time.\(\backslash\)n"{}};}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Let's\ report\ the\ clock\ error\ now,\ so\ an\ app\ can\ resync\ now\ that}}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ we're\ at\ a\ good\ time.}}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ ++\_error\_count;}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00402\ }
+\DoxyCodeLine{00403\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \textcolor{comment}{//\ Slow\ down\ the\ clock\ by\ sliding\ the\ offset\ a\ bit\ backward.}}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ fixup\ =\ 1.0\ -\/\ (1.0\ /\ (corrected\_time\ -\/\ corrected\_tod));}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ correction\ =\ time\_delta\ *\ max(fixup,\ paranoid\_clock\_chase\_factor);}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \_time\_offset\ -\/=\ correction;}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ corrected\_time\ -\/=\ correction;}
+\DoxyCodeLine{00409\ \ \ \ \ \}}
+\DoxyCodeLine{00410\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00411\ }
+\DoxyCodeLine{00412\ \ \ \textcolor{keywordflow}{case}\ CC\_keep\_even:}
+\DoxyCodeLine{00413\ \ \ \ \ \textcolor{keywordflow}{if}\ ((corrected\_tod\ -\/\ corrected\_time)\ >\ paranoid\_clock\_chase\_threshold)\ \{}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \textcolor{comment}{//\ Oops,\ we're\ dropping\ behind;\ need\ to\ speed\ up.}}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \_chase\_clock\ =\ CC\_speed\_up;}
+\DoxyCodeLine{00416\ }
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (clock\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ clock\_cat.debug()}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Clock\ is\ behind\ by\ "{}}\ <<\ (corrected\_tod\ -\/\ corrected\_time)}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}s;\ speeding\ up\ to\ correct.\(\backslash\)n"{}};}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00422\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((corrected\_time\ -\/\ corrected\_tod)\ >\ paranoid\_clock\_chase\_threshold)\ \{}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \textcolor{comment}{//\ Oops,\ we're\ going\ too\ fast;\ need\ to\ slow\ down.}}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ \_chase\_clock\ =\ CC\_slow\_down;}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (clock\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \ \ clock\_cat.debug()}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Clock\ is\ ahead\ by\ "{}}\ <<\ (corrected\_time\ -\/\ corrected\_tod)}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}s;\ slowing\ down\ to\ correct.\(\backslash\)n"{}};}
+\DoxyCodeLine{00430\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00431\ \ \ \ \ \}}
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00433\ }
+\DoxyCodeLine{00434\ \ \ \textcolor{keywordflow}{case}\ CC\_speed\_up:}
+\DoxyCodeLine{00435\ \ \ \ \ \textcolor{keywordflow}{if}\ (corrected\_time\ >\ corrected\_tod)\ \{}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \textcolor{comment}{//\ We\ caught\ up.}}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \_chase\_clock\ =\ CC\_keep\_even;}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (clock\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \ \ clock\_cat.debug()}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Clock\ back\ up\ to\ real\ time.\(\backslash\)n"{}};}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Let's\ report\ the\ clock\ error\ now,\ so\ an\ app\ can\ resync\ now\ that}}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ we're\ at\ a\ good\ time.}}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \ \ ++\_error\_count;}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00445\ }
+\DoxyCodeLine{00446\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \textcolor{comment}{//\ Speed\ up\ the\ clock\ by\ sliding\ the\ offset\ a\ bit\ forward.}}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ fixup\ =\ 1.0\ -\/\ (1.0\ /\ (corrected\_tod\ -\/\ corrected\_time));}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ correction\ =\ time\_delta\ *\ max(fixup,\ paranoid\_clock\_chase\_factor);}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \_time\_offset\ +=\ correction;}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ corrected\_time\ +=\ correction;}
+\DoxyCodeLine{00452\ \ \ \ \ \}}
+\DoxyCodeLine{00453\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00454\ \ \ \}}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00456\ \ \ \textcolor{keywordflow}{if}\ (clock\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00457\ \ \ \ \ clock\_cat.spam()}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}time\ "{}}\ <<\ time\ <<\ \textcolor{stringliteral}{"{}\ tod\ "{}}\ <<\ corrected\_tod}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ corrected\ time\ "{}}\ <<\ corrected\_time\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00460\ \ \ \}}
+\DoxyCodeLine{00461\ }
+\DoxyCodeLine{00462\ \ \ \textcolor{keywordflow}{return}\ corrected\_time;}
+\DoxyCodeLine{00463\ \}}
+\DoxyCodeLine{00464\ }
+\DoxyCodeLine{00469\ \textcolor{keywordtype}{void}\ TrueClock::}
+\DoxyCodeLine{00470\ set\_time\_scale(\textcolor{keywordtype}{double}\ time,\ \textcolor{keywordtype}{double}\ new\_time\_scale)\ \{}
+\DoxyCodeLine{00471\ \ \ nassertv(new\_time\_scale\ >\ 0.0);}
+\DoxyCodeLine{00472\ \ \ \_time\_offset\ =\ time\ *\ \_time\_scale\ +\ \_time\_offset\ -\/\ (time\ *\ new\_time\_scale);}
+\DoxyCodeLine{00473\ \ \ \_time\_scale\ =\ new\_time\_scale;}
+\DoxyCodeLine{00474\ \}}
+\DoxyCodeLine{00475\ }
+\DoxyCodeLine{00476\ \textcolor{preprocessor}{\#elif\ defined(\_\_EMSCRIPTEN\_\_)}}
+\DoxyCodeLine{00477\ }
+\DoxyCodeLine{00483\ \textcolor{preprocessor}{\#include\ <emscripten.h>}}
+\DoxyCodeLine{00484\ }
+\DoxyCodeLine{00488\ \textcolor{keywordtype}{double}\ TrueClock::}
+\DoxyCodeLine{00489\ get\_long\_time()\ \{}
+\DoxyCodeLine{00490\ \ \ \textcolor{keywordflow}{return}\ emscripten\_get\_now()\ *\ 0.001;}
+\DoxyCodeLine{00491\ \}}
+\DoxyCodeLine{00492\ }
+\DoxyCodeLine{00496\ \textcolor{keywordtype}{double}\ TrueClock::}
+\DoxyCodeLine{00497\ get\_short\_raw\_time()\ \{}
+\DoxyCodeLine{00498\ \ \ \textcolor{keywordflow}{return}\ emscripten\_get\_now()\ *\ 0.001;}
+\DoxyCodeLine{00499\ \}}
+\DoxyCodeLine{00500\ }
+\DoxyCodeLine{00504\ \textcolor{keywordtype}{bool}\ TrueClock::}
+\DoxyCodeLine{00505\ set\_cpu\_affinity(uint32\_t\ mask)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00506\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00507\ \}}
+\DoxyCodeLine{00508\ }
+\DoxyCodeLine{00512\ TrueClock::}
+\DoxyCodeLine{00513\ TrueClock()\ \{}
+\DoxyCodeLine{00514\ \}}
+\DoxyCodeLine{00515\ }
+\DoxyCodeLine{00516\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ !\_WIN32}}
+\DoxyCodeLine{00517\ }
+\DoxyCodeLine{00518\ \textcolor{comment}{//\ The\ Posix\ implementation.}}
+\DoxyCodeLine{00519\ }
+\DoxyCodeLine{00520\ \textcolor{preprocessor}{\#include\ <sys/time.h>}}
+\DoxyCodeLine{00521\ \textcolor{preprocessor}{\#include\ <stdio.h>}\ \ \textcolor{comment}{//\ for\ perror}}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00523\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{long}\ \_init\_sec;}
+\DoxyCodeLine{00524\ \textcolor{keyword}{static}\ time\_t\ \_init\_sec\_monotonic\ =\ 0;}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00529\ \textcolor{keywordtype}{double}\ TrueClock::}
+\DoxyCodeLine{00530\ get\_long\_time()\ \{}
+\DoxyCodeLine{00531\ \ \ \textcolor{keyword}{struct\ }timeval\ tv;}
+\DoxyCodeLine{00532\ }
+\DoxyCodeLine{00533\ \ \ \textcolor{keywordtype}{int}\ result;}
+\DoxyCodeLine{00534\ }
+\DoxyCodeLine{00535\ \textcolor{preprocessor}{\#ifdef\ GETTIMEOFDAY\_ONE\_PARAM}}
+\DoxyCodeLine{00536\ \ \ result\ =\ gettimeofday(\&tv);}
+\DoxyCodeLine{00537\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00538\ \ \ result\ =\ gettimeofday(\&tv,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00539\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00540\ }
+\DoxyCodeLine{00541\ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00542\ \ \ \ \ \textcolor{comment}{//\ Error\ in\ gettimeofday().}}
+\DoxyCodeLine{00543\ \ \ \ \ \textcolor{keywordflow}{return}\ 0.0;}
+\DoxyCodeLine{00544\ \ \ \}}
+\DoxyCodeLine{00545\ }
+\DoxyCodeLine{00546\ \ \ \textcolor{comment}{//\ We\ subtract\ out\ the\ time\ at\ which\ the\ clock\ was\ initialized,\ because\ we}}
+\DoxyCodeLine{00547\ \ \ \textcolor{comment}{//\ don't\ care\ about\ the\ number\ of\ seconds\ all\ the\ way\ back\ to\ 1970,\ and\ we}}
+\DoxyCodeLine{00548\ \ \ \textcolor{comment}{//\ want\ to\ leave\ the\ double\ with\ as\ much\ precision\ as\ it\ can\ get.}}
+\DoxyCodeLine{00549\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{double})(tv.tv\_sec\ -\/\ \_init\_sec)\ +\ (\textcolor{keywordtype}{double})tv.tv\_usec\ /\ 1000000.0;}
+\DoxyCodeLine{00550\ \}}
+\DoxyCodeLine{00551\ }
+\DoxyCodeLine{00555\ \textcolor{keywordtype}{double}\ TrueClock::}
+\DoxyCodeLine{00556\ get\_short\_raw\_time()\ \{}
+\DoxyCodeLine{00557\ \textcolor{preprocessor}{\#if\ defined(CLOCK\_MONOTONIC)\ \&\&\ !defined(\_\_APPLE\_\_)}}
+\DoxyCodeLine{00558\ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structtimespec}{timespec}}\ spec;}
+\DoxyCodeLine{00559\ \ \ \textcolor{keywordflow}{if}\ (clock\_gettime(CLOCK\_MONOTONIC,\ \&spec)\ ==\ 0)\ \{}
+\DoxyCodeLine{00560\ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{double})(spec.tv\_sec\ -\/\ \_init\_sec\_monotonic)\ +\ (\textcolor{keywordtype}{double})spec.tv\_nsec\ /\ 1000000000.0;}
+\DoxyCodeLine{00561\ \ \ \}}
+\DoxyCodeLine{00562\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00563\ \ \ \textcolor{keywordflow}{return}\ get\_long\_time();}
+\DoxyCodeLine{00564\ \}}
+\DoxyCodeLine{00565\ }
+\DoxyCodeLine{00569\ \textcolor{keywordtype}{bool}\ TrueClock::}
+\DoxyCodeLine{00570\ set\_cpu\_affinity(uint32\_t\ mask)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00571\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00572\ \}}
+\DoxyCodeLine{00573\ }
+\DoxyCodeLine{00577\ TrueClock::}
+\DoxyCodeLine{00578\ TrueClock()\ \{}
+\DoxyCodeLine{00579\ \ \ \_error\_count\ =\ 0;}
+\DoxyCodeLine{00580\ \ \ \textcolor{keyword}{struct\ }timeval\ tv;}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ \textcolor{keywordtype}{int}\ result;}
+\DoxyCodeLine{00583\ \textcolor{preprocessor}{\#ifdef\ GETTIMEOFDAY\_ONE\_PARAM}}
+\DoxyCodeLine{00584\ \ \ result\ =\ gettimeofday(\&tv);}
+\DoxyCodeLine{00585\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00586\ \ \ result\ =\ gettimeofday(\&tv,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00587\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00588\ }
+\DoxyCodeLine{00589\ \ \ \textcolor{keywordflow}{if}\ (result\ <\ 0)\ \{}
+\DoxyCodeLine{00590\ \ \ \ \ perror(\textcolor{stringliteral}{"{}gettimeofday"{}});}
+\DoxyCodeLine{00591\ \ \ \ \ \_init\_sec\ =\ 0;}
+\DoxyCodeLine{00592\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00593\ \ \ \ \ \_init\_sec\ =\ tv.tv\_sec;}
+\DoxyCodeLine{00594\ \ \ \}}
+\DoxyCodeLine{00595\ }
+\DoxyCodeLine{00596\ \textcolor{preprocessor}{\#if\ defined(CLOCK\_MONOTONIC)\ \&\&\ !defined(\_\_APPLE\_\_)}}
+\DoxyCodeLine{00597\ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structtimespec}{timespec}}\ spec;}
+\DoxyCodeLine{00598\ \ \ \textcolor{keywordflow}{if}\ (clock\_gettime(CLOCK\_MONOTONIC,\ \&spec)\ ==\ 0)\ \{}
+\DoxyCodeLine{00599\ \ \ \ \ \_init\_sec\_monotonic\ =\ spec.tv\_sec;}
+\DoxyCodeLine{00600\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00601\ \ \ \ \ perror(\textcolor{stringliteral}{"{}clock\_gettime(CLOCK\_MONOTONIC)"{}});}
+\DoxyCodeLine{00602\ \ \ \ \ \_init\_sec\_monotonic\ =\ 0;}
+\DoxyCodeLine{00603\ \ \ \}}
+\DoxyCodeLine{00604\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00605\ \}}
+\DoxyCodeLine{00606\ }
+\DoxyCodeLine{00607\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

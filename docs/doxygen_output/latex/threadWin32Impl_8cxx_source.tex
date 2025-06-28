@@ -1,0 +1,269 @@
+\doxysection{thread\+Win32\+Impl.\+cxx}
+\hypertarget{threadWin32Impl_8cxx_source}{}\label{threadWin32Impl_8cxx_source}\index{panda/src/pipeline/threadWin32Impl.cxx@{panda/src/pipeline/threadWin32Impl.cxx}}
+\mbox{\hyperlink{threadWin32Impl_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{threadWin32Impl_8h}{threadWin32Impl.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{selectThreadImpl_8h}{selectThreadImpl.h}}"{}}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#ifdef\ THREAD\_WIN32\_IMPL}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pointerTo_8h}{pointerTo.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pipeline_8h}{config\_pipeline.h}}"{}}}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{windows_8h}{windows.h}}>}}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{keyword}{static}\ \textcolor{keyword}{thread\_local}\ \mbox{\hyperlink{classThread}{Thread}}\ *\_current\_thread\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00026\ \textcolor{keyword}{static}\ \mbox{\hyperlink{classpatomic__flag}{patomic\_flag}}\ \_main\_thread\_known\ =\ ATOMIC\_FLAG\_INIT;}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#ifndef\ CREATE\_WAITABLE\_TIMER\_HIGH\_RESOLUTION}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#define\ CREATE\_WAITABLE\_TIMER\_HIGH\_RESOLUTION\ 0x00000002}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#if\ \_WIN32\_WINNT\ <\ 0x0601}}
+\DoxyCodeLine{00033\ \textcolor{comment}{//\ Requires\ Windows\ 7.}}
+\DoxyCodeLine{00034\ \textcolor{keyword}{static}\ DWORD\ (\_\_stdcall\ *EnableThreadProfiling)(HANDLE,\ DWORD,\ DWORD64,\ HANDLE\ *)\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00035\ \textcolor{keyword}{static}\ DWORD\ (\_\_stdcall\ *DisableThreadProfiling)(HANDLE)\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00036\ \textcolor{keyword}{static}\ DWORD\ (\_\_stdcall\ *ReadThreadProfilingData)(HANDLE,\ DWORD,\ PPERFORMANCE\_DATA\ data)\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}\ init\_thread\_profiling()\ \{}
+\DoxyCodeLine{00039\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}\ inited\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00040\ \ \ \textcolor{keywordflow}{if}\ (!inited)\ \{}
+\DoxyCodeLine{00041\ \ \ \ \ HMODULE\ kernel32\ =\ GetModuleHandleA(\textcolor{stringliteral}{"{}kernel32.dll"{}});}
+\DoxyCodeLine{00042\ \ \ \ \ EnableThreadProfiling\ =\ (\textcolor{keyword}{decltype}(EnableThreadProfiling))GetProcAddress(kernel32,\ \textcolor{stringliteral}{"{}EnableThreadProfiling"{}});}
+\DoxyCodeLine{00043\ \ \ \ \ DisableThreadProfiling\ =\ (\textcolor{keyword}{decltype}(DisableThreadProfiling))GetProcAddress(kernel32,\ \textcolor{stringliteral}{"{}DisableThreadProfiling"{}});}
+\DoxyCodeLine{00044\ \ \ \ \ ReadThreadProfilingData\ =\ (\textcolor{keyword}{decltype}(ReadThreadProfilingData))GetProcAddress(kernel32,\ \textcolor{stringliteral}{"{}ReadThreadProfilingData"{}});}
+\DoxyCodeLine{00045\ \ \ \ \ inited\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00046\ \ \ \}}
+\DoxyCodeLine{00047\ \ \ \textcolor{keywordflow}{return}\ (EnableThreadProfiling\ \&\&\ DisableThreadProfiling\ \&\&\ ReadThreadProfilingData);}
+\DoxyCodeLine{00048\ \}}
+\DoxyCodeLine{00049\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00050\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}\ init\_thread\_profiling()\ \{}
+\DoxyCodeLine{00051\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00052\ \}}
+\DoxyCodeLine{00053\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00060\ \textcolor{keyword}{static}\ \_\_declspec(noinline)\ \mbox{\hyperlink{classThread}{Thread}}\ *}
+\DoxyCodeLine{00061\ init\_current\_thread()\ \{}
+\DoxyCodeLine{00062\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *thread\ =\ \_current\_thread;}
+\DoxyCodeLine{00063\ \ \ \textcolor{keywordflow}{if}\ (!\_main\_thread\_known.test\_and\_set(std::memory\_order\_relaxed))\ \{}
+\DoxyCodeLine{00064\ \ \ \ \ \textcolor{comment}{//\ Assume\ that\ we\ must\ be\ in\ the\ main\ thread,\ since\ this\ method\ must\ be}}
+\DoxyCodeLine{00065\ \ \ \ \ \textcolor{comment}{//\ called\ before\ the\ first\ thread\ is\ spawned.}}
+\DoxyCodeLine{00066\ \ \ \ \ thread\ =\ Thread::get\_main\_thread();}
+\DoxyCodeLine{00067\ \ \ \ \ \_current\_thread\ =\ thread;}
+\DoxyCodeLine{00068\ \ \ \}}
+\DoxyCodeLine{00069\ \ \ \textcolor{comment}{//\ If\ this\ assertion\ triggers,\ you\ are\ making\ Panda\ calls\ from\ a\ thread}}
+\DoxyCodeLine{00070\ \ \ \textcolor{comment}{//\ that\ has\ not\ first\ been\ registered\ using\ Thread::bind\_thread().}}
+\DoxyCodeLine{00071\ \ \ nassertr(thread\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00072\ \ \ \textcolor{keywordflow}{return}\ thread;}
+\DoxyCodeLine{00073\ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00078\ ThreadWin32Impl::}
+\DoxyCodeLine{00079\ \string~ThreadWin32Impl()\ \{}
+\DoxyCodeLine{00080\ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00081\ \ \ \ \ thread\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}Deleting\ thread\ "{}}\ <<\ \_parent\_obj-\/>get\_name()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00082\ \ \ \}}
+\DoxyCodeLine{00083\ }
+\DoxyCodeLine{00084\ \ \ CloseHandle(\_thread);}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00086\ \ \ \textcolor{keywordflow}{if}\ (\_timer\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00087\ \ \ \ \ CloseHandle(\_timer);}
+\DoxyCodeLine{00088\ \ \ \ \ \_timer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00089\ \ \ \}}
+\DoxyCodeLine{00090\ \}}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00096\ \textcolor{keywordtype}{void}\ ThreadWin32Impl::}
+\DoxyCodeLine{00097\ setup\_main\_thread()\ \{}
+\DoxyCodeLine{00098\ \ \ \_status\ =\ S\_running;}
+\DoxyCodeLine{00099\ \}}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00104\ \textcolor{keywordtype}{bool}\ ThreadWin32Impl::}
+\DoxyCodeLine{00105\ start(ThreadPriority\ priority,\ \textcolor{keywordtype}{bool}\ joinable)\ \{}
+\DoxyCodeLine{00106\ \ \ \_mutex.lock();}
+\DoxyCodeLine{00107\ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00108\ \ \ \ \ thread\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}Starting\ "{}}\ <<\ *\_parent\_obj\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00109\ \ \ \}}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ nassertd(\_status\ ==\ S\_new\ \&\&\ \_thread\ ==\ 0)\ \{}
+\DoxyCodeLine{00112\ \ \ \ \ \_mutex.unlock();}
+\DoxyCodeLine{00113\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00114\ \ \ \}}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ \_joinable\ =\ joinable;}
+\DoxyCodeLine{00117\ \ \ \_status\ =\ S\_start\_called;}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ \textcolor{comment}{//\ Increment\ the\ parent\ object's\ reference\ count\ first.\ \ The\ thread\ will}}
+\DoxyCodeLine{00120\ \ \ \textcolor{comment}{//\ eventually\ decrement\ it\ when\ it\ terminates.}}
+\DoxyCodeLine{00121\ \ \ \_parent\_obj-\/>ref();}
+\DoxyCodeLine{00122\ \ \ \_thread\ =}
+\DoxyCodeLine{00123\ \ \ \ \ CreateThread(\textcolor{keyword}{nullptr},\ 0,\ \&root\_func,\ (\textcolor{keywordtype}{void}\ *)\textcolor{keyword}{this},\ 0,\ \&\_thread\_id);}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \textcolor{keywordflow}{if}\ (\_thread\_id\ ==\ 0)\ \{}
+\DoxyCodeLine{00126\ \ \ \ \ \textcolor{comment}{//\ Oops,\ we\ couldn't\ start\ the\ thread.\ \ Be\ sure\ to\ decrement\ the\ reference}}
+\DoxyCodeLine{00127\ \ \ \ \ \textcolor{comment}{//\ count\ we\ incremented\ above,\ and\ return\ false\ to\ indicate\ failure.}}
+\DoxyCodeLine{00128\ \ \ \ \ unref\_delete(\_parent\_obj);}
+\DoxyCodeLine{00129\ \ \ \ \ \_mutex.unlock();}
+\DoxyCodeLine{00130\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00131\ \ \ \}}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \ \ \textcolor{comment}{//\ Thread\ was\ successfully\ started.\ \ Set\ the\ priority\ as\ specified.}}
+\DoxyCodeLine{00134\ \ \ \textcolor{keywordflow}{switch}\ (priority)\ \{}
+\DoxyCodeLine{00135\ \ \ \textcolor{keywordflow}{case}\ TP\_low:}
+\DoxyCodeLine{00136\ \ \ \ \ SetThreadPriority(\_thread,\ THREAD\_PRIORITY\_BELOW\_NORMAL);}
+\DoxyCodeLine{00137\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00139\ \ \ \textcolor{keywordflow}{case}\ TP\_high:}
+\DoxyCodeLine{00140\ \ \ \ \ SetThreadPriority(\_thread,\ THREAD\_PRIORITY\_ABOVE\_NORMAL);}
+\DoxyCodeLine{00141\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00143\ \ \ \textcolor{keywordflow}{case}\ TP\_urgent:}
+\DoxyCodeLine{00144\ \ \ \ \ SetThreadPriority(\_thread,\ THREAD\_PRIORITY\_HIGHEST);}
+\DoxyCodeLine{00145\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00147\ \ \ \textcolor{keywordflow}{case}\ TP\_normal:}
+\DoxyCodeLine{00148\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00149\ \ \ \ \ SetThreadPriority(\_thread,\ THREAD\_PRIORITY\_NORMAL);}
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00151\ \ \ \}}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ \ \ \_mutex.unlock();}
+\DoxyCodeLine{00154\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00155\ \}}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00161\ \textcolor{keywordtype}{void}\ ThreadWin32Impl::}
+\DoxyCodeLine{00162\ join()\ \{}
+\DoxyCodeLine{00163\ \ \ \_mutex.lock();}
+\DoxyCodeLine{00164\ \ \ nassertd(\_joinable\ \&\&\ \_status\ !=\ S\_new)\ \{}
+\DoxyCodeLine{00165\ \ \ \ \ \_mutex.unlock();}
+\DoxyCodeLine{00166\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00167\ \ \ \}}
+\DoxyCodeLine{00168\ }
+\DoxyCodeLine{00169\ \ \ \textcolor{keywordflow}{while}\ (\_status\ !=\ S\_finished)\ \{}
+\DoxyCodeLine{00170\ \ \ \ \ \_cv.wait();}
+\DoxyCodeLine{00171\ \ \ \}}
+\DoxyCodeLine{00172\ \ \ \_mutex.unlock();}
+\DoxyCodeLine{00173\ \}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00178\ std::string\ ThreadWin32Impl::}
+\DoxyCodeLine{00179\ get\_unique\_id()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00180\ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ strm;}
+\DoxyCodeLine{00181\ \ \ strm\ <<\ GetCurrentProcessId()\ <<\ \textcolor{stringliteral}{"{}."{}}\ <<\ \_thread\_id;}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ \ \ \textcolor{keywordflow}{return}\ strm.str();}
+\DoxyCodeLine{00184\ \}}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00189\ \mbox{\hyperlink{classThread}{Thread}}\ *ThreadWin32Impl::}
+\DoxyCodeLine{00190\ get\_current\_thread()\ \{}
+\DoxyCodeLine{00191\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *thread\ =\ \_current\_thread;}
+\DoxyCodeLine{00192\ \ \ \textcolor{keywordflow}{return}\ (thread\ !=\ \textcolor{keyword}{nullptr})\ ?\ thread\ :\ init\_current\_thread();}
+\DoxyCodeLine{00193\ \}}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00200\ \mbox{\hyperlink{classThread}{Thread}}\ *ThreadWin32Impl::}
+\DoxyCodeLine{00201\ bind\_thread(\mbox{\hyperlink{classThread}{Thread}}\ *thread)\ \{}
+\DoxyCodeLine{00202\ \ \ \textcolor{keywordflow}{if}\ (\_current\_thread\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \textcolor{keywordflow}{return}\ \_current\_thread;}
+\DoxyCodeLine{00204\ \ \ \}}
+\DoxyCodeLine{00205\ \ \ \textcolor{keywordflow}{if}\ (thread\ ==\ Thread::get\_main\_thread())\ \{}
+\DoxyCodeLine{00206\ \ \ \ \ \_main\_thread\_known.test\_and\_set(std::memory\_order\_relaxed);}
+\DoxyCodeLine{00207\ \ \ \}}
+\DoxyCodeLine{00208\ \ \ \_current\_thread\ =\ thread;}
+\DoxyCodeLine{00209\ \ \ \textcolor{keywordflow}{return}\ thread;}
+\DoxyCodeLine{00210\ \}}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00212\ }
+\DoxyCodeLine{00216\ \textcolor{keywordtype}{void}\ ThreadWin32Impl::}
+\DoxyCodeLine{00217\ sleep(\textcolor{keywordtype}{double}\ seconds)\ \{}
+\DoxyCodeLine{00218\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *thread\ =\ get\_current\_thread();}
+\DoxyCodeLine{00219\ \ \ ThreadWin32Impl\ *self\ =\ \&thread-\/>\_impl;}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00221\ \ \ HANDLE\ timer\ =\ self-\/>\_timer;}
+\DoxyCodeLine{00222\ \ \ \textcolor{keywordflow}{if}\ (timer\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00223\ \ \ \ \ timer\ =\ CreateWaitableTimerExW(\textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ CREATE\_WAITABLE\_TIMER\_MANUAL\_RESET\ |\ CREATE\_WAITABLE\_TIMER\_HIGH\_RESOLUTION,\ TIMER\_ALL\_ACCESS);}
+\DoxyCodeLine{00224\ \ \ \ \ self-\/>\_timer\ =\ timer;}
+\DoxyCodeLine{00225\ \ \ \}}
+\DoxyCodeLine{00226\ }
+\DoxyCodeLine{00227\ \ \ LARGE\_INTEGER\ ft;}
+\DoxyCodeLine{00228\ \ \ ft.QuadPart\ =\ seconds\ *\ -\/10000000LL;}
+\DoxyCodeLine{00229\ \ \ SetWaitableTimer(timer,\ \&ft,\ 0,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ 0);}
+\DoxyCodeLine{00230\ \ \ WaitForSingleObject(timer,\ INFINITE);}
+\DoxyCodeLine{00231\ \}}
+\DoxyCodeLine{00232\ }
+\DoxyCodeLine{00240\ \textcolor{keywordtype}{bool}\ ThreadWin32Impl::}
+\DoxyCodeLine{00241\ get\_context\_switches(\textcolor{keywordtype}{size\_t}\ \&total,\ \textcolor{keywordtype}{size\_t}\ \&involuntary)\ \{}
+\DoxyCodeLine{00242\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *thread\ =\ get\_current\_thread();}
+\DoxyCodeLine{00243\ \ \ ThreadWin32Impl\ *self\ =\ \&thread-\/>\_impl;}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00245\ \ \ \textcolor{keywordflow}{if}\ (!self-\/>\_profiling\ \&\&\ init\_thread\_profiling())\ \{}
+\DoxyCodeLine{00246\ \ \ \ \ DWORD\ result\ =\ EnableThreadProfiling(GetCurrentThread(),\ THREAD\_PROFILING\_FLAG\_DISPATCH,\ 0,\ \&self-\/>\_profiling);}
+\DoxyCodeLine{00247\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ ERROR\_SUCCESS)\ \{}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ self-\/>\_profiling\ =\ 0;}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00250\ \ \ \ \ \}}
+\DoxyCodeLine{00251\ \ \ \}}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ PERFORMANCE\_DATA\ data\ =\ \{\textcolor{keyword}{sizeof}(PERFORMANCE\_DATA),\ PERFORMANCE\_DATA\_VERSION\};}
+\DoxyCodeLine{00254\ \ \ \textcolor{keywordflow}{if}\ (ReadThreadProfilingData(self-\/>\_profiling,\ READ\_THREAD\_PROFILING\_FLAG\_DISPATCHING,\ \&data)\ ==\ ERROR\_SUCCESS)\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ total\ =\ data.ContextSwitchCount;}
+\DoxyCodeLine{00256\ \ \ \ \ involuntary\ =\ 0;}
+\DoxyCodeLine{00257\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00258\ \ \ \}}
+\DoxyCodeLine{00259\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00260\ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00265\ DWORD\ ThreadWin32Impl::}
+\DoxyCodeLine{00266\ root\_func(LPVOID\ data)\ \{}
+\DoxyCodeLine{00267\ \ \ TAU\_REGISTER\_THREAD();}
+\DoxyCodeLine{00268\ \ \ \{}
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{comment}{//\ TAU\_PROFILE("{}void\ ThreadWin32Impl::root\_func()"{},\ "{}\ "{},\ TAU\_USER);}}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \ \ \ \ ThreadWin32Impl\ *self\ =\ (ThreadWin32Impl\ *)data;}
+\DoxyCodeLine{00272\ \ \ \ \ \_current\_thread\ =\ self-\/>\_parent\_obj;}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \ \ \ \ \{}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ self-\/>\_mutex.lock();}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ nassertd(self-\/>\_status\ ==\ S\_start\_called)\ \{}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ \ \ self-\/>\_mutex.unlock();}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 1;}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ self-\/>\_status\ =\ S\_running;}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ self-\/>\_cv.notify();}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ self-\/>\_mutex.unlock();}
+\DoxyCodeLine{00283\ \ \ \ \ \}}
+\DoxyCodeLine{00284\ }
+\DoxyCodeLine{00285\ \ \ \ \ self-\/>\_parent\_obj-\/>thread\_main();}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \ \ \ \ \textcolor{keywordflow}{if}\ (thread\_cat-\/>is\_debug())\ \{}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ thread\_cat.debug()}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Terminating\ thread\ "{}}\ <<\ self-\/>\_parent\_obj-\/>get\_name()}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ count\ =\ "{}}\ <<\ self-\/>\_parent\_obj-\/>get\_ref\_count()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00291\ \ \ \ \ \}}
+\DoxyCodeLine{00292\ }
+\DoxyCodeLine{00293\ \ \ \ \ \{}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ self-\/>\_mutex.lock();}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ nassertd(self-\/>\_status\ ==\ S\_running)\ \{}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \ \ self-\/>\_mutex.unlock();}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 1;}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ self-\/>\_status\ =\ S\_finished;}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ self-\/>\_cv.notify();}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ self-\/>\_mutex.unlock();}
+\DoxyCodeLine{00302\ \ \ \ \ \}}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00304\ \ \ \ \ \textcolor{keywordflow}{if}\ (self-\/>\_profiling\ !=\ 0)\ \{}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ DisableThreadProfiling(self-\/>\_profiling);}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ self-\/>\_profiling\ =\ 0;}
+\DoxyCodeLine{00307\ \ \ \ \ \}}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{comment}{//\ Now\ drop\ the\ parent\ object\ reference\ that\ we\ grabbed\ in\ start().\ This}}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{comment}{//\ might\ delete\ the\ parent\ object,\ and\ in\ turn,\ delete\ the\ ThreadWin32Impl}}
+\DoxyCodeLine{00311\ \ \ \ \ \textcolor{comment}{//\ object.}}
+\DoxyCodeLine{00312\ \ \ \ \ unref\_delete(self-\/>\_parent\_obj);}
+\DoxyCodeLine{00313\ \ \ \}}
+\DoxyCodeLine{00314\ }
+\DoxyCodeLine{00315\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00316\ \}}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00318\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ THREAD\_WIN32\_IMPL}}
+
+\end{DoxyCode}

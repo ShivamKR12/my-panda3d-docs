@@ -1,0 +1,617 @@
+\doxysection{shader\+Terrain\+Mesh.\+cxx}
+\hypertarget{shaderTerrainMesh_8cxx_source}{}\label{shaderTerrainMesh_8cxx_source}\index{panda/src/grutil/shaderTerrainMesh.cxx@{panda/src/grutil/shaderTerrainMesh.cxx}}
+\mbox{\hyperlink{shaderTerrainMesh_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{shaderTerrainMesh_8h}{shaderTerrainMesh.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geom_8h}{geom.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexFormat_8h}{geomVertexFormat.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexData_8h}{geomVertexData.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexWriter_8h}{geomVertexWriter.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomNode_8h}{geomNode.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomTriangles_8h}{geomTriangles.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomPatches_8h}{geomPatches.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{omniBoundingVolume_8h}{omniBoundingVolume.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullableObject_8h}{cullableObject.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullTraverser_8h}{cullTraverser.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullHandler_8h}{cullHandler.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullTraverserData_8h}{cullTraverserData.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{clockObject_8h}{clockObject.h}}"{}}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{shaderAttrib_8h}{shaderAttrib.h}}"{}}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{renderAttrib_8h}{renderAttrib.h}}"{}}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{shaderInput_8h}{shaderInput.h}}"{}}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{boundingBox_8h}{boundingBox.h}}"{}}}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{boundingSphere_8h}{boundingSphere.h}}"{}}}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{samplerState_8h}{samplerState.h}}"{}}}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__grutil_8h}{config\_grutil.h}}"{}}}
+\DoxyCodeLine{00036\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{typeHandle_8h}{typeHandle.h}}"{}}}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \textcolor{keyword}{using\ }std::endl;}
+\DoxyCodeLine{00039\ \textcolor{keyword}{using\ }std::max;}
+\DoxyCodeLine{00040\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ \mbox{\hyperlink{classConfigVariableBool}{ConfigVariableBool}}\ stm\_use\_hexagonal\_layout}
+\DoxyCodeLine{00043\ (\textcolor{stringliteral}{"{}stm-\/use-\/hexagonal-\/layout"{}},\ \textcolor{keyword}{false},}
+\DoxyCodeLine{00044\ \ PRC\_DESC(\textcolor{stringliteral}{"{}Set\ this\ to\ true\ to\ use\ a\ hexagonal\ vertex\ layout.\ This\ approximates\ "{}}}
+\DoxyCodeLine{00045\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}the\ heightfield\ in\ a\ better\ way,\ however\ the\ CLOD\ transitions\ might\ be\ "{}}}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}visible\ due\ to\ the\ vertices\ not\ matching\ exactly."{}}));}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00048\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ stm\_max\_chunk\_count}
+\DoxyCodeLine{00049\ (\textcolor{stringliteral}{"{}stm-\/max-\/chunk-\/count"{}},\ 2048,}
+\DoxyCodeLine{00050\ \ PRC\_DESC(\textcolor{stringliteral}{"{}Controls\ the\ maximum\ amount\ of\ chunks\ the\ Terrain\ can\ display.\ If\ you\ use\ "{}}}
+\DoxyCodeLine{00051\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}a\ high\ LOD,\ you\ might\ have\ to\ increment\ this\ value.\ The\ lower\ this\ value\ is\ "{}}}
+\DoxyCodeLine{00052\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}the\ less\ data\ has\ to\ be\ transferred\ to\ the\ GPU."{}}));}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ stm\_max\_views}
+\DoxyCodeLine{00055\ (\textcolor{stringliteral}{"{}stm-\/max-\/views"{}},\ 8,}
+\DoxyCodeLine{00056\ \ PRC\_DESC(\textcolor{stringliteral}{"{}Controls\ the\ maximum\ amount\ of\ different\ views\ the\ Terrain\ can\ be\ rendered\ "{}}}
+\DoxyCodeLine{00057\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}with.\ Each\ camera\ rendering\ the\ terrain\ corresponds\ to\ a\ view.\ Lowering\ this\ "{}}}
+\DoxyCodeLine{00058\ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}value\ will\ reduce\ the\ data\ that\ has\ to\ be\ transferred\ to\ the\ GPU."{}}));}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00060\ \mbox{\hyperlink{classConfigVariableEnum}{ConfigVariableEnum<SamplerState::FilterType>}}\ stm\_heightfield\_minfilter}
+\DoxyCodeLine{00061\ (\textcolor{stringliteral}{"{}stm-\/heightfield-\/minfilter"{}},\ SamplerState::FT\_linear,}
+\DoxyCodeLine{00062\ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ specifies\ the\ minfilter\ that\ is\ applied\ for\ a\ heightfield\ texture.\ This\ "{}}}
+\DoxyCodeLine{00063\ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}can\ be\ used\ to\ create\ heightfield\ that\ is\ visual\ correct\ with\ collision\ "{}}}
+\DoxyCodeLine{00064\ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}geometry\ (for\ example\ bullet\ terrain\ mesh)\ by\ changing\ it\ to\ nearest"{}}));}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \mbox{\hyperlink{classConfigVariableEnum}{ConfigVariableEnum<SamplerState::FilterType>}}\ stm\_heightfield\_magfilter}
+\DoxyCodeLine{00067\ (\textcolor{stringliteral}{"{}stm-\/heightfield-\/magfilter"{}},\ SamplerState::FT\_linear,}
+\DoxyCodeLine{00068\ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ specifies\ the\ magfilter\ that\ is\ applied\ for\ a\ heightfield\ texture.\ This\ "{}}}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}can\ be\ used\ to\ create\ heightfield\ that\ is\ visual\ correct\ with\ collision\ "{}}}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}geometry\ (for\ example\ bullet\ terrain\ mesh)\ by\ changing\ it\ to\ nearest"{}}));}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00072\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ ShaderTerrainMesh::\_basic\_collector(\textcolor{stringliteral}{"{}Cull:ShaderTerrainMesh:Setup"{}});}
+\DoxyCodeLine{00073\ \mbox{\hyperlink{classPStatCollector}{PStatCollector}}\ ShaderTerrainMesh::\_lod\_collector(\textcolor{stringliteral}{"{}Cull:ShaderTerrainMesh:CollectLOD"{}});}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ NotifyCategoryDef(shader\_terrain,\ \textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00077\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ ShaderTerrainMesh::\_type\_handle;}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00086\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{shaderTerrainMesh_8cxx_ace4c13d8fa8e63065906d15d87109577}{check\_power\_of\_two}}(\textcolor{keywordtype}{size\_t}\ x)}
+\DoxyCodeLine{00087\ \{}
+\DoxyCodeLine{00088\ \ \ \textcolor{keywordflow}{return}\ ((x\ !=\ 0)\ \&\&\ ((x\ \&\ (\string~x\ +\ 1))\ ==\ x));}
+\DoxyCodeLine{00089\ \}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00097\ ShaderTerrainMesh::ShaderTerrainMesh()\ :}
+\DoxyCodeLine{00098\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}(\textcolor{stringliteral}{"{}ShaderTerrainMesh"{}}),}
+\DoxyCodeLine{00099\ \ \ \_size(0),}
+\DoxyCodeLine{00100\ \ \ \_chunk\_size(32),}
+\DoxyCodeLine{00101\ \ \ \_generate\_patches(false),}
+\DoxyCodeLine{00102\ \ \ \_heightfield\_tex(nullptr),}
+\DoxyCodeLine{00103\ \ \ \_chunk\_geom(nullptr),}
+\DoxyCodeLine{00104\ \ \ \_data\_texture(nullptr),}
+\DoxyCodeLine{00105\ \ \ \_current\_view\_index(0),}
+\DoxyCodeLine{00106\ \ \ \_last\_frame\_count(-\/1),}
+\DoxyCodeLine{00107\ \ \ \_target\_triangle\_width(10.0f),}
+\DoxyCodeLine{00108\ \ \ \_update\_enabled(true)}
+\DoxyCodeLine{00109\ \{}
+\DoxyCodeLine{00110\ \ \ set\_renderable();}
+\DoxyCodeLine{00111\ \}}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00124\ \textcolor{keywordtype}{bool}\ ShaderTerrainMesh::generate()\ \{}
+\DoxyCodeLine{00125\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00126\ \ \ \textcolor{keywordflow}{if}\ (!do\_check\_heightfield())}
+\DoxyCodeLine{00127\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00129\ \ \ \textcolor{keywordflow}{if}\ (\_chunk\_size\ <\ 8\ ||\ !\mbox{\hyperlink{shaderTerrainMesh_8cxx_ace4c13d8fa8e63065906d15d87109577}{check\_power\_of\_two}}(\_chunk\_size))\ \{}
+\DoxyCodeLine{00130\ \ \ \ \ shader\_terrain\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Invalid\ chunk\ size!\ Has\ to\ be\ >=\ 8\ and\ a\ power\ of\ two!"{}}\ <<\ endl;}
+\DoxyCodeLine{00131\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00132\ \ \ \}}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \ \ \textcolor{keywordflow}{if}\ (\_chunk\_size\ >\ \_size\ /\ 4)\ \{}
+\DoxyCodeLine{00135\ \ \ \ \ shader\_terrain\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Chunk\ size\ too\ close\ or\ greater\ than\ the\ actual\ terrain\ size!"{}}\ <<\ endl;}
+\DoxyCodeLine{00136\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00137\ \ \ \}}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00139\ \ \ do\_extract\_heightfield();}
+\DoxyCodeLine{00140\ \ \ do\_create\_chunks();}
+\DoxyCodeLine{00141\ \ \ do\_compute\_bounds(\&\_base\_chunk);}
+\DoxyCodeLine{00142\ \ \ do\_create\_chunk\_geom();}
+\DoxyCodeLine{00143\ \ \ do\_init\_data\_texture();}
+\DoxyCodeLine{00144\ }
+\DoxyCodeLine{00145\ \ \ \textcolor{comment}{//\ Clear\ image\ after\ using\ it,\ otherwise\ we\ have\ two\ copies\ of\ the\ heightfield}}
+\DoxyCodeLine{00146\ \ \ \textcolor{comment}{//\ in\ memory.}}
+\DoxyCodeLine{00147\ \ \ \_heightfield.clear();}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00150\ \}}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00158\ \textcolor{keywordtype}{void}\ ShaderTerrainMesh::do\_extract\_heightfield()\ \{}
+\DoxyCodeLine{00159\ \ \ \textcolor{keywordflow}{if}\ (!\_heightfield\_tex-\/>has\_ram\_image())\ \{}
+\DoxyCodeLine{00160\ \ \ \ \ \_heightfield\_tex-\/>reload();}
+\DoxyCodeLine{00161\ \ \ \}}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00163\ \ \ \_heightfield\_tex-\/>store(\_heightfield);}
+\DoxyCodeLine{00164\ }
+\DoxyCodeLine{00165\ \ \ \textcolor{keywordflow}{if}\ (\_heightfield.get\_maxval()\ !=\ 65535)\ \{}
+\DoxyCodeLine{00166\ \ \ \ \ shader\_terrain\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}Using\ non\ 16-\/bit\ heightfield!"{}}\ <<\ endl;}
+\DoxyCodeLine{00167\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00168\ \ \ \ \ \_heightfield\_tex-\/>set\_format(Texture::F\_r16);}
+\DoxyCodeLine{00169\ \ \ \}}
+\DoxyCodeLine{00170\ \ \ \_heightfield\_tex-\/>set\_minfilter(stm\_heightfield\_minfilter);}
+\DoxyCodeLine{00171\ \ \ \_heightfield\_tex-\/>set\_magfilter(stm\_heightfield\_magfilter);}
+\DoxyCodeLine{00172\ \ \ \_heightfield\_tex-\/>set\_wrap\_u(SamplerState::WM\_clamp);}
+\DoxyCodeLine{00173\ \ \ \_heightfield\_tex-\/>set\_wrap\_v(SamplerState::WM\_clamp);}
+\DoxyCodeLine{00174\ \}}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00184\ \textcolor{keywordtype}{bool}\ ShaderTerrainMesh::do\_check\_heightfield()\ \{}
+\DoxyCodeLine{00185\ \ \ \textcolor{keywordflow}{if}\ (\_heightfield\_tex-\/>get\_x\_size()\ !=\ \_heightfield\_tex-\/>get\_y\_size())\ \{}
+\DoxyCodeLine{00186\ \ \ \ \ shader\_terrain\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Only\ square\ heightfields\ are\ supported!"{}};}
+\DoxyCodeLine{00187\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00188\ \ \ \}}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00190\ \ \ \_size\ =\ \_heightfield\_tex-\/>get\_x\_size();}
+\DoxyCodeLine{00191\ \ \ \textcolor{keywordflow}{if}\ (\_size\ <\ 32\ ||\ !\mbox{\hyperlink{shaderTerrainMesh_8cxx_ace4c13d8fa8e63065906d15d87109577}{check\_power\_of\_two}}(\_size))\ \{}
+\DoxyCodeLine{00192\ \ \ \ \ shader\_terrain\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Invalid\ heightfield!\ Needs\ to\ be\ >=\ 32\ and\ a\ power\ of\ two\ (was:\ "{}}}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ \ <<\ \_size\ <<\ \textcolor{stringliteral}{"{})!"{}}\ <<\ endl;}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00195\ \ \ \}}
+\DoxyCodeLine{00196\ }
+\DoxyCodeLine{00197\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00198\ \}}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00207\ \textcolor{keywordtype}{void}\ ShaderTerrainMesh::do\_init\_data\_texture()\ \{}
+\DoxyCodeLine{00208\ \ \ \_data\_texture\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classTexture}{Texture}}(\textcolor{stringliteral}{"{}TerrainDataTexture"{}});}
+\DoxyCodeLine{00209\ \ \ \_data\_texture-\/>setup\_2d\_texture(stm\_max\_chunk\_count,\ stm\_max\_views,\ Texture::T\_float,\ Texture::F\_rgba32);}
+\DoxyCodeLine{00210\ \ \ \_data\_texture-\/>set\_compression(Texture::CM\_off);}
+\DoxyCodeLine{00211\ \ \ \_data\_texture-\/>set\_clear\_color(LVector4(0));}
+\DoxyCodeLine{00212\ \ \ \_data\_texture-\/>clear\_image();}
+\DoxyCodeLine{00213\ \}}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00220\ \textcolor{keywordtype}{void}\ ShaderTerrainMesh::do\_create\_chunks()\ \{}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \ \ \textcolor{comment}{//\ Release\ any\ previously\ stored\ children}}
+\DoxyCodeLine{00223\ \ \ \_base\_chunk.clear\_children();}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00225\ \ \ \textcolor{comment}{//\ Create\ the\ base\ chunk}}
+\DoxyCodeLine{00226\ \ \ \_base\_chunk.depth\ =\ 0;}
+\DoxyCodeLine{00227\ \ \ \_base\_chunk.x\ =\ 0;}
+\DoxyCodeLine{00228\ \ \ \_base\_chunk.y\ =\ 0;}
+\DoxyCodeLine{00229\ \ \ \_base\_chunk.size\ =\ \_size;}
+\DoxyCodeLine{00230\ \ \ \_base\_chunk.edges.set(0,\ 0,\ 0,\ 0);}
+\DoxyCodeLine{00231\ \ \ \_base\_chunk.avg\_height\ =\ 0.5;}
+\DoxyCodeLine{00232\ \ \ \_base\_chunk.min\_height\ =\ 0.0;}
+\DoxyCodeLine{00233\ \ \ \_base\_chunk.max\_height\ =\ 1.0;}
+\DoxyCodeLine{00234\ \ \ \_base\_chunk.last\_clod\ =\ 0.0;}
+\DoxyCodeLine{00235\ \ \ do\_init\_chunk(\&\_base\_chunk);}
+\DoxyCodeLine{00236\ \}}
+\DoxyCodeLine{00237\ }
+\DoxyCodeLine{00251\ \textcolor{keywordtype}{void}\ ShaderTerrainMesh::do\_init\_chunk(Chunk*\ chunk)\ \{}
+\DoxyCodeLine{00252\ \ \ \textcolor{keywordflow}{if}\ (chunk-\/>size\ >\ \_chunk\_size)\ \{}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \ \ \ \ \textcolor{comment}{//\ Compute\ children\ chunk\ size}}
+\DoxyCodeLine{00255\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ child\_chunk\_size\ =\ chunk-\/>size\ /\ 2;}
+\DoxyCodeLine{00256\ }
+\DoxyCodeLine{00257\ \ \ \ \ \textcolor{comment}{//\ Subdivide\ chunk\ into\ 4\ children}}
+\DoxyCodeLine{00258\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ y\ =\ 0;\ y\ <\ 2;\ ++y)\ \{}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ x\ =\ 0;\ x\ <\ 2;\ ++x)\ \{}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \ \ Chunk*\ child\ =\ \textcolor{keyword}{new}\ Chunk();}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ child-\/>size\ =\ child\_chunk\_size;}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ child-\/>depth\ =\ chunk-\/>depth\ +\ 1;}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ child-\/>x\ =\ chunk-\/>x\ +\ x\ *\ child\_chunk\_size;}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ child-\/>y\ =\ chunk-\/>y\ +\ y\ *\ child\_chunk\_size;}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \ \ do\_init\_chunk(child);}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ chunk-\/>children[x\ +\ 2*y]\ =\ child;}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00268\ \ \ \ \ \}}
+\DoxyCodeLine{00269\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00270\ \ \ \ \ \textcolor{comment}{//\ Final\ chunk,\ initialize\ all\ children\ to\ zero}}
+\DoxyCodeLine{00271\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ 4;\ ++i)\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ chunk-\/>children[i]\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00273\ \ \ \ \ \}}
+\DoxyCodeLine{00274\ \ \ \}}
+\DoxyCodeLine{00275\ \}}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00293\ \textcolor{keywordtype}{void}\ ShaderTerrainMesh::do\_compute\_bounds(Chunk*\ chunk)\ \{}
+\DoxyCodeLine{00294\ }
+\DoxyCodeLine{00295\ \ \ \textcolor{comment}{//\ Final\ chunk\ (Leaf)}}
+\DoxyCodeLine{00296\ \ \ \textcolor{keywordflow}{if}\ (chunk-\/>size\ ==\ \_chunk\_size)\ \{}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{comment}{//\ Get\ a\ pointer\ to\ the\ PNMImage\ data,\ this\ is\ faster\ than\ using\ get\_xel()}}
+\DoxyCodeLine{00299\ \ \ \ \ \textcolor{comment}{//\ for\ all\ pixels,\ since\ get\_xel()\ also\ includes\ bounds\ checks\ and\ so\ on.}}
+\DoxyCodeLine{00300\ \ \ \ \ \mbox{\hyperlink{structpixel}{xel}}*\ data\ =\ \_heightfield.get\_array();}
+\DoxyCodeLine{00301\ }
+\DoxyCodeLine{00302\ \ \ \ \ \textcolor{comment}{//\ Pixel\ getter\ function.\ Note\ that\ we\ have\ to\ flip\ the\ Y-\/component,\ since}}
+\DoxyCodeLine{00303\ \ \ \ \ \textcolor{comment}{//\ panda\ itself\ also\ flips\ it}}
+\DoxyCodeLine{00304\ \ \ \ \ \textcolor{comment}{//\ auto\ get\_xel\ =\ [\&](size\_t\ x,\ size\_t\ y)\{\ return\ data[x\ +\ (\_size\ -\/\ 1\ -\/\ y)\ *\ \_size].b\ /\ (PN\_stdfloat)PGM\_MAXMAXVAL;\ \};}}
+\DoxyCodeLine{00305\ \textcolor{preprocessor}{\ \ \ \ \#define\ get\_xel(x,\ y)\ (data[(x)\ +\ (\_size\ -\/\ 1\ -\/\ (y))\ *\ \_size].b\ /\ (PN\_stdfloat)PGM\_MAXMAXVAL)}}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00307\ \ \ \ \ \textcolor{comment}{//\ Iterate\ over\ all\ pixels}}
+\DoxyCodeLine{00308\ \ \ \ \ PN\_stdfloat\ avg\_height\ =\ 0.0,\ min\_height\ =\ 1.0,\ max\_height\ =\ 0.0;}
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ x\ =\ 0;\ x\ <\ \_chunk\_size;\ ++x)\ \{}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ y\ =\ 0;\ y\ <\ \_chunk\_size;\ ++y)\ \{}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Access\ data\ directly,\ to\ improve\ performance}}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ PN\_stdfloat\ height\ =\ get\_xel(chunk-\/>x\ +\ x,\ chunk-\/>y\ +\ y);}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ avg\_height\ +=\ height;}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ min\_height\ =\ min(min\_height,\ height);}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ max\_height\ =\ max(max\_height,\ height);}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00318\ \ \ \ \ \}}
+\DoxyCodeLine{00319\ }
+\DoxyCodeLine{00320\ \ \ \ \ \textcolor{comment}{//\ Normalize\ average\ height}}
+\DoxyCodeLine{00321\ \ \ \ \ avg\_height\ /=\ \_chunk\_size\ *\ \_chunk\_size;}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00323\ \ \ \ \ \textcolor{comment}{//\ Store\ values}}
+\DoxyCodeLine{00324\ \ \ \ \ chunk-\/>min\_height\ =\ min\_height;}
+\DoxyCodeLine{00325\ \ \ \ \ chunk-\/>max\_height\ =\ max\_height;}
+\DoxyCodeLine{00326\ \ \ \ \ chunk-\/>avg\_height\ =\ avg\_height;}
+\DoxyCodeLine{00327\ }
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{comment}{//\ Get\ edges\ in\ the\ order\ (0,\ 0)\ (1,\ 0)\ (0,\ 1)\ (1,\ 1)}}
+\DoxyCodeLine{00329\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ y\ =\ 0;\ y\ <\ 2;\ ++y)\ \{}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ x\ =\ 0;\ x\ <\ 2;\ ++x)\ \{}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ chunk-\/>edges.set\_cell(x\ +\ 2\ *\ y,\ get\_xel(}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \ \ \ \ \ \ chunk-\/>x\ +\ x\ *\ (\_chunk\_size\ -\/\ 1),}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ \ \ \ \ chunk-\/>y\ +\ y\ *\ (\_chunk\_size\ -\/\ 1)}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ \ \ ));}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00336\ \ \ \ \ \}}
+\DoxyCodeLine{00337\ }
+\DoxyCodeLine{00338\ \textcolor{preprocessor}{\ \ \ \ \#undef\ get\_xel}}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00340\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00341\ }
+\DoxyCodeLine{00342\ \ \ \ \ \textcolor{comment}{//\ Reset\ heights}}
+\DoxyCodeLine{00343\ \ \ \ \ chunk-\/>avg\_height\ =\ 0.0;}
+\DoxyCodeLine{00344\ \ \ \ \ chunk-\/>min\_height\ =\ 1.0;}
+\DoxyCodeLine{00345\ \ \ \ \ chunk-\/>max\_height\ =\ 0.0;}
+\DoxyCodeLine{00346\ }
+\DoxyCodeLine{00347\ \ \ \ \ \textcolor{comment}{//\ Perform\ bounds\ computation\ for\ every\ children\ and\ merge\ the\ children\ values}}
+\DoxyCodeLine{00348\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ 4;\ ++i)\ \{}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ do\_compute\_bounds(chunk-\/>children[i]);}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ chunk-\/>avg\_height\ +=\ chunk-\/>children[i]-\/>avg\_height\ /\ 4.0;}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ chunk-\/>min\_height\ =\ min(chunk-\/>min\_height,\ chunk-\/>children[i]-\/>min\_height);}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ chunk-\/>max\_height\ =\ max(chunk-\/>max\_height,\ chunk-\/>children[i]-\/>max\_height);}
+\DoxyCodeLine{00353\ \ \ \ \ \}}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00355\ \ \ \ \ \textcolor{comment}{//\ Also\ take\ the\ edge\ points\ from\ the\ children}}
+\DoxyCodeLine{00356\ \ \ \ \ chunk-\/>edges.set\_x(chunk-\/>children[0]-\/>edges.get\_x());}
+\DoxyCodeLine{00357\ \ \ \ \ chunk-\/>edges.set\_y(chunk-\/>children[1]-\/>edges.get\_y());}
+\DoxyCodeLine{00358\ \ \ \ \ chunk-\/>edges.set\_z(chunk-\/>children[2]-\/>edges.get\_z());}
+\DoxyCodeLine{00359\ \ \ \ \ chunk-\/>edges.set\_w(chunk-\/>children[3]-\/>edges.get\_w());}
+\DoxyCodeLine{00360\ \ \ \}}
+\DoxyCodeLine{00361\ \}}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00374\ \textcolor{keywordtype}{void}\ ShaderTerrainMesh::do\_create\_chunk\_geom()\ \{}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00376\ \ \ \textcolor{comment}{//\ Convert\ chunk\ size\ to\ an\ integer,\ because\ we\ operate\ on\ integers\ and\ get}}
+\DoxyCodeLine{00377\ \ \ \textcolor{comment}{//\ signed/unsigned\ mismatches\ otherwise}}
+\DoxyCodeLine{00378\ \ \ \textcolor{keywordtype}{int}\ size\ =\ (int)\_chunk\_size;}
+\DoxyCodeLine{00379\ }
+\DoxyCodeLine{00380\ \ \ \textcolor{comment}{//\ Create\ vertex\ data}}
+\DoxyCodeLine{00381\ \ \ PT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ gvd\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}(\textcolor{stringliteral}{"{}vertices"{}},\ GeomVertexFormat::get\_v3(),\ Geom::UH\_static);}
+\DoxyCodeLine{00382\ \ \ gvd-\/>reserve\_num\_rows(\ (size\ +\ 3)\ *\ (size\ +\ 3)\ );}
+\DoxyCodeLine{00383\ \ \ \mbox{\hyperlink{classGeomVertexWriter}{GeomVertexWriter}}\ vertex\_writer(gvd,\ \textcolor{stringliteral}{"{}vertex"{}});}
+\DoxyCodeLine{00384\ }
+\DoxyCodeLine{00385\ \ \ \textcolor{comment}{//\ Create\ primitive}}
+\DoxyCodeLine{00386\ \ \ PT(\mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}})\ triangles\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00387\ \ \ \textcolor{keywordflow}{if}\ (\_generate\_patches)\ \{}
+\DoxyCodeLine{00388\ \ \ \ \ triangles\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomPatches}{GeomPatches}}(3,\ Geom::UH\_static);}
+\DoxyCodeLine{00389\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00390\ \ \ \ \ triangles\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomTriangles}{GeomTriangles}}(Geom::UH\_static);}
+\DoxyCodeLine{00391\ \ \ \}}
+\DoxyCodeLine{00392\ }
+\DoxyCodeLine{00393\ \ \ \textcolor{comment}{//\ Insert\ chunk\ vertices}}
+\DoxyCodeLine{00394\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ -\/1;\ y\ <=\ size\ +\ 1;\ ++y)\ \{}
+\DoxyCodeLine{00395\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ -\/1;\ x\ <=\ size\ +\ 1;\ ++x)\ \{}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ LVector3\ vtx\_pos(x\ /\ (PN\_stdfloat)size,\ y\ /\ (PN\_stdfloat)size,\ 0.0f);}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \textcolor{comment}{//\ Stitched\ vertices\ at\ the\ cornders}}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (x\ ==\ -\/1\ ||\ y\ ==\ -\/1\ ||\ x\ ==\ size\ +\ 1\ ||\ y\ ==\ size\ +\ 1)\ \{}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ vtx\_pos.set\_z(-\/1.0f\ /\ (PN\_stdfloat)size);}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ vtx\_pos.set\_x(max((PN\_stdfloat)0,\ min((PN\_stdfloat)1,\ vtx\_pos.get\_x())));}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \ \ vtx\_pos.set\_y(max((PN\_stdfloat)0,\ min((PN\_stdfloat)1,\ vtx\_pos.get\_y())));}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ vertex\_writer.add\_data3(vtx\_pos);}
+\DoxyCodeLine{00404\ \ \ \ \ \}}
+\DoxyCodeLine{00405\ \ \ \}}
+\DoxyCodeLine{00406\ }
+\DoxyCodeLine{00407\ \ \ \textcolor{comment}{//\ Its\ important\ to\ use\ int\ and\ not\ size\_t\ here,\ since\ we\ do\ store\ negative\ values}}
+\DoxyCodeLine{00408\ \ \ \textcolor{comment}{//\ auto\ get\_point\_index\ =\ [\&size](int\ x,\ int\ y)\{\ return\ (x\ +\ 1)\ +\ (size\ +\ 3)\ *\ (y\ +\ 1);\ \};}}
+\DoxyCodeLine{00409\ \textcolor{preprocessor}{\ \ \#define\ get\_point\_index(x,\ y)\ (((x)\ +\ 1)\ +\ (size\ +\ 3)\ *\ ((y)\ +\ 1))}}
+\DoxyCodeLine{00410\ }
+\DoxyCodeLine{00411\ \ \ \textcolor{comment}{//\ Create\ triangles}}
+\DoxyCodeLine{00412\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ -\/1;\ y\ <=\ size;\ ++y)\ \{}
+\DoxyCodeLine{00413\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ -\/1;\ x\ <=\ size;\ ++x)\ \{}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \textcolor{comment}{//\ Get\ point\ indices\ of\ the\ quad\ vertices}}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ tl\ =\ get\_point\_index(x,\ y);}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ tr\ =\ get\_point\_index(x\ +\ 1,\ y);}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ bl\ =\ get\_point\_index(x,\ y\ +\ 1);}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ br\ =\ get\_point\_index(x\ +\ 1,\ y\ +\ 1);}
+\DoxyCodeLine{00419\ }
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \textcolor{comment}{//\ Vary\ triangle\ scheme\ on\ each\ uneven\ quad}}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (stm\_use\_hexagonal\_layout\ \&\&\ (x\ +\ y)\ \%\ 2\ ==\ 0\ )\ \{}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \ \ triangles-\/>add\_vertices(tl,\ tr,\ br);}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \ \ triangles-\/>add\_vertices(tl,\ br,\ bl);}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00425\ \ \ \ \ \ \ \ \ triangles-\/>add\_vertices(tl,\ tr,\ bl);}
+\DoxyCodeLine{00426\ \ \ \ \ \ \ \ \ triangles-\/>add\_vertices(bl,\ tr,\ br);}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00428\ \ \ \ \ \}}
+\DoxyCodeLine{00429\ \ \ \}}
+\DoxyCodeLine{00430\ }
+\DoxyCodeLine{00431\ \textcolor{preprocessor}{\ \ \#undef\ get\_point\_index}}
+\DoxyCodeLine{00432\ }
+\DoxyCodeLine{00433\ \ \ \textcolor{comment}{//\ Construct\ geom}}
+\DoxyCodeLine{00434\ \ \ PT(\mbox{\hyperlink{classGeom}{Geom}})\ geom\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeom}{Geom}}(gvd);}
+\DoxyCodeLine{00435\ \ \ geom-\/>add\_primitive(triangles);}
+\DoxyCodeLine{00436\ }
+\DoxyCodeLine{00437\ \ \ \textcolor{comment}{//\ Do\ not\ set\ any\ bounds,\ we\ do\ culling\ ourself}}
+\DoxyCodeLine{00438\ \ \ geom-\/>clear\_bounds();}
+\DoxyCodeLine{00439\ \ \ geom-\/>set\_bounds(\textcolor{keyword}{new}\ \mbox{\hyperlink{classOmniBoundingVolume}{OmniBoundingVolume}}());}
+\DoxyCodeLine{00440\ \ \ \_chunk\_geom\ =\ geom;}
+\DoxyCodeLine{00441\ \}}
+\DoxyCodeLine{00442\ }
+\DoxyCodeLine{00446\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classShaderTerrainMesh_ad88652da03b0d9b06e95f819ca42d866}{ShaderTerrainMesh::safe\_to\_flatten}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00447\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00448\ \}}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00453\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classShaderTerrainMesh_a7a38f2b7ba3c563e1e4197bb0a4e62a3}{ShaderTerrainMesh::safe\_to\_combine}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00454\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00455\ \}}
+\DoxyCodeLine{00456\ }
+\DoxyCodeLine{00460\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classShaderTerrainMesh_a5c095ce8c2fb4220d4bbe60365d5b106}{ShaderTerrainMesh::add\_for\_draw}}(\mbox{\hyperlink{classCullTraverser}{CullTraverser}}\ *trav,\ \mbox{\hyperlink{classCullTraverserData}{CullTraverserData}}\ \&data)\ \{}
+\DoxyCodeLine{00461\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00462\ }
+\DoxyCodeLine{00463\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ terrain\ was\ properly\ initialized,\ and\ the\ geom\ was\ created}}
+\DoxyCodeLine{00464\ \ \ \textcolor{comment}{//\ successfully}}
+\DoxyCodeLine{00465\ \ \ nassertv(\_data\_texture\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00466\ \ \ nassertv(\_chunk\_geom\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00467\ }
+\DoxyCodeLine{00468\ \ \ \_basic\_collector.start();}
+\DoxyCodeLine{00469\ }
+\DoxyCodeLine{00470\ \ \ \textcolor{comment}{//\ Get\ current\ frame\ count}}
+\DoxyCodeLine{00471\ \ \ \textcolor{keywordtype}{int}\ frame\_count\ =\ ClockObject::get\_global\_clock()-\/>get\_frame\_count();}
+\DoxyCodeLine{00472\ }
+\DoxyCodeLine{00473\ \ \ \textcolor{keywordflow}{if}\ (\_last\_frame\_count\ !=\ frame\_count)\ \{}
+\DoxyCodeLine{00474\ \ \ \ \ \textcolor{comment}{//\ Frame\ count\ changed,\ this\ means\ we\ are\ at\ the\ beginning\ of\ a\ new\ frame.}}
+\DoxyCodeLine{00475\ \ \ \ \ \textcolor{comment}{//\ In\ this\ case,\ update\ the\ frame\ count\ and\ reset\ the\ view\ index.}}
+\DoxyCodeLine{00476\ \ \ \ \ \_last\_frame\_count\ =\ frame\_count;}
+\DoxyCodeLine{00477\ \ \ \ \ \_current\_view\_index\ =\ 0;}
+\DoxyCodeLine{00478\ \ \ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ \ \ \textcolor{comment}{//\ Get\ transform\ and\ render\ state\ for\ this\ render\ pass}}
+\DoxyCodeLine{00481\ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ modelview\_transform\ =\ data.get\_internal\_transform(trav);}
+\DoxyCodeLine{00482\ \ \ CPT(\mbox{\hyperlink{classRenderState}{RenderState}})\ state\ =\ data.\_state-\/>compose(get\_state());}
+\DoxyCodeLine{00483\ }
+\DoxyCodeLine{00484\ \ \ \textcolor{comment}{//\ Store\ a\ handle\ to\ the\ scene\ setup}}
+\DoxyCodeLine{00485\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classSceneSetup}{SceneSetup}}*\ scene\ =\ trav-\/>get\_scene();}
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00487\ \ \ \textcolor{comment}{//\ Get\ the\ MVP\ matrix,\ this\ is\ required\ for\ the\ LOD}}
+\DoxyCodeLine{00488\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLens}{Lens}}*\ current\_lens\ =\ scene-\/>get\_lens();}
+\DoxyCodeLine{00489\ \ \ \textcolor{keyword}{const}\ LMatrix4\&\ projection\_mat\ =\ current\_lens-\/>get\_projection\_mat();}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00491\ \ \ \textcolor{comment}{//\ Get\ the\ current\ lens\ bounds}}
+\DoxyCodeLine{00492\ \ \ PT(\mbox{\hyperlink{classBoundingVolume}{BoundingVolume}})\ cam\_bounds\ =\ scene-\/>get\_cull\_bounds();}
+\DoxyCodeLine{00493\ }
+\DoxyCodeLine{00494\ \ \ \textcolor{comment}{//\ Transform\ the\ camera\ bounds\ with\ the\ main\ camera\ transform}}
+\DoxyCodeLine{00495\ \ \ DCAST(\mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}},\ cam\_bounds)-\/>xform(scene-\/>get\_camera\_transform()-\/>get\_mat());}
+\DoxyCodeLine{00496\ }
+\DoxyCodeLine{00497\ \ \ TraversalData\ traversal\_data;}
+\DoxyCodeLine{00498\ \ \ traversal\_data.cam\_bounds\ =\ cam\_bounds;}
+\DoxyCodeLine{00499\ \ \ traversal\_data.model\_mat\ =\ get\_transform()-\/>get\_mat();}
+\DoxyCodeLine{00500\ \ \ traversal\_data.mvp\_mat\ =\ modelview\_transform-\/>get\_mat()\ *\ projection\_mat;}
+\DoxyCodeLine{00501\ \ \ traversal\_data.emitted\_chunks\ =\ 0;}
+\DoxyCodeLine{00502\ \ \ traversal\_data.storage\_ptr\ =\ (ChunkDataEntry*)\_data\_texture-\/>modify\_ram\_image().p();}
+\DoxyCodeLine{00503\ \ \ traversal\_data.screen\_size.set(scene-\/>get\_viewport\_width(),\ scene-\/>get\_viewport\_height());}
+\DoxyCodeLine{00504\ }
+\DoxyCodeLine{00505\ \ \ \textcolor{comment}{//\ Move\ write\ pointer\ so\ it\ points\ to\ the\ beginning\ of\ the\ current\ view}}
+\DoxyCodeLine{00506\ \ \ traversal\_data.storage\_ptr\ +=\ \_data\_texture-\/>get\_x\_size()\ *\ \_current\_view\_index;}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00508\ \ \ \textcolor{keywordflow}{if}\ (\_update\_enabled)\ \{}
+\DoxyCodeLine{00509\ \ \ \ \ \textcolor{comment}{//\ Traverse\ recursively}}
+\DoxyCodeLine{00510\ \ \ \ \ \_lod\_collector.start();}
+\DoxyCodeLine{00511\ \ \ \ \ do\_traverse(\&\_base\_chunk,\ \&traversal\_data);}
+\DoxyCodeLine{00512\ \ \ \ \ \_lod\_collector.stop();}
+\DoxyCodeLine{00513\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00514\ \ \ \ \ \textcolor{comment}{//\ Do\ a\ rough\ guess\ of\ the\ emitted\ chunks,\ we\ don't\ know\ the\ actual\ count}}
+\DoxyCodeLine{00515\ \ \ \ \ \textcolor{comment}{//\ (we\ would\ have\ to\ store\ it).\ This\ is\ only\ for\ debugging\ anyways,\ so}}
+\DoxyCodeLine{00516\ \ \ \ \ \textcolor{comment}{//\ its\ not\ important\ we\ get\ an\ accurate\ count\ here.}}
+\DoxyCodeLine{00517\ \ \ \ \ traversal\_data.emitted\_chunks\ =\ \_data\_texture-\/>get\_x\_size();}
+\DoxyCodeLine{00518\ \ \ \}}
+\DoxyCodeLine{00519\ }
+\DoxyCodeLine{00520\ \ \ \textcolor{comment}{//\ Set\ shader\ inputs}}
+\DoxyCodeLine{00521\ \ \ CPT(\mbox{\hyperlink{classRenderAttrib}{RenderAttrib}})\ current\_shader\_attrib\ =\ state-\/>get\_attrib\_def(ShaderAttrib::get\_class\_slot());}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00523\ \ \ \textcolor{comment}{//\ Make\ sure\ the\ user\ didn't\ forget\ to\ set\ a\ shader}}
+\DoxyCodeLine{00524\ \ \ \textcolor{keywordflow}{if}\ (!DCAST(\mbox{\hyperlink{classShaderAttrib}{ShaderAttrib}},\ current\_shader\_attrib)-\/>has\_shader())\ \{}
+\DoxyCodeLine{00525\ \ \ \ \ shader\_terrain\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}No\ shader\ set\ on\ the\ terrain!\ You\ need\ to\ set\ the\ appropriate\ shader!"{}}\ <<\ endl;}
+\DoxyCodeLine{00526\ \ \ \}}
+\DoxyCodeLine{00527\ }
+\DoxyCodeLine{00528\ \ \ \textcolor{comment}{//\ Should\ never\ happen}}
+\DoxyCodeLine{00529\ \ \ nassertv(current\_shader\_attrib\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00530\ }
+\DoxyCodeLine{00531\ \ \ current\_shader\_attrib\ =\ DCAST(\mbox{\hyperlink{classShaderAttrib}{ShaderAttrib}},\ current\_shader\_attrib)-\/>set\_shader\_input(}
+\DoxyCodeLine{00532\ \ \ \ \ \mbox{\hyperlink{classShaderInput}{ShaderInput}}(\textcolor{stringliteral}{"{}ShaderTerrainMesh.terrain\_size"{}},\ LVecBase2i(\_size)));}
+\DoxyCodeLine{00533\ \ \ current\_shader\_attrib\ =\ DCAST(\mbox{\hyperlink{classShaderAttrib}{ShaderAttrib}},\ current\_shader\_attrib)-\/>set\_shader\_input(}
+\DoxyCodeLine{00534\ \ \ \ \ \mbox{\hyperlink{classShaderInput}{ShaderInput}}(\textcolor{stringliteral}{"{}ShaderTerrainMesh.chunk\_size"{}},\ LVecBase2i(\_chunk\_size)));}
+\DoxyCodeLine{00535\ \ \ current\_shader\_attrib\ =\ DCAST(\mbox{\hyperlink{classShaderAttrib}{ShaderAttrib}},\ current\_shader\_attrib)-\/>set\_shader\_input(}
+\DoxyCodeLine{00536\ \ \ \ \ \mbox{\hyperlink{classShaderInput}{ShaderInput}}(\textcolor{stringliteral}{"{}ShaderTerrainMesh.view\_index"{}},\ LVecBase2i(\_current\_view\_index)));}
+\DoxyCodeLine{00537\ \ \ current\_shader\_attrib\ =\ DCAST(\mbox{\hyperlink{classShaderAttrib}{ShaderAttrib}},\ current\_shader\_attrib)-\/>set\_shader\_input(}
+\DoxyCodeLine{00538\ \ \ \ \ \mbox{\hyperlink{classShaderInput}{ShaderInput}}(\textcolor{stringliteral}{"{}ShaderTerrainMesh.data\_texture"{}},\ \_data\_texture));}
+\DoxyCodeLine{00539\ \ \ current\_shader\_attrib\ =\ DCAST(\mbox{\hyperlink{classShaderAttrib}{ShaderAttrib}},\ current\_shader\_attrib)-\/>set\_shader\_input(}
+\DoxyCodeLine{00540\ \ \ \ \ \mbox{\hyperlink{classShaderInput}{ShaderInput}}(\textcolor{stringliteral}{"{}ShaderTerrainMesh.heightfield"{}},\ \_heightfield\_tex));}
+\DoxyCodeLine{00541\ \ \ current\_shader\_attrib\ =\ DCAST(\mbox{\hyperlink{classShaderAttrib}{ShaderAttrib}},\ current\_shader\_attrib)-\/>set\_instance\_count(}
+\DoxyCodeLine{00542\ \ \ \ \ traversal\_data.emitted\_chunks);}
+\DoxyCodeLine{00543\ }
+\DoxyCodeLine{00544\ \ \ state\ =\ state-\/>set\_attrib(current\_shader\_attrib,\ 10000);}
+\DoxyCodeLine{00545\ }
+\DoxyCodeLine{00546\ \ \ \textcolor{comment}{//\ Emit\ chunk}}
+\DoxyCodeLine{00547\ \ \ trav-\/>get\_cull\_handler()-\/>\mbox{\hyperlink{classCullHandler_a35e3215f1c647c0ce091d234a9afa57c}{record\_object}}(\mbox{\hyperlink{classCullableObject}{CullableObject}}(}
+\DoxyCodeLine{00548\ \ \ \ \ \_chunk\_geom,\ std::move(state),\ std::move(modelview\_transform)),\ trav);}
+\DoxyCodeLine{00549\ }
+\DoxyCodeLine{00550\ \ \ \textcolor{comment}{//\ After\ rendering,\ increment\ the\ view\ index}}
+\DoxyCodeLine{00551\ \ \ ++\_current\_view\_index;}
+\DoxyCodeLine{00552\ }
+\DoxyCodeLine{00553\ \ \ \textcolor{keywordflow}{if}\ (\_current\_view\_index\ >\ (\textcolor{keywordtype}{size\_t})stm\_max\_views)\ \{}
+\DoxyCodeLine{00554\ \ \ \ \ shader\_terrain\_cat.error()\ <<\ \textcolor{stringliteral}{"{}More\ views\ than\ supported!\ Increase\ the\ stm-\/max-\/views\ config\ variable!"{}}\ <<\ endl;}
+\DoxyCodeLine{00555\ \ \ \}}
+\DoxyCodeLine{00556\ }
+\DoxyCodeLine{00557\ \ \ \_basic\_collector.stop();}
+\DoxyCodeLine{00558\ \}}
+\DoxyCodeLine{00559\ }
+\DoxyCodeLine{00571\ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ ShaderTerrainMesh::}
+\DoxyCodeLine{00572\ calc\_tight\_bounds(LPoint3\ \&min\_point,\ LPoint3\ \&max\_point,\ \textcolor{keywordtype}{bool}\ \&found\_any,}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classTransformState}{TransformState}}\ *transform,\ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00574\ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ next\_transform\ =}
+\DoxyCodeLine{00575\ \ \ \ \ PandaNode::calc\_tight\_bounds(min\_point,\ max\_point,\ found\_any,\ transform,}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ current\_thread);}
+\DoxyCodeLine{00577\ }
+\DoxyCodeLine{00578\ \ \ \textcolor{keyword}{const}\ LMatrix4\ \&mat\ =\ next\_transform-\/>get\_mat();}
+\DoxyCodeLine{00579\ \ \ LPoint3\ terrain\_min\_point\ =\ LPoint3(0,\ 0,\ 0)\ *\ mat;}
+\DoxyCodeLine{00580\ \ \ LPoint3\ terrain\_max\_point\ =\ LPoint3(1,\ 1,\ 1)\ *\ mat;}
+\DoxyCodeLine{00581\ \ \ \textcolor{keywordflow}{if}\ (!found\_any)\ \{}
+\DoxyCodeLine{00582\ \ \ \ \ min\_point\ =\ terrain\_min\_point;}
+\DoxyCodeLine{00583\ \ \ \ \ max\_point\ =\ terrain\_max\_point;}
+\DoxyCodeLine{00584\ \ \ \ \ found\_any\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00585\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00586\ \ \ \ \ min\_point\ =\ min\_point.fmin(terrain\_min\_point);}
+\DoxyCodeLine{00587\ \ \ \ \ max\_point\ =\ max\_point.fmax(terrain\_max\_point);}
+\DoxyCodeLine{00588\ \ \ \}}
+\DoxyCodeLine{00589\ }
+\DoxyCodeLine{00590\ \ \ \textcolor{keywordflow}{return}\ next\_transform;}
+\DoxyCodeLine{00591\ \}}
+\DoxyCodeLine{00592\ }
+\DoxyCodeLine{00598\ \textcolor{keywordtype}{void}\ ShaderTerrainMesh::}
+\DoxyCodeLine{00599\ compute\_internal\_bounds(CPT(\mbox{\hyperlink{classBoundingVolume}{BoundingVolume}})\ \&internal\_bounds,}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \&internal\_vertices,}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ pipeline\_stage,}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00603\ }
+\DoxyCodeLine{00604\ \ \ BoundingVolume::BoundsType\ btype\ =\ \mbox{\hyperlink{classPandaNode_a762e487a7d3378c7d4be1b7582f3d850}{get\_bounds\_type}}();}
+\DoxyCodeLine{00605\ \ \ \textcolor{keywordflow}{if}\ (btype\ ==\ BoundingVolume::BT\_default)\ \{}
+\DoxyCodeLine{00606\ \ \ \ \ btype\ =\ bounds\_type;}
+\DoxyCodeLine{00607\ \ \ \}}
+\DoxyCodeLine{00608\ }
+\DoxyCodeLine{00609\ \ \ \textcolor{keywordflow}{if}\ (btype\ ==\ BoundingVolume::BT\_sphere)\ \{}
+\DoxyCodeLine{00610\ \ \ \ \ internal\_bounds\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBoundingSphere}{BoundingSphere}}(LPoint3(0.5,\ 0.5,\ 0.5),\ csqrt(0.75));}
+\DoxyCodeLine{00611\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00612\ \ \ \ \ internal\_bounds\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBoundingBox}{BoundingBox}}(LPoint3(0,\ 0,\ 0),\ LPoint3(1,\ 1,\ 1));}
+\DoxyCodeLine{00613\ \ \ \}}
+\DoxyCodeLine{00614\ }
+\DoxyCodeLine{00615\ \ \ internal\_vertices\ =\ 0;}
+\DoxyCodeLine{00616\ \}}
+\DoxyCodeLine{00617\ }
+\DoxyCodeLine{00632\ \textcolor{keywordtype}{void}\ ShaderTerrainMesh::do\_traverse(Chunk*\ chunk,\ TraversalData*\ data,\ \textcolor{keywordtype}{bool}\ fully\_visible)\ \{}
+\DoxyCodeLine{00633\ }
+\DoxyCodeLine{00634\ \ \ \textcolor{comment}{//\ Don't\ check\ bounds\ if\ we\ are\ fully\ visible}}
+\DoxyCodeLine{00635\ \ \ \textcolor{keywordflow}{if}\ (!fully\_visible)\ \{}
+\DoxyCodeLine{00636\ }
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{comment}{//\ Construct\ chunk\ bounding\ volume}}
+\DoxyCodeLine{00638\ \ \ \ \ PN\_stdfloat\ scale\ =\ 1.0\ /\ (PN\_stdfloat)\_size;}
+\DoxyCodeLine{00639\ \ \ \ \ LPoint3\ bb\_min(chunk-\/>x\ *\ scale,\ chunk-\/>y\ *\ scale,\ chunk-\/>min\_height);}
+\DoxyCodeLine{00640\ \ \ \ \ LPoint3\ bb\_max((chunk-\/>x\ +\ chunk-\/>size)\ *\ scale,\ (chunk-\/>y\ +\ chunk-\/>size)\ *\ scale,\ chunk-\/>max\_height);}
+\DoxyCodeLine{00641\ }
+\DoxyCodeLine{00642\ \ \ \ \ \mbox{\hyperlink{classBoundingBox}{BoundingBox}}\ bbox\ =\ \mbox{\hyperlink{classBoundingBox}{BoundingBox}}(bb\_min,\ bb\_max);}
+\DoxyCodeLine{00643\ \ \ \ \ DCAST(\mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}},\ \&bbox)-\/>xform(data-\/>model\_mat);}
+\DoxyCodeLine{00644\ \ \ \ \ \textcolor{keywordtype}{int}\ intersection\ =\ data-\/>cam\_bounds-\/>contains(\&bbox);}
+\DoxyCodeLine{00645\ }
+\DoxyCodeLine{00646\ \ \ \ \ \textcolor{keywordflow}{if}\ (intersection\ ==\ BoundingVolume::IF\_no\_intersection)\ \{}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ \textcolor{comment}{//\ No\ intersection\ with\ frustum}}
+\DoxyCodeLine{00648\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00649\ \ \ \ \ \}}
+\DoxyCodeLine{00650\ }
+\DoxyCodeLine{00651\ \ \ \ \ \textcolor{comment}{//\ If\ the\ bounds\ are\ fully\ visible,\ there\ is\ no\ reason\ to\ perform\ culling}}
+\DoxyCodeLine{00652\ \ \ \ \ \textcolor{comment}{//\ on\ the\ children,\ so\ we\ set\ this\ flag\ to\ prevent\ any\ bounding\ computation}}
+\DoxyCodeLine{00653\ \ \ \ \ \textcolor{comment}{//\ on\ the\ child\ nodes.}}
+\DoxyCodeLine{00654\ \ \ \ \ fully\_visible\ =\ (intersection\ \&\ BoundingVolume::IF\_all)\ !=\ 0;}
+\DoxyCodeLine{00655\ \ \ \}}
+\DoxyCodeLine{00656\ }
+\DoxyCodeLine{00657\ \ \ \textcolor{comment}{//\ Check\ if\ the\ chunk\ should\ be\ subdivided.\ In\ case\ the\ chunk\ is\ a\ leaf\ node,}}
+\DoxyCodeLine{00658\ \ \ \textcolor{comment}{//\ the\ chunk\ will\ never\ get\ subdivided.}}
+\DoxyCodeLine{00659\ \ \ \textcolor{comment}{//\ NOTE:\ We\ still\ always\ perform\ the\ LOD\ check.\ This\ is\ for\ the\ reason\ that}}
+\DoxyCodeLine{00660\ \ \ \textcolor{comment}{//\ the\ lod\ check\ also\ computes\ the\ CLOD\ factor,\ which\ is\ useful.}}
+\DoxyCodeLine{00661\ \ \ \textcolor{keywordflow}{if}\ (do\_check\_lod\_matches(chunk,\ data)\ ||\ chunk-\/>size\ ==\ \_chunk\_size)\ \{}
+\DoxyCodeLine{00662\ \ \ \ \ do\_emit\_chunk(chunk,\ data);}
+\DoxyCodeLine{00663\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00664\ \ \ \ \ \textcolor{comment}{//\ Traverse\ children}}
+\DoxyCodeLine{00665\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ 4;\ ++i)\ \{}
+\DoxyCodeLine{00666\ \ \ \ \ \ \ do\_traverse(chunk-\/>children[i],\ data,\ fully\_visible);}
+\DoxyCodeLine{00667\ \ \ \ \ \}}
+\DoxyCodeLine{00668\ \ \ \}}
+\DoxyCodeLine{00669\ \}}
+\DoxyCodeLine{00670\ }
+\DoxyCodeLine{00684\ \textcolor{keywordtype}{bool}\ ShaderTerrainMesh::do\_check\_lod\_matches(Chunk*\ chunk,\ TraversalData*\ data)\ \{}
+\DoxyCodeLine{00685\ }
+\DoxyCodeLine{00686\ \ \ \textcolor{comment}{//\ Project\ all\ points\ to\ world\ space}}
+\DoxyCodeLine{00687\ \ \ LVector2\ projected\_points[4];}
+\DoxyCodeLine{00688\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ y\ =\ 0;\ y\ <\ 2;\ ++y)\ \{}
+\DoxyCodeLine{00689\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ x\ =\ 0;\ x\ <\ 2;\ ++x)\ \{}
+\DoxyCodeLine{00690\ }
+\DoxyCodeLine{00691\ \ \ \ \ \ \ \textcolor{comment}{//\ Compute\ point\ in\ model\ space\ (0,0,0\ to\ 1,1,1)}}
+\DoxyCodeLine{00692\ \ \ \ \ \ \ LVector3\ edge\_pos\ =\ LVector3(}
+\DoxyCodeLine{00693\ \ \ \ \ \ \ \ \ (PN\_stdfloat)(chunk-\/>x\ +\ x\ *\ (chunk-\/>size\ -\/\ 1))\ /\ (PN\_stdfloat)\_size,}
+\DoxyCodeLine{00694\ \ \ \ \ \ \ \ \ (PN\_stdfloat)(chunk-\/>y\ +\ y\ *\ (chunk-\/>size\ -\/\ 1))\ /\ (PN\_stdfloat)\_size,}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ \ \ chunk-\/>edges.get\_cell(x\ +\ 2\ *\ y)}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ );}
+\DoxyCodeLine{00697\ \ \ \ \ \ \ LVector4\ projected\ =\ data-\/>mvp\_mat.xform(LVector4(edge\_pos,\ 1.0));}
+\DoxyCodeLine{00698\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (projected.get\_w()\ ==\ 0.0)\ \{}
+\DoxyCodeLine{00699\ \ \ \ \ \ \ \ \ projected.set(0.0,\ 0.0,\ -\/1.0,\ 1.0f);}
+\DoxyCodeLine{00700\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00701\ \ \ \ \ \ \ projected\ *=\ 1.0\ /\ projected.get\_w();}
+\DoxyCodeLine{00702\ \ \ \ \ \ \ projected\_points[x\ +\ 2\ *\ y].set(}
+\DoxyCodeLine{00703\ \ \ \ \ \ \ \ \ projected.get\_x()\ *\ data-\/>screen\_size.get\_x(),}
+\DoxyCodeLine{00704\ \ \ \ \ \ \ \ \ projected.get\_y()\ *\ data-\/>screen\_size.get\_y());}
+\DoxyCodeLine{00705\ \ \ \ \ \}}
+\DoxyCodeLine{00706\ \ \ \}}
+\DoxyCodeLine{00707\ }
+\DoxyCodeLine{00708\ \ \ \textcolor{comment}{//\ Compute\ the\ length\ of\ the\ edges\ in\ screen\ space}}
+\DoxyCodeLine{00709\ \ \ PN\_stdfloat\ edge\_top\ =\ (projected\_points[1]\ -\/\ projected\_points[3]).length\_squared();}
+\DoxyCodeLine{00710\ \ \ PN\_stdfloat\ edge\_right\ =\ (projected\_points[0]\ -\/\ projected\_points[2]).length\_squared();}
+\DoxyCodeLine{00711\ \ \ PN\_stdfloat\ edge\_bottom\ =\ (projected\_points[2]\ -\/\ projected\_points[3]).length\_squared();}
+\DoxyCodeLine{00712\ \ \ PN\_stdfloat\ edge\_left\ =\ (projected\_points[0]\ -\/\ projected\_points[1]).length\_squared();}
+\DoxyCodeLine{00713\ }
+\DoxyCodeLine{00714\ \ \ \textcolor{comment}{//\ CLOD\ factor}}
+\DoxyCodeLine{00715\ \ \ PN\_stdfloat\ max\_edge\ =\ max(edge\_top,\ max(edge\_right,\ max(edge\_bottom,\ edge\_left)));}
+\DoxyCodeLine{00716\ }
+\DoxyCodeLine{00717\ \ \ \textcolor{comment}{//\ Micro-\/Optimization:\ We\ use\ length\_squared()\ instead\ of\ length()\ to\ compute\ the}}
+\DoxyCodeLine{00718\ \ \ \textcolor{comment}{//\ maximum\ edge\ length.\ This\ reduces\ it\ to\ one\ csqrt\ instead\ of\ four.}}
+\DoxyCodeLine{00719\ \ \ max\_edge\ =\ csqrt(max\_edge);}
+\DoxyCodeLine{00720\ }
+\DoxyCodeLine{00721\ \ \ PN\_stdfloat\ tesselation\_factor\ =\ (max\_edge\ /\ \_target\_triangle\_width)\ /\ (PN\_stdfloat)\_chunk\_size;}
+\DoxyCodeLine{00722\ \ \ PN\_stdfloat\ clod\_factor\ =\ max(0.0,\ min(1.0,\ 2.0\ -\/\ tesselation\_factor));}
+\DoxyCodeLine{00723\ }
+\DoxyCodeLine{00724\ \ \ \textcolor{comment}{//\ Store\ the\ clod\ factor}}
+\DoxyCodeLine{00725\ \ \ chunk-\/>last\_clod\ =\ clod\_factor;}
+\DoxyCodeLine{00726\ }
+\DoxyCodeLine{00727\ \ \ \textcolor{keywordflow}{return}\ tesselation\_factor\ <=\ 2.0;}
+\DoxyCodeLine{00728\ \}}
+\DoxyCodeLine{00729\ }
+\DoxyCodeLine{00739\ \textcolor{keywordtype}{void}\ ShaderTerrainMesh::do\_emit\_chunk(Chunk*\ chunk,\ TraversalData*\ data)\ \{}
+\DoxyCodeLine{00740\ \ \ \textcolor{keywordflow}{if}\ (data-\/>emitted\_chunks\ >=\ \_data\_texture-\/>get\_x\_size())\ \{}
+\DoxyCodeLine{00741\ }
+\DoxyCodeLine{00742\ \ \ \ \ \textcolor{comment}{//\ Only\ print\ warning\ once}}
+\DoxyCodeLine{00743\ \ \ \ \ \textcolor{keywordflow}{if}\ (data-\/>emitted\_chunks\ ==\ \_data\_texture-\/>get\_x\_size())\ \{}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ shader\_terrain\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Too\ many\ chunks\ in\ the\ terrain!\ Consider\ lowering\ the\ desired\ LOD,\ or\ increase\ the\ stm-\/max-\/chunk-\/count\ variable."{}}\ <<\ endl;}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ data-\/>emitted\_chunks++;}
+\DoxyCodeLine{00746\ \ \ \ \ \}}
+\DoxyCodeLine{00747\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00748\ \ \ \}}
+\DoxyCodeLine{00749\ }
+\DoxyCodeLine{00750\ \ \ ChunkDataEntry\&\ data\_entry\ =\ *data-\/>storage\_ptr;}
+\DoxyCodeLine{00751\ \ \ data\_entry.x\ =\ chunk-\/>x;}
+\DoxyCodeLine{00752\ \ \ data\_entry.y\ =\ chunk-\/>y;}
+\DoxyCodeLine{00753\ \ \ data\_entry.size\ =\ chunk-\/>size\ /\ \_chunk\_size;}
+\DoxyCodeLine{00754\ \ \ data\_entry.clod\ =\ chunk-\/>last\_clod;}
+\DoxyCodeLine{00755\ }
+\DoxyCodeLine{00756\ \ \ data-\/>emitted\_chunks++;}
+\DoxyCodeLine{00757\ \ \ data-\/>storage\_ptr++;}
+\DoxyCodeLine{00758\ \}}
+\DoxyCodeLine{00759\ }
+\DoxyCodeLine{00769\ LPoint3\ ShaderTerrainMesh::uv\_to\_world(\textcolor{keyword}{const}\ LTexCoord\&\ coord)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00770\ \ \ \mbox{\hyperlink{classMutexHolder}{MutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00771\ \ \ nassertr(\_heightfield\_tex\ !=\ \textcolor{keyword}{nullptr},\ LPoint3(0));\ \textcolor{comment}{//\ Heightfield\ not\ set\ yet}}
+\DoxyCodeLine{00772\ \ \ nassertr(\_heightfield\_tex-\/>has\_ram\_image(),\ LPoint3(0));\ \textcolor{comment}{//\ Heightfield\ not\ in\ memory}}
+\DoxyCodeLine{00773\ }
+\DoxyCodeLine{00774\ \ \ PT(\mbox{\hyperlink{classTexturePeeker}{TexturePeeker}})\ peeker\ =\ \_heightfield\_tex-\/>peek();}
+\DoxyCodeLine{00775\ \ \ nassertr(peeker\ !=\ \textcolor{keyword}{nullptr},\ LPoint3(0));}
+\DoxyCodeLine{00776\ }
+\DoxyCodeLine{00777\ \ \ LColor\ result;}
+\DoxyCodeLine{00778\ \ \ \textcolor{keywordflow}{if}\ (!peeker-\/>lookup\_bilinear(result,\ coord.get\_x(),\ coord.get\_y()))\ \{}
+\DoxyCodeLine{00779\ \ \ \ \ shader\_terrain\_cat.error()\ <<\ \textcolor{stringliteral}{"{}UV\ out\ of\ range,\ cant\ transform\ to\ world!"{}}\ <<\ endl;}
+\DoxyCodeLine{00780\ \ \ \ \ \textcolor{keywordflow}{return}\ LPoint3(0);}
+\DoxyCodeLine{00781\ \ \ \}}
+\DoxyCodeLine{00782\ \ \ LPoint3\ unit\_point(coord.get\_x(),\ coord.get\_y(),\ result.get\_x());}
+\DoxyCodeLine{00783\ \ \ \textcolor{keywordflow}{return}\ get\_transform()-\/>get\_mat().xform\_point\_general(unit\_point);}
+\DoxyCodeLine{00784\ \}}
+
+\end{DoxyCode}

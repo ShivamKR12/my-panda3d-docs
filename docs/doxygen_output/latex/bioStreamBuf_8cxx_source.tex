@@ -1,0 +1,269 @@
+\doxysection{bio\+Stream\+Buf.\+cxx}
+\hypertarget{bioStreamBuf_8cxx_source}{}\label{bioStreamBuf_8cxx_source}\index{panda/src/downloader/bioStreamBuf.cxx@{panda/src/downloader/bioStreamBuf.cxx}}
+\mbox{\hyperlink{bioStreamBuf_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bioStreamBuf_8h}{bioStreamBuf.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__downloader_8h}{config\_downloader.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{openSSLWrapper_8h}{openSSLWrapper.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ <errno.h>}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\ \ \#include\ <winsock2.h>}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\ \ \#include\ <\mbox{\hyperlink{windows_8h}{windows.h}}>}\ \ \textcolor{comment}{//\ for\ WSAGetLastError()}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\ \ \#undef\ X509\_NAME}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00030\ BioStreamBuf::}
+\DoxyCodeLine{00031\ BioStreamBuf()\ \{}
+\DoxyCodeLine{00032\ \ \ \_read\_open\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00033\ \ \ \_write\_open\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_IOSTREAM}}
+\DoxyCodeLine{00036\ \ \ \_buffer\ =\ (\textcolor{keywordtype}{char}\ *)PANDA\_MALLOC\_ARRAY(8192);}
+\DoxyCodeLine{00037\ \ \ \textcolor{keywordtype}{char}\ *ebuf\ =\ \_buffer\ +\ 8192;}
+\DoxyCodeLine{00038\ \ \ \textcolor{keywordtype}{char}\ *mbuf\ =\ \_buffer\ +\ 4096;}
+\DoxyCodeLine{00039\ \ \ setg(\_buffer,\ mbuf,\ mbuf);}
+\DoxyCodeLine{00040\ \ \ setp(mbuf,\ ebuf);}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00043\ \ \ allocate();}
+\DoxyCodeLine{00044\ \ \ \textcolor{comment}{//\ Chop\ the\ buffer\ in\ half.\ \ The\ bottom\ half\ goes\ to\ the\ get\ buffer;\ the\ top}}
+\DoxyCodeLine{00045\ \ \ \textcolor{comment}{//\ half\ goes\ to\ the\ put\ buffer.}}
+\DoxyCodeLine{00046\ \ \ \textcolor{keywordtype}{char}\ *b\ =\ base();}
+\DoxyCodeLine{00047\ \ \ \textcolor{keywordtype}{char}\ *t\ =\ ebuf();}
+\DoxyCodeLine{00048\ \ \ \textcolor{keywordtype}{char}\ *m\ =\ b\ +\ (t\ -\/\ b)\ /\ 2;}
+\DoxyCodeLine{00049\ \ \ setg(b,\ m,\ m);}
+\DoxyCodeLine{00050\ \ \ setp(b,\ m);}
+\DoxyCodeLine{00051\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00052\ \}}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00057\ BioStreamBuf::}
+\DoxyCodeLine{00058\ \string~BioStreamBuf()\ \{}
+\DoxyCodeLine{00059\ \ \ close();}
+\DoxyCodeLine{00060\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_IOSTREAM}}
+\DoxyCodeLine{00061\ \ \ PANDA\_FREE\_ARRAY(\_buffer);}
+\DoxyCodeLine{00062\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00063\ \}}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00068\ \textcolor{keywordtype}{void}\ BioStreamBuf::}
+\DoxyCodeLine{00069\ open(BioPtr\ *source)\ \{}
+\DoxyCodeLine{00070\ \ \ \_source\ =\ source;}
+\DoxyCodeLine{00071\ \ \ \_read\_open\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00072\ \ \ \_write\_open\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00073\ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00078\ \textcolor{keywordtype}{void}\ BioStreamBuf::}
+\DoxyCodeLine{00079\ close()\ \{}
+\DoxyCodeLine{00080\ \ \ sync();}
+\DoxyCodeLine{00081\ \ \ \_source.clear();}
+\DoxyCodeLine{00082\ \ \ \_read\_open\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00083\ \ \ \_write\_open\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00084\ \}}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00090\ \textcolor{keywordtype}{int}\ BioStreamBuf::}
+\DoxyCodeLine{00091\ overflow(\textcolor{keywordtype}{int}\ ch)\ \{}
+\DoxyCodeLine{00092\ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ pptr()\ -\/\ pbase();}
+\DoxyCodeLine{00093\ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00094\ \ \ \ \ downloader\_cat.spam()}
+\DoxyCodeLine{00095\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}BioStreamBuf::overflow,\ "{}}\ <<\ n\ <<\ \textcolor{stringliteral}{"{}\ bytes\(\backslash\)n"{}};}
+\DoxyCodeLine{00096\ \ \ \}}
+\DoxyCodeLine{00097\ \ \ \textcolor{keywordflow}{if}\ (n\ !=\ 0)\ \{}
+\DoxyCodeLine{00098\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ num\_wrote\ =\ write\_chars(pbase(),\ n);}
+\DoxyCodeLine{00099\ \ \ \ \ pbump(-\/(\textcolor{keywordtype}{int})n);}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_wrote\ !=\ n)\ \{}
+\DoxyCodeLine{00101\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EOF;}
+\DoxyCodeLine{00102\ \ \ \ \ \}}
+\DoxyCodeLine{00103\ \ \ \}}
+\DoxyCodeLine{00104\ }
+\DoxyCodeLine{00105\ \ \ \textcolor{keywordflow}{if}\ (ch\ !=\ EOF)\ \{}
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{comment}{//\ Store\ the\ next\ character\ back\ in\ the\ buffer.}}
+\DoxyCodeLine{00107\ \ \ \ \ *pptr()\ =\ ch;}
+\DoxyCodeLine{00108\ \ \ \ \ pbump(1);}
+\DoxyCodeLine{00109\ \ \ \}}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00112\ \}}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00118\ \textcolor{keywordtype}{int}\ BioStreamBuf::}
+\DoxyCodeLine{00119\ sync()\ \{}
+\DoxyCodeLine{00120\ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00121\ \textcolor{comment}{\ \ size\_t\ n\ =\ egptr()\ -\/\ gptr();}}
+\DoxyCodeLine{00122\ \textcolor{comment}{\ \ gbump(n);}}
+\DoxyCodeLine{00123\ \textcolor{comment}{\ \ */}}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \textcolor{keywordtype}{size\_t}\ n\ =\ pptr()\ -\/\ pbase();}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00127\ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_spam()\ \&\&\ n\ !=\ 0)\ \{}
+\DoxyCodeLine{00128\ \ \ \ \ downloader\_cat.spam()}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}BioStreamBuf::sync,\ "{}}\ <<\ n\ <<\ \textcolor{stringliteral}{"{}\ bytes\(\backslash\)n"{}};}
+\DoxyCodeLine{00130\ \ \ \}}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ \ \ \textcolor{keywordtype}{size\_t}\ num\_wrote\ =\ write\_chars(pbase(),\ n);}
+\DoxyCodeLine{00133\ \ \ pbump(-\/(\textcolor{keywordtype}{int})n);}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00135\ \ \ \textcolor{keywordflow}{if}\ (num\_wrote\ !=\ n)\ \{}
+\DoxyCodeLine{00136\ \ \ \ \ \textcolor{keywordflow}{return}\ EOF;}
+\DoxyCodeLine{00137\ \ \ \}}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00139\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00140\ \}}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00146\ \textcolor{keywordtype}{int}\ BioStreamBuf::}
+\DoxyCodeLine{00147\ underflow()\ \{}
+\DoxyCodeLine{00148\ \ \ \textcolor{comment}{//\ Sometimes\ underflow()\ is\ called\ even\ if\ the\ buffer\ is\ not\ empty.}}
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordflow}{if}\ (gptr()\ >=\ egptr())\ \{}
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ egptr()\ -\/\ eback();}
+\DoxyCodeLine{00151\ \ \ \ \ gbump(-\/(\textcolor{keywordtype}{int})buffer\_size);}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ num\_bytes\ =\ buffer\_size;}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ \ \ \textcolor{comment}{//\ BIO\_read\ might\ return\ -\/1\ or\ -\/2\ on\ eof\ or\ error,\ so\ we\ have\ to\ allow\ for}}
+\DoxyCodeLine{00156\ \ \ \ \ \textcolor{comment}{//\ negative\ numbers.}}
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{keywordtype}{int}\ read\_count\ =\ BIO\_read(*\_source,\ gptr(),\ buffer\_size);}
+\DoxyCodeLine{00158\ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_count\ !=\ (\textcolor{keywordtype}{int})num\_bytes)\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \textcolor{comment}{//\ Oops,\ we\ didn't\ read\ what\ we\ thought\ we\ would.}}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_count\ <=\ 0)\ \{}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Immediately\ save\ the\ os\ error\ in\ case\ we\ screw\ up\ and\ do\ something}}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ that\ will\ change\ its\ value\ before\ we\ can\ output\ it.}}
+\DoxyCodeLine{00165\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ os\_error\ =\ WSAGetLastError();}
+\DoxyCodeLine{00167\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ os\_error\ =\ errno;}
+\DoxyCodeLine{00169\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Though\ BIO\_eof()\ is\ tempting,\ it\ appears\ there\ are\ cases\ in\ which}}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ that\ never\ returns\ true,\ if\ the\ socket\ is\ closed\ by\ the\ server.}}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ But\ BIO\_should\_retry()\ *appears*\ to\ be\ reliable.}}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \_read\_open\ =\ (BIO\_should\_retry(*\_source)\ !=\ 0);}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00176\ \textcolor{preprocessor}{\#ifdef\ IS\_OSX}}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ occassionally\ we\ get\ -\/1\ on\ read\_open\ on\ the\ mac\ the\ os\_error\ is\ 35}}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ which\ means\ "{}Resource\ temporarily\ unavailable"{}.}}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_read\_open\ \&\&\ os\_error\ ==\ 35)\ \{}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ \ \ downloader\_cat.warning()\ <<\ \textcolor{stringliteral}{"{}forcing\ retry\ to\ true\ again\ and\ \_read\_open\ to\ true\(\backslash\)n"{}};}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \ \ BIO\_set\_retry\_read(*\_source);}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ \ \ \_read\_open\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00184\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_read\_open)\ \{}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \ \ downloader\_cat.info()}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Lost\ connection\ to\ "{}}}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \_source-\/>get\_server\_name()\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \_source-\/>get\_port()\ <<\ \textcolor{stringliteral}{"{}\ ("{}}\ <<\ read\_count\ <<\ \textcolor{stringliteral}{"{}).\(\backslash\)n"{}};}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ \ \ OpenSSLWrapper::get\_global\_ptr()-\/>notify\_ssl\_errors();}
+\DoxyCodeLine{00191\ }
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \ \ SSL\ *ssl\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ \ \ BIO\_get\_ssl(*\_source,\ \&ssl);}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ssl\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \ \ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}OpenSSL\ error\ code:\ "{}}\ <<\ SSL\_get\_error(ssl,\ read\_count)}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00200\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Windows\ error\ code:\ "{}}\ <<\ os\_error\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00203\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unix\ error\ code:\ "{}}\ <<\ os\_error\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00206\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ gbump(num\_bytes);}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EOF;}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \textcolor{comment}{//\ Slide\ what\ we\ did\ read\ to\ the\ top\ of\ the\ buffer.}}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ nassertr(read\_count\ <\ (\textcolor{keywordtype}{int})num\_bytes,\ EOF);}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ delta\ =\ (int)num\_bytes\ -\/\ read\_count;}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ memmove(gptr()\ +\ delta,\ gptr(),\ read\_count);}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ gbump(delta);}
+\DoxyCodeLine{00217\ \ \ \ \ \}}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00219\ \ \ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ downloader\_cat.spam()}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}read\ "{}}\ <<\ read\_count\ <<\ \textcolor{stringliteral}{"{}\ bytes\ from\ "{}}\ <<\ \_source\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00222\ \ \ \ \ \}}
+\DoxyCodeLine{00223\ \ \ \}}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00225\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})*gptr();}
+\DoxyCodeLine{00226\ \}}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00233\ \textcolor{keywordtype}{size\_t}\ BioStreamBuf::}
+\DoxyCodeLine{00234\ write\_chars(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *start,\ \textcolor{keywordtype}{size\_t}\ length)\ \{}
+\DoxyCodeLine{00235\ \ \ \textcolor{keywordflow}{if}\ (length\ !=\ 0)\ \{}
+\DoxyCodeLine{00236\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ wrote\_so\_far\ =\ 0;}
+\DoxyCodeLine{00237\ }
+\DoxyCodeLine{00238\ \ \ \ \ \textcolor{keywordtype}{int}\ write\_count\ =\ BIO\_write(*\_source,\ start,\ length);}
+\DoxyCodeLine{00239\ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00240\ \ \ \ \ \textcolor{keywordflow}{while}\ (write\_count\ !=\ (\textcolor{keywordtype}{int})(length\ -\/\ wrote\_so\_far))\ \{}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (write\_count\ <=\ 0)\ \{}
+\DoxyCodeLine{00242\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00243\ \textcolor{comment}{\ *\ http:www.openssl.orgdocscryptoBIO\_s\_bio.html\ "{}Calls\ to\ BIO\_write()\ will}}
+\DoxyCodeLine{00244\ \textcolor{comment}{\ *\ place\ data\ in\ the\ buffer\ or\ request\ a\ retry\ if\ the\ buffer\ is\ full."{}\ \ when}}
+\DoxyCodeLine{00245\ \textcolor{comment}{\ *\ the\ server\ is\ terminated,\ this\ seems\ to\ be\ the\ best\ way\ of\ detecting\ that}}
+\DoxyCodeLine{00246\ \textcolor{comment}{\ *\ case\ on\ the\ client:\ a\ BIO\ write\ error\ without\ a\ retry\ request\ \_write\_open\ =}}
+\DoxyCodeLine{00247\ \textcolor{comment}{\ *\ BIO\_should\_retry(*\_source);\ \_write\_open\ =\ !BIO\_eof(*\_source);}}
+\DoxyCodeLine{00248\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \ \ \_write\_open\ =\ (BIO\_should\_write(*\_source)\ !=\ 0\ ||\ BIO\_should\_retry(*\_source)\ !=\ 0);}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_write\_open)\ \{}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ wrote\_so\_far;}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Block\ on\ the\ underlying\ socket\ before\ we\ try\ to\ write\ some\ more.}}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ fd\ =\ -\/1;}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ BIO\_get\_fd(*\_source,\ \&fd);}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (fd\ <\ 0)\ \{}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}socket\ BIO\ has\ no\ file\ descriptor.\(\backslash\)n"{}};}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ \ \ \ \ downloader\_cat.spam()}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}waiting\ to\ write\ to\ BIO.\(\backslash\)n"{}};}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00265\ \textcolor{preprocessor}{\#if\ defined(HAVE\_THREADS)\ \&\&\ defined(SIMPLE\_THREADS)}}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ In\ SIMPLE\_THREADS\ mode,\ instead\ of\ blocking,\ simply\ yield\ the}}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ thread.}}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ \ \ thread\_yield();}
+\DoxyCodeLine{00269\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ In\ any\ other\ threading\ mode,\ we\ actually\ want\ to\ block.}}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structfd__set}{fd\_set}}\ wset;}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ \ \ FD\_ZERO(\&wset);}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \ \ \ \ FD\_SET(fd,\ \&wset);}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \ \ \ \ select(fd\ +\ 1,\ \textcolor{keyword}{nullptr},\ \&wset,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00275\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ SIMPLE\_THREADS}}
+\DoxyCodeLine{00276\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ wrote\ some\ characters.}}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \ \ wrote\_so\_far\ +=\ write\_count;}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \ \ \ \ downloader\_cat.spam()}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}wrote\ "{}}\ <<\ write\_count\ <<\ \textcolor{stringliteral}{"{}\ bytes\ to\ "{}}\ <<\ \_source\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \textcolor{comment}{//\ Try\ to\ write\ some\ more.}}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ write\_count\ =\ BIO\_write(*\_source,\ start\ +\ wrote\_so\_far,\ length\ -\/\ wrote\_so\_far);}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \ \ downloader\_cat.spam()}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}continued,\ wrote\ "{}}\ <<\ write\_count\ <<\ \textcolor{stringliteral}{"{}\ bytes.\(\backslash\)n"{}};}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{00294\ \ \ \ \ \}}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ downloader\_cat.spam()}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}wrote\ "{}}\ <<\ write\_count\ <<\ \textcolor{stringliteral}{"{}\ bytes\ to\ "{}}\ <<\ \_source\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00298\ \ \ \ \ \}}
+\DoxyCodeLine{00299\ \ \ \}}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00301\ \ \ \textcolor{keywordflow}{return}\ length;}
+\DoxyCodeLine{00302\ \}}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00304\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+
+\end{DoxyCode}

@@ -1,0 +1,2348 @@
+\doxysection{multifile.\+cxx}
+\hypertarget{multifile_8cxx_source}{}\label{multifile_8cxx_source}\index{panda/src/express/multifile.cxx@{panda/src/express/multifile.cxx}}
+\mbox{\hyperlink{multifile_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{multifile_8h}{multifile.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__express_8h}{config\_express.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{streamWriter_8h}{streamWriter.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{streamReader_8h}{streamReader.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{datagram_8h}{datagram.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{zStream_8h}{zStream.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{encryptStream_8h}{encryptStream.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFileSystem_8h}{virtualFileSystem.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{virtualFile_8h}{virtualFile.h}}"{}}}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <algorithm>}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ <iterator>}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ <time.h>}}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{openSSLWrapper_8h}{openSSLWrapper.h}}"{}}}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \textcolor{keyword}{using\ }std::ios;}
+\DoxyCodeLine{00032\ \textcolor{keyword}{using\ }std::iostream;}
+\DoxyCodeLine{00033\ \textcolor{keyword}{using\ }std::istream;}
+\DoxyCodeLine{00034\ \textcolor{keyword}{using\ }std::max;}
+\DoxyCodeLine{00035\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00036\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00037\ \textcolor{keyword}{using\ }\mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}};}
+\DoxyCodeLine{00038\ \textcolor{keyword}{using\ }std::streamoff;}
+\DoxyCodeLine{00039\ \textcolor{keyword}{using\ }std::streampos;}
+\DoxyCodeLine{00040\ \textcolor{keyword}{using\ }std::streamsize;}
+\DoxyCodeLine{00041\ \textcolor{keyword}{using\ }std::stringstream;}
+\DoxyCodeLine{00042\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00044\ \textcolor{comment}{//\ This\ sequence\ of\ bytes\ begins\ each\ Multifile\ to\ identify\ it\ as\ a\ Multifile.}}
+\DoxyCodeLine{00045\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ Multifile::\_header[]\ =\ \textcolor{stringliteral}{"{}pmf\(\backslash\)0\(\backslash\)n\(\backslash\)r"{}};}
+\DoxyCodeLine{00046\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ Multifile::\_header\_size\ =\ 6;}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00048\ \textcolor{comment}{//\ These\ numbers\ identify\ the\ version\ of\ the\ Multifile.\ \ Generally,\ a\ change}}
+\DoxyCodeLine{00049\ \textcolor{comment}{//\ in\ the\ major\ version\ is\ intolerable;\ while\ a\ Multifile\ with\ an\ older\ minor}}
+\DoxyCodeLine{00050\ \textcolor{comment}{//\ version\ may\ still\ be\ read.}}
+\DoxyCodeLine{00051\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ Multifile::\_current\_major\_ver\ =\ 1;}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ Multifile::\_current\_minor\_ver\ =\ 1;}
+\DoxyCodeLine{00054\ \textcolor{comment}{//\ Bumped\ to\ version\ 1.1\ on\ 6806\ to\ add\ timestamps.}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \textcolor{comment}{//\ To\ confirm\ that\ the\ supplied\ password\ matches,\ we\ write\ the\ Mutifile\ magic}}
+\DoxyCodeLine{00057\ \textcolor{comment}{//\ header\ at\ the\ beginning\ of\ the\ encrypted\ stream.\ \ I\ suppose\ this\ does}}
+\DoxyCodeLine{00058\ \textcolor{comment}{//\ compromise\ the\ encryption\ security\ a\ tiny\ bit\ by\ making\ it\ easy\ for}}
+\DoxyCodeLine{00059\ \textcolor{comment}{//\ crackers\ to\ validate\ that\ a\ particular\ password\ guess\ matches\ or\ doesn't}}
+\DoxyCodeLine{00060\ \textcolor{comment}{//\ match,\ but\ the\ encryption\ algorithm\ doesn't\ depend\ on\ this\ being\ difficult}}
+\DoxyCodeLine{00061\ \textcolor{comment}{//\ anyway.}}
+\DoxyCodeLine{00062\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ Multifile::\_encrypt\_header[]\ =\ \textcolor{stringliteral}{"{}crypty"{}};}
+\DoxyCodeLine{00063\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ Multifile::\_encrypt\_header\_size\ =\ 6;}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00067\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00068\ \textcolor{comment}{\ *\ A\ Multifile\ consists\ of\ the\ following\ elements:\ (1)\ A\ header.\ \ This\ is}}
+\DoxyCodeLine{00069\ \textcolor{comment}{\ *\ always\ the\ first\ n\ bytes\ of\ the\ Multifile,\ and\ contains\ a\ magic\ number\ to}}
+\DoxyCodeLine{00070\ \textcolor{comment}{\ *\ identify\ the\ file,\ as\ well\ as\ version\ numbers\ and\ any\ file-\/specific}}
+\DoxyCodeLine{00071\ \textcolor{comment}{\ *\ parameters.\ \ char[6]\ \ \ \ The\ string\ Multifile::\_header,\ a\ magic\ number.}}
+\DoxyCodeLine{00072\ \textcolor{comment}{\ *\ int16\ \ \ \ \ \ The\ file's\ major\ version\ number\ int16\ \ \ \ \ \ The\ file's\ minor}}
+\DoxyCodeLine{00073\ \textcolor{comment}{\ *\ version\ number\ uint32\ \ \ \ \ Scale\ factor.\ \ This\ scales\ all\ address\ references}}
+\DoxyCodeLine{00074\ \textcolor{comment}{\ *\ within\ the\ file.\ \ Normally\ 1,\ this\ may\ be\ set\ larger\ to\ support\ Multifiles}}
+\DoxyCodeLine{00075\ \textcolor{comment}{\ *\ larger\ than\ 4GB.\ uint32\ \ \ \ \ An\ overall\ modification\ timestamp\ for\ the}}
+\DoxyCodeLine{00076\ \textcolor{comment}{\ *\ entire\ multifile.}}
+\DoxyCodeLine{00077\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00079\ \textcolor{comment}{/*}}
+\DoxyCodeLine{00080\ \textcolor{comment}{\ *\ (2)\ Zero\ or\ more\ index\ entries,\ one\ for\ each\ subfile\ within\ the\ Multifile.}}
+\DoxyCodeLine{00081\ \textcolor{comment}{\ *\ These\ entries\ are\ of\ variable\ length.\ \ The\ first\ one\ of\ these\ immediately}}
+\DoxyCodeLine{00082\ \textcolor{comment}{\ *\ follows\ the\ header,\ and\ the\ first\ word\ of\ each\ index\ entry\ contains\ the}}
+\DoxyCodeLine{00083\ \textcolor{comment}{\ *\ address\ of\ the\ next\ index\ entry.\ \ A\ zero\ "{}next"{}\ address\ marks\ the\ end\ of}}
+\DoxyCodeLine{00084\ \textcolor{comment}{\ *\ the\ chain.\ \ These\ may\ appear\ at\ any\ point\ within\ the\ Multifile;\ they\ do\ not}}
+\DoxyCodeLine{00085\ \textcolor{comment}{\ *\ necessarily\ appear\ in\ sequential\ order\ at\ the\ beginning\ of\ the\ file}}
+\DoxyCodeLine{00086\ \textcolor{comment}{\ *\ (although\ they\ will\ after\ the\ file\ has\ been\ "{}packed"{}).\ uint32\ \ \ \ \ The}}
+\DoxyCodeLine{00087\ \textcolor{comment}{\ *\ address\ of\ the\ next\ entry.\ \ 0\ to\ mark\ the\ end.\ \ uint32\ \ \ \ \ The\ address\ of}}
+\DoxyCodeLine{00088\ \textcolor{comment}{\ *\ this\ subfile's\ data\ record.\ \ uint32\ \ \ \ \ The\ length\ in\ bytes\ of\ this}}
+\DoxyCodeLine{00089\ \textcolor{comment}{\ *\ subfile's\ data\ record.\ \ uint16\ \ \ \ \ The\ Subfile::\_flags\ member.\ \ [uint32]}}
+\DoxyCodeLine{00090\ \textcolor{comment}{\ *\ The\ original,\ uncompressed\ and\ unencrypted\ length\ of\ the\ subfile,\ if\ it\ is}}
+\DoxyCodeLine{00091\ \textcolor{comment}{\ *\ compressed\ or\ encrypted.\ \ This\ field\ is\ only\ present\ if\ one\ or\ both\ of\ the}}
+\DoxyCodeLine{00092\ \textcolor{comment}{\ *\ SF\_compressed\ or\ SF\_encrypted\ bits\ are\ set\ in\ \_flags.\ \ uint32\ \ \ \ \ A}}
+\DoxyCodeLine{00093\ \textcolor{comment}{\ *\ modification\ timestamp\ for\ the\ subfile.\ \ uint16\ \ \ \ \ The\ length\ in\ bytes\ of}}
+\DoxyCodeLine{00094\ \textcolor{comment}{\ *\ the\ subfile's\ name.\ \ char[n]\ \ \ \ The\ subfile's\ name.\ \ (3)\ Zero\ or\ more\ data}}
+\DoxyCodeLine{00095\ \textcolor{comment}{\ *\ entries,\ one\ for\ each\ subfile.\ \ These\ may\ appear\ at\ any\ point\ within\ the}}
+\DoxyCodeLine{00096\ \textcolor{comment}{\ *\ Multifile;\ they\ do\ not\ necessarily\ follow\ each\ index\ entry,\ nor\ are\ they}}
+\DoxyCodeLine{00097\ \textcolor{comment}{\ *\ necessarily\ all\ grouped\ together\ at\ the\ end\ (although\ they\ will\ be\ all}}
+\DoxyCodeLine{00098\ \textcolor{comment}{\ *\ grouped\ together\ at\ the\ end\ after\ the\ file\ has\ been\ "{}packed"{}).\ \ These\ are}}
+\DoxyCodeLine{00099\ \textcolor{comment}{\ *\ just\ blocks\ of\ literal\ data.}}
+\DoxyCodeLine{00100\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00105\ Multifile::}
+\DoxyCodeLine{00106\ Multifile()\ :}
+\DoxyCodeLine{00107\ \ \ \_read\_filew(\_read\_file),}
+\DoxyCodeLine{00108\ \ \ \_read\_write\_filew(\_read\_write\_file)}
+\DoxyCodeLine{00109\ \{}
+\DoxyCodeLine{00110\ \ \ \mbox{\hyperlink{classConfigVariableInt}{ConfigVariableInt}}\ multifile\_encryption\_iteration\_count}
+\DoxyCodeLine{00111\ \ \ \ \ (\textcolor{stringliteral}{"{}multifile-\/encryption-\/iteration-\/count"{}},\ 0,}
+\DoxyCodeLine{00112\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}This\ is\ a\ special\ value\ of\ encryption-\/iteration-\/count\ used\ to\ encrypt\ "{}}}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}subfiles\ within\ a\ multifile.\ \ It\ has\ a\ default\ value\ of\ 0\ (just\ one\ "{}}}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}application),\ on\ the\ assumption\ that\ the\ files\ from\ a\ multifile\ must\ "{}}}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}be\ loaded\ quickly,\ without\ paying\ the\ cost\ of\ an\ expensive\ hash\ on\ "{}}}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}each\ subfile\ in\ order\ to\ decrypt\ it."{}}));}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \ \ \_read\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00119\ \ \ \_write\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00120\ \ \ \_offset\ =\ 0;}
+\DoxyCodeLine{00121\ \ \ \_owns\_stream\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00122\ \ \ \_next\_index\ =\ 0;}
+\DoxyCodeLine{00123\ \ \ \_last\_index\ =\ 0;}
+\DoxyCodeLine{00124\ \ \ \_last\_data\_byte\ =\ 0;}
+\DoxyCodeLine{00125\ \ \ \_needs\_repack\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00126\ \ \ \_timestamp\ =\ 0;}
+\DoxyCodeLine{00127\ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00128\ \ \ \_record\_timestamp\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00129\ \ \ \_scale\_factor\ =\ 1;}
+\DoxyCodeLine{00130\ \ \ \_new\_scale\_factor\ =\ 1;}
+\DoxyCodeLine{00131\ \ \ \_encryption\_flag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00132\ \ \ \_encryption\_iteration\_count\ =\ multifile\_encryption\_iteration\_count;}
+\DoxyCodeLine{00133\ \ \ \_file\_major\_ver\ =\ 0;}
+\DoxyCodeLine{00134\ \ \ \_file\_minor\_ver\ =\ 0;}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00136\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00137\ \ \ \textcolor{comment}{//\ Get\ these\ values\ from\ the\ config\ file\ via\ an\ EncryptStreamBuf.}}
+\DoxyCodeLine{00138\ \ \ EncryptStreamBuf\ tbuf;}
+\DoxyCodeLine{00139\ \ \ \_encryption\_algorithm\ =\ tbuf.get\_algorithm();}
+\DoxyCodeLine{00140\ \ \ \_encryption\_key\_length\ =\ tbuf.get\_key\_length();}
+\DoxyCodeLine{00141\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00142\ \}}
+\DoxyCodeLine{00143\ }
+\DoxyCodeLine{00147\ Multifile::}
+\DoxyCodeLine{00148\ \string~Multifile()\ \{}
+\DoxyCodeLine{00149\ \ \ close();}
+\DoxyCodeLine{00150\ \}}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00160\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{00161\ open\_read(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&multifile\_name,\ \textcolor{keyword}{const}\ streampos\ \&offset)\ \{}
+\DoxyCodeLine{00162\ \ \ close();}
+\DoxyCodeLine{00163\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ multifile\_name;}
+\DoxyCodeLine{00164\ \ \ fname.set\_binary();}
+\DoxyCodeLine{00165\ }
+\DoxyCodeLine{00166\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00167\ \ \ PT(\mbox{\hyperlink{classVirtualFile}{VirtualFile}})\ vfile\ =\ vfs-\/>get\_file(fname);}
+\DoxyCodeLine{00168\ \ \ \textcolor{keywordflow}{if}\ (vfile\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00169\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00170\ \ \ \}}
+\DoxyCodeLine{00171\ \ \ istream\ *multifile\_stream\ =\ vfile-\/>open\_read\_file(\textcolor{keyword}{false});}
+\DoxyCodeLine{00172\ \ \ \textcolor{keywordflow}{if}\ (multifile\_stream\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00173\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00174\ \ \ \}}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00176\ \ \ \_timestamp\ =\ vfile-\/>get\_timestamp();}
+\DoxyCodeLine{00177\ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00178\ \ \ \_read\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classIStreamWrapper}{IStreamWrapper}}(multifile\_stream,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00179\ \ \ \_owns\_stream\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00180\ \ \ \_multifile\_name\ =\ multifile\_name;}
+\DoxyCodeLine{00181\ \ \ \_offset\ =\ offset;}
+\DoxyCodeLine{00182\ \ \ \textcolor{keywordflow}{return}\ read\_index();}
+\DoxyCodeLine{00183\ \}}
+\DoxyCodeLine{00184\ }
+\DoxyCodeLine{00193\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{00194\ open\_read(\mbox{\hyperlink{classIStreamWrapper}{IStreamWrapper}}\ *multifile\_stream,\ \textcolor{keywordtype}{bool}\ owns\_pointer,}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ streampos\ \&offset)\ \{}
+\DoxyCodeLine{00196\ \ \ close();}
+\DoxyCodeLine{00197\ \ \ \_timestamp\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00198\ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00199\ \ \ \_read\ =\ multifile\_stream;}
+\DoxyCodeLine{00200\ \ \ \_owns\_stream\ =\ owns\_pointer;}
+\DoxyCodeLine{00201\ \ \ \_offset\ =\ offset;}
+\DoxyCodeLine{00202\ \ \ \textcolor{keywordflow}{return}\ read\_index();}
+\DoxyCodeLine{00203\ \}}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00214\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{00215\ open\_write(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&multifile\_name)\ \{}
+\DoxyCodeLine{00216\ \ \ close();}
+\DoxyCodeLine{00217\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ multifile\_name;}
+\DoxyCodeLine{00218\ \ \ fname.set\_binary();}
+\DoxyCodeLine{00219\ \ \ \textcolor{keywordflow}{if}\ (!fname.open\_write(\_write\_file,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00220\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00221\ \ \ \}}
+\DoxyCodeLine{00222\ \ \ \_timestamp\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00223\ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00224\ \ \ \_write\ =\ \&\_write\_file;}
+\DoxyCodeLine{00225\ \ \ \_multifile\_name\ =\ multifile\_name;}
+\DoxyCodeLine{00226\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00227\ \}}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00237\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{00238\ open\_write(ostream\ *multifile\_stream,\ \textcolor{keywordtype}{bool}\ owns\_pointer)\ \{}
+\DoxyCodeLine{00239\ \ \ close();}
+\DoxyCodeLine{00240\ \ \ \_timestamp\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00241\ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00242\ \ \ \_write\ =\ multifile\_stream;}
+\DoxyCodeLine{00243\ \ \ \_owns\_stream\ =\ owns\_pointer;}
+\DoxyCodeLine{00244\ \ \ \_write-\/>seekp(0,\ ios::beg);}
+\DoxyCodeLine{00245\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00246\ \}}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00257\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{00258\ open\_read\_write(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&multifile\_name)\ \{}
+\DoxyCodeLine{00259\ \ \ close();}
+\DoxyCodeLine{00260\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ multifile\_name;}
+\DoxyCodeLine{00261\ \ \ fname.set\_binary();}
+\DoxyCodeLine{00262\ \ \ \textcolor{keywordtype}{bool}\ exists\ =\ fname.exists();}
+\DoxyCodeLine{00263\ \ \ \textcolor{keywordflow}{if}\ (!fname.open\_read\_write(\_read\_write\_file))\ \{}
+\DoxyCodeLine{00264\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00265\ \ \ \}}
+\DoxyCodeLine{00266\ \ \ \textcolor{keywordflow}{if}\ (exists)\ \{}
+\DoxyCodeLine{00267\ \ \ \ \ \_timestamp\ =\ fname.get\_timestamp();}
+\DoxyCodeLine{00268\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ \_timestamp\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00270\ \ \ \}}
+\DoxyCodeLine{00271\ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00272\ \ \ \_read\ =\ \&\_read\_write\_filew;}
+\DoxyCodeLine{00273\ \ \ \_write\ =\ \&\_read\_write\_file;}
+\DoxyCodeLine{00274\ \ \ \_multifile\_name\ =\ multifile\_name;}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00276\ \ \ \textcolor{keywordflow}{if}\ (exists)\ \{}
+\DoxyCodeLine{00277\ \ \ \ \ \textcolor{keywordflow}{return}\ read\_index();}
+\DoxyCodeLine{00278\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00279\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00280\ \ \ \}}
+\DoxyCodeLine{00281\ \}}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00292\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{00293\ open\_read\_write(iostream\ *multifile\_stream,\ \textcolor{keywordtype}{bool}\ owns\_pointer)\ \{}
+\DoxyCodeLine{00294\ \ \ close();}
+\DoxyCodeLine{00295\ \ \ \_timestamp\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00296\ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \ \ \textcolor{comment}{//\ We\ don't\ support\ locking\ when\ opening\ a\ file\ in\ read-\/write\ mode,\ because}}
+\DoxyCodeLine{00299\ \ \ \textcolor{comment}{//\ we\ don't\ bother\ with\ locking\ on\ write.\ \ But\ we\ need\ to\ have\ an}}
+\DoxyCodeLine{00300\ \ \ \textcolor{comment}{//\ IStreamWrapper\ to\ assign\ to\ the\ \_read\ member,\ so\ we\ create\ one\ on-\/the-\/fly}}
+\DoxyCodeLine{00301\ \ \ \textcolor{comment}{//\ here.}}
+\DoxyCodeLine{00302\ \ \ \_read\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classStreamWrapper}{StreamWrapper}}(multifile\_stream,\ owns\_pointer);}
+\DoxyCodeLine{00303\ \ \ \_write\ =\ multifile\_stream;}
+\DoxyCodeLine{00304\ \ \ \_owns\_stream\ =\ \textcolor{keyword}{true};\ \ \textcolor{comment}{//\ Because\ we\ own\ the\ StreamWrapper,\ above.}}
+\DoxyCodeLine{00305\ \ \ \_write-\/>seekp(0,\ ios::beg);}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00307\ \ \ \textcolor{comment}{//\ Check\ whether\ the\ read\ stream\ is\ empty.}}
+\DoxyCodeLine{00308\ \ \ multifile\_stream-\/>seekg(0,\ ios::end);}
+\DoxyCodeLine{00309\ \ \ \textcolor{keywordflow}{if}\ (multifile\_stream-\/>tellg()\ ==\ (streampos)0)\ \{}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{comment}{//\ The\ read\ stream\ is\ empty,\ which\ is\ always\ valid.}}
+\DoxyCodeLine{00311\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00312\ \ \ \}}
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00314\ \ \ \textcolor{comment}{//\ The\ read\ stream\ is\ not\ empty,\ so\ we'd\ better\ have\ a\ valid\ Multifile.}}
+\DoxyCodeLine{00315\ \ \ \textcolor{keywordflow}{return}\ read\_index();}
+\DoxyCodeLine{00316\ \}}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00323\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{00324\ close()\ \{}
+\DoxyCodeLine{00325\ \ \ \textcolor{keywordflow}{if}\ (\_new\_scale\_factor\ !=\ \_scale\_factor)\ \{}
+\DoxyCodeLine{00326\ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ changed\ the\ scale\ factor\ recently,\ we\ need\ to\ force\ a}}
+\DoxyCodeLine{00327\ \ \ \ \ \textcolor{comment}{//\ repack.}}
+\DoxyCodeLine{00328\ \ \ \ \ repack();}
+\DoxyCodeLine{00329\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00330\ \ \ \ \ flush();}
+\DoxyCodeLine{00331\ \ \ \}}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00333\ \ \ \textcolor{keywordflow}{if}\ (\_owns\_stream)\ \{}
+\DoxyCodeLine{00334\ \ \ \ \ \textcolor{comment}{//\ We\ prefer\ to\ delete\ the\ IStreamWrapper\ over\ the\ ostream,\ if\ possible.}}
+\DoxyCodeLine{00335\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_read\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \textcolor{comment}{//\ Only\ delete\ it\ if\ no\ SubStream\ is\ still\ referencing\ it.}}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_read-\/>unref())\ \{}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_read;}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00340\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ \_write;}
+\DoxyCodeLine{00342\ \ \ \ \ \}}
+\DoxyCodeLine{00343\ \ \ \}}
+\DoxyCodeLine{00344\ }
+\DoxyCodeLine{00345\ \ \ \_read\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00346\ \ \ \_write\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00347\ \ \ \_offset\ =\ 0;}
+\DoxyCodeLine{00348\ \ \ \_owns\_stream\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00349\ \ \ \_next\_index\ =\ 0;}
+\DoxyCodeLine{00350\ \ \ \_last\_index\ =\ 0;}
+\DoxyCodeLine{00351\ \ \ \_needs\_repack\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00352\ \ \ \_timestamp\ =\ 0;}
+\DoxyCodeLine{00353\ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00354\ \ \ \_scale\_factor\ =\ 1;}
+\DoxyCodeLine{00355\ \ \ \_new\_scale\_factor\ =\ 1;}
+\DoxyCodeLine{00356\ \ \ \_encryption\_flag\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00357\ \ \ \_file\_major\_ver\ =\ 0;}
+\DoxyCodeLine{00358\ \ \ \_file\_minor\_ver\ =\ 0;}
+\DoxyCodeLine{00359\ }
+\DoxyCodeLine{00360\ \ \ \_read\_file.close();}
+\DoxyCodeLine{00361\ \ \ \_write\_file.close();}
+\DoxyCodeLine{00362\ \ \ \_read\_write\_file.close();}
+\DoxyCodeLine{00363\ \ \ \_multifile\_name\ =\ \mbox{\hyperlink{classFilename}{Filename}}();}
+\DoxyCodeLine{00364\ }
+\DoxyCodeLine{00365\ \ \ clear\_subfiles();}
+\DoxyCodeLine{00366\ \}}
+\DoxyCodeLine{00367\ }
+\DoxyCodeLine{00385\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{00386\ set\_scale\_factor(\textcolor{keywordtype}{size\_t}\ scale\_factor)\ \{}
+\DoxyCodeLine{00387\ \ \ nassertv(is\_write\_valid());}
+\DoxyCodeLine{00388\ \ \ nassertv(scale\_factor\ !=\ (\textcolor{keywordtype}{size\_t})0);}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \textcolor{keywordflow}{if}\ (\_next\_index\ ==\ (streampos)0)\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ \textcolor{comment}{//\ If\ it's\ a\ brand\ new\ Multifile,\ we\ can\ go\ ahead\ and\ set\ it\ immediately.}}
+\DoxyCodeLine{00392\ \ \ \ \ \_scale\_factor\ =\ scale\_factor;}
+\DoxyCodeLine{00393\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ we'd\ better\ have\ read\ access\ so\ we\ can\ repack\ it\ later.}}
+\DoxyCodeLine{00395\ \ \ \ \ nassertv(is\_read\_valid());}
+\DoxyCodeLine{00396\ \ \ \}}
+\DoxyCodeLine{00397\ }
+\DoxyCodeLine{00398\ \ \ \textcolor{comment}{//\ Setting\ the\ \_new\_scale\_factor\ different\ from\ the\ \_scale\_factor\ will\ force}}
+\DoxyCodeLine{00399\ \ \ \textcolor{comment}{//\ a\ repack\ operation\ on\ close.}}
+\DoxyCodeLine{00400\ \ \ \_new\_scale\_factor\ =\ scale\_factor;}
+\DoxyCodeLine{00401\ \}}
+\DoxyCodeLine{00402\ }
+\DoxyCodeLine{00416\ \textcolor{keywordtype}{string}\ Multifile::}
+\DoxyCodeLine{00417\ add\_subfile(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&subfile\_name,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ compression\_level)\ \{}
+\DoxyCodeLine{00419\ \ \ nassertr(is\_write\_valid(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00421\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ filename;}
+\DoxyCodeLine{00422\ \ \ \textcolor{keywordflow}{if}\ (multifile\_always\_binary)\ \{}
+\DoxyCodeLine{00423\ \ \ \ \ fname.set\_binary();}
+\DoxyCodeLine{00424\ \ \ \}}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ nassertr(fname.is\_binary\_or\_text(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00427\ }
+\DoxyCodeLine{00428\ \ \ \textcolor{keywordflow}{if}\ (!fname.exists())\ \{}
+\DoxyCodeLine{00429\ \ \ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00430\ \ \ \}}
+\DoxyCodeLine{00431\ \ \ \textcolor{keywordtype}{string}\ name\ =\ standardize\_subfile\_name(subfile\_name);}
+\DoxyCodeLine{00432\ \ \ \textcolor{keywordflow}{if}\ (!name.empty())\ \{}
+\DoxyCodeLine{00433\ \ \ \ \ Subfile\ *subfile\ =\ \textcolor{keyword}{new}\ Subfile;}
+\DoxyCodeLine{00434\ \ \ \ \ subfile-\/>\_name\ =\ name;}
+\DoxyCodeLine{00435\ \ \ \ \ subfile-\/>\_source\_filename\ =\ fname;}
+\DoxyCodeLine{00436\ \ \ \ \ \textcolor{keywordflow}{if}\ (fname.is\_text())\ \{}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ subfile-\/>\_flags\ |=\ SF\_text;}
+\DoxyCodeLine{00438\ \ \ \ \ \}}
+\DoxyCodeLine{00439\ }
+\DoxyCodeLine{00440\ \ \ \ \ add\_new\_subfile(subfile,\ compression\_level);}
+\DoxyCodeLine{00441\ \ \ \}}
+\DoxyCodeLine{00442\ }
+\DoxyCodeLine{00443\ \ \ \_timestamp\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00444\ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00445\ }
+\DoxyCodeLine{00446\ \ \ \textcolor{keywordflow}{return}\ name;}
+\DoxyCodeLine{00447\ \}}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00464\ \textcolor{keywordtype}{string}\ Multifile::}
+\DoxyCodeLine{00465\ add\_subfile(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&subfile\_name,\ istream\ *subfile\_data,}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ compression\_level)\ \{}
+\DoxyCodeLine{00467\ \ \ nassertr(is\_write\_valid(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00468\ }
+\DoxyCodeLine{00469\ \ \ \textcolor{keywordtype}{string}\ name\ =\ standardize\_subfile\_name(subfile\_name);}
+\DoxyCodeLine{00470\ \ \ \textcolor{keywordflow}{if}\ (!name.empty())\ \{}
+\DoxyCodeLine{00471\ \ \ \ \ Subfile\ *subfile\ =\ \textcolor{keyword}{new}\ Subfile;}
+\DoxyCodeLine{00472\ \ \ \ \ subfile-\/>\_name\ =\ name;}
+\DoxyCodeLine{00473\ \ \ \ \ subfile-\/>\_source\ =\ subfile\_data;}
+\DoxyCodeLine{00474\ \ \ \ \ add\_new\_subfile(subfile,\ compression\_level);}
+\DoxyCodeLine{00475\ \ \ \}}
+\DoxyCodeLine{00476\ }
+\DoxyCodeLine{00477\ \ \ \textcolor{keywordflow}{return}\ name;}
+\DoxyCodeLine{00478\ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00490\ \textcolor{keywordtype}{string}\ Multifile::}
+\DoxyCodeLine{00491\ update\_subfile(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&subfile\_name,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename,}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ compression\_level)\ \{}
+\DoxyCodeLine{00493\ \ \ nassertr(is\_write\_valid(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00494\ }
+\DoxyCodeLine{00495\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ filename;}
+\DoxyCodeLine{00496\ \ \ \textcolor{keywordflow}{if}\ (multifile\_always\_binary)\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ fname.set\_binary();}
+\DoxyCodeLine{00498\ \ \ \}}
+\DoxyCodeLine{00499\ }
+\DoxyCodeLine{00500\ \ \ nassertr(fname.is\_binary\_or\_text(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00501\ }
+\DoxyCodeLine{00502\ \ \ \textcolor{keywordflow}{if}\ (!fname.exists())\ \{}
+\DoxyCodeLine{00503\ \ \ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00504\ \ \ \}}
+\DoxyCodeLine{00505\ \ \ \textcolor{keywordtype}{string}\ name\ =\ standardize\_subfile\_name(subfile\_name);}
+\DoxyCodeLine{00506\ \ \ \textcolor{keywordflow}{if}\ (!name.empty())\ \{}
+\DoxyCodeLine{00507\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ find\_subfile(name);}
+\DoxyCodeLine{00508\ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ >=\ 0)\ \{}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ subfile\ already\ exists;\ compare\ it\ to\ the\ source\ file.}}
+\DoxyCodeLine{00510\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (compare\_subfile(index,\ fname))\ \{}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ files\ are\ identical;\ do\ nothing.}}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ name;}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00514\ \ \ \ \ \}}
+\DoxyCodeLine{00515\ }
+\DoxyCodeLine{00516\ \ \ \ \ \textcolor{comment}{//\ The\ subfile\ does\ not\ already\ exist\ or\ it\ is\ different\ from\ the\ source}}
+\DoxyCodeLine{00517\ \ \ \ \ \textcolor{comment}{//\ file.\ \ Add\ the\ new\ source\ file.}}
+\DoxyCodeLine{00518\ \ \ \ \ Subfile\ *subfile\ =\ \textcolor{keyword}{new}\ Subfile;}
+\DoxyCodeLine{00519\ \ \ \ \ subfile-\/>\_name\ =\ name;}
+\DoxyCodeLine{00520\ \ \ \ \ subfile-\/>\_source\_filename\ =\ fname;}
+\DoxyCodeLine{00521\ \ \ \ \ \textcolor{keywordflow}{if}\ (fname.is\_text())\ \{}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ subfile-\/>\_flags\ |=\ SF\_text;}
+\DoxyCodeLine{00523\ \ \ \ \ \}}
+\DoxyCodeLine{00524\ }
+\DoxyCodeLine{00525\ \ \ \ \ add\_new\_subfile(subfile,\ compression\_level);}
+\DoxyCodeLine{00526\ \ \ \}}
+\DoxyCodeLine{00527\ }
+\DoxyCodeLine{00528\ \ \ \_timestamp\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00529\ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00530\ }
+\DoxyCodeLine{00531\ \ \ \textcolor{keywordflow}{return}\ name;}
+\DoxyCodeLine{00532\ \}}
+\DoxyCodeLine{00533\ }
+\DoxyCodeLine{00534\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00539\ Multifile::CertRecord::}
+\DoxyCodeLine{00540\ CertRecord(X509\ *cert)\ :}
+\DoxyCodeLine{00541\ \ \ \_cert(cert)}
+\DoxyCodeLine{00542\ \{}
+\DoxyCodeLine{00543\ \}}
+\DoxyCodeLine{00544\ }
+\DoxyCodeLine{00548\ Multifile::CertRecord::}
+\DoxyCodeLine{00549\ CertRecord(\textcolor{keyword}{const}\ Multifile::CertRecord\ \&copy)\ :}
+\DoxyCodeLine{00550\ \ \ \_cert(X509\_dup(copy.\_cert))}
+\DoxyCodeLine{00551\ \{}
+\DoxyCodeLine{00552\ \}}
+\DoxyCodeLine{00553\ }
+\DoxyCodeLine{00557\ Multifile::CertRecord::}
+\DoxyCodeLine{00558\ \string~CertRecord()\ \{}
+\DoxyCodeLine{00559\ \ \ X509\_free(\_cert);}
+\DoxyCodeLine{00560\ \}}
+\DoxyCodeLine{00561\ }
+\DoxyCodeLine{00565\ \textcolor{keywordtype}{void}\ Multifile::CertRecord::}
+\DoxyCodeLine{00566\ operator\ =\ (\textcolor{keyword}{const}\ Multifile::CertRecord\ \&other)\ \{}
+\DoxyCodeLine{00567\ \ \ X509\_free(\_cert);}
+\DoxyCodeLine{00568\ \ \ \_cert\ =\ X509\_dup(other.\_cert);}
+\DoxyCodeLine{00569\ \}}
+\DoxyCodeLine{00570\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00571\ }
+\DoxyCodeLine{00572\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00598\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{00599\ add\_signature(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&certificate,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&chain,}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&pkey,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&password)\ \{}
+\DoxyCodeLine{00601\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00602\ }
+\DoxyCodeLine{00603\ \ \ \textcolor{keywordflow}{if}\ (chain.empty()\ \&\&\ pkey.empty())\ \{}
+\DoxyCodeLine{00604\ \ \ \ \ \textcolor{comment}{//\ If\ the\ second\ two\ filenames\ are\ empty,\ assume\ we're\ going\ for\ the}}
+\DoxyCodeLine{00605\ \ \ \ \ \textcolor{comment}{//\ composite\ mode,\ where\ everything's\ stuffed\ into\ the\ first\ file.}}
+\DoxyCodeLine{00606\ \ \ \ \ \textcolor{keywordflow}{return}\ add\_signature(certificate,\ password);}
+\DoxyCodeLine{00607\ \ \ \}}
+\DoxyCodeLine{00608\ }
+\DoxyCodeLine{00609\ \ \ CertChain\ cert\_chain;}
+\DoxyCodeLine{00610\ }
+\DoxyCodeLine{00611\ \ \ \textcolor{comment}{//\ Read\ the\ certificate\ file\ from\ VFS.\ \ First,\ read\ the\ complete\ file\ into}}
+\DoxyCodeLine{00612\ \ \ \textcolor{comment}{//\ memory.}}
+\DoxyCodeLine{00613\ \ \ \textcolor{keywordtype}{string}\ certificate\_data;}
+\DoxyCodeLine{00614\ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>read\_file(certificate,\ certificate\_data,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00615\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ "{}}\ <<\ certificate\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00617\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00618\ \ \ \}}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00620\ \ \ \textcolor{comment}{//\ Create\ an\ in-\/memory\ BIO\ to\ read\ the\ "{}file"{}\ from\ the\ buffer.}}
+\DoxyCodeLine{00621\ \ \ BIO\ *certificate\_mbio\ =\ BIO\_new\_mem\_buf((\textcolor{keywordtype}{void}\ *)certificate\_data.data(),\ certificate\_data.size());}
+\DoxyCodeLine{00622\ \ \ X509\ *x509\ =\ PEM\_read\_bio\_X509(certificate\_mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ (\textcolor{keywordtype}{void}\ *)\textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00623\ \ \ BIO\_free(certificate\_mbio);}
+\DoxyCodeLine{00624\ \ \ \textcolor{keywordflow}{if}\ (x509\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00625\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00626\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ certificate\ in\ "{}}\ <<\ certificate\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00627\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00628\ \ \ \}}
+\DoxyCodeLine{00629\ }
+\DoxyCodeLine{00630\ \ \ \textcolor{comment}{//\ Store\ the\ first\ X509-\/-\/the\ actual\ certificate-\/-\/as\ the\ first\ record\ in\ our}}
+\DoxyCodeLine{00631\ \ \ \textcolor{comment}{//\ CertChain\ object.}}
+\DoxyCodeLine{00632\ \ \ cert\_chain.push\_back(CertRecord(x509));}
+\DoxyCodeLine{00633\ }
+\DoxyCodeLine{00634\ \ \ \textcolor{comment}{//\ Read\ the\ rest\ of\ the\ certificates\ in\ the\ chain\ file.}}
+\DoxyCodeLine{00635\ \ \ \textcolor{keywordflow}{if}\ (!chain.empty())\ \{}
+\DoxyCodeLine{00636\ \ \ \ \ \textcolor{keywordtype}{string}\ chain\_data;}
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>read\_file(chain,\ chain\_data,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ "{}}\ <<\ chain\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00640\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00641\ \ \ \ \ \}}
+\DoxyCodeLine{00642\ }
+\DoxyCodeLine{00643\ \ \ \ \ BIO\ *chain\_mbio\ =\ BIO\_new\_mem\_buf((\textcolor{keywordtype}{void}\ *)chain\_data.data(),\ chain\_data.size());}
+\DoxyCodeLine{00644\ \ \ \ \ X509\ *c\ =\ PEM\_read\_bio\_X509(chain\_mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ (\textcolor{keywordtype}{void}\ *)\textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00645\ \ \ \ \ \textcolor{keywordflow}{while}\ (c\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ cert\_chain.push\_back(c);}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ c\ =\ PEM\_read\_bio\_X509(chain\_mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ (\textcolor{keywordtype}{void}\ *)\textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00648\ \ \ \ \ \}}
+\DoxyCodeLine{00649\ \ \ \ \ BIO\_free(chain\_mbio);}
+\DoxyCodeLine{00650\ }
+\DoxyCodeLine{00651\ \ \ \ \ \textcolor{keywordflow}{if}\ (cert\_chain.size()\ ==\ 1)\ \{}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ certificate\ chain\ in\ "{}}\ <<\ chain\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00655\ \ \ \ \ \}}
+\DoxyCodeLine{00656\ \ \ \}}
+\DoxyCodeLine{00657\ }
+\DoxyCodeLine{00658\ \ \ \textcolor{comment}{//\ Now\ do\ the\ same\ thing\ with\ the\ private\ key.\ \ This\ one\ may\ be\ password-\/}}
+\DoxyCodeLine{00659\ \ \ \textcolor{comment}{//\ encrypted\ on\ disk.}}
+\DoxyCodeLine{00660\ \ \ \textcolor{keywordtype}{string}\ pkey\_data;}
+\DoxyCodeLine{00661\ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>read\_file(pkey,\ pkey\_data,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00662\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00663\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ "{}}\ <<\ pkey\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00664\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00665\ \ \ \}}
+\DoxyCodeLine{00666\ }
+\DoxyCodeLine{00667\ \ \ BIO\ *pkey\_mbio\ =\ BIO\_new\_mem\_buf((\textcolor{keywordtype}{void}\ *)pkey\_data.data(),\ pkey\_data.size());}
+\DoxyCodeLine{00668\ \ \ EVP\_PKEY\ *evp\_pkey\ =\ PEM\_read\_bio\_PrivateKey(pkey\_mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},}
+\DoxyCodeLine{00669\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{void}\ *)password.c\_str());}
+\DoxyCodeLine{00670\ \ \ BIO\_free(pkey\_mbio);}
+\DoxyCodeLine{00671\ \ \ \textcolor{keywordflow}{if}\ (evp\_pkey\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00672\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00673\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ private\ key\ in\ "{}}\ <<\ pkey\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00674\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00675\ \ \ \}}
+\DoxyCodeLine{00676\ }
+\DoxyCodeLine{00677\ \ \ \textcolor{keywordtype}{bool}\ result\ =\ add\_signature(cert\_chain,\ evp\_pkey);}
+\DoxyCodeLine{00678\ }
+\DoxyCodeLine{00679\ \ \ EVP\_PKEY\_free(evp\_pkey);}
+\DoxyCodeLine{00680\ }
+\DoxyCodeLine{00681\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00682\ \}}
+\DoxyCodeLine{00683\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00684\ }
+\DoxyCodeLine{00685\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00699\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{00700\ add\_signature(\textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&composite,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&password)\ \{}
+\DoxyCodeLine{00701\ \ \ \mbox{\hyperlink{classVirtualFileSystem}{VirtualFileSystem}}\ *vfs\ =\ VirtualFileSystem::get\_global\_ptr();}
+\DoxyCodeLine{00702\ }
+\DoxyCodeLine{00703\ \ \ \textcolor{comment}{//\ First,\ read\ the\ complete\ file\ into\ memory.}}
+\DoxyCodeLine{00704\ \ \ \textcolor{keywordtype}{string}\ composite\_data;}
+\DoxyCodeLine{00705\ \ \ \textcolor{keywordflow}{if}\ (!vfs-\/>read\_file(composite,\ composite\_data,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00706\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00707\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ "{}}\ <<\ composite\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00708\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00709\ \ \ \}}
+\DoxyCodeLine{00710\ }
+\DoxyCodeLine{00711\ \ \ \textcolor{comment}{//\ Get\ the\ private\ key.}}
+\DoxyCodeLine{00712\ \ \ BIO\ *pkey\_mbio\ =\ BIO\_new\_mem\_buf((\textcolor{keywordtype}{void}\ *)composite\_data.data(),\ composite\_data.size());}
+\DoxyCodeLine{00713\ \ \ EVP\_PKEY\ *evp\_pkey\ =\ PEM\_read\_bio\_PrivateKey(pkey\_mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},}
+\DoxyCodeLine{00714\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{void}\ *)password.c\_str());}
+\DoxyCodeLine{00715\ \ \ BIO\_free(pkey\_mbio);}
+\DoxyCodeLine{00716\ \ \ \textcolor{keywordflow}{if}\ (evp\_pkey\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00717\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00718\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ private\ key\ in\ "{}}\ <<\ composite\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00719\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00720\ \ \ \}}
+\DoxyCodeLine{00721\ }
+\DoxyCodeLine{00722\ \ \ \textcolor{comment}{//\ Now\ read\ all\ of\ the\ certificates.}}
+\DoxyCodeLine{00723\ \ \ CertChain\ cert\_chain;}
+\DoxyCodeLine{00724\ }
+\DoxyCodeLine{00725\ \ \ BIO\ *chain\_mbio\ =\ BIO\_new\_mem\_buf((\textcolor{keywordtype}{void}\ *)composite\_data.data(),\ composite\_data.size());}
+\DoxyCodeLine{00726\ \ \ X509\ *c\ =\ PEM\_read\_bio\_X509(chain\_mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ (\textcolor{keywordtype}{void}\ *)\textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00727\ \ \ \textcolor{keywordflow}{while}\ (c\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00728\ \ \ \ \ cert\_chain.push\_back(c);}
+\DoxyCodeLine{00729\ \ \ \ \ c\ =\ PEM\_read\_bio\_X509(chain\_mbio,\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{nullptr},\ (\textcolor{keywordtype}{void}\ *)\textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00730\ \ \ \}}
+\DoxyCodeLine{00731\ \ \ BIO\_free(chain\_mbio);}
+\DoxyCodeLine{00732\ }
+\DoxyCodeLine{00733\ \ \ \textcolor{keywordflow}{if}\ (cert\_chain.empty())\ \{}
+\DoxyCodeLine{00734\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00735\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Could\ not\ read\ certificates\ in\ "{}}\ <<\ composite\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{00736\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00737\ \ \ \}}
+\DoxyCodeLine{00738\ }
+\DoxyCodeLine{00739\ \ \ \textcolor{comment}{//\ Now\ find\ the\ certificate\ that\ matches\ the\ signature,\ and\ move\ it\ to\ the}}
+\DoxyCodeLine{00740\ \ \ \textcolor{comment}{//\ front\ of\ the\ chain.}}
+\DoxyCodeLine{00741\ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{00742\ \ \ \textcolor{keywordtype}{bool}\ found\_match\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00743\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ cert\_chain.size();\ ++i)\ \{}
+\DoxyCodeLine{00744\ \ \ \ \ X509\ *c\ =\ cert\_chain[i].\_cert;}
+\DoxyCodeLine{00745\ \ \ \ \ \textcolor{keywordflow}{if}\ (X509\_check\_private\_key(c,\ evp\_pkey))\ \{}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ found\_match\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ !=\ 0)\ \{}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Move\ this\ entry\ to\ the\ beginning.}}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \ \ cert\_chain.insert(cert\_chain.begin(),\ cert\_chain[i]);}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \ \ cert\_chain.erase(cert\_chain.begin()\ +\ i\ +\ 1);}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00753\ \ \ \ \ \}}
+\DoxyCodeLine{00754\ \ \ \}}
+\DoxyCodeLine{00755\ }
+\DoxyCodeLine{00756\ \ \ \textcolor{keywordflow}{if}\ (!found\_match)\ \{}
+\DoxyCodeLine{00757\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00758\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ certificates\ in\ "{}}\ <<\ composite\ <<\ \textcolor{stringliteral}{"{}\ match\ key.\(\backslash\)n"{}};}
+\DoxyCodeLine{00759\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00760\ \ \ \}}
+\DoxyCodeLine{00761\ }
+\DoxyCodeLine{00762\ \ \ \textcolor{keywordtype}{bool}\ result\ =\ add\_signature(cert\_chain,\ evp\_pkey);}
+\DoxyCodeLine{00763\ }
+\DoxyCodeLine{00764\ \ \ EVP\_PKEY\_free(evp\_pkey);}
+\DoxyCodeLine{00765\ }
+\DoxyCodeLine{00766\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00767\ \}}
+\DoxyCodeLine{00768\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00769\ }
+\DoxyCodeLine{00770\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00792\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{00793\ add\_signature(\textcolor{keyword}{const}\ Multifile::CertChain\ \&cert\_chain,\ EVP\_PKEY\ *pkey)\ \{}
+\DoxyCodeLine{00794\ \ \ \textcolor{keywordflow}{if}\ (\_needs\_repack)\ \{}
+\DoxyCodeLine{00795\ \ \ \ \ \textcolor{keywordflow}{if}\ (!repack())\ \{}
+\DoxyCodeLine{00796\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00797\ \ \ \ \ \}}
+\DoxyCodeLine{00798\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00799\ \ \ \ \ \textcolor{keywordflow}{if}\ (!flush())\ \{}
+\DoxyCodeLine{00800\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00801\ \ \ \ \ \}}
+\DoxyCodeLine{00802\ \ \ \}}
+\DoxyCodeLine{00803\ }
+\DoxyCodeLine{00804\ \ \ \textcolor{keywordflow}{if}\ (cert\_chain.empty())\ \{}
+\DoxyCodeLine{00805\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00806\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ certificate\ given.\(\backslash\)n"{}};}
+\DoxyCodeLine{00807\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00808\ \ \ \}}
+\DoxyCodeLine{00809\ }
+\DoxyCodeLine{00810\ \ \ \textcolor{keywordflow}{if}\ (pkey\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00811\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00812\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ private\ key\ given.\(\backslash\)n"{}};}
+\DoxyCodeLine{00813\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00814\ \ \ \}}
+\DoxyCodeLine{00815\ }
+\DoxyCodeLine{00816\ \ \ \textcolor{keywordflow}{if}\ (!X509\_check\_private\_key(cert\_chain[0].\_cert,\ pkey))\ \{}
+\DoxyCodeLine{00817\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{00818\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Private\ key\ does\ not\ match\ certificate.\(\backslash\)n"{}};}
+\DoxyCodeLine{00819\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00820\ \ \ \}}
+\DoxyCodeLine{00821\ }
+\DoxyCodeLine{00822\ \ \ \textcolor{comment}{//\ Now\ encode\ that\ list\ of\ certs\ to\ a\ stream\ in\ DER\ form.}}
+\DoxyCodeLine{00823\ \ \ \mbox{\hyperlink{classstringstream}{stringstream}}\ der\_stream;}
+\DoxyCodeLine{00824\ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ der\_writer(der\_stream);}
+\DoxyCodeLine{00825\ \ \ der\_writer.add\_uint32((uint32\_t)cert\_chain.size());}
+\DoxyCodeLine{00826\ }
+\DoxyCodeLine{00827\ \ \ CertChain::const\_iterator\ ci;}
+\DoxyCodeLine{00828\ \ \ \textcolor{keywordflow}{for}\ (ci\ =\ cert\_chain.begin();\ ci\ !=\ cert\_chain.end();\ ++ci)\ \{}
+\DoxyCodeLine{00829\ \ \ \ \ X509\ *cert\ =\ (*ci).\_cert;}
+\DoxyCodeLine{00830\ }
+\DoxyCodeLine{00831\ \ \ \ \ \textcolor{keywordtype}{int}\ der\_len\ =\ i2d\_X509(cert,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00832\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *der\_buf\ =\ \textcolor{keyword}{new}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}[der\_len];}
+\DoxyCodeLine{00833\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *p\ =\ der\_buf;}
+\DoxyCodeLine{00834\ \ \ \ \ i2d\_X509(cert,\ \&p);}
+\DoxyCodeLine{00835\ \ \ \ \ der\_writer.append\_data(der\_buf,\ der\_len);}
+\DoxyCodeLine{00836\ \ \ \ \ \textcolor{keyword}{delete}[]\ der\_buf;}
+\DoxyCodeLine{00837\ \ \ \}}
+\DoxyCodeLine{00838\ }
+\DoxyCodeLine{00839\ \ \ \textcolor{comment}{//\ Create\ a\ temporary\ Subfile\ for\ writing\ out\ the\ signature.}}
+\DoxyCodeLine{00840\ \ \ der\_stream.seekg(0);}
+\DoxyCodeLine{00841\ \ \ Subfile\ *subfile\ =\ \textcolor{keyword}{new}\ Subfile;}
+\DoxyCodeLine{00842\ \ \ subfile-\/>\_pkey\ =\ pkey;}
+\DoxyCodeLine{00843\ \ \ subfile-\/>\_flags\ |=\ SF\_signature;}
+\DoxyCodeLine{00844\ \ \ subfile-\/>\_source\ =\ \&der\_stream;}
+\DoxyCodeLine{00845\ }
+\DoxyCodeLine{00846\ \ \ \textcolor{comment}{//\ Write\ the\ new\ Subfile\ at\ the\ end.\ \ The\ cert\_special\ subfiles\ always\ go\ at}}
+\DoxyCodeLine{00847\ \ \ \textcolor{comment}{//\ the\ end,\ because\ they're\ not\ the\ part\ of\ the\ file\ that's\ signed.}}
+\DoxyCodeLine{00848\ \ \ nassertr(\_new\_subfiles.empty(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00849\ \ \ \_new\_subfiles.push\_back(subfile);}
+\DoxyCodeLine{00850\ \ \ \textcolor{keywordtype}{bool}\ result\ =\ flush();}
+\DoxyCodeLine{00851\ }
+\DoxyCodeLine{00852\ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{00853\ }
+\DoxyCodeLine{00854\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00855\ \}}
+\DoxyCodeLine{00856\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00857\ }
+\DoxyCodeLine{00858\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00870\ \textcolor{keywordtype}{int}\ Multifile::}
+\DoxyCodeLine{00871\ get\_num\_signatures()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00872\ \ \ ((\mbox{\hyperlink{classMultifile}{Multifile}}\ *)\textcolor{keyword}{this})-\/>check\_signatures();}
+\DoxyCodeLine{00873\ \ \ \textcolor{keywordflow}{return}\ \_signatures.size();}
+\DoxyCodeLine{00874\ \}}
+\DoxyCodeLine{00875\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00876\ }
+\DoxyCodeLine{00877\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00882\ \textcolor{keyword}{const}\ Multifile::CertChain\ \&Multifile::}
+\DoxyCodeLine{00883\ get\_signature(\textcolor{keywordtype}{int}\ n)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00884\ \ \ ((\mbox{\hyperlink{classMultifile}{Multifile}}\ *)\textcolor{keyword}{this})-\/>check\_signatures();}
+\DoxyCodeLine{00885\ \ \ \textcolor{keyword}{static}\ CertChain\ error\_chain;}
+\DoxyCodeLine{00886\ \ \ nassertr(n\ >=\ 0\ \&\&\ n\ <\ (\textcolor{keywordtype}{int})\_signatures.size(),\ error\_chain);}
+\DoxyCodeLine{00887\ \ \ \textcolor{keywordflow}{return}\ \_signatures[n];}
+\DoxyCodeLine{00888\ \}}
+\DoxyCodeLine{00889\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00890\ }
+\DoxyCodeLine{00891\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00899\ \textcolor{keywordtype}{string}\ Multifile::}
+\DoxyCodeLine{00900\ get\_signature\_subject\_name(\textcolor{keywordtype}{int}\ n)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00901\ \ \ \textcolor{keyword}{const}\ CertChain\ \&cert\_chain\ =\ get\_signature(n);}
+\DoxyCodeLine{00902\ \ \ nassertr(!cert\_chain.empty(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00903\ }
+\DoxyCodeLine{00904\ \ \ X509\_NAME\ *xname\ =\ X509\_get\_subject\_name(cert\_chain[0].\_cert);}
+\DoxyCodeLine{00905\ \ \ \textcolor{keywordflow}{if}\ (xname\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00906\ \ \ \ \ \textcolor{comment}{//\ We\ use\ "{}print"{}\ to\ dump\ the\ output\ to\ a\ memory\ BIO.\ \ Is\ there\ an\ easier}}
+\DoxyCodeLine{00907\ \ \ \ \ \textcolor{comment}{//\ way\ to\ extract\ the\ X509\_NAME\ text?\ \ Curse\ these\ incomplete\ docs.}}
+\DoxyCodeLine{00908\ \ \ \ \ BIO\ *mbio\ =\ BIO\_new(BIO\_s\_mem());}
+\DoxyCodeLine{00909\ \ \ \ \ X509\_NAME\_print\_ex(mbio,\ xname,\ 0,\ XN\_FLAG\_RFC2253);}
+\DoxyCodeLine{00910\ }
+\DoxyCodeLine{00911\ \ \ \ \ \textcolor{keywordtype}{char}\ *pp;}
+\DoxyCodeLine{00912\ \ \ \ \ \textcolor{keywordtype}{long}\ pp\_size\ =\ BIO\_get\_mem\_data(mbio,\ \&pp);}
+\DoxyCodeLine{00913\ \ \ \ \ \textcolor{keywordtype}{string}\ name(pp,\ pp\_size);}
+\DoxyCodeLine{00914\ \ \ \ \ BIO\_free(mbio);}
+\DoxyCodeLine{00915\ \ \ \ \ \textcolor{keywordflow}{return}\ name;}
+\DoxyCodeLine{00916\ \ \ \}}
+\DoxyCodeLine{00917\ }
+\DoxyCodeLine{00918\ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00919\ \}}
+\DoxyCodeLine{00920\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00921\ }
+\DoxyCodeLine{00922\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00931\ \textcolor{keywordtype}{string}\ Multifile::}
+\DoxyCodeLine{00932\ get\_signature\_friendly\_name(\textcolor{keywordtype}{int}\ n)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00933\ \ \ \textcolor{keyword}{const}\ CertChain\ \&cert\_chain\ =\ get\_signature(n);}
+\DoxyCodeLine{00934\ \ \ nassertr(!cert\_chain.empty(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00935\ }
+\DoxyCodeLine{00936\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ nid\_choices[]\ =\ \{}
+\DoxyCodeLine{00937\ \ \ \ \ NID\_pkcs9\_emailAddress,}
+\DoxyCodeLine{00938\ \ \ \ \ NID\_subject\_alt\_name,}
+\DoxyCodeLine{00939\ \ \ \ \ NID\_commonName,}
+\DoxyCodeLine{00940\ \ \ \ \ -\/1,}
+\DoxyCodeLine{00941\ \ \ \};}
+\DoxyCodeLine{00942\ }
+\DoxyCodeLine{00943\ \ \ \textcolor{comment}{//\ Choose\ the\ first\ NID\ that\ exists\ on\ the\ cert.}}
+\DoxyCodeLine{00944\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ ni\ =\ 0;\ nid\_choices[ni]\ !=\ -\/1;\ ++ni)\ \{}
+\DoxyCodeLine{00945\ \ \ \ \ \textcolor{keywordtype}{int}\ nid\ =\ nid\_choices[ni];}
+\DoxyCodeLine{00946\ }
+\DoxyCodeLine{00947\ \ \ \ \ \textcolor{comment}{//\ A\ complex\ OpenSSL\ interface\ to\ extract\ out\ the\ name\ in\ utf-\/8.}}
+\DoxyCodeLine{00948\ \ \ \ \ X509\_NAME\ *xname\ =\ X509\_get\_subject\_name(cert\_chain[0].\_cert);}
+\DoxyCodeLine{00949\ \ \ \ \ \textcolor{keywordflow}{if}\ (xname\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00950\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ pos\ =\ X509\_NAME\_get\_index\_by\_NID(xname,\ nid,\ -\/1);}
+\DoxyCodeLine{00951\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pos\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00952\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ just\ get\ the\ first\ common\ name.\ \ I\ guess\ it's\ possible\ to\ have}}
+\DoxyCodeLine{00953\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ more\ than\ one;\ not\ sure\ what\ that\ means\ in\ this\ context.}}
+\DoxyCodeLine{00954\ \ \ \ \ \ \ \ \ X509\_NAME\_ENTRY\ *xentry\ =\ X509\_NAME\_get\_entry(xname,\ pos);}
+\DoxyCodeLine{00955\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (xentry\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00956\ \ \ \ \ \ \ \ \ \ \ ASN1\_STRING\ *data\ =\ X509\_NAME\_ENTRY\_get\_data(xentry);}
+\DoxyCodeLine{00957\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (data\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00958\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We\ use\ "{}print"{}\ to\ dump\ the\ output\ to\ a\ memory\ BIO.\ \ Is\ there\ an}}
+\DoxyCodeLine{00959\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ easier\ way\ to\ decode\ the\ ASN1\_STRING?\ \ Curse\ these\ incomplete}}
+\DoxyCodeLine{00960\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ docs.}}
+\DoxyCodeLine{00961\ \ \ \ \ \ \ \ \ \ \ \ \ BIO\ *mbio\ =\ BIO\_new(BIO\_s\_mem());}
+\DoxyCodeLine{00962\ \ \ \ \ \ \ \ \ \ \ \ \ ASN1\_STRING\_print\_ex(mbio,\ data,\ ASN1\_STRFLGS\_RFC2253\ \&\ \string~ASN1\_STRFLGS\_ESC\_MSB);}
+\DoxyCodeLine{00963\ }
+\DoxyCodeLine{00964\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ *pp;}
+\DoxyCodeLine{00965\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{long}\ pp\_size\ =\ BIO\_get\_mem\_data(mbio,\ \&pp);}
+\DoxyCodeLine{00966\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ name(pp,\ pp\_size);}
+\DoxyCodeLine{00967\ \ \ \ \ \ \ \ \ \ \ \ \ BIO\_free(mbio);}
+\DoxyCodeLine{00968\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ name;}
+\DoxyCodeLine{00969\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00970\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00971\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00972\ \ \ \ \ \}}
+\DoxyCodeLine{00973\ \ \ \}}
+\DoxyCodeLine{00974\ }
+\DoxyCodeLine{00975\ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00976\ \}}
+\DoxyCodeLine{00977\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00978\ }
+\DoxyCodeLine{00979\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00989\ \textcolor{keywordtype}{string}\ Multifile::}
+\DoxyCodeLine{00990\ get\_signature\_public\_key(\textcolor{keywordtype}{int}\ n)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00991\ \ \ \textcolor{keyword}{const}\ CertChain\ \&cert\_chain\ =\ get\_signature(n);}
+\DoxyCodeLine{00992\ \ \ nassertr(!cert\_chain.empty(),\ \textcolor{keywordtype}{string}());}
+\DoxyCodeLine{00993\ }
+\DoxyCodeLine{00994\ \ \ EVP\_PKEY\ *pkey\ =\ X509\_get\_pubkey(cert\_chain[0].\_cert);}
+\DoxyCodeLine{00995\ \ \ \textcolor{keywordflow}{if}\ (pkey\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00996\ \ \ \ \ \textcolor{keywordtype}{int}\ key\_len\ =\ i2d\_PublicKey(pkey,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00997\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *key\_buf\ =\ \textcolor{keyword}{new}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}[key\_len];}
+\DoxyCodeLine{00998\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *p\ =\ key\_buf;}
+\DoxyCodeLine{00999\ \ \ \ \ i2d\_PublicKey(pkey,\ \&p);}
+\DoxyCodeLine{01000\ \ \ \ \ \textcolor{keywordtype}{string}\ result;}
+\DoxyCodeLine{01001\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ key\_len;\ ++i)\ \{}
+\DoxyCodeLine{01002\ \ \ \ \ \ \ result\ +=\ tohex(key\_buf[i]\ >>\ 4);}
+\DoxyCodeLine{01003\ \ \ \ \ \ \ result\ +=\ tohex(key\_buf[i]);}
+\DoxyCodeLine{01004\ \ \ \ \ \}}
+\DoxyCodeLine{01005\ \ \ \ \ \textcolor{keyword}{delete}[]\ key\_buf;}
+\DoxyCodeLine{01006\ \ \ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{01007\ \ \ \}}
+\DoxyCodeLine{01008\ }
+\DoxyCodeLine{01009\ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{01010\ \}}
+\DoxyCodeLine{01011\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{01012\ }
+\DoxyCodeLine{01013\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{01018\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{01019\ print\_signature\_certificate(\textcolor{keywordtype}{int}\ n,\ ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01020\ \ \ \textcolor{keyword}{const}\ CertChain\ \&cert\_chain\ =\ get\_signature(n);}
+\DoxyCodeLine{01021\ \ \ nassertv(!cert\_chain.empty());}
+\DoxyCodeLine{01022\ }
+\DoxyCodeLine{01023\ \ \ BIO\ *mbio\ =\ BIO\_new(BIO\_s\_mem());}
+\DoxyCodeLine{01024\ \ \ X509\_print(mbio,\ cert\_chain[0].\_cert);}
+\DoxyCodeLine{01025\ }
+\DoxyCodeLine{01026\ \ \ \textcolor{keywordtype}{char}\ *pp;}
+\DoxyCodeLine{01027\ \ \ \textcolor{keywordtype}{long}\ pp\_size\ =\ BIO\_get\_mem\_data(mbio,\ \&pp);}
+\DoxyCodeLine{01028\ \ \ out.write(pp,\ pp\_size);}
+\DoxyCodeLine{01029\ \ \ BIO\_free(mbio);}
+\DoxyCodeLine{01030\ \}}
+\DoxyCodeLine{01031\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{01032\ }
+\DoxyCodeLine{01033\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{01038\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{01039\ write\_signature\_certificate(\textcolor{keywordtype}{int}\ n,\ ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01040\ \ \ \textcolor{keyword}{const}\ CertChain\ \&cert\_chain\ =\ get\_signature(n);}
+\DoxyCodeLine{01041\ \ \ nassertv(!cert\_chain.empty());}
+\DoxyCodeLine{01042\ }
+\DoxyCodeLine{01043\ \ \ BIO\ *mbio\ =\ BIO\_new(BIO\_s\_mem());}
+\DoxyCodeLine{01044\ }
+\DoxyCodeLine{01045\ \ \ CertChain::const\_iterator\ ci;}
+\DoxyCodeLine{01046\ \ \ \textcolor{keywordflow}{for}\ (ci\ =\ cert\_chain.begin();\ ci\ !=\ cert\_chain.end();\ ++ci)\ \{}
+\DoxyCodeLine{01047\ \ \ \ \ X509\ *c\ =\ (*ci).\_cert;}
+\DoxyCodeLine{01048\ \ \ \ \ X509\_print(mbio,\ c);}
+\DoxyCodeLine{01049\ \ \ \ \ PEM\_write\_bio\_X509(mbio,\ c);}
+\DoxyCodeLine{01050\ \ \ \}}
+\DoxyCodeLine{01051\ }
+\DoxyCodeLine{01052\ \ \ \textcolor{keywordtype}{char}\ *pp;}
+\DoxyCodeLine{01053\ \ \ \textcolor{keywordtype}{long}\ pp\_size\ =\ BIO\_get\_mem\_data(mbio,\ \&pp);}
+\DoxyCodeLine{01054\ \ \ out.write(pp,\ pp\_size);}
+\DoxyCodeLine{01055\ \ \ BIO\_free(mbio);}
+\DoxyCodeLine{01056\ \}}
+\DoxyCodeLine{01057\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{01058\ }
+\DoxyCodeLine{01059\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{01066\ \textcolor{keywordtype}{int}\ Multifile::}
+\DoxyCodeLine{01067\ validate\_signature\_certificate(\textcolor{keywordtype}{int}\ n)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01068\ \ \ \textcolor{keywordtype}{int}\ verify\_result\ =\ -\/1;}
+\DoxyCodeLine{01069\ }
+\DoxyCodeLine{01070\ \ \ \textcolor{keyword}{const}\ CertChain\ \&chain\ =\ get\_signature(n);}
+\DoxyCodeLine{01071\ \ \ nassertr(!chain.empty(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01072\ }
+\DoxyCodeLine{01073\ \ \ OpenSSLWrapper\ *sslw\ =\ OpenSSLWrapper::get\_global\_ptr();}
+\DoxyCodeLine{01074\ }
+\DoxyCodeLine{01075\ \ \ \textcolor{comment}{//\ Copy\ our\ CertChain\ structure\ into\ an\ X509\ pointer\ and\ accompanying}}
+\DoxyCodeLine{01076\ \ \ \textcolor{comment}{//\ STACK\_OF(X509)\ pointer.}}
+\DoxyCodeLine{01077\ \ \ X509\ *x509\ =\ chain[0].\_cert;}
+\DoxyCodeLine{01078\ \ \ STACK\_OF(X509)\ *stack\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01079\ \ \ \textcolor{keywordflow}{if}\ (chain.size()\ >\ 1)\ \{}
+\DoxyCodeLine{01080\ \ \ \ \ stack\ =\ sk\_X509\_new(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01081\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ n\ =\ 1;\ n\ <\ chain.size();\ ++n)\ \{}
+\DoxyCodeLine{01082\ \ \ \ \ \ \ sk\_X509\_push(stack,\ chain[n].\_cert);}
+\DoxyCodeLine{01083\ \ \ \ \ \}}
+\DoxyCodeLine{01084\ \ \ \}}
+\DoxyCodeLine{01085\ }
+\DoxyCodeLine{01086\ \ \ \textcolor{comment}{//\ Create\ the\ X509\_STORE\_CTX\ for\ verifying\ the\ cert\ and\ chain.}}
+\DoxyCodeLine{01087\ \ \ X509\_STORE\_CTX\ *ctx\ =\ X509\_STORE\_CTX\_new();}
+\DoxyCodeLine{01088\ \ \ X509\_STORE\_CTX\_init(ctx,\ sslw-\/>get\_x509\_store(),\ x509,\ stack);}
+\DoxyCodeLine{01089\ \ \ X509\_STORE\_CTX\_set\_cert(ctx,\ x509);}
+\DoxyCodeLine{01090\ }
+\DoxyCodeLine{01091\ \ \ \textcolor{keywordflow}{if}\ (X509\_verify\_cert(ctx))\ \{}
+\DoxyCodeLine{01092\ \ \ \ \ verify\_result\ =\ 0;}
+\DoxyCodeLine{01093\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01094\ \ \ \ \ verify\_result\ =\ X509\_STORE\_CTX\_get\_error(ctx);}
+\DoxyCodeLine{01095\ \ \ \}}
+\DoxyCodeLine{01096\ }
+\DoxyCodeLine{01097\ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01098\ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{01099\ \ \ \ \ \ \ <<\ get\_signature\_subject\_name(n)\ <<\ \textcolor{stringliteral}{"{}:\ validate\ "{}}\ <<\ verify\_result}
+\DoxyCodeLine{01100\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01101\ \ \ \}}
+\DoxyCodeLine{01102\ }
+\DoxyCodeLine{01103\ \ \ sk\_X509\_free(stack);}
+\DoxyCodeLine{01104\ \ \ X509\_STORE\_CTX\_cleanup(ctx);}
+\DoxyCodeLine{01105\ \ \ X509\_STORE\_CTX\_free(ctx);}
+\DoxyCodeLine{01106\ }
+\DoxyCodeLine{01107\ \ \ \textcolor{keywordflow}{return}\ verify\_result;}
+\DoxyCodeLine{01108\ \}}
+\DoxyCodeLine{01109\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{01110\ }
+\DoxyCodeLine{01126\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01127\ flush()\ \{}
+\DoxyCodeLine{01128\ \ \ \textcolor{keywordflow}{if}\ (!is\_write\_valid())\ \{}
+\DoxyCodeLine{01129\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01130\ \ \ \}}
+\DoxyCodeLine{01131\ }
+\DoxyCodeLine{01132\ \ \ \textcolor{keywordtype}{bool}\ new\_file\ =\ (\_next\_index\ ==\ (streampos)0);}
+\DoxyCodeLine{01133\ \ \ \textcolor{keywordflow}{if}\ (new\_file)\ \{}
+\DoxyCodeLine{01134\ \ \ \ \ \textcolor{comment}{//\ If\ we\ don't\ have\ an\ index\ yet,\ we\ don't\ have\ a\ header.\ \ Write\ the}}
+\DoxyCodeLine{01135\ \ \ \ \ \textcolor{comment}{//\ header.}}
+\DoxyCodeLine{01136\ \ \ \ \ \textcolor{keywordflow}{if}\ (!write\_header())\ \{}
+\DoxyCodeLine{01137\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01138\ \ \ \ \ \}}
+\DoxyCodeLine{01139\ }
+\DoxyCodeLine{01140\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01141\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_file\_minor\_ver\ !=\ \_current\_minor\_ver)\ \{}
+\DoxyCodeLine{01142\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ *do*\ have\ an\ index\ already,\ but\ this\ is\ an\ old\ version}}
+\DoxyCodeLine{01143\ \ \ \ \ \ \ \textcolor{comment}{//\ multifile,\ we\ have\ to\ completely\ rewrite\ it\ anyway.}}
+\DoxyCodeLine{01144\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ repack();}
+\DoxyCodeLine{01145\ \ \ \ \ \}}
+\DoxyCodeLine{01146\ \ \ \}}
+\DoxyCodeLine{01147\ }
+\DoxyCodeLine{01148\ \ \ nassertr(\_write\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01149\ }
+\DoxyCodeLine{01150\ \ \ \textcolor{comment}{//\ First,\ mark\ out\ all\ of\ the\ removed\ subfiles.}}
+\DoxyCodeLine{01151\ \ \ PendingSubfiles::iterator\ pi;}
+\DoxyCodeLine{01152\ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ \_removed\_subfiles.begin();\ pi\ !=\ \_removed\_subfiles.end();\ ++pi)\ \{}
+\DoxyCodeLine{01153\ \ \ \ \ Subfile\ *subfile\ =\ (*pi);}
+\DoxyCodeLine{01154\ \ \ \ \ subfile-\/>rewrite\_index\_flags(*\_write);}
+\DoxyCodeLine{01155\ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{01156\ \ \ \}}
+\DoxyCodeLine{01157\ \ \ \_removed\_subfiles.clear();}
+\DoxyCodeLine{01158\ }
+\DoxyCodeLine{01159\ \ \ \textcolor{keywordtype}{bool}\ wrote\_ok\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01160\ }
+\DoxyCodeLine{01161\ \ \ \textcolor{keywordflow}{if}\ (!\_new\_subfiles.empty()\ ||\ new\_file)\ \{}
+\DoxyCodeLine{01162\ \ \ \ \ \textcolor{comment}{//\ Add\ a\ few\ more\ files\ to\ the\ end.\ \ We\ always\ add\ subfiles\ at\ the\ end\ of}}
+\DoxyCodeLine{01163\ \ \ \ \ \textcolor{comment}{//\ the\ multifile,\ so\ go\ there\ first.}}
+\DoxyCodeLine{01164\ \ \ \ \ sort(\_new\_subfiles.begin(),\ \_new\_subfiles.end(),\ \mbox{\hyperlink{classIndirectLess}{IndirectLess<Subfile>}}());}
+\DoxyCodeLine{01165\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_last\_index\ !=\ (streampos)0)\ \{}
+\DoxyCodeLine{01166\ \ \ \ \ \ \ \_write-\/>seekp(0,\ ios::end);}
+\DoxyCodeLine{01167\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_write-\/>fail())\ \{}
+\DoxyCodeLine{01168\ \ \ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01169\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ seek\ Multifile\ "{}}\ <<\ \_multifile\_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01170\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01171\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01172\ \ \ \ \ \ \ \_next\_index\ =\ \_write-\/>tellp();}
+\DoxyCodeLine{01173\ \ \ \ \ \ \ \_next\_index\ =\ pad\_to\_streampos(\_next\_index);}
+\DoxyCodeLine{01174\ }
+\DoxyCodeLine{01175\ \ \ \ \ \ \ \textcolor{comment}{//\ And\ update\ the\ forward\ link\ from\ the\ last\_index\ to\ point\ to\ this\ new}}
+\DoxyCodeLine{01176\ \ \ \ \ \ \ \textcolor{comment}{//\ index\ location.}}
+\DoxyCodeLine{01177\ \ \ \ \ \ \ \_write-\/>seekp(\_last\_index);}
+\DoxyCodeLine{01178\ \ \ \ \ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ writer(\_write,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01179\ \ \ \ \ \ \ writer.add\_uint32(streampos\_to\_word(\_next\_index));}
+\DoxyCodeLine{01180\ \ \ \ \ \}}
+\DoxyCodeLine{01181\ }
+\DoxyCodeLine{01182\ \ \ \ \ \_write-\/>seekp(\_next\_index);}
+\DoxyCodeLine{01183\ \ \ \ \ nassertr(\_next\_index\ ==\ \_write-\/>tellp(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01184\ }
+\DoxyCodeLine{01185\ \ \ \ \ \textcolor{comment}{//\ Ok,\ here\ we\ are\ at\ the\ end\ of\ the\ file.\ \ Write\ out\ the\ recently-\/added}}
+\DoxyCodeLine{01186\ \ \ \ \ \textcolor{comment}{//\ subfiles\ here.\ \ First,\ count\ up\ the\ index\ size.}}
+\DoxyCodeLine{01187\ \ \ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ \_new\_subfiles.begin();\ pi\ !=\ \_new\_subfiles.end();\ ++pi)\ \{}
+\DoxyCodeLine{01188\ \ \ \ \ \ \ Subfile\ *subfile\ =\ (*pi);}
+\DoxyCodeLine{01189\ \ \ \ \ \ \ \_last\_index\ =\ \_next\_index;}
+\DoxyCodeLine{01190\ \ \ \ \ \ \ \_next\_index\ =\ subfile-\/>write\_index(*\_write,\ \_next\_index,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01191\ \ \ \ \ \ \ nassertr(\_next\_index\ ==\ \_write-\/>tellp(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01192\ \ \ \ \ \ \ \_next\_index\ =\ pad\_to\_streampos(\_next\_index);}
+\DoxyCodeLine{01193\ \ \ \ \ \ \ nassertr(\_next\_index\ ==\ \_write-\/>tellp(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01194\ \ \ \ \ \}}
+\DoxyCodeLine{01195\ }
+\DoxyCodeLine{01196\ \ \ \ \ \textcolor{comment}{//\ Now\ we're\ at\ the\ end\ of\ the\ index.\ \ Write\ a\ 0\ here\ to\ mark\ the\ end.}}
+\DoxyCodeLine{01197\ \ \ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ writer(\_write,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01198\ \ \ \ \ writer.add\_uint32(0);}
+\DoxyCodeLine{01199\ \ \ \ \ \_next\_index\ +=\ 4;}
+\DoxyCodeLine{01200\ \ \ \ \ nassertr(\_next\_index\ ==\ \_write-\/>tellp(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01201\ \ \ \ \ \_next\_index\ =\ pad\_to\_streampos(\_next\_index);}
+\DoxyCodeLine{01202\ }
+\DoxyCodeLine{01203\ \ \ \ \ \textcolor{comment}{//\ All\ right,\ now\ write\ out\ each\ subfile's\ data.}}
+\DoxyCodeLine{01204\ \ \ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ \_new\_subfiles.begin();\ pi\ !=\ \_new\_subfiles.end();\ ++pi)\ \{}
+\DoxyCodeLine{01205\ \ \ \ \ \ \ Subfile\ *subfile\ =\ (*pi);}
+\DoxyCodeLine{01206\ }
+\DoxyCodeLine{01207\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_read\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01208\ \ \ \ \ \ \ \ \ \_read-\/>acquire();}
+\DoxyCodeLine{01209\ \ \ \ \ \ \ \ \ \_next\_index\ =\ subfile-\/>write\_data(*\_write,\ \_read-\/>get\_istream(),}
+\DoxyCodeLine{01210\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_next\_index,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01211\ \ \ \ \ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{01212\ }
+\DoxyCodeLine{01213\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01214\ \ \ \ \ \ \ \ \ \_next\_index\ =\ subfile-\/>write\_data(*\_write,\ \textcolor{keyword}{nullptr},\ \_next\_index,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01215\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01216\ }
+\DoxyCodeLine{01217\ \ \ \ \ \ \ nassertr(\_next\_index\ ==\ \_write-\/>tellp(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01218\ \ \ \ \ \ \ \_next\_index\ =\ pad\_to\_streampos(\_next\_index);}
+\DoxyCodeLine{01219\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (subfile-\/>is\_data\_invalid())\ \{}
+\DoxyCodeLine{01220\ \ \ \ \ \ \ \ \ wrote\_ok\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01221\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01222\ }
+\DoxyCodeLine{01223\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!subfile-\/>is\_cert\_special())\ \{}
+\DoxyCodeLine{01224\ \ \ \ \ \ \ \ \ \_last\_data\_byte\ =\ max(\_last\_data\_byte,\ subfile-\/>get\_last\_byte\_pos());}
+\DoxyCodeLine{01225\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01226\ \ \ \ \ \ \ nassertr(\_next\_index\ ==\ \_write-\/>tellp(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01227\ \ \ \ \ \}}
+\DoxyCodeLine{01228\ }
+\DoxyCodeLine{01229\ \ \ \ \ \textcolor{comment}{//\ Now\ go\ back\ and\ fill\ in\ the\ proper\ addresses\ for\ the\ data\ start.\ \ We}}
+\DoxyCodeLine{01230\ \ \ \ \ \textcolor{comment}{//\ didn't\ do\ it\ in\ the\ first\ pass,\ because\ we\ don't\ really\ want\ to\ keep}}
+\DoxyCodeLine{01231\ \ \ \ \ \textcolor{comment}{//\ all\ those\ file\ handles\ open,\ and\ so\ we\ didn't\ have\ to\ determine\ each}}
+\DoxyCodeLine{01232\ \ \ \ \ \textcolor{comment}{//\ file's\ length\ ahead\ of\ time.}}
+\DoxyCodeLine{01233\ \ \ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ \_new\_subfiles.begin();\ pi\ !=\ \_new\_subfiles.end();\ ++pi)\ \{}
+\DoxyCodeLine{01234\ \ \ \ \ \ \ Subfile\ *subfile\ =\ (*pi);}
+\DoxyCodeLine{01235\ \ \ \ \ \ \ subfile-\/>rewrite\_index\_data\_start(*\_write,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{01236\ \ \ \ \ \}}
+\DoxyCodeLine{01237\ }
+\DoxyCodeLine{01238\ \ \ \ \ \_new\_subfiles.clear();}
+\DoxyCodeLine{01239\ \ \ \}}
+\DoxyCodeLine{01240\ }
+\DoxyCodeLine{01241\ \ \ \textcolor{comment}{//\ Also\ update\ the\ overall\ timestamp.}}
+\DoxyCodeLine{01242\ \ \ \textcolor{keywordflow}{if}\ (\_timestamp\_dirty)\ \{}
+\DoxyCodeLine{01243\ \ \ \ \ nassertr(!\_write-\/>fail(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01244\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ timestamp\_pos\ =\ \_header\_prefix.size()\ +\ \_header\_size\ +\ 2\ +\ 2\ +\ 4;}
+\DoxyCodeLine{01245\ \ \ \ \ \_write-\/>seekp(timestamp\_pos);}
+\DoxyCodeLine{01246\ \ \ \ \ nassertr(!\_write-\/>fail(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01247\ }
+\DoxyCodeLine{01248\ \ \ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ writer(*\_write);}
+\DoxyCodeLine{01249\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_record\_timestamp)\ \{}
+\DoxyCodeLine{01250\ \ \ \ \ \ \ writer.add\_uint32(\_timestamp);}
+\DoxyCodeLine{01251\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01252\ \ \ \ \ \ \ writer.add\_uint32(0);}
+\DoxyCodeLine{01253\ \ \ \ \ \}}
+\DoxyCodeLine{01254\ \ \ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01255\ \ \ \}}
+\DoxyCodeLine{01256\ }
+\DoxyCodeLine{01257\ \ \ \_write-\/>flush();}
+\DoxyCodeLine{01258\ \ \ \textcolor{keywordflow}{if}\ (!wrote\_ok\ ||\ \_write-\/>fail())\ \{}
+\DoxyCodeLine{01259\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01260\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ update\ Multifile\ "{}}\ <<\ \_multifile\_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01261\ \ \ \ \ close();}
+\DoxyCodeLine{01262\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01263\ \ \ \}}
+\DoxyCodeLine{01264\ }
+\DoxyCodeLine{01265\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01266\ \}}
+\DoxyCodeLine{01267\ }
+\DoxyCodeLine{01280\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01281\ repack()\ \{}
+\DoxyCodeLine{01282\ \ \ \textcolor{keywordflow}{if}\ (\_next\_index\ ==\ (streampos)0)\ \{}
+\DoxyCodeLine{01283\ \ \ \ \ \textcolor{comment}{//\ If\ the\ Multifile\ hasn't\ yet\ been\ written,\ this\ is\ really\ just\ a\ flush}}
+\DoxyCodeLine{01284\ \ \ \ \ \textcolor{comment}{//\ operation.}}
+\DoxyCodeLine{01285\ \ \ \ \ \_needs\_repack\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01286\ \ \ \ \ \textcolor{keywordflow}{return}\ flush();}
+\DoxyCodeLine{01287\ \ \ \}}
+\DoxyCodeLine{01288\ }
+\DoxyCodeLine{01289\ \ \ nassertr(is\_write\_valid()\ \&\&\ is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01290\ \ \ nassertr(!\_multifile\_name.empty(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01291\ }
+\DoxyCodeLine{01292\ \ \ \textcolor{comment}{//\ First,\ we\ open\ a\ temporary\ filename\ to\ copy\ the\ Multifile\ to.}}
+\DoxyCodeLine{01293\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ dirname\ =\ \_multifile\_name.get\_dirname();}
+\DoxyCodeLine{01294\ \ \ \textcolor{keywordflow}{if}\ (dirname.empty())\ \{}
+\DoxyCodeLine{01295\ \ \ \ \ dirname\ =\ \textcolor{stringliteral}{"{}."{}};}
+\DoxyCodeLine{01296\ \ \ \}}
+\DoxyCodeLine{01297\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ temp\_filename\ =\ \mbox{\hyperlink{classFilename_ab0650c0800c5af778d667c6b855e644a}{Filename::temporary}}(dirname,\ \textcolor{stringliteral}{"{}mftemp"{}});}
+\DoxyCodeLine{01298\ \ \ temp\_filename.set\_binary();}
+\DoxyCodeLine{01299\ \ \ pofstream\ temp;}
+\DoxyCodeLine{01300\ \ \ \textcolor{keywordflow}{if}\ (!temp\_filename.\mbox{\hyperlink{classFilename_ad37a9d52c837218b01076de184dc5f4d}{open\_write}}(temp))\ \{}
+\DoxyCodeLine{01301\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01302\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ open\ temporary\ file\ "{}}\ <<\ temp\_filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01303\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01304\ \ \ \}}
+\DoxyCodeLine{01305\ }
+\DoxyCodeLine{01306\ \ \ \textcolor{comment}{//\ Now\ we\ scrub\ our\ internal\ structures\ so\ it\ looks\ like\ we're\ a\ brand\ new}}
+\DoxyCodeLine{01307\ \ \ \textcolor{comment}{//\ Multifile.}}
+\DoxyCodeLine{01308\ \ \ PendingSubfiles::iterator\ pi;}
+\DoxyCodeLine{01309\ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ \_removed\_subfiles.begin();\ pi\ !=\ \_removed\_subfiles.end();\ ++pi)\ \{}
+\DoxyCodeLine{01310\ \ \ \ \ Subfile\ *subfile\ =\ (*pi);}
+\DoxyCodeLine{01311\ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{01312\ \ \ \}}
+\DoxyCodeLine{01313\ \ \ \_removed\_subfiles.clear();}
+\DoxyCodeLine{01314\ \ \ \_new\_subfiles.clear();}
+\DoxyCodeLine{01315\ \ \ std::copy(\_subfiles.begin(),\ \_subfiles.end(),\ std::back\_inserter(\_new\_subfiles));}
+\DoxyCodeLine{01316\ \ \ \_next\_index\ =\ 0;}
+\DoxyCodeLine{01317\ \ \ \_last\_index\ =\ 0;}
+\DoxyCodeLine{01318\ \ \ \_last\_data\_byte\ =\ 0;}
+\DoxyCodeLine{01319\ \ \ \_scale\_factor\ =\ \_new\_scale\_factor;}
+\DoxyCodeLine{01320\ }
+\DoxyCodeLine{01321\ \ \ \textcolor{comment}{//\ And\ we\ write\ our\ contents\ to\ our\ new\ temporary\ file.}}
+\DoxyCodeLine{01322\ \ \ \_write\ =\ \&temp;}
+\DoxyCodeLine{01323\ \ \ \textcolor{keywordflow}{if}\ (!flush())\ \{}
+\DoxyCodeLine{01324\ \ \ \ \ temp.close();}
+\DoxyCodeLine{01325\ \ \ \ \ temp\_filename.\mbox{\hyperlink{classFilename_a722fac5764b2c91628bbbf4ddc8c6254}{unlink}}();}
+\DoxyCodeLine{01326\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01327\ \ \ \}}
+\DoxyCodeLine{01328\ }
+\DoxyCodeLine{01329\ \ \ \textcolor{comment}{//\ Now\ close\ everything,\ and\ move\ the\ temporary\ file\ back\ over\ our\ original}}
+\DoxyCodeLine{01330\ \ \ \textcolor{comment}{//\ file.}}
+\DoxyCodeLine{01331\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ orig\_name\ =\ \_multifile\_name;}
+\DoxyCodeLine{01332\ \ \ temp.close();}
+\DoxyCodeLine{01333\ \ \ close();}
+\DoxyCodeLine{01334\ \ \ orig\_name.\mbox{\hyperlink{classFilename_a722fac5764b2c91628bbbf4ddc8c6254}{unlink}}();}
+\DoxyCodeLine{01335\ \ \ \textcolor{keywordflow}{if}\ (!temp\_filename.\mbox{\hyperlink{classFilename_a6624cb0d69babb7da9c6c1af0551ecc4}{rename\_to}}(orig\_name))\ \{}
+\DoxyCodeLine{01336\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01337\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ rename\ temporary\ file\ "{}}\ <<\ temp\_filename\ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}}
+\DoxyCodeLine{01338\ \ \ \ \ \ \ <<\ orig\_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01339\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01340\ \ \ \}}
+\DoxyCodeLine{01341\ }
+\DoxyCodeLine{01342\ \ \ \textcolor{keywordflow}{if}\ (!open\_read\_write(orig\_name))\ \{}
+\DoxyCodeLine{01343\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01344\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ read\ newly\ repacked\ "{}}\ <<\ \_multifile\_name}
+\DoxyCodeLine{01345\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{01346\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01347\ \ \ \}}
+\DoxyCodeLine{01348\ }
+\DoxyCodeLine{01349\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01350\ \}}
+\DoxyCodeLine{01351\ }
+\DoxyCodeLine{01357\ \textcolor{keywordtype}{int}\ Multifile::}
+\DoxyCodeLine{01358\ get\_num\_subfiles()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01359\ \ \ \textcolor{keywordflow}{return}\ \_subfiles.size();}
+\DoxyCodeLine{01360\ \}}
+\DoxyCodeLine{01361\ }
+\DoxyCodeLine{01366\ \textcolor{keywordtype}{int}\ Multifile::}
+\DoxyCodeLine{01367\ find\_subfile(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&subfile\_name)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01368\ \ \ Subfile\ find\_subfile;}
+\DoxyCodeLine{01369\ \ \ find\_subfile.\_name\ =\ standardize\_subfile\_name(subfile\_name);}
+\DoxyCodeLine{01370\ \ \ Subfiles::const\_iterator\ fi;}
+\DoxyCodeLine{01371\ \ \ fi\ =\ \_subfiles.find(\&find\_subfile);}
+\DoxyCodeLine{01372\ \ \ \textcolor{keywordflow}{if}\ (fi\ ==\ \_subfiles.end())\ \{}
+\DoxyCodeLine{01373\ \ \ \ \ \textcolor{comment}{//\ Not\ present.}}
+\DoxyCodeLine{01374\ \ \ \ \ \textcolor{keywordflow}{return}\ -\/1;}
+\DoxyCodeLine{01375\ \ \ \}}
+\DoxyCodeLine{01376\ \ \ \textcolor{keywordflow}{return}\ (fi\ -\/\ \_subfiles.begin());}
+\DoxyCodeLine{01377\ \}}
+\DoxyCodeLine{01378\ }
+\DoxyCodeLine{01384\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01385\ has\_directory(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&subfile\_name)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01386\ \ \ \textcolor{keywordtype}{string}\ prefix\ =\ subfile\_name;}
+\DoxyCodeLine{01387\ \ \ \textcolor{keywordflow}{if}\ (!prefix.empty())\ \{}
+\DoxyCodeLine{01388\ \ \ \ \ prefix\ +=\ \textcolor{charliteral}{'/'};}
+\DoxyCodeLine{01389\ \ \ \}}
+\DoxyCodeLine{01390\ \ \ Subfile\ find\_subfile;}
+\DoxyCodeLine{01391\ \ \ find\_subfile.\_name\ =\ prefix;}
+\DoxyCodeLine{01392\ \ \ Subfiles::const\_iterator\ fi;}
+\DoxyCodeLine{01393\ \ \ fi\ =\ \_subfiles.upper\_bound(\&find\_subfile);}
+\DoxyCodeLine{01394\ \ \ \textcolor{keywordflow}{if}\ (fi\ ==\ \_subfiles.end())\ \{}
+\DoxyCodeLine{01395\ \ \ \ \ \textcolor{comment}{//\ Not\ present.}}
+\DoxyCodeLine{01396\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01397\ \ \ \}}
+\DoxyCodeLine{01398\ }
+\DoxyCodeLine{01399\ \ \ \textcolor{comment}{//\ At\ least\ one\ subfile\ exists\ whose\ name\ sorts\ after\ prefix.\ \ If\ it}}
+\DoxyCodeLine{01400\ \ \ \textcolor{comment}{//\ contains\ prefix\ as\ the\ initial\ substring,\ then\ we\ have\ a\ match.}}
+\DoxyCodeLine{01401\ \ \ Subfile\ *subfile\ =\ (*fi);}
+\DoxyCodeLine{01402\ \ \ \textcolor{keywordflow}{return}\ (subfile-\/>\_name.length()\ >\ prefix.length()\ \&\&}
+\DoxyCodeLine{01403\ \ \ \ \ \ \ \ \ \ \ subfile-\/>\_name.substr(0,\ prefix.length())\ ==\ prefix);}
+\DoxyCodeLine{01404\ \}}
+\DoxyCodeLine{01405\ }
+\DoxyCodeLine{01416\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01417\ scan\_directory(vector\_string\ \&contents,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&subfile\_name)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01418\ \ \ \textcolor{keywordtype}{string}\ prefix\ =\ subfile\_name;}
+\DoxyCodeLine{01419\ \ \ \textcolor{keywordflow}{if}\ (!prefix.empty())\ \{}
+\DoxyCodeLine{01420\ \ \ \ \ prefix\ +=\ \textcolor{charliteral}{'/'};}
+\DoxyCodeLine{01421\ \ \ \}}
+\DoxyCodeLine{01422\ \ \ Subfile\ find\_subfile;}
+\DoxyCodeLine{01423\ \ \ find\_subfile.\_name\ =\ prefix;}
+\DoxyCodeLine{01424\ \ \ Subfiles::const\_iterator\ fi;}
+\DoxyCodeLine{01425\ \ \ fi\ =\ \_subfiles.upper\_bound(\&find\_subfile);}
+\DoxyCodeLine{01426\ }
+\DoxyCodeLine{01427\ \ \ \textcolor{keywordtype}{string}\ previous\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{01428\ \ \ \textcolor{keywordflow}{while}\ (fi\ !=\ \_subfiles.end())\ \{}
+\DoxyCodeLine{01429\ \ \ \ \ Subfile\ *subfile\ =\ (*fi);}
+\DoxyCodeLine{01430\ \ \ \ \ \textcolor{keywordflow}{if}\ (!(subfile-\/>\_name.length()\ >\ prefix.length()\ \&\&}
+\DoxyCodeLine{01431\ \ \ \ \ \ \ \ \ \ \ subfile-\/>\_name.substr(0,\ prefix.length())\ ==\ prefix))\ \{}
+\DoxyCodeLine{01432\ \ \ \ \ \ \ \textcolor{comment}{//\ We've\ reached\ the\ end\ of\ the\ list\ of\ subfiles\ beneath\ the\ indicated}}
+\DoxyCodeLine{01433\ \ \ \ \ \ \ \textcolor{comment}{//\ directory\ prefix.}}
+\DoxyCodeLine{01434\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01435\ \ \ \ \ \}}
+\DoxyCodeLine{01436\ }
+\DoxyCodeLine{01437\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ slash\ =\ subfile-\/>\_name.find(\textcolor{charliteral}{'/'},\ prefix.length());}
+\DoxyCodeLine{01438\ \ \ \ \ \textcolor{keywordtype}{string}\ basename\ =\ subfile-\/>\_name.substr(prefix.length(),\ slash\ -\/\ prefix.length());}
+\DoxyCodeLine{01439\ \ \ \ \ \textcolor{keywordflow}{if}\ (basename\ !=\ previous)\ \{}
+\DoxyCodeLine{01440\ \ \ \ \ \ \ contents.push\_back(basename);}
+\DoxyCodeLine{01441\ \ \ \ \ \ \ previous\ =\ basename;}
+\DoxyCodeLine{01442\ \ \ \ \ \}}
+\DoxyCodeLine{01443\ \ \ \ \ ++fi;}
+\DoxyCodeLine{01444\ \ \ \}}
+\DoxyCodeLine{01445\ }
+\DoxyCodeLine{01446\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01447\ \}}
+\DoxyCodeLine{01448\ }
+\DoxyCodeLine{01458\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{01459\ remove\_subfile(\textcolor{keywordtype}{int}\ index)\ \{}
+\DoxyCodeLine{01460\ \ \ nassertv(is\_write\_valid());}
+\DoxyCodeLine{01461\ \ \ nassertv(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size());}
+\DoxyCodeLine{01462\ \ \ Subfile\ *subfile\ =\ \_subfiles[index];}
+\DoxyCodeLine{01463\ \ \ subfile-\/>\_flags\ |=\ SF\_deleted;}
+\DoxyCodeLine{01464\ \ \ \_removed\_subfiles.push\_back(subfile);}
+\DoxyCodeLine{01465\ \ \ \_subfiles.erase(\_subfiles.begin()\ +\ index);}
+\DoxyCodeLine{01466\ }
+\DoxyCodeLine{01467\ \ \ \_timestamp\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01468\ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01469\ }
+\DoxyCodeLine{01470\ \ \ \_needs\_repack\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01471\ \}}
+\DoxyCodeLine{01472\ }
+\DoxyCodeLine{01476\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&Multifile::}
+\DoxyCodeLine{01477\ get\_subfile\_name(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01478\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{01479\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{string}\ empty\_string;}
+\DoxyCodeLine{01480\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ empty\_string);}
+\DoxyCodeLine{01481\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01482\ \ \ \textcolor{keywordflow}{return}\ \_subfiles[index]-\/>\_name;}
+\DoxyCodeLine{01483\ \}}
+\DoxyCodeLine{01484\ }
+\DoxyCodeLine{01490\ \textcolor{keywordtype}{size\_t}\ Multifile::}
+\DoxyCodeLine{01491\ get\_subfile\_length(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01492\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ 0);}
+\DoxyCodeLine{01493\ \ \ \textcolor{keywordflow}{return}\ \_subfiles[index]-\/>\_uncompressed\_length;}
+\DoxyCodeLine{01494\ \}}
+\DoxyCodeLine{01495\ }
+\DoxyCodeLine{01502\ time\_t\ Multifile::}
+\DoxyCodeLine{01503\ get\_subfile\_timestamp(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01504\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ 0);}
+\DoxyCodeLine{01505\ \ \ \textcolor{keywordflow}{if}\ (!get\_record\_timestamp())\ \{}
+\DoxyCodeLine{01506\ \ \ \ \ \textcolor{keywordflow}{return}\ get\_timestamp();}
+\DoxyCodeLine{01507\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01508\ \ \ \ \ \textcolor{keywordflow}{return}\ \_subfiles[index]-\/>\_timestamp;}
+\DoxyCodeLine{01509\ \ \ \}}
+\DoxyCodeLine{01510\ \}}
+\DoxyCodeLine{01511\ }
+\DoxyCodeLine{01516\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01517\ is\_subfile\_compressed(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01518\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01519\ \ \ \textcolor{keywordflow}{return}\ (\_subfiles[index]-\/>\_flags\ \&\ SF\_compressed)\ !=\ 0;}
+\DoxyCodeLine{01520\ \}}
+\DoxyCodeLine{01521\ }
+\DoxyCodeLine{01526\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01527\ is\_subfile\_encrypted(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01528\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01529\ \ \ \textcolor{keywordflow}{return}\ (\_subfiles[index]-\/>\_flags\ \&\ SF\_encrypted)\ !=\ 0;}
+\DoxyCodeLine{01530\ \}}
+\DoxyCodeLine{01531\ }
+\DoxyCodeLine{01539\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01540\ is\_subfile\_text(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01541\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01542\ \ \ \textcolor{keywordflow}{return}\ (\_subfiles[index]-\/>\_flags\ \&\ SF\_text)\ !=\ 0;}
+\DoxyCodeLine{01543\ \}}
+\DoxyCodeLine{01544\ }
+\DoxyCodeLine{01554\ streampos\ Multifile::}
+\DoxyCodeLine{01555\ get\_index\_end()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01556\ \ \ \textcolor{keywordflow}{return}\ normalize\_streampos(\_next\_index\ +\ (streampos)4);}
+\DoxyCodeLine{01557\ \}}
+\DoxyCodeLine{01558\ }
+\DoxyCodeLine{01566\ streampos\ Multifile::}
+\DoxyCodeLine{01567\ get\_subfile\_internal\_start(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01568\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ 0);}
+\DoxyCodeLine{01569\ \ \ \textcolor{keywordflow}{return}\ \_subfiles[index]-\/>\_data\_start;}
+\DoxyCodeLine{01570\ \}}
+\DoxyCodeLine{01571\ }
+\DoxyCodeLine{01579\ \textcolor{keywordtype}{size\_t}\ Multifile::}
+\DoxyCodeLine{01580\ get\_subfile\_internal\_length(\textcolor{keywordtype}{int}\ index)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01581\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ 0);}
+\DoxyCodeLine{01582\ \ \ \textcolor{keywordflow}{return}\ \_subfiles[index]-\/>\_data\_length;}
+\DoxyCodeLine{01583\ \}}
+\DoxyCodeLine{01584\ }
+\DoxyCodeLine{01602\ istream\ *Multifile::}
+\DoxyCodeLine{01603\ open\_read\_subfile(\textcolor{keywordtype}{int}\ index)\ \{}
+\DoxyCodeLine{01604\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01605\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01606\ \ \ Subfile\ *subfile\ =\ \_subfiles[index];}
+\DoxyCodeLine{01607\ }
+\DoxyCodeLine{01608\ \ \ \textcolor{keywordflow}{if}\ (subfile-\/>\_source\ !=\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{01609\ \ \ \ \ \ \ !subfile-\/>\_source\_filename.empty())\ \{}
+\DoxyCodeLine{01610\ \ \ \ \ \textcolor{comment}{//\ The\ subfile\ has\ not\ yet\ been\ copied\ into\ the\ physical\ Multifile.\ \ Force}}
+\DoxyCodeLine{01611\ \ \ \ \ \textcolor{comment}{//\ a\ flush\ operation\ to\ incorporate\ it.}}
+\DoxyCodeLine{01612\ \ \ \ \ flush();}
+\DoxyCodeLine{01613\ }
+\DoxyCodeLine{01614\ \ \ \ \ \textcolor{comment}{//\ That\ shouldn't\ change\ the\ subfile\ index\ or\ delete\ the\ subfile\ pointer.}}
+\DoxyCodeLine{01615\ \ \ \ \ nassertr(subfile\ ==\ \_subfiles[index],\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01616\ \ \ \}}
+\DoxyCodeLine{01617\ }
+\DoxyCodeLine{01618\ \ \ \textcolor{keywordflow}{return}\ open\_read\_subfile(subfile);}
+\DoxyCodeLine{01619\ \}}
+\DoxyCodeLine{01620\ }
+\DoxyCodeLine{01627\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{01628\ close\_read\_subfile(istream\ *stream)\ \{}
+\DoxyCodeLine{01629\ \ \ \textcolor{keywordflow}{if}\ (stream\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01630\ \ \ \ \ \textcolor{comment}{//\ For\ some\ reason-\/-\/compiler\ bug\ in\ gcc\ 3.2?-\/-\/explicitly\ deleting\ the}}
+\DoxyCodeLine{01631\ \ \ \ \ \textcolor{comment}{//\ stream\ pointer\ does\ not\ call\ the\ appropriate\ global\ delete\ function;}}
+\DoxyCodeLine{01632\ \ \ \ \ \textcolor{comment}{//\ instead\ apparently\ calling\ the\ system\ delete\ function.\ \ So\ we\ call\ the}}
+\DoxyCodeLine{01633\ \ \ \ \ \textcolor{comment}{//\ delete\ function\ by\ hand\ instead.}}
+\DoxyCodeLine{01634\ \textcolor{preprocessor}{\#if\ defined(\_\_GNUC\_\_)\ \&\&\ !defined(USE\_MEMORY\_NOWRAPPERS)\ \&\&\ defined(REDEFINE\_GLOBAL\_OPERATOR\_NEW)}}
+\DoxyCodeLine{01635\ \ \ \ \ stream-\/>\string~istream();}
+\DoxyCodeLine{01636\ \ \ \ \ (*global\_operator\_delete)(stream);}
+\DoxyCodeLine{01637\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{01638\ \ \ \ \ \textcolor{keyword}{delete}\ stream;}
+\DoxyCodeLine{01639\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{01640\ \ \ \}}
+\DoxyCodeLine{01641\ \}}
+\DoxyCodeLine{01642\ }
+\DoxyCodeLine{01646\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01647\ extract\_subfile(\textcolor{keywordtype}{int}\ index,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{01648\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01649\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01650\ }
+\DoxyCodeLine{01651\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ filename;}
+\DoxyCodeLine{01652\ \ \ \textcolor{keywordflow}{if}\ (multifile\_always\_binary)\ \{}
+\DoxyCodeLine{01653\ \ \ \ \ fname.set\_binary();}
+\DoxyCodeLine{01654\ \ \ \}}
+\DoxyCodeLine{01655\ }
+\DoxyCodeLine{01656\ \ \ \textcolor{keywordflow}{if}\ (!fname.is\_binary\_or\_text())\ \{}
+\DoxyCodeLine{01657\ \ \ \ \ \textcolor{comment}{//\ If\ we\ haven't\ specified\ binary\ or\ text,\ infer\ it\ from\ the\ type\ of\ the}}
+\DoxyCodeLine{01658\ \ \ \ \ \textcolor{comment}{//\ subfile.}}
+\DoxyCodeLine{01659\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_subfiles[index]-\/>\_flags\ \&\ SF\_text)\ !=\ 0)\ \{}
+\DoxyCodeLine{01660\ \ \ \ \ \ \ fname.set\_text();}
+\DoxyCodeLine{01661\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01662\ \ \ \ \ \ \ fname.set\_binary();}
+\DoxyCodeLine{01663\ \ \ \ \ \}}
+\DoxyCodeLine{01664\ \ \ \}}
+\DoxyCodeLine{01665\ \ \ fname.make\_dir();}
+\DoxyCodeLine{01666\ \ \ pofstream\ out;}
+\DoxyCodeLine{01667\ \ \ \textcolor{keywordflow}{if}\ (!fname.open\_write(out,\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{01668\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01669\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ to\ file\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01670\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01671\ \ \ \}}
+\DoxyCodeLine{01672\ }
+\DoxyCodeLine{01673\ \ \ \textcolor{keywordflow}{return}\ extract\_subfile\_to(index,\ out);}
+\DoxyCodeLine{01674\ \}}
+\DoxyCodeLine{01675\ }
+\DoxyCodeLine{01679\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01680\ extract\_subfile\_to(\textcolor{keywordtype}{int}\ index,\ ostream\ \&out)\ \{}
+\DoxyCodeLine{01681\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01682\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01683\ }
+\DoxyCodeLine{01684\ \ \ istream\ *in\ =\ open\_read\_subfile(index);}
+\DoxyCodeLine{01685\ \ \ \textcolor{keywordflow}{if}\ (in\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01686\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01687\ \ \ \}}
+\DoxyCodeLine{01688\ }
+\DoxyCodeLine{01689\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 4096;}
+\DoxyCodeLine{01690\ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{01691\ }
+\DoxyCodeLine{01692\ \ \ in-\/>read(buffer,\ buffer\_size);}
+\DoxyCodeLine{01693\ \ \ \textcolor{keywordtype}{size\_t}\ count\ =\ in-\/>gcount();}
+\DoxyCodeLine{01694\ \ \ \textcolor{keywordflow}{while}\ (count\ !=\ 0)\ \{}
+\DoxyCodeLine{01695\ \ \ \ \ out.write(buffer,\ count);}
+\DoxyCodeLine{01696\ \ \ \ \ in-\/>read(buffer,\ buffer\_size);}
+\DoxyCodeLine{01697\ \ \ \ \ count\ =\ in-\/>gcount();}
+\DoxyCodeLine{01698\ \ \ \}}
+\DoxyCodeLine{01699\ }
+\DoxyCodeLine{01700\ \ \ \textcolor{keywordtype}{bool}\ failed\ =\ (in-\/>fail()\ \&\&\ !in-\/>eof());}
+\DoxyCodeLine{01701\ \ \ close\_read\_subfile(in);}
+\DoxyCodeLine{01702\ \ \ nassertr(!failed,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01703\ }
+\DoxyCodeLine{01704\ \ \ \textcolor{keywordflow}{return}\ (!out.fail());}
+\DoxyCodeLine{01705\ \}}
+\DoxyCodeLine{01706\ }
+\DoxyCodeLine{01717\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01718\ compare\_subfile(\textcolor{keywordtype}{int}\ index,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classFilename}{Filename}}\ \&filename)\ \{}
+\DoxyCodeLine{01719\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01720\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01721\ }
+\DoxyCodeLine{01722\ \ \ \textcolor{keywordflow}{if}\ (!filename.\mbox{\hyperlink{classFilename_af8a2ef9ed26abbed32786e6d8025c2c7}{exists}}())\ \{}
+\DoxyCodeLine{01723\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01724\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}File\ is\ missing:\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01725\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01726\ \ \ \}}
+\DoxyCodeLine{01727\ }
+\DoxyCodeLine{01728\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ filename;}
+\DoxyCodeLine{01729\ \ \ \textcolor{keywordflow}{if}\ (fname.is\_binary())\ \{}
+\DoxyCodeLine{01730\ \ \ \ \ \textcolor{comment}{//\ If\ we've\ specified\ a\ binary\ file,\ it\ had\ better\ be\ a\ binary\ subfile.}}
+\DoxyCodeLine{01731\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_subfiles[index]-\/>\_flags\ \&\ SF\_text)\ !=\ 0)\ \{}
+\DoxyCodeLine{01732\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01733\ \ \ \ \ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{01734\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}File\ is\ not\ binary:\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01735\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01736\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01737\ \ \ \ \ \}}
+\DoxyCodeLine{01738\ }
+\DoxyCodeLine{01739\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (fname.is\_text())\ \{}
+\DoxyCodeLine{01740\ \ \ \ \ \textcolor{comment}{//\ If\ we've\ specified\ a\ text\ file,\ it\ had\ better\ be\ a\ text\ subfile.}}
+\DoxyCodeLine{01741\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_subfiles[index]-\/>\_flags\ \&\ SF\_text)\ ==\ 0)\ \{}
+\DoxyCodeLine{01742\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (express\_cat.is\_debug())\ \{}
+\DoxyCodeLine{01743\ \ \ \ \ \ \ \ \ express\_cat.debug()}
+\DoxyCodeLine{01744\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}File\ is\ not\ text:\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01745\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01746\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01747\ \ \ \ \ \}}
+\DoxyCodeLine{01748\ }
+\DoxyCodeLine{01749\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01750\ \ \ \ \ \textcolor{comment}{//\ If\ we\ haven't\ specified\ binary\ or\ text,\ infer\ it\ from\ the\ type\ of\ the}}
+\DoxyCodeLine{01751\ \ \ \ \ \textcolor{comment}{//\ subfile.}}
+\DoxyCodeLine{01752\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_subfiles[index]-\/>\_flags\ \&\ SF\_text)\ !=\ 0)\ \{}
+\DoxyCodeLine{01753\ \ \ \ \ \ \ fname.set\_text();}
+\DoxyCodeLine{01754\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01755\ \ \ \ \ \ \ fname.set\_binary();}
+\DoxyCodeLine{01756\ \ \ \ \ \}}
+\DoxyCodeLine{01757\ \ \ \}}
+\DoxyCodeLine{01758\ }
+\DoxyCodeLine{01759\ \ \ istream\ *in1\ =\ open\_read\_subfile(index);}
+\DoxyCodeLine{01760\ \ \ \textcolor{keywordflow}{if}\ (in1\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01761\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01762\ \ \ \}}
+\DoxyCodeLine{01763\ }
+\DoxyCodeLine{01764\ \ \ pifstream\ in2;}
+\DoxyCodeLine{01765\ }
+\DoxyCodeLine{01766\ \ \ \textcolor{keywordflow}{if}\ (!fname.open\_read(in2))\ \{}
+\DoxyCodeLine{01767\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{01768\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cannot\ read\ "{}}\ <<\ filename\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01769\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01770\ \ \ \}}
+\DoxyCodeLine{01771\ }
+\DoxyCodeLine{01772\ \ \ \textcolor{keywordflow}{if}\ (fname.is\_binary())\ \{}
+\DoxyCodeLine{01773\ \ \ \ \ \textcolor{comment}{//\ Check\ the\ file\ size.}}
+\DoxyCodeLine{01774\ \ \ \ \ in2.seekg(0,\ ios::end);}
+\DoxyCodeLine{01775\ \ \ \ \ streampos\ file\_size\ =\ in2.tellg();}
+\DoxyCodeLine{01776\ }
+\DoxyCodeLine{01777\ \ \ \ \ \textcolor{keywordflow}{if}\ (file\_size\ !=\ (streampos)get\_subfile\_length(index))\ \{}
+\DoxyCodeLine{01778\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ files\ have\ different\ sizes.}}
+\DoxyCodeLine{01779\ \ \ \ \ \ \ close\_read\_subfile(in1);}
+\DoxyCodeLine{01780\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01781\ \ \ \ \ \}}
+\DoxyCodeLine{01782\ \ \ \}}
+\DoxyCodeLine{01783\ }
+\DoxyCodeLine{01784\ \ \ \textcolor{comment}{//\ Check\ the\ file\ data,\ byte-\/for-\/byte.}}
+\DoxyCodeLine{01785\ \ \ in2.seekg(0);}
+\DoxyCodeLine{01786\ \ \ \textcolor{keywordtype}{int}\ byte1\ =\ in1-\/>get();}
+\DoxyCodeLine{01787\ \ \ \textcolor{keywordtype}{int}\ byte2\ =\ in2.get();}
+\DoxyCodeLine{01788\ \ \ \textcolor{keywordflow}{while}\ (!in1-\/>fail()\ \&\&\ !in2.fail())\ \{}
+\DoxyCodeLine{01789\ \ \ \ \ \textcolor{keywordflow}{if}\ (byte1\ !=\ byte2)\ \{}
+\DoxyCodeLine{01790\ \ \ \ \ \ \ close\_read\_subfile(in1);}
+\DoxyCodeLine{01791\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01792\ \ \ \ \ \}}
+\DoxyCodeLine{01793\ \ \ \ \ byte1\ =\ in1-\/>get();}
+\DoxyCodeLine{01794\ \ \ \ \ byte2\ =\ in2.get();}
+\DoxyCodeLine{01795\ \ \ \}}
+\DoxyCodeLine{01796\ }
+\DoxyCodeLine{01797\ \ \ \textcolor{keywordtype}{bool}\ failed\ =\ (in1-\/>fail()\ \&\&\ !in1-\/>eof())\ ||\ (in2.fail()\ \&\&\ !in2.eof());}
+\DoxyCodeLine{01798\ \ \ close\_read\_subfile(in1);}
+\DoxyCodeLine{01799\ }
+\DoxyCodeLine{01800\ \ \ nassertr(!failed,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01801\ }
+\DoxyCodeLine{01802\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01803\ \}}
+\DoxyCodeLine{01804\ }
+\DoxyCodeLine{01808\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{01809\ output(ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01810\ \ \ out\ <<\ \textcolor{stringliteral}{"{}Multifile\ "{}}\ <<\ \_multifile\_name\ <<\ \textcolor{stringliteral}{"{},\ "{}}\ <<\ get\_num\_subfiles()}
+\DoxyCodeLine{01811\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ subfiles.\(\backslash\)n"{}};}
+\DoxyCodeLine{01812\ \}}
+\DoxyCodeLine{01813\ }
+\DoxyCodeLine{01817\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{01818\ ls(ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01819\ \ \ \textcolor{keywordtype}{int}\ num\_subfiles\ =\ get\_num\_subfiles();}
+\DoxyCodeLine{01820\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ num\_subfiles;\ i++)\ \{}
+\DoxyCodeLine{01821\ \ \ \ \ \textcolor{keywordtype}{string}\ subfile\_name\ =\ get\_subfile\_name(i);}
+\DoxyCodeLine{01822\ \ \ \ \ out\ <<\ subfile\_name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{01823\ \ \ \}}
+\DoxyCodeLine{01824\ \}}
+\DoxyCodeLine{01825\ }
+\DoxyCodeLine{01839\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{01840\ set\_header\_prefix(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&header\_prefix)\ \{}
+\DoxyCodeLine{01841\ \ \ \textcolor{keywordtype}{string}\ new\_header\_prefix\ =\ header\_prefix;}
+\DoxyCodeLine{01842\ }
+\DoxyCodeLine{01843\ \ \ \textcolor{keywordflow}{if}\ (!new\_header\_prefix.empty())\ \{}
+\DoxyCodeLine{01844\ \ \ \ \ \textcolor{comment}{//\ It\ must\ begin\ with\ a\ hash\ mark.}}
+\DoxyCodeLine{01845\ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_header\_prefix[0]\ !=\ \textcolor{charliteral}{'\#'})\ \{}
+\DoxyCodeLine{01846\ \ \ \ \ \ \ new\_header\_prefix\ =\ string(\textcolor{stringliteral}{"{}\#"{}})\ +\ new\_header\_prefix;}
+\DoxyCodeLine{01847\ \ \ \ \ \}}
+\DoxyCodeLine{01848\ }
+\DoxyCodeLine{01849\ \ \ \ \ \textcolor{comment}{//\ It\ must\ end\ with\ a\ newline.}}
+\DoxyCodeLine{01850\ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_header\_prefix[new\_header\_prefix.size()\ -\/\ 1]\ !=\ \textcolor{charliteral}{'\(\backslash\)n'})\ \{}
+\DoxyCodeLine{01851\ \ \ \ \ \ \ new\_header\_prefix\ +=\ string(\textcolor{stringliteral}{"{}\(\backslash\)n"{}});}
+\DoxyCodeLine{01852\ \ \ \ \ \}}
+\DoxyCodeLine{01853\ }
+\DoxyCodeLine{01854\ \ \ \ \ \textcolor{comment}{//\ Embedded\ newlines\ must\ be\ followed\ by\ a\ hash\ mark.}}
+\DoxyCodeLine{01855\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ newline\ =\ new\_header\_prefix.find(\textcolor{charliteral}{'\(\backslash\)n'});}
+\DoxyCodeLine{01856\ \ \ \ \ \textcolor{keywordflow}{while}\ (newline\ <\ new\_header\_prefix.size()\ -\/\ 1)\ \{}
+\DoxyCodeLine{01857\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_header\_prefix[newline\ +\ 1]\ !=\ \textcolor{charliteral}{'\#'})\ \{}
+\DoxyCodeLine{01858\ \ \ \ \ \ \ \ \ new\_header\_prefix\ =\ new\_header\_prefix.substr(0,\ newline\ +\ 1)\ +\ string(\textcolor{stringliteral}{"{}\#"{}})\ +\ new\_header\_prefix.substr(newline\ +\ 1);}
+\DoxyCodeLine{01859\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01860\ \ \ \ \ \ \ newline\ =\ new\_header\_prefix.find(\textcolor{charliteral}{'\#'},\ newline);}
+\DoxyCodeLine{01861\ \ \ \ \ \}}
+\DoxyCodeLine{01862\ \ \ \}}
+\DoxyCodeLine{01863\ }
+\DoxyCodeLine{01864\ \ \ \textcolor{keywordflow}{if}\ (\_header\_prefix\ !=\ new\_header\_prefix)\ \{}
+\DoxyCodeLine{01865\ \ \ \ \ \_header\_prefix\ =\ new\_header\_prefix;}
+\DoxyCodeLine{01866\ \ \ \ \ \_needs\_repack\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01867\ \ \ \}}
+\DoxyCodeLine{01868\ \}}
+\DoxyCodeLine{01869\ }
+\DoxyCodeLine{01870\ }
+\DoxyCodeLine{01874\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01875\ read\_subfile(\textcolor{keywordtype}{int}\ index,\ \textcolor{keywordtype}{string}\ \&result)\ \{}
+\DoxyCodeLine{01876\ \ \ result\ =\ string();}
+\DoxyCodeLine{01877\ }
+\DoxyCodeLine{01878\ \ \ \textcolor{comment}{//\ We\ use\ a\ temporary\ pvector,\ because\ dynamic\ accumulation\ of\ a\ pvector}}
+\DoxyCodeLine{01879\ \ \ \textcolor{comment}{//\ seems\ to\ be\ many\ times\ faster\ than\ that\ of\ a\ string,\ at\ least\ on\ the}}
+\DoxyCodeLine{01880\ \ \ \textcolor{comment}{//\ Windows\ implementation\ of\ STL.}}
+\DoxyCodeLine{01881\ \ \ vector\_uchar\ pv;}
+\DoxyCodeLine{01882\ \ \ \textcolor{keywordflow}{if}\ (!read\_subfile(index,\ pv))\ \{}
+\DoxyCodeLine{01883\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01884\ \ \ \}}
+\DoxyCodeLine{01885\ }
+\DoxyCodeLine{01886\ \ \ \textcolor{keywordflow}{if}\ (!pv.empty())\ \{}
+\DoxyCodeLine{01887\ \ \ \ \ result.append((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)\&pv[0],\ pv.size());}
+\DoxyCodeLine{01888\ \ \ \}}
+\DoxyCodeLine{01889\ }
+\DoxyCodeLine{01890\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01891\ \}}
+\DoxyCodeLine{01892\ }
+\DoxyCodeLine{01896\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{01897\ read\_subfile(\textcolor{keywordtype}{int}\ index,\ vector\_uchar\ \&result)\ \{}
+\DoxyCodeLine{01898\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01899\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01900\ \ \ result.clear();}
+\DoxyCodeLine{01901\ }
+\DoxyCodeLine{01902\ \ \ \textcolor{comment}{//\ Now\ look\ up\ the\ particular\ Subfile\ we\ are\ reading.}}
+\DoxyCodeLine{01903\ \ \ nassertr(is\_read\_valid(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01904\ \ \ nassertr(index\ >=\ 0\ \&\&\ index\ <\ (\textcolor{keywordtype}{int})\_subfiles.size(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01905\ \ \ Subfile\ *subfile\ =\ \_subfiles[index];}
+\DoxyCodeLine{01906\ }
+\DoxyCodeLine{01907\ \ \ \textcolor{keywordflow}{if}\ (subfile-\/>\_source\ !=\ \textcolor{keyword}{nullptr}\ ||}
+\DoxyCodeLine{01908\ \ \ \ \ \ \ !subfile-\/>\_source\_filename.empty())\ \{}
+\DoxyCodeLine{01909\ \ \ \ \ \textcolor{comment}{//\ The\ subfile\ has\ not\ yet\ been\ copied\ into\ the\ physical\ Multifile.\ \ Force}}
+\DoxyCodeLine{01910\ \ \ \ \ \textcolor{comment}{//\ a\ flush\ operation\ to\ incorporate\ it.}}
+\DoxyCodeLine{01911\ \ \ \ \ flush();}
+\DoxyCodeLine{01912\ }
+\DoxyCodeLine{01913\ \ \ \ \ \textcolor{comment}{//\ That\ shouldn't\ change\ the\ subfile\ index\ or\ delete\ the\ subfile\ pointer.}}
+\DoxyCodeLine{01914\ \ \ \ \ nassertr(subfile\ ==\ \_subfiles[index],\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01915\ \ \ \}}
+\DoxyCodeLine{01916\ }
+\DoxyCodeLine{01917\ \ \ result.reserve(subfile-\/>\_uncompressed\_length);}
+\DoxyCodeLine{01918\ }
+\DoxyCodeLine{01919\ \ \ \textcolor{keywordtype}{bool}\ success\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01920\ \ \ \textcolor{keywordflow}{if}\ (subfile-\/>\_flags\ \&\ (SF\_encrypted\ |\ SF\_compressed))\ \{}
+\DoxyCodeLine{01921\ \ \ \ \ \textcolor{comment}{//\ If\ the\ subfile\ is\ encrypted\ or\ compressed,\ we\ can't\ read\ it\ directly.}}
+\DoxyCodeLine{01922\ \ \ \ \ \textcolor{comment}{//\ Fall\ back\ to\ the\ generic\ implementation.}}
+\DoxyCodeLine{01923\ \ \ \ \ istream\ *in\ =\ open\_read\_subfile(index);}
+\DoxyCodeLine{01924\ \ \ \ \ \textcolor{keywordflow}{if}\ (in\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01925\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01926\ \ \ \ \ \}}
+\DoxyCodeLine{01927\ }
+\DoxyCodeLine{01928\ \ \ \ \ success\ =\ VirtualFile::simple\_read\_file(in,\ result);}
+\DoxyCodeLine{01929\ \ \ \ \ close\_read\_subfile(in);}
+\DoxyCodeLine{01930\ }
+\DoxyCodeLine{01931\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01932\ \ \ \ \ \textcolor{comment}{//\ But\ if\ the\ subfile\ is\ just\ a\ plain\ file,\ we\ can\ just\ read\ the\ data}}
+\DoxyCodeLine{01933\ \ \ \ \ \textcolor{comment}{//\ directly\ from\ the\ Multifile,\ without\ paying\ the\ cost\ of\ an\ ISubStream.}}
+\DoxyCodeLine{01934\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 4096;}
+\DoxyCodeLine{01935\ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{01936\ }
+\DoxyCodeLine{01937\ \ \ \ \ streamsize\ pos\ =\ \_offset\ +\ subfile-\/>\_data\_start;}
+\DoxyCodeLine{01938\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ max\_bytes\ =\ subfile-\/>\_data\_length;}
+\DoxyCodeLine{01939\ \ \ \ \ streamsize\ count\ =\ 0;}
+\DoxyCodeLine{01940\ \ \ \ \ \textcolor{keywordtype}{bool}\ eof\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01941\ }
+\DoxyCodeLine{01942\ \ \ \ \ streamsize\ num\_bytes\ =\ (streamsize)min(buffer\_size,\ max\_bytes);}
+\DoxyCodeLine{01943\ \ \ \ \ \_read-\/>\mbox{\hyperlink{classIStreamWrapper_a3f9ec1c42cc6af605829b3cab0796b23}{seek\_read}}(pos,\ buffer,\ num\_bytes,\ count,\ eof);}
+\DoxyCodeLine{01944\ \ \ \ \ \textcolor{keywordflow}{while}\ (count\ !=\ 0)\ \{}
+\DoxyCodeLine{01945\ \ \ \ \ \ \ thread\_consider\_yield();}
+\DoxyCodeLine{01946\ \ \ \ \ \ \ nassertr(count\ <=\ (streamsize)max\_bytes,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01947\ \ \ \ \ \ \ result.insert(result.end(),\ buffer,\ buffer\ +\ (\textcolor{keywordtype}{size\_t})count);}
+\DoxyCodeLine{01948\ \ \ \ \ \ \ max\_bytes\ -\/=\ (size\_t)count;}
+\DoxyCodeLine{01949\ \ \ \ \ \ \ pos\ +=\ count;}
+\DoxyCodeLine{01950\ }
+\DoxyCodeLine{01951\ \ \ \ \ \ \ num\_bytes\ =\ (streamsize)min(buffer\_size,\ max\_bytes);}
+\DoxyCodeLine{01952\ \ \ \ \ \ \ \_read-\/>\mbox{\hyperlink{classIStreamWrapper_a3f9ec1c42cc6af605829b3cab0796b23}{seek\_read}}(pos,\ buffer,\ num\_bytes,\ count,\ eof);}
+\DoxyCodeLine{01953\ \ \ \ \ \}}
+\DoxyCodeLine{01954\ }
+\DoxyCodeLine{01955\ \ \ \ \ success\ =\ !eof;}
+\DoxyCodeLine{01956\ \ \ \}}
+\DoxyCodeLine{01957\ }
+\DoxyCodeLine{01958\ \ \ \textcolor{keywordflow}{if}\ (!success)\ \{}
+\DoxyCodeLine{01959\ \ \ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{ostringstream}}\ message;}
+\DoxyCodeLine{01960\ \ \ \ \ message\ <<\ \textcolor{stringliteral}{"{}I/O\ error\ reading\ from\ "{}}\ <<\ get\_multifile\_name()\ <<\ \textcolor{stringliteral}{"{}\ at\ "{}}}
+\DoxyCodeLine{01961\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ get\_subfile\_name(index);}
+\DoxyCodeLine{01962\ \ \ \ \ nassert\_raise(message.str());}
+\DoxyCodeLine{01963\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01964\ \ \ \}}
+\DoxyCodeLine{01965\ }
+\DoxyCodeLine{01966\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01967\ \}}
+\DoxyCodeLine{01968\ }
+\DoxyCodeLine{01974\ streampos\ Multifile::}
+\DoxyCodeLine{01975\ pad\_to\_streampos(streampos\ fpos)\ \{}
+\DoxyCodeLine{01976\ \ \ nassertr(\_write\ !=\ \textcolor{keyword}{nullptr},\ fpos);}
+\DoxyCodeLine{01977\ \ \ nassertr(\_write-\/>tellp()\ ==\ fpos,\ fpos);}
+\DoxyCodeLine{01978\ \ \ streampos\ new\_fpos\ =\ normalize\_streampos(fpos);}
+\DoxyCodeLine{01979\ \ \ \textcolor{keywordflow}{while}\ (fpos\ <\ new\_fpos)\ \{}
+\DoxyCodeLine{01980\ \ \ \ \ \_write-\/>put(0);}
+\DoxyCodeLine{01981\ \ \ \ \ fpos\ +=\ 1;\ \textcolor{comment}{//\ VC++\ doesn't\ define\ streampos++\ (!)}}
+\DoxyCodeLine{01982\ \ \ \}}
+\DoxyCodeLine{01983\ \ \ nassertr(\_write-\/>tellp()\ ==\ fpos,\ fpos);}
+\DoxyCodeLine{01984\ \ \ \textcolor{keywordflow}{return}\ fpos;}
+\DoxyCodeLine{01985\ \}}
+\DoxyCodeLine{01986\ }
+\DoxyCodeLine{01990\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{01991\ add\_new\_subfile(Subfile\ *subfile,\ \textcolor{keywordtype}{int}\ compression\_level)\ \{}
+\DoxyCodeLine{01992\ \ \ \textcolor{keywordflow}{if}\ (compression\_level\ !=\ 0)\ \{}
+\DoxyCodeLine{01993\ \textcolor{preprocessor}{\#ifndef\ HAVE\_ZLIB}}
+\DoxyCodeLine{01994\ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{01995\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}zlib\ not\ compiled\ in;\ cannot\ generated\ compressed\ multifiles.\(\backslash\)n"{}};}
+\DoxyCodeLine{01996\ \ \ \ \ compression\_level\ =\ 0;}
+\DoxyCodeLine{01997\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{01998\ \ \ \ \ subfile-\/>\_flags\ |=\ SF\_compressed;}
+\DoxyCodeLine{01999\ \ \ \ \ subfile-\/>\_compression\_level\ =\ compression\_level;}
+\DoxyCodeLine{02000\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{02001\ \ \ \}}
+\DoxyCodeLine{02002\ }
+\DoxyCodeLine{02003\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02004\ \ \ \textcolor{keywordflow}{if}\ (\_encryption\_flag)\ \{}
+\DoxyCodeLine{02005\ \ \ \ \ subfile-\/>\_flags\ |=\ SF\_encrypted;}
+\DoxyCodeLine{02006\ \ \ \}}
+\DoxyCodeLine{02007\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02008\ }
+\DoxyCodeLine{02009\ \ \ \textcolor{keywordflow}{if}\ (\_next\_index\ !=\ (streampos)0)\ \{}
+\DoxyCodeLine{02010\ \ \ \ \ \textcolor{comment}{//\ If\ we're\ adding\ a\ Subfile\ to\ an\ already-\/existing\ Multifile,\ we\ will}}
+\DoxyCodeLine{02011\ \ \ \ \ \textcolor{comment}{//\ eventually\ need\ to\ repack\ the\ file.}}
+\DoxyCodeLine{02012\ \ \ \ \ \_needs\_repack\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02013\ \ \ \}}
+\DoxyCodeLine{02014\ }
+\DoxyCodeLine{02015\ \ \ std::pair<Subfiles::iterator,\ bool>\ insert\_result\ =\ \_subfiles.insert(subfile);}
+\DoxyCodeLine{02016\ \ \ \textcolor{keywordflow}{if}\ (!insert\_result.second)\ \{}
+\DoxyCodeLine{02017\ \ \ \ \ \textcolor{comment}{//\ Hmm,\ unable\ to\ insert.\ \ There\ must\ already\ be\ a\ subfile\ by\ that\ name.}}
+\DoxyCodeLine{02018\ \ \ \ \ \textcolor{comment}{//\ Remove\ the\ old\ one.}}
+\DoxyCodeLine{02019\ \ \ \ \ Subfile\ *old\_subfile\ =\ (*insert\_result.first);}
+\DoxyCodeLine{02020\ \ \ \ \ old\_subfile-\/>\_flags\ |=\ SF\_deleted;}
+\DoxyCodeLine{02021\ }
+\DoxyCodeLine{02022\ \ \ \ \ \textcolor{comment}{//\ Maybe\ it\ was\ just\ added\ to\ the\ \_new\_subfiles\ list.\ \ In\ this\ case,}}
+\DoxyCodeLine{02023\ \ \ \ \ \textcolor{comment}{//\ remove\ it\ from\ that\ list.}}
+\DoxyCodeLine{02024\ \ \ \ \ PendingSubfiles::iterator\ ni\ =\ find(\_new\_subfiles.begin(),\ \_new\_subfiles.end(),\ old\_subfile);}
+\DoxyCodeLine{02025\ \ \ \ \ \textcolor{keywordflow}{if}\ (ni\ !=\ \_new\_subfiles.end())\ \{}
+\DoxyCodeLine{02026\ \ \ \ \ \ \ \_new\_subfiles.erase(ni);}
+\DoxyCodeLine{02027\ }
+\DoxyCodeLine{02028\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02029\ \ \ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ add\ it\ to\ the\ \_removed\_subfiles\ list,\ so\ we\ can\ remove\ the}}
+\DoxyCodeLine{02030\ \ \ \ \ \ \ \textcolor{comment}{//\ old\ one.}}
+\DoxyCodeLine{02031\ \ \ \ \ \ \ \_removed\_subfiles.push\_back(old\_subfile);}
+\DoxyCodeLine{02032\ \ \ \ \ \}}
+\DoxyCodeLine{02033\ }
+\DoxyCodeLine{02034\ \ \ \ \ (*insert\_result.first)\ =\ subfile;}
+\DoxyCodeLine{02035\ \ \ \}}
+\DoxyCodeLine{02036\ }
+\DoxyCodeLine{02037\ \ \ \_new\_subfiles.push\_back(subfile);}
+\DoxyCodeLine{02038\ \}}
+\DoxyCodeLine{02039\ }
+\DoxyCodeLine{02045\ istream\ *Multifile::}
+\DoxyCodeLine{02046\ open\_read\_subfile(Subfile\ *subfile)\ \{}
+\DoxyCodeLine{02047\ \ \ nassertr(subfile-\/>\_source\ ==\ \textcolor{keyword}{nullptr}\ \&\&}
+\DoxyCodeLine{02048\ \ \ \ \ \ \ \ \ \ \ \ subfile-\/>\_source\_filename.empty(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{02049\ }
+\DoxyCodeLine{02050\ \ \ \textcolor{comment}{//\ Return\ an\ ISubStream\ object\ that\ references\ into\ the\ open\ Multifile}}
+\DoxyCodeLine{02051\ \ \ \textcolor{comment}{//\ istream.}}
+\DoxyCodeLine{02052\ \ \ nassertr(subfile-\/>\_data\_start\ !=\ (streampos)0,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{02053\ \ \ istream\ *stream\ =}
+\DoxyCodeLine{02054\ \ \ \ \ \textcolor{keyword}{new}\ \mbox{\hyperlink{classISubStream}{ISubStream}}(\_read,\ \_offset\ +\ subfile-\/>\_data\_start,}
+\DoxyCodeLine{02055\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_offset\ +\ subfile-\/>\_data\_start\ +\ (streampos)subfile-\/>\_data\_length);}
+\DoxyCodeLine{02056\ }
+\DoxyCodeLine{02057\ \ \ \textcolor{keywordflow}{if}\ ((subfile-\/>\_flags\ \&\ SF\_encrypted)\ !=\ 0)\ \{}
+\DoxyCodeLine{02058\ \textcolor{preprocessor}{\#ifndef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02059\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{02060\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}OpenSSL\ not\ compiled\ in;\ cannot\ read\ encrypted\ multifiles.\(\backslash\)n"{}};}
+\DoxyCodeLine{02061\ \ \ \ \ \textcolor{keyword}{delete}\ stream;}
+\DoxyCodeLine{02062\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{02063\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02064\ \ \ \ \ \textcolor{comment}{//\ The\ subfile\ is\ encrypted.\ \ So\ actually,\ return\ an\ IDecryptStream\ that}}
+\DoxyCodeLine{02065\ \ \ \ \ \textcolor{comment}{//\ wraps\ around\ the\ ISubStream.}}
+\DoxyCodeLine{02066\ \ \ \ \ IDecryptStream\ *wrapper\ =}
+\DoxyCodeLine{02067\ \ \ \ \ \ \ \textcolor{keyword}{new}\ IDecryptStream(stream,\ \textcolor{keyword}{true},\ \_encryption\_password);}
+\DoxyCodeLine{02068\ \ \ \ \ stream\ =\ wrapper;}
+\DoxyCodeLine{02069\ }
+\DoxyCodeLine{02070\ \ \ \ \ \textcolor{comment}{//\ Validate\ the\ password\ by\ confirming\ that\ the\ encryption\ header\ matches.}}
+\DoxyCodeLine{02071\ \ \ \ \ \textcolor{keywordflow}{if}\ (!wrapper-\/>read\_magic(\_encrypt\_header,\ \_encrypt\_header\_size))\ \{}
+\DoxyCodeLine{02072\ \ \ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{02073\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ decrypt\ subfile\ "{}}\ <<\ subfile-\/>\_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{02074\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ stream;}
+\DoxyCodeLine{02075\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{02076\ \ \ \ \ \}}
+\DoxyCodeLine{02077\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02078\ \ \ \}}
+\DoxyCodeLine{02079\ }
+\DoxyCodeLine{02080\ \ \ \textcolor{keywordflow}{if}\ ((subfile-\/>\_flags\ \&\ SF\_compressed)\ !=\ 0)\ \{}
+\DoxyCodeLine{02081\ \textcolor{preprocessor}{\#ifndef\ HAVE\_ZLIB}}
+\DoxyCodeLine{02082\ \ \ \ \ express\_cat.error()}
+\DoxyCodeLine{02083\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}zlib\ not\ compiled\ in;\ cannot\ read\ compressed\ multifiles.\(\backslash\)n"{}};}
+\DoxyCodeLine{02084\ \ \ \ \ \textcolor{keyword}{delete}\ stream;}
+\DoxyCodeLine{02085\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{02086\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{02087\ \ \ \ \ \textcolor{comment}{//\ Oops,\ the\ subfile\ is\ compressed.\ \ So\ actually,\ return\ an}}
+\DoxyCodeLine{02088\ \ \ \ \ \textcolor{comment}{//\ IDecompressStream\ that\ wraps\ around\ the\ ISubStream.}}
+\DoxyCodeLine{02089\ \ \ \ \ IDecompressStream\ *wrapper\ =\ \textcolor{keyword}{new}\ IDecompressStream(stream,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{02090\ \ \ \ \ stream\ =\ wrapper;}
+\DoxyCodeLine{02091\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{02092\ \ \ \}}
+\DoxyCodeLine{02093\ }
+\DoxyCodeLine{02094\ \ \ \textcolor{keywordflow}{if}\ (stream-\/>fail())\ \{}
+\DoxyCodeLine{02095\ \ \ \ \ \textcolor{comment}{//\ Hmm,\ some\ inexplicable\ problem.}}
+\DoxyCodeLine{02096\ \ \ \ \ \textcolor{keyword}{delete}\ stream;}
+\DoxyCodeLine{02097\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{02098\ \ \ \}}
+\DoxyCodeLine{02099\ }
+\DoxyCodeLine{02100\ \ \ \textcolor{keywordflow}{return}\ stream;}
+\DoxyCodeLine{02101\ \}}
+\DoxyCodeLine{02102\ }
+\DoxyCodeLine{02106\ \textcolor{keywordtype}{string}\ Multifile::}
+\DoxyCodeLine{02107\ standardize\_subfile\_name(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&subfile\_name)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{02108\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ name\ =\ subfile\_name;}
+\DoxyCodeLine{02109\ \ \ name.\mbox{\hyperlink{classFilename_a741ce752b93d24e2e87bff42f6a0b828}{standardize}}();}
+\DoxyCodeLine{02110\ \ \ \textcolor{keywordflow}{if}\ (name.empty()\ ||\ name\ ==\ \textcolor{stringliteral}{"{}/"{}})\ \{}
+\DoxyCodeLine{02111\ \ \ \ \ \textcolor{comment}{//\ Invalid\ empty\ name.}}
+\DoxyCodeLine{02112\ \ \ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{02113\ \ \ \}}
+\DoxyCodeLine{02114\ }
+\DoxyCodeLine{02115\ \ \ \textcolor{keywordflow}{if}\ (name[0]\ ==\ \textcolor{charliteral}{'/'})\ \{}
+\DoxyCodeLine{02116\ \ \ \ \ \textcolor{keywordflow}{return}\ name.get\_fullpath().substr(1);}
+\DoxyCodeLine{02117\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (name.length()\ >\ 2\ \&\&\ name[0]\ ==\ \textcolor{charliteral}{'.'}\ \&\&\ name[1]\ ==\ \textcolor{charliteral}{'/'})\ \{}
+\DoxyCodeLine{02118\ \ \ \ \ \textcolor{keywordflow}{return}\ name.get\_fullpath().substr(2);}
+\DoxyCodeLine{02119\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02120\ \ \ \ \ \textcolor{keywordflow}{return}\ name.get\_fullpath();}
+\DoxyCodeLine{02121\ \ \ \}}
+\DoxyCodeLine{02122\ \}}
+\DoxyCodeLine{02123\ }
+\DoxyCodeLine{02128\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{02129\ clear\_subfiles()\ \{}
+\DoxyCodeLine{02130\ \ \ PendingSubfiles::iterator\ pi;}
+\DoxyCodeLine{02131\ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ \_removed\_subfiles.begin();\ pi\ !=\ \_removed\_subfiles.end();\ ++pi)\ \{}
+\DoxyCodeLine{02132\ \ \ \ \ Subfile\ *subfile\ =\ (*pi);}
+\DoxyCodeLine{02133\ \ \ \ \ subfile-\/>rewrite\_index\_flags(*\_write);}
+\DoxyCodeLine{02134\ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{02135\ \ \ \}}
+\DoxyCodeLine{02136\ \ \ \_removed\_subfiles.clear();}
+\DoxyCodeLine{02137\ }
+\DoxyCodeLine{02138\ \ \ \textcolor{comment}{//\ We\ don't\ have\ to\ delete\ the\ ones\ in\ \_new\_subfiles,\ because\ these\ also}}
+\DoxyCodeLine{02139\ \ \ \textcolor{comment}{//\ appear\ in\ \_subfiles.}}
+\DoxyCodeLine{02140\ \ \ \_new\_subfiles.clear();}
+\DoxyCodeLine{02141\ }
+\DoxyCodeLine{02142\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02143\ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ \_cert\_special.begin();\ pi\ !=\ \_cert\_special.end();\ ++pi)\ \{}
+\DoxyCodeLine{02144\ \ \ \ \ Subfile\ *subfile\ =\ (*pi);}
+\DoxyCodeLine{02145\ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{02146\ \ \ \}}
+\DoxyCodeLine{02147\ \ \ \_cert\_special.clear();}
+\DoxyCodeLine{02148\ }
+\DoxyCodeLine{02149\ \ \ \_signatures.clear();}
+\DoxyCodeLine{02150\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02151\ }
+\DoxyCodeLine{02152\ \ \ Subfiles::iterator\ fi;}
+\DoxyCodeLine{02153\ \ \ \textcolor{keywordflow}{for}\ (fi\ =\ \_subfiles.begin();\ fi\ !=\ \_subfiles.end();\ ++fi)\ \{}
+\DoxyCodeLine{02154\ \ \ \ \ Subfile\ *subfile\ =\ (*fi);}
+\DoxyCodeLine{02155\ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{02156\ \ \ \}}
+\DoxyCodeLine{02157\ \ \ \_subfiles.clear();}
+\DoxyCodeLine{02158\ \}}
+\DoxyCodeLine{02159\ }
+\DoxyCodeLine{02164\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{02165\ read\_index()\ \{}
+\DoxyCodeLine{02166\ \ \ nassertr(\_read\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02167\ }
+\DoxyCodeLine{02168\ \ \ \textcolor{comment}{//\ We\ acquire\ the\ IStreamWrapper\ lock\ for\ the\ duration\ of\ this\ method.}}
+\DoxyCodeLine{02169\ \ \ \_read-\/>acquire();}
+\DoxyCodeLine{02170\ \ \ istream\ *read\ =\ \_read-\/>get\_istream();}
+\DoxyCodeLine{02171\ }
+\DoxyCodeLine{02172\ \ \ \textcolor{keywordtype}{char}\ this\_header[\_header\_size];}
+\DoxyCodeLine{02173\ \ \ read-\/>seekg(\_offset);}
+\DoxyCodeLine{02174\ }
+\DoxyCodeLine{02175\ \ \ \textcolor{comment}{//\ Here's\ a\ special\ case:\ if\ the\ multifile\ begins\ with\ a\ hash\ character,}}
+\DoxyCodeLine{02176\ \ \ \textcolor{comment}{//\ then\ we\ continue\ reading\ and\ discarding\ lines\ of\ ASCII\ text,\ until\ we}}
+\DoxyCodeLine{02177\ \ \ \textcolor{comment}{//\ come\ across\ a\ nonempty\ line\ that\ does\ not\ begin\ with\ a\ hash\ character.}}
+\DoxyCodeLine{02178\ \ \ \textcolor{comment}{//\ This\ allows\ a\ P3D\ application\ (which\ is\ a\ multifile)\ to\ be\ run\ directly}}
+\DoxyCodeLine{02179\ \ \ \textcolor{comment}{//\ on\ the\ command\ line\ on\ Unix-\/based\ systems.}}
+\DoxyCodeLine{02180\ \ \ \_header\_prefix\ =\ string();}
+\DoxyCodeLine{02181\ \ \ \textcolor{keywordtype}{int}\ ch\ =\ read-\/>get();}
+\DoxyCodeLine{02182\ }
+\DoxyCodeLine{02183\ \ \ \textcolor{keywordflow}{if}\ (ch\ ==\ \textcolor{charliteral}{'\#'})\ \{}
+\DoxyCodeLine{02184\ \ \ \ \ \textcolor{keywordflow}{while}\ (ch\ !=\ EOF\ \&\&\ ch\ ==\ \textcolor{charliteral}{'\#'})\ \{}
+\DoxyCodeLine{02185\ \ \ \ \ \ \ \textcolor{comment}{//\ Skip\ to\ the\ end\ of\ the\ line.}}
+\DoxyCodeLine{02186\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (ch\ !=\ EOF\ \&\&\ ch\ !=\ \textcolor{charliteral}{'\(\backslash\)n'})\ \{}
+\DoxyCodeLine{02187\ \ \ \ \ \ \ \ \ \_header\_prefix\ +=\ ch;}
+\DoxyCodeLine{02188\ \ \ \ \ \ \ \ \ ch\ =\ read-\/>get();}
+\DoxyCodeLine{02189\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02190\ \ \ \ \ \ \ \textcolor{comment}{//\ Skip\ to\ the\ first\ non-\/whitespace\ character\ of\ the\ line.}}
+\DoxyCodeLine{02191\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (ch\ !=\ EOF\ \&\&\ (isspace(ch)\ ||\ ch\ ==\ \textcolor{charliteral}{'\(\backslash\)r'}))\ \{}
+\DoxyCodeLine{02192\ \ \ \ \ \ \ \ \ \_header\_prefix\ +=\ ch;}
+\DoxyCodeLine{02193\ \ \ \ \ \ \ \ \ ch\ =\ read-\/>get();}
+\DoxyCodeLine{02194\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02195\ \ \ \ \ \}}
+\DoxyCodeLine{02196\ \ \ \}}
+\DoxyCodeLine{02197\ }
+\DoxyCodeLine{02198\ \ \ \textcolor{comment}{//\ Now\ read\ the\ actual\ Multifile\ header.}}
+\DoxyCodeLine{02199\ \ \ this\_header[0]\ =\ ch;}
+\DoxyCodeLine{02200\ \ \ read-\/>read(this\_header\ +\ 1,\ \_header\_size\ -\/\ 1);}
+\DoxyCodeLine{02201\ \ \ \textcolor{keywordflow}{if}\ (read-\/>fail()\ ||\ read-\/>gcount()\ !=\ (\textcolor{keywordtype}{unsigned})(\_header\_size\ -\/\ 1))\ \{}
+\DoxyCodeLine{02202\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{02203\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ read\ Multifile\ header\ "{}}\ <<\ \_multifile\_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{02204\ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{02205\ \ \ \ \ close();}
+\DoxyCodeLine{02206\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02207\ \ \ \}}
+\DoxyCodeLine{02208\ }
+\DoxyCodeLine{02209\ \ \ \textcolor{keywordflow}{if}\ (memcmp(this\_header,\ \_header,\ \_header\_size)\ !=\ 0)\ \{}
+\DoxyCodeLine{02210\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{02211\ \ \ \ \ \ \ <<\ \_multifile\_name\ <<\ \textcolor{stringliteral}{"{}\ is\ not\ a\ Multifile.\(\backslash\)n"{}};}
+\DoxyCodeLine{02212\ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{02213\ \ \ \ \ close();}
+\DoxyCodeLine{02214\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02215\ \ \ \}}
+\DoxyCodeLine{02216\ }
+\DoxyCodeLine{02217\ \ \ \textcolor{comment}{//\ Now\ get\ the\ version\ numbers\ out.}}
+\DoxyCodeLine{02218\ \ \ \mbox{\hyperlink{classStreamReader}{StreamReader}}\ reader(read,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02219\ \ \ \_file\_major\_ver\ =\ reader.get\_int16();}
+\DoxyCodeLine{02220\ \ \ \_file\_minor\_ver\ =\ reader.get\_int16();}
+\DoxyCodeLine{02221\ \ \ \_scale\_factor\ =\ reader.get\_uint32();}
+\DoxyCodeLine{02222\ \ \ \_new\_scale\_factor\ =\ \_scale\_factor;}
+\DoxyCodeLine{02223\ }
+\DoxyCodeLine{02224\ \ \ \textcolor{keywordflow}{if}\ (read-\/>eof()\ ||\ read-\/>fail())\ \{}
+\DoxyCodeLine{02225\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{02226\ \ \ \ \ \ \ <<\ \_multifile\_name\ <<\ \textcolor{stringliteral}{"{}\ header\ is\ truncated.\(\backslash\)n"{}};}
+\DoxyCodeLine{02227\ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{02228\ \ \ \ \ close();}
+\DoxyCodeLine{02229\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02230\ \ \ \}}
+\DoxyCodeLine{02231\ }
+\DoxyCodeLine{02232\ \ \ \textcolor{keywordflow}{if}\ (\_file\_major\_ver\ !=\ \_current\_major\_ver\ ||}
+\DoxyCodeLine{02233\ \ \ \ \ \ \ (\_file\_major\_ver\ ==\ \_current\_major\_ver\ \&\&}
+\DoxyCodeLine{02234\ \ \ \ \ \ \ \ \_file\_minor\_ver\ >\ \_current\_minor\_ver))\ \{}
+\DoxyCodeLine{02235\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{02236\ \ \ \ \ \ \ <<\ \_multifile\_name\ <<\ \textcolor{stringliteral}{"{}\ has\ version\ "{}}\ <<\ \_file\_major\_ver\ <<\ \textcolor{stringliteral}{"{}."{}}}
+\DoxyCodeLine{02237\ \ \ \ \ \ \ <<\ \_file\_minor\_ver\ <<\ \textcolor{stringliteral}{"{},\ expecting\ version\ "{}}}
+\DoxyCodeLine{02238\ \ \ \ \ \ \ <<\ \_current\_major\_ver\ <<\ \textcolor{stringliteral}{"{}."{}}\ <<\ \_current\_minor\_ver\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{02239\ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{02240\ \ \ \ \ close();}
+\DoxyCodeLine{02241\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02242\ \ \ \}}
+\DoxyCodeLine{02243\ }
+\DoxyCodeLine{02244\ \ \ \_record\_timestamp\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02245\ \ \ \textcolor{keywordflow}{if}\ (\_file\_minor\_ver\ >=\ 1)\ \{}
+\DoxyCodeLine{02246\ \ \ \ \ time\_t\ read\_timestamp\ =\ reader.get\_uint32();}
+\DoxyCodeLine{02247\ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_timestamp\ ==\ 0)\ \{}
+\DoxyCodeLine{02248\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ read\ a\ 0\ timestamp\ from\ the\ file,\ that\ implies\ that\ we\ don't}}
+\DoxyCodeLine{02249\ \ \ \ \ \ \ \textcolor{comment}{//\ want\ to\ record\ a\ timestamp\ in\ this\ particular\ file.}}
+\DoxyCodeLine{02250\ \ \ \ \ \ \ \_record\_timestamp\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02251\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02252\ \ \ \ \ \ \ \_timestamp\ =\ read\_timestamp;}
+\DoxyCodeLine{02253\ \ \ \ \ \}}
+\DoxyCodeLine{02254\ \ \ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02255\ \ \ \}}
+\DoxyCodeLine{02256\ }
+\DoxyCodeLine{02257\ \ \ \textcolor{comment}{//\ Now\ read\ the\ index\ out.}}
+\DoxyCodeLine{02258\ \ \ streampos\ curr\_pos\ =\ read-\/>tellg()\ -\/\ \_offset;}
+\DoxyCodeLine{02259\ \ \ \_next\_index\ =\ normalize\_streampos(curr\_pos);}
+\DoxyCodeLine{02260\ \ \ \textcolor{keywordflow}{if}\ (\_next\_index\ >\ curr\_pos)\ \{}
+\DoxyCodeLine{02261\ \ \ \ \ read-\/>ignore(\_next\_index\ -\/\ curr\_pos);}
+\DoxyCodeLine{02262\ \ \ \}}
+\DoxyCodeLine{02263\ \ \ \_last\_index\ =\ 0;}
+\DoxyCodeLine{02264\ \ \ \_last\_data\_byte\ =\ 0;}
+\DoxyCodeLine{02265\ \ \ streampos\ index\_forward;}
+\DoxyCodeLine{02266\ \ \ streamoff\ bytes\_skipped\ =\ 0;}
+\DoxyCodeLine{02267\ \ \ \textcolor{keywordtype}{bool}\ read\_cert\_special\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02268\ }
+\DoxyCodeLine{02269\ \ \ Subfile\ *subfile\ =\ \textcolor{keyword}{new}\ Subfile;}
+\DoxyCodeLine{02270\ \ \ index\_forward\ =\ subfile-\/>read\_index(*read,\ \_next\_index,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{02271\ \ \ \textcolor{keywordflow}{while}\ (index\_forward\ !=\ (streampos)0)\ \{}
+\DoxyCodeLine{02272\ \ \ \ \ \_last\_index\ =\ \_next\_index;}
+\DoxyCodeLine{02273\ \ \ \ \ \textcolor{keywordflow}{if}\ (subfile-\/>is\_deleted())\ \{}
+\DoxyCodeLine{02274\ \ \ \ \ \ \ \textcolor{comment}{//\ Ignore\ deleted\ Subfiles\ in\ the\ index.}}
+\DoxyCodeLine{02275\ \ \ \ \ \ \ \_needs\_repack\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02276\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{02277\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (subfile-\/>is\_cert\_special())\ \{}
+\DoxyCodeLine{02278\ \ \ \ \ \ \ \textcolor{comment}{//\ Certificate\ chains\ and\ signature\ files\ get\ stored\ in\ a\ special\ list.}}
+\DoxyCodeLine{02279\ \ \ \ \ \ \ \_cert\_special.push\_back(subfile);}
+\DoxyCodeLine{02280\ \ \ \ \ \ \ read\_cert\_special\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02281\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02282\ \ \ \ \ \ \ \_subfiles.push\_back(subfile);}
+\DoxyCodeLine{02283\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (bytes\_skipped\ !=\ 0)\ \{}
+\DoxyCodeLine{02284\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ index\ entries\ don't\ follow\ exactly\ sequentially\ (except\ for}}
+\DoxyCodeLine{02285\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ cert\ special\ files),\ the\ file\ ought\ to\ be\ repacked.}}
+\DoxyCodeLine{02286\ \ \ \ \ \ \ \ \ \_needs\_repack\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02287\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02288\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_cert\_special)\ \{}
+\DoxyCodeLine{02289\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ read\ a\ normal\ subfile\ following\ a\ cert\_special\ entry,\ the}}
+\DoxyCodeLine{02290\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ file\ ought\ to\ be\ repacked\ (certificates\ have\ to\ go\ at\ the\ end).}}
+\DoxyCodeLine{02291\ \ \ \ \ \ \ \ \ \_needs\_repack\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02292\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02293\ \ \ \ \ \ \ \_last\_data\_byte\ =\ max(\_last\_data\_byte,\ subfile-\/>get\_last\_byte\_pos());}
+\DoxyCodeLine{02294\ \ \ \ \ \}}
+\DoxyCodeLine{02295\ \ \ \ \ streampos\ curr\_pos\ =\ read-\/>tellg()\ -\/\ \_offset;}
+\DoxyCodeLine{02296\ \ \ \ \ bytes\_skipped\ =\ index\_forward\ -\/\ normalize\_streampos(curr\_pos);}
+\DoxyCodeLine{02297\ \ \ \ \ \_next\_index\ =\ index\_forward;}
+\DoxyCodeLine{02298\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_next\_index\ >\ curr\_pos)\ \{}
+\DoxyCodeLine{02299\ \ \ \ \ \ \ read-\/>ignore(\_next\_index\ -\/\ curr\_pos);}
+\DoxyCodeLine{02300\ \ \ \ \ \}}
+\DoxyCodeLine{02301\ \ \ \ \ subfile\ =\ \textcolor{keyword}{new}\ Subfile;}
+\DoxyCodeLine{02302\ \ \ \ \ index\_forward\ =\ subfile-\/>read\_index(*read,\ \_next\_index,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{02303\ \ \ \}}
+\DoxyCodeLine{02304\ \ \ \textcolor{keywordflow}{if}\ (subfile-\/>is\_index\_invalid())\ \{}
+\DoxyCodeLine{02305\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{02306\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Error\ reading\ index\ for\ "{}}\ <<\ \_multifile\_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{02307\ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{02308\ \ \ \ \ close();}
+\DoxyCodeLine{02309\ \ \ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{02310\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02311\ \ \ \}}
+\DoxyCodeLine{02312\ }
+\DoxyCodeLine{02313\ \ \ \textcolor{comment}{//\ Check\ if\ the\ list\ is\ already\ sorted.\ \ If\ it\ is\ not,\ we\ need\ a\ repack.}}
+\DoxyCodeLine{02314\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ si\ =\ 1;\ si\ <\ \_subfiles.size()\ \&\&\ !\_needs\_repack;\ ++si)\ \{}
+\DoxyCodeLine{02315\ \ \ \ \ \textcolor{keywordflow}{if}\ (*\_subfiles[si]\ <\ *\_subfiles[si\ -\/\ 1])\ \{}
+\DoxyCodeLine{02316\ \ \ \ \ \ \ \_needs\_repack\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02317\ \ \ \ \ \}}
+\DoxyCodeLine{02318\ \ \ \}}
+\DoxyCodeLine{02319\ }
+\DoxyCodeLine{02320\ \ \ \textcolor{keywordflow}{if}\ (\_needs\_repack)\ \{}
+\DoxyCodeLine{02321\ \ \ \ \ \textcolor{comment}{//\ At\ least\ sort\ them\ now.}}
+\DoxyCodeLine{02322\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ before\_size\ =\ \_subfiles.size();}
+\DoxyCodeLine{02323\ \ \ \ \ \_subfiles.sort();}
+\DoxyCodeLine{02324\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ after\_size\ =\ \_subfiles.size();}
+\DoxyCodeLine{02325\ }
+\DoxyCodeLine{02326\ \ \ \ \ \textcolor{comment}{//\ If\ these\ don't\ match,\ the\ same\ filename\ appeared\ twice\ in\ the\ index,}}
+\DoxyCodeLine{02327\ \ \ \ \ \textcolor{comment}{//\ which\ shouldn't\ be\ possible.}}
+\DoxyCodeLine{02328\ \ \ \ \ nassertr(before\_size\ ==\ after\_size,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{02329\ \ \ \}}
+\DoxyCodeLine{02330\ }
+\DoxyCodeLine{02331\ \ \ \textcolor{keyword}{delete}\ subfile;}
+\DoxyCodeLine{02332\ \ \ \_read-\/>release();}
+\DoxyCodeLine{02333\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02334\ \}}
+\DoxyCodeLine{02335\ }
+\DoxyCodeLine{02339\ \textcolor{keywordtype}{bool}\ Multifile::}
+\DoxyCodeLine{02340\ write\_header()\ \{}
+\DoxyCodeLine{02341\ \ \ \_file\_major\_ver\ =\ \_current\_major\_ver;}
+\DoxyCodeLine{02342\ \ \ \_file\_minor\_ver\ =\ \_current\_minor\_ver;}
+\DoxyCodeLine{02343\ }
+\DoxyCodeLine{02344\ \ \ nassertr(\_write\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02345\ \ \ nassertr(\_write-\/>tellp()\ ==\ (streampos)0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02346\ \ \ \_write-\/>write(\_header\_prefix.data(),\ \_header\_prefix.size());}
+\DoxyCodeLine{02347\ \ \ \_write-\/>write(\_header,\ \_header\_size);}
+\DoxyCodeLine{02348\ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ writer(\_write,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{02349\ \ \ writer.add\_int16(\_current\_major\_ver);}
+\DoxyCodeLine{02350\ \ \ writer.add\_int16(\_current\_minor\_ver);}
+\DoxyCodeLine{02351\ \ \ writer.add\_uint32(\_scale\_factor);}
+\DoxyCodeLine{02352\ }
+\DoxyCodeLine{02353\ \ \ \textcolor{keywordflow}{if}\ (\_record\_timestamp)\ \{}
+\DoxyCodeLine{02354\ \ \ \ \ writer.add\_uint32(\_timestamp);}
+\DoxyCodeLine{02355\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02356\ \ \ \ \ writer.add\_uint32(0);}
+\DoxyCodeLine{02357\ \ \ \ \ \_timestamp\_dirty\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02358\ \ \ \}}
+\DoxyCodeLine{02359\ }
+\DoxyCodeLine{02360\ \ \ \_next\_index\ =\ \_write-\/>tellp();}
+\DoxyCodeLine{02361\ \ \ \_next\_index\ =\ pad\_to\_streampos(\_next\_index);}
+\DoxyCodeLine{02362\ \ \ \_last\_index\ =\ 0;}
+\DoxyCodeLine{02363\ }
+\DoxyCodeLine{02364\ \ \ \textcolor{keywordflow}{if}\ (\_write-\/>fail())\ \{}
+\DoxyCodeLine{02365\ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{02366\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ write\ header\ for\ "{}}\ <<\ \_multifile\_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{02367\ \ \ \ \ close();}
+\DoxyCodeLine{02368\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02369\ \ \ \}}
+\DoxyCodeLine{02370\ }
+\DoxyCodeLine{02371\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02372\ \}}
+\DoxyCodeLine{02373\ }
+\DoxyCodeLine{02382\ \textcolor{keywordtype}{void}\ Multifile::}
+\DoxyCodeLine{02383\ check\_signatures()\ \{}
+\DoxyCodeLine{02384\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02385\ \ \ PendingSubfiles::iterator\ pi;}
+\DoxyCodeLine{02386\ }
+\DoxyCodeLine{02387\ \ \ \textcolor{keywordflow}{for}\ (pi\ =\ \_cert\_special.begin();\ pi\ !=\ \_cert\_special.end();\ ++pi)\ \{}
+\DoxyCodeLine{02388\ \ \ \ \ Subfile\ *subfile\ =\ (*pi);}
+\DoxyCodeLine{02389\ \ \ \ \ nassertv((subfile-\/>\_flags\ \&\ SF\_signature)\ !=\ 0);}
+\DoxyCodeLine{02390\ }
+\DoxyCodeLine{02391\ \ \ \ \ \textcolor{comment}{//\ Extract\ the\ signature\ data\ and\ certificate\ separately.}}
+\DoxyCodeLine{02392\ \ \ \ \ istream\ *stream\ =\ open\_read\_subfile(subfile);}
+\DoxyCodeLine{02393\ \ \ \ \ nassertv(stream\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{02394\ \ \ \ \ \mbox{\hyperlink{classStreamReader}{StreamReader}}\ reader(*stream);}
+\DoxyCodeLine{02395\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ sig\_size\ =\ reader.get\_uint32();}
+\DoxyCodeLine{02396\ \ \ \ \ vector\_uchar\ sig\_data\ =\ reader.extract\_bytes(sig\_size);}
+\DoxyCodeLine{02397\ }
+\DoxyCodeLine{02398\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ num\_certs\ =\ reader.get\_uint32();}
+\DoxyCodeLine{02399\ }
+\DoxyCodeLine{02400\ \ \ \ \ \textcolor{comment}{//\ Read\ the\ remaining\ buffer\ of\ certificate\ data.}}
+\DoxyCodeLine{02401\ \ \ \ \ vector\_uchar\ buffer;}
+\DoxyCodeLine{02402\ \ \ \ \ \textcolor{keywordtype}{bool}\ success\ =\ VirtualFile::simple\_read\_file(stream,\ buffer);}
+\DoxyCodeLine{02403\ \ \ \ \ nassertv(success);}
+\DoxyCodeLine{02404\ \ \ \ \ close\_read\_subfile(stream);}
+\DoxyCodeLine{02405\ }
+\DoxyCodeLine{02406\ \ \ \ \ \textcolor{comment}{//\ Now\ convert\ each\ of\ the\ certificates\ to\ an\ X509\ object,\ and\ store\ it\ in}}
+\DoxyCodeLine{02407\ \ \ \ \ \textcolor{comment}{//\ our\ CertChain.}}
+\DoxyCodeLine{02408\ \ \ \ \ CertChain\ chain;}
+\DoxyCodeLine{02409\ \ \ \ \ EVP\_PKEY\ *pkey\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{02410\ \ \ \ \ \textcolor{keywordflow}{if}\ (!buffer.empty())\ \{}
+\DoxyCodeLine{02411\ \textcolor{preprocessor}{\#if\ OPENSSL\_VERSION\_NUMBER\ >=\ 0x00908000L}}
+\DoxyCodeLine{02412\ \ \ \ \ \ \ \textcolor{comment}{//\ Beginning\ in\ 0.9.8,\ d2i\_X509()\ accepted\ a\ const\ unsigned\ char\ **.}}
+\DoxyCodeLine{02413\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *bp,\ *bp\_end;}
+\DoxyCodeLine{02414\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{02415\ \ \ \ \ \ \ \textcolor{comment}{//\ Prior\ to\ 0.9.8,\ d2i\_X509()\ accepted\ an\ unsigned\ char\ **.}}
+\DoxyCodeLine{02416\ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *bp,\ *bp\_end;}
+\DoxyCodeLine{02417\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{02418\ \ \ \ \ \ \ bp\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)\&buffer[0];}
+\DoxyCodeLine{02419\ \ \ \ \ \ \ bp\_end\ =\ bp\ +\ buffer.size();}
+\DoxyCodeLine{02420\ \ \ \ \ \ \ X509\ *x509\ =\ d2i\_X509(\textcolor{keyword}{nullptr},\ \&bp,\ bp\_end\ -\/\ bp);}
+\DoxyCodeLine{02421\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (num\_certs\ >\ 0\ \&\&\ x509\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02422\ \ \ \ \ \ \ \ \ chain.push\_back(CertRecord(x509));}
+\DoxyCodeLine{02423\ \ \ \ \ \ \ \ \ -\/-\/num\_certs;}
+\DoxyCodeLine{02424\ \ \ \ \ \ \ \ \ x509\ =\ d2i\_X509(\textcolor{keyword}{nullptr},\ \&bp,\ bp\_end\ -\/\ bp);}
+\DoxyCodeLine{02425\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02426\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (num\_certs\ !=\ 0\ ||\ x509\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02427\ \ \ \ \ \ \ \ \ express\_cat.warning()}
+\DoxyCodeLine{02428\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Extra\ data\ in\ signature\ record.\(\backslash\)n"{}};}
+\DoxyCodeLine{02429\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02430\ \ \ \ \ \}}
+\DoxyCodeLine{02431\ }
+\DoxyCodeLine{02432\ \ \ \ \ \textcolor{keywordflow}{if}\ (!chain.empty())\ \{}
+\DoxyCodeLine{02433\ \ \ \ \ \ \ pkey\ =\ X509\_get\_pubkey(chain[0].\_cert);}
+\DoxyCodeLine{02434\ \ \ \ \ \}}
+\DoxyCodeLine{02435\ }
+\DoxyCodeLine{02436\ \ \ \ \ \textcolor{keywordflow}{if}\ (pkey\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02437\ \ \ \ \ \ \ EVP\_MD\_CTX\ *md\_ctx\ =\ EVP\_MD\_CTX\_create();}
+\DoxyCodeLine{02438\ \ \ \ \ \ \ EVP\_VerifyInit(md\_ctx,\ EVP\_sha1());}
+\DoxyCodeLine{02439\ }
+\DoxyCodeLine{02440\ \ \ \ \ \ \ nassertv(\_read\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{02441\ \ \ \ \ \ \ \_read-\/>acquire();}
+\DoxyCodeLine{02442\ \ \ \ \ \ \ istream\ *read\ =\ \_read-\/>get\_istream();}
+\DoxyCodeLine{02443\ }
+\DoxyCodeLine{02444\ \ \ \ \ \ \ \textcolor{comment}{//\ Read\ and\ hash\ the\ multifile\ contents,\ but\ only\ up\ till}}
+\DoxyCodeLine{02445\ \ \ \ \ \ \ \textcolor{comment}{//\ \_last\_data\_byte.}}
+\DoxyCodeLine{02446\ \ \ \ \ \ \ read-\/>seekg(\_offset);}
+\DoxyCodeLine{02447\ \ \ \ \ \ \ streampos\ bytes\_remaining\ =\ \_last\_data\_byte;}
+\DoxyCodeLine{02448\ \ \ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 4096;}
+\DoxyCodeLine{02449\ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{02450\ \ \ \ \ \ \ read-\/>read(buffer,\ min((streampos)buffer\_size,\ bytes\_remaining));}
+\DoxyCodeLine{02451\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ count\ =\ read-\/>gcount();}
+\DoxyCodeLine{02452\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (count\ !=\ 0)\ \{}
+\DoxyCodeLine{02453\ \ \ \ \ \ \ \ \ nassertv(count\ <=\ buffer\_size);}
+\DoxyCodeLine{02454\ \ \ \ \ \ \ \ \ EVP\_VerifyUpdate(md\_ctx,\ buffer,\ count);}
+\DoxyCodeLine{02455\ \ \ \ \ \ \ \ \ bytes\_remaining\ -\/=\ count;}
+\DoxyCodeLine{02456\ \ \ \ \ \ \ \ \ read-\/>read(buffer,\ min((streampos)buffer\_size,\ bytes\_remaining));}
+\DoxyCodeLine{02457\ \ \ \ \ \ \ \ \ count\ =\ read-\/>gcount();}
+\DoxyCodeLine{02458\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02459\ \ \ \ \ \ \ nassertv(bytes\_remaining\ ==\ (streampos)0);}
+\DoxyCodeLine{02460\ \ \ \ \ \ \ \_read-\/>release();}
+\DoxyCodeLine{02461\ }
+\DoxyCodeLine{02462\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ check\ that\ the\ signature\ matches\ the\ hash.}}
+\DoxyCodeLine{02463\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ verify\_result\ =}
+\DoxyCodeLine{02464\ \ \ \ \ \ \ \ \ EVP\_VerifyFinal(md\_ctx,\ sig\_data.data(),\ sig\_data.size(),\ pkey);}
+\DoxyCodeLine{02465\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (verify\_result\ ==\ 1)\ \{}
+\DoxyCodeLine{02466\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ signature\ matches;\ save\ the\ certificate\ and\ its\ chain.}}
+\DoxyCodeLine{02467\ \ \ \ \ \ \ \ \ \_signatures.push\_back(chain);}
+\DoxyCodeLine{02468\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02469\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Bad\ match.}}
+\DoxyCodeLine{02470\ \ \ \ \ \ \ \ \ \_needs\_repack\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02471\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02472\ \ \ \ \ \}}
+\DoxyCodeLine{02473\ \ \ \}}
+\DoxyCodeLine{02474\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02475\ }
+\DoxyCodeLine{02476\ \ \ \_cert\_special.clear();}
+\DoxyCodeLine{02477\ \}}
+\DoxyCodeLine{02478\ }
+\DoxyCodeLine{02485\ streampos\ Multifile::Subfile::}
+\DoxyCodeLine{02486\ read\_index(istream\ \&read,\ streampos\ fpos,\ \mbox{\hyperlink{classMultifile}{Multifile}}\ *multifile)\ \{}
+\DoxyCodeLine{02487\ \ \ nassertr(read.tellg()\ -\/\ multifile-\/>\_offset\ ==\ fpos,\ fpos);}
+\DoxyCodeLine{02488\ }
+\DoxyCodeLine{02489\ \ \ \textcolor{comment}{//\ First,\ get\ the\ next\ stream\ position.\ \ We\ do\ this\ separately,\ because\ if}}
+\DoxyCodeLine{02490\ \ \ \textcolor{comment}{//\ it\ is\ zero,\ we\ don't\ get\ anything\ else.}}
+\DoxyCodeLine{02491\ \ \ \mbox{\hyperlink{classStreamReader}{StreamReader}}\ reader(read);}
+\DoxyCodeLine{02492\ }
+\DoxyCodeLine{02493\ \ \ streampos\ next\_index\ =\ multifile-\/>word\_to\_streampos(reader.get\_uint32());}
+\DoxyCodeLine{02494\ \ \ \textcolor{keywordflow}{if}\ (read.fail())\ \{}
+\DoxyCodeLine{02495\ \ \ \ \ \_flags\ |=\ SF\_index\_invalid;}
+\DoxyCodeLine{02496\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{02497\ \ \ \}}
+\DoxyCodeLine{02498\ }
+\DoxyCodeLine{02499\ \ \ \textcolor{keywordflow}{if}\ (next\_index\ ==\ (streampos)0)\ \{}
+\DoxyCodeLine{02500\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{02501\ \ \ \}}
+\DoxyCodeLine{02502\ }
+\DoxyCodeLine{02503\ \ \ \textcolor{comment}{//\ Now\ get\ the\ rest\ of\ the\ index.}}
+\DoxyCodeLine{02504\ }
+\DoxyCodeLine{02505\ \ \ \_index\_start\ =\ fpos;}
+\DoxyCodeLine{02506\ \ \ \_index\_length\ =\ 0;}
+\DoxyCodeLine{02507\ }
+\DoxyCodeLine{02508\ \ \ \_data\_start\ =\ multifile-\/>word\_to\_streampos(reader.get\_uint32());}
+\DoxyCodeLine{02509\ \ \ \_data\_length\ =\ reader.get\_uint32();}
+\DoxyCodeLine{02510\ \ \ \_flags\ =\ reader.get\_uint16();}
+\DoxyCodeLine{02511\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ (SF\_compressed\ |\ SF\_encrypted))\ !=\ 0)\ \{}
+\DoxyCodeLine{02512\ \ \ \ \ \_uncompressed\_length\ =\ reader.get\_uint32();}
+\DoxyCodeLine{02513\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02514\ \ \ \ \ \_uncompressed\_length\ =\ \_data\_length;}
+\DoxyCodeLine{02515\ \ \ \}}
+\DoxyCodeLine{02516\ \ \ \textcolor{keywordflow}{if}\ (multifile-\/>\_file\_minor\_ver\ <\ 1)\ \{}
+\DoxyCodeLine{02517\ \ \ \ \ \_timestamp\ =\ multifile-\/>get\_timestamp();}
+\DoxyCodeLine{02518\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02519\ \ \ \ \ \_timestamp\ =\ reader.get\_uint32();}
+\DoxyCodeLine{02520\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_timestamp\ ==\ 0)\ \{}
+\DoxyCodeLine{02521\ \ \ \ \ \ \ \_timestamp\ =\ multifile-\/>get\_timestamp();}
+\DoxyCodeLine{02522\ \ \ \ \ \}}
+\DoxyCodeLine{02523\ \ \ \}}
+\DoxyCodeLine{02524\ }
+\DoxyCodeLine{02525\ \ \ \textcolor{keywordtype}{size\_t}\ name\_length\ =\ reader.get\_uint16();}
+\DoxyCodeLine{02526\ \ \ \textcolor{keywordflow}{if}\ (read.fail())\ \{}
+\DoxyCodeLine{02527\ \ \ \ \ \_flags\ |=\ SF\_index\_invalid;}
+\DoxyCodeLine{02528\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{02529\ \ \ \}}
+\DoxyCodeLine{02530\ }
+\DoxyCodeLine{02531\ \ \ \textcolor{comment}{//\ And\ finally,\ get\ the\ rest\ of\ the\ name.}}
+\DoxyCodeLine{02532\ \ \ \textcolor{keywordtype}{char}\ *name\_buffer\ =\ (\textcolor{keywordtype}{char}\ *)PANDA\_MALLOC\_ARRAY(name\_length);}
+\DoxyCodeLine{02533\ \ \ nassertr(name\_buffer\ !=\ \textcolor{keyword}{nullptr},\ next\_index);}
+\DoxyCodeLine{02534\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ ni\ =\ 0;\ ni\ <\ name\_length;\ ni++)\ \{}
+\DoxyCodeLine{02535\ \ \ \ \ name\_buffer[ni]\ =\ read.get()\ \string^\ 0xff;}
+\DoxyCodeLine{02536\ \ \ \}}
+\DoxyCodeLine{02537\ \ \ \_name\ =\ string(name\_buffer,\ name\_length);}
+\DoxyCodeLine{02538\ \ \ PANDA\_FREE\_ARRAY(name\_buffer);}
+\DoxyCodeLine{02539\ }
+\DoxyCodeLine{02540\ \ \ \textcolor{keywordflow}{if}\ (read.fail())\ \{}
+\DoxyCodeLine{02541\ \ \ \ \ \_flags\ |=\ SF\_index\_invalid;}
+\DoxyCodeLine{02542\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{02543\ \ \ \}}
+\DoxyCodeLine{02544\ }
+\DoxyCodeLine{02545\ \ \ \_index\_length\ =\ read.tellg()\ -\/\ fpos\ -\/\ multifile-\/>\_offset;}
+\DoxyCodeLine{02546\ \ \ \textcolor{keywordflow}{return}\ next\_index;}
+\DoxyCodeLine{02547\ \}}
+\DoxyCodeLine{02548\ }
+\DoxyCodeLine{02557\ streampos\ Multifile::Subfile::}
+\DoxyCodeLine{02558\ write\_index(ostream\ \&write,\ streampos\ fpos,\ \mbox{\hyperlink{classMultifile}{Multifile}}\ *multifile)\ \{}
+\DoxyCodeLine{02559\ \ \ nassertr(write.tellp()\ -\/\ multifile-\/>\_offset\ ==\ fpos,\ fpos);}
+\DoxyCodeLine{02560\ }
+\DoxyCodeLine{02561\ \ \ \_index\_start\ =\ fpos;}
+\DoxyCodeLine{02562\ \ \ \_index\_length\ =\ 0;}
+\DoxyCodeLine{02563\ }
+\DoxyCodeLine{02564\ \ \ \textcolor{comment}{//\ This\ will\ be\ the\ contents\ of\ this\ particular\ index\ record.\ \ We\ build\ it}}
+\DoxyCodeLine{02565\ \ \ \textcolor{comment}{//\ up\ first\ since\ it\ will\ be\ variable\ length.}}
+\DoxyCodeLine{02566\ \ \ \mbox{\hyperlink{classDatagram}{Datagram}}\ dg;}
+\DoxyCodeLine{02567\ \ \ dg.add\_uint32(multifile-\/>streampos\_to\_word(\_data\_start));}
+\DoxyCodeLine{02568\ \ \ dg.add\_uint32(\_data\_length);}
+\DoxyCodeLine{02569\ \ \ dg.add\_uint16(\_flags);}
+\DoxyCodeLine{02570\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ (SF\_compressed\ |\ SF\_encrypted))\ !=\ 0)\ \{}
+\DoxyCodeLine{02571\ \ \ \ \ dg.add\_uint32(\_uncompressed\_length);}
+\DoxyCodeLine{02572\ \ \ \}}
+\DoxyCodeLine{02573\ \ \ dg.add\_uint32(\_timestamp);}
+\DoxyCodeLine{02574\ \ \ dg.add\_uint16(\_name.length());}
+\DoxyCodeLine{02575\ }
+\DoxyCodeLine{02576\ \ \ \textcolor{comment}{//\ For\ no\ real\ good\ reason,\ we'll\ invert\ all\ the\ bits\ in\ the\ name.\ \ The\ only}}
+\DoxyCodeLine{02577\ \ \ \textcolor{comment}{//\ reason\ we\ do\ this\ is\ to\ make\ it\ inconvenient\ for\ a\ casual\ browser\ of\ the}}
+\DoxyCodeLine{02578\ \ \ \textcolor{comment}{//\ Multifile\ to\ discover\ the\ names\ of\ the\ files\ stored\ within\ it.}}
+\DoxyCodeLine{02579\ \ \ \textcolor{comment}{//\ Naturally,\ this\ isn't\ real\ obfuscation\ or\ security.}}
+\DoxyCodeLine{02580\ \ \ string::iterator\ ni;}
+\DoxyCodeLine{02581\ \ \ \textcolor{keywordflow}{for}\ (ni\ =\ \_name.begin();\ ni\ !=\ \_name.end();\ ++ni)\ \{}
+\DoxyCodeLine{02582\ \ \ \ \ dg.add\_int8((*ni)\ \string^\ 0xff);}
+\DoxyCodeLine{02583\ \ \ \}}
+\DoxyCodeLine{02584\ }
+\DoxyCodeLine{02585\ \ \ \textcolor{keywordtype}{size\_t}\ this\_index\_size\ =\ 4\ +\ dg.get\_length();}
+\DoxyCodeLine{02586\ }
+\DoxyCodeLine{02587\ \ \ \textcolor{comment}{//\ Plus,\ we\ will\ write\ out\ the\ next\ index\ address\ first.}}
+\DoxyCodeLine{02588\ \ \ streampos\ next\_index\ =\ fpos\ +\ (streampos)this\_index\_size;}
+\DoxyCodeLine{02589\ }
+\DoxyCodeLine{02590\ \ \ \mbox{\hyperlink{classDatagram}{Datagram}}\ idg;}
+\DoxyCodeLine{02591\ \ \ idg.add\_uint32(multifile-\/>streampos\_to\_word(next\_index));}
+\DoxyCodeLine{02592\ }
+\DoxyCodeLine{02593\ \ \ write.write((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)idg.get\_data(),\ idg.get\_length());}
+\DoxyCodeLine{02594\ \ \ write.write((\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)dg.get\_data(),\ dg.get\_length());}
+\DoxyCodeLine{02595\ }
+\DoxyCodeLine{02596\ \ \ \_index\_length\ =\ write.tellp()\ -\/\ fpos\ -\/\ multifile-\/>\_offset;}
+\DoxyCodeLine{02597\ \ \ \textcolor{keywordflow}{return}\ next\_index;}
+\DoxyCodeLine{02598\ \}}
+\DoxyCodeLine{02599\ }
+\DoxyCodeLine{02614\ streampos\ Multifile::Subfile::}
+\DoxyCodeLine{02615\ write\_data(ostream\ \&write,\ istream\ *read,\ streampos\ fpos,}
+\DoxyCodeLine{02616\ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classMultifile}{Multifile}}\ *multifile)\ \{}
+\DoxyCodeLine{02617\ \ \ nassertr(write.tellp()\ -\/\ multifile-\/>\_offset\ ==\ fpos,\ fpos);}
+\DoxyCodeLine{02618\ }
+\DoxyCodeLine{02619\ \ \ istream\ *source\ =\ \_source;}
+\DoxyCodeLine{02620\ \ \ pifstream\ source\_file;}
+\DoxyCodeLine{02621\ \ \ \textcolor{keywordflow}{if}\ (source\ ==\ \textcolor{keyword}{nullptr}\ \&\&\ !\_source\_filename.empty())\ \{}
+\DoxyCodeLine{02622\ \ \ \ \ \textcolor{comment}{//\ If\ we\ have\ a\ filename,\ open\ it\ up\ and\ read\ that.}}
+\DoxyCodeLine{02623\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_source\_filename.open\_read(source\_file))\ \{}
+\DoxyCodeLine{02624\ \ \ \ \ \ \ \textcolor{comment}{//\ Unable\ to\ open\ the\ source\ file.}}
+\DoxyCodeLine{02625\ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{02626\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ read\ "{}}\ <<\ \_source\_filename\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{02627\ \ \ \ \ \ \ \_flags\ |=\ SF\_data\_invalid;}
+\DoxyCodeLine{02628\ \ \ \ \ \ \ \_data\_length\ =\ 0;}
+\DoxyCodeLine{02629\ \ \ \ \ \ \ \_uncompressed\_length\ =\ 0;}
+\DoxyCodeLine{02630\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02631\ \ \ \ \ \ \ source\ =\ \&source\_file;}
+\DoxyCodeLine{02632\ \ \ \ \ \}}
+\DoxyCodeLine{02633\ \ \ \}}
+\DoxyCodeLine{02634\ }
+\DoxyCodeLine{02635\ \ \ \textcolor{keywordflow}{if}\ (source\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02636\ \ \ \ \ \textcolor{comment}{//\ We\ don't\ have\ any\ source\ data.\ \ Perhaps\ we're\ reading\ from\ an\ already-\/}}
+\DoxyCodeLine{02637\ \ \ \ \ \textcolor{comment}{//\ packed\ Subfile\ (e.g.\ \ during\ repack()).}}
+\DoxyCodeLine{02638\ \ \ \ \ \textcolor{keywordflow}{if}\ (read\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{02639\ \ \ \ \ \ \ \textcolor{comment}{//\ No,\ we're\ just\ screwed.}}
+\DoxyCodeLine{02640\ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{02641\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}No\ source\ for\ subfile\ "{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{02642\ \ \ \ \ \ \ \_flags\ |=\ SF\_data\_invalid;}
+\DoxyCodeLine{02643\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02644\ \ \ \ \ \ \ \textcolor{comment}{//\ Read\ the\ data\ from\ the\ original\ Multifile.}}
+\DoxyCodeLine{02645\ \ \ \ \ \ \ read-\/>seekg(\_data\_start\ +\ multifile-\/>\_offset);}
+\DoxyCodeLine{02646\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ p\ =\ 0;\ p\ <\ \_data\_length;\ p++)\ \{}
+\DoxyCodeLine{02647\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \textcolor{keywordtype}{byte}\ =\ read-\/>get();}
+\DoxyCodeLine{02648\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (read-\/>eof()\ ||\ read-\/>fail())\ \{}
+\DoxyCodeLine{02649\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Unexpected\ EOF\ or\ other\ failure\ on\ the\ source\ file.}}
+\DoxyCodeLine{02650\ \ \ \ \ \ \ \ \ \ \ express\_cat.info()}
+\DoxyCodeLine{02651\ \ \ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unexpected\ EOF\ for\ subfile\ "{}}\ <<\ \_name\ <<\ \textcolor{stringliteral}{"{}.\(\backslash\)n"{}};}
+\DoxyCodeLine{02652\ \ \ \ \ \ \ \ \ \ \ \_flags\ |=\ SF\_data\_invalid;}
+\DoxyCodeLine{02653\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{02654\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02655\ \ \ \ \ \ \ \ \ write.put(\textcolor{keywordtype}{byte});}
+\DoxyCodeLine{02656\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02657\ \ \ \ \ \}}
+\DoxyCodeLine{02658\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02659\ \ \ \ \ \textcolor{comment}{//\ We\ do\ have\ source\ data.\ \ Copy\ it\ in,\ and\ also\ measure\ its\ length.}}
+\DoxyCodeLine{02660\ \ \ \ \ ostream\ *putter\ =\ \&write;}
+\DoxyCodeLine{02661\ \ \ \ \ \textcolor{keywordtype}{bool}\ delete\_putter\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{02662\ }
+\DoxyCodeLine{02663\ \textcolor{preprocessor}{\#ifndef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02664\ \ \ \ \ \textcolor{comment}{//\ Without\ OpenSSL,\ we\ can't\ support\ encryption.\ \ The\ flag\ had\ better\ not}}
+\DoxyCodeLine{02665\ \ \ \ \ \textcolor{comment}{//\ be\ set.}}
+\DoxyCodeLine{02666\ \ \ \ \ nassertr((\_flags\ \&\ SF\_encrypted)\ ==\ 0,\ fpos);}
+\DoxyCodeLine{02667\ }
+\DoxyCodeLine{02668\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02669\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ SF\_encrypted)\ !=\ 0)\ \{}
+\DoxyCodeLine{02670\ \ \ \ \ \ \ \textcolor{comment}{//\ Write\ it\ encrypted.}}
+\DoxyCodeLine{02671\ \ \ \ \ \ \ OEncryptStream\ *encrypt\ =\ \textcolor{keyword}{new}\ OEncryptStream;}
+\DoxyCodeLine{02672\ \ \ \ \ \ \ encrypt-\/>set\_iteration\_count(multifile-\/>\_encryption\_iteration\_count);}
+\DoxyCodeLine{02673\ \ \ \ \ \ \ encrypt-\/>open(putter,\ delete\_putter,\ multifile-\/>\_encryption\_password);}
+\DoxyCodeLine{02674\ }
+\DoxyCodeLine{02675\ \ \ \ \ \ \ putter\ =\ encrypt;}
+\DoxyCodeLine{02676\ \ \ \ \ \ \ delete\_putter\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02677\ }
+\DoxyCodeLine{02678\ \ \ \ \ \ \ \textcolor{comment}{//\ Also\ write\ the\ encrypt\_header\ to\ the\ beginning\ of\ the\ encrypted}}
+\DoxyCodeLine{02679\ \ \ \ \ \ \ \textcolor{comment}{//\ stream,\ so\ we\ can\ validate\ the\ password\ on\ decryption.}}
+\DoxyCodeLine{02680\ \ \ \ \ \ \ putter-\/>write(\_encrypt\_header,\ \_encrypt\_header\_size);}
+\DoxyCodeLine{02681\ \ \ \ \ \}}
+\DoxyCodeLine{02682\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02683\ }
+\DoxyCodeLine{02684\ \textcolor{preprocessor}{\#ifndef\ HAVE\_ZLIB}}
+\DoxyCodeLine{02685\ \ \ \ \ \textcolor{comment}{//\ Without\ ZLIB,\ we\ can't\ support\ compression.\ \ The\ flag\ had\ better\ not\ be}}
+\DoxyCodeLine{02686\ \ \ \ \ \textcolor{comment}{//\ set.}}
+\DoxyCodeLine{02687\ \ \ \ \ nassertr((\_flags\ \&\ SF\_compressed)\ ==\ 0,\ fpos);}
+\DoxyCodeLine{02688\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{02689\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ SF\_compressed)\ !=\ 0)\ \{}
+\DoxyCodeLine{02690\ \ \ \ \ \ \ \textcolor{comment}{//\ Write\ it\ compressed.}}
+\DoxyCodeLine{02691\ \ \ \ \ \ \ putter\ =\ \textcolor{keyword}{new}\ OCompressStream(putter,\ delete\_putter,\ \_compression\_level);}
+\DoxyCodeLine{02692\ \ \ \ \ \ \ delete\_putter\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{02693\ \ \ \ \ \}}
+\DoxyCodeLine{02694\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_ZLIB}}
+\DoxyCodeLine{02695\ }
+\DoxyCodeLine{02696\ \ \ \ \ streampos\ write\_start\ =\ fpos;}
+\DoxyCodeLine{02697\ \ \ \ \ \_uncompressed\_length\ =\ 0;}
+\DoxyCodeLine{02698\ }
+\DoxyCodeLine{02699\ \textcolor{preprocessor}{\#ifndef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02700\ \ \ \ \ \textcolor{comment}{//\ We\ also\ need\ OpenSSL\ for\ signatures.}}
+\DoxyCodeLine{02701\ \ \ \ \ nassertr((\_flags\ \&\ SF\_signature)\ ==\ 0,\ fpos);}
+\DoxyCodeLine{02702\ }
+\DoxyCodeLine{02703\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02704\ \ \ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ SF\_signature)\ !=\ 0)\ \{}
+\DoxyCodeLine{02705\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ it's\ a\ special\ signature\ record,\ precede\ the\ record\ data\ (the}}
+\DoxyCodeLine{02706\ \ \ \ \ \ \ \textcolor{comment}{//\ certificate\ itself)\ with\ the\ signature\ data\ generated\ against\ the}}
+\DoxyCodeLine{02707\ \ \ \ \ \ \ \textcolor{comment}{//\ multifile\ contents.}}
+\DoxyCodeLine{02708\ }
+\DoxyCodeLine{02709\ \ \ \ \ \ \ \textcolor{comment}{//\ In\ order\ to\ generate\ a\ signature,\ we\ need\ to\ have\ a\ valid\ read}}
+\DoxyCodeLine{02710\ \ \ \ \ \ \ \textcolor{comment}{//\ pointer.}}
+\DoxyCodeLine{02711\ \ \ \ \ \ \ nassertr(read\ !=\ \textcolor{keyword}{nullptr},\ fpos);}
+\DoxyCodeLine{02712\ }
+\DoxyCodeLine{02713\ \ \ \ \ \ \ \textcolor{comment}{//\ And\ we\ also\ need\ to\ have\ a\ private\ key.}}
+\DoxyCodeLine{02714\ \ \ \ \ \ \ nassertr(\_pkey\ !=\ \textcolor{keyword}{nullptr},\ fpos);}
+\DoxyCodeLine{02715\ }
+\DoxyCodeLine{02716\ \ \ \ \ \ \ EVP\_MD\_CTX\ *md\_ctx\ =\ EVP\_MD\_CTX\_create();}
+\DoxyCodeLine{02717\ \ \ \ \ \ \ EVP\_SignInit(md\_ctx,\ EVP\_sha1());}
+\DoxyCodeLine{02718\ }
+\DoxyCodeLine{02719\ \ \ \ \ \ \ \textcolor{comment}{//\ Read\ and\ hash\ the\ multifile\ contents,\ but\ only\ up\ till}}
+\DoxyCodeLine{02720\ \ \ \ \ \ \ \textcolor{comment}{//\ \_last\_data\_byte.}}
+\DoxyCodeLine{02721\ \ \ \ \ \ \ nassertr(multifile-\/>\_last\_data\_byte\ <\ fpos,\ fpos);}
+\DoxyCodeLine{02722\ \ \ \ \ \ \ read-\/>seekg(multifile-\/>\_offset);}
+\DoxyCodeLine{02723\ \ \ \ \ \ \ streampos\ bytes\_remaining\ =\ multifile-\/>\_last\_data\_byte;}
+\DoxyCodeLine{02724\ \ \ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 4096;}
+\DoxyCodeLine{02725\ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{02726\ \ \ \ \ \ \ read-\/>read(buffer,\ min((streampos)buffer\_size,\ bytes\_remaining));}
+\DoxyCodeLine{02727\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ count\ =\ read-\/>gcount();}
+\DoxyCodeLine{02728\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (count\ !=\ 0)\ \{}
+\DoxyCodeLine{02729\ \ \ \ \ \ \ \ \ nassertr(count\ <=\ buffer\_size,\ fpos);}
+\DoxyCodeLine{02730\ \ \ \ \ \ \ \ \ EVP\_SignUpdate(md\_ctx,\ buffer,\ count);}
+\DoxyCodeLine{02731\ \ \ \ \ \ \ \ \ bytes\_remaining\ -\/=\ count;}
+\DoxyCodeLine{02732\ \ \ \ \ \ \ \ \ read-\/>read(buffer,\ min((streampos)buffer\_size,\ bytes\_remaining));}
+\DoxyCodeLine{02733\ \ \ \ \ \ \ \ \ count\ =\ read-\/>gcount();}
+\DoxyCodeLine{02734\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02735\ \ \ \ \ \ \ nassertr(bytes\_remaining\ ==\ (streampos)0,\ fpos);}
+\DoxyCodeLine{02736\ }
+\DoxyCodeLine{02737\ \ \ \ \ \ \ \textcolor{comment}{//\ Now\ generate\ and\ write\ out\ the\ signature.}}
+\DoxyCodeLine{02738\ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ max\_size\ =\ EVP\_PKEY\_size(\_pkey);}
+\DoxyCodeLine{02739\ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *sig\_data\ =\ \textcolor{keyword}{new}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}[max\_size];}
+\DoxyCodeLine{02740\ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ sig\_size;}
+\DoxyCodeLine{02741\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!EVP\_SignFinal(md\_ctx,\ sig\_data,\ \&sig\_size,\ \_pkey))\ \{}
+\DoxyCodeLine{02742\ \ \ \ \ \ \ \ \ OpenSSLWrapper\ *sslw\ =\ OpenSSLWrapper::get\_global\_ptr();}
+\DoxyCodeLine{02743\ \ \ \ \ \ \ \ \ sslw-\/>notify\_ssl\_errors();}
+\DoxyCodeLine{02744\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{02745\ \ \ \ \ \ \ nassertr(sig\_size\ <=\ max\_size,\ fpos);}
+\DoxyCodeLine{02746\ }
+\DoxyCodeLine{02747\ \ \ \ \ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ writer(*putter);}
+\DoxyCodeLine{02748\ \ \ \ \ \ \ writer.add\_uint32(sig\_size);}
+\DoxyCodeLine{02749\ \ \ \ \ \ \ putter-\/>write((\textcolor{keywordtype}{char}\ *)sig\_data,\ sig\_size);}
+\DoxyCodeLine{02750\ \ \ \ \ \ \ \_uncompressed\_length\ +=\ 4\ +\ sig\_size;}
+\DoxyCodeLine{02751\ }
+\DoxyCodeLine{02752\ \ \ \ \ \ \ \textcolor{keyword}{delete}[]\ sig\_data;}
+\DoxyCodeLine{02753\ }
+\DoxyCodeLine{02754\ \ \ \ \ \ \ EVP\_MD\_CTX\_destroy(md\_ctx);}
+\DoxyCodeLine{02755\ \ \ \ \ \}}
+\DoxyCodeLine{02756\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+\DoxyCodeLine{02757\ }
+\DoxyCodeLine{02758\ \ \ \ \ \textcolor{comment}{//\ Finally,\ we\ can\ write\ out\ the\ data\ itself.}}
+\DoxyCodeLine{02759\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ 4096;}
+\DoxyCodeLine{02760\ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[buffer\_size];}
+\DoxyCodeLine{02761\ }
+\DoxyCodeLine{02762\ \ \ \ \ source-\/>read(buffer,\ buffer\_size);}
+\DoxyCodeLine{02763\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ count\ =\ source-\/>gcount();}
+\DoxyCodeLine{02764\ \ \ \ \ \textcolor{keywordflow}{while}\ (count\ !=\ 0)\ \{}
+\DoxyCodeLine{02765\ \ \ \ \ \ \ \_uncompressed\_length\ +=\ count;}
+\DoxyCodeLine{02766\ \ \ \ \ \ \ putter-\/>write(buffer,\ count);}
+\DoxyCodeLine{02767\ \ \ \ \ \ \ source-\/>read(buffer,\ buffer\_size);}
+\DoxyCodeLine{02768\ \ \ \ \ \ \ count\ =\ source-\/>gcount();}
+\DoxyCodeLine{02769\ \ \ \ \ \}}
+\DoxyCodeLine{02770\ }
+\DoxyCodeLine{02771\ \ \ \ \ \textcolor{keywordflow}{if}\ (delete\_putter)\ \{}
+\DoxyCodeLine{02772\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ putter;}
+\DoxyCodeLine{02773\ \ \ \ \ \}}
+\DoxyCodeLine{02774\ }
+\DoxyCodeLine{02775\ \ \ \ \ streampos\ write\_end\ =\ write.tellp()\ -\/\ multifile-\/>\_offset;}
+\DoxyCodeLine{02776\ \ \ \ \ \_data\_length\ =\ (size\_t)(write\_end\ -\/\ write\_start);}
+\DoxyCodeLine{02777\ \ \ \}}
+\DoxyCodeLine{02778\ }
+\DoxyCodeLine{02779\ \ \ \textcolor{comment}{//\ We\ can't\ set\ \_data\_start\ until\ down\ here,\ after\ we\ have\ read\ the\ Subfile.}}
+\DoxyCodeLine{02780\ \ \ \textcolor{comment}{//\ (In\ case\ we\ are\ running\ during\ repack()).}}
+\DoxyCodeLine{02781\ \ \ \_data\_start\ =\ fpos;}
+\DoxyCodeLine{02782\ }
+\DoxyCodeLine{02783\ \ \ \textcolor{comment}{//\ Get\ the\ modification\ timestamp\ for\ this\ subfile.\ \ This\ is\ read\ from\ the}}
+\DoxyCodeLine{02784\ \ \ \textcolor{comment}{//\ source\ file,\ if\ we\ have\ a\ filename;\ otherwise,\ it's\ the\ current\ time.}}
+\DoxyCodeLine{02785\ \ \ \textcolor{keywordflow}{if}\ (!\_source\_filename.empty())\ \{}
+\DoxyCodeLine{02786\ \ \ \ \ \_timestamp\ =\ \_source\_filename.get\_timestamp();}
+\DoxyCodeLine{02787\ \ \ \}}
+\DoxyCodeLine{02788\ \ \ \textcolor{keywordflow}{if}\ (\_timestamp\ ==\ 0)\ \{}
+\DoxyCodeLine{02789\ \ \ \ \ \_timestamp\ =\ time(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{02790\ \ \ \}}
+\DoxyCodeLine{02791\ }
+\DoxyCodeLine{02792\ \ \ \_source\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{02793\ \ \ \_source\_filename\ =\ \mbox{\hyperlink{classFilename}{Filename}}();}
+\DoxyCodeLine{02794\ \ \ source\_file.close();}
+\DoxyCodeLine{02795\ }
+\DoxyCodeLine{02796\ \ \ \textcolor{keywordflow}{return}\ fpos\ +\ (streampos)\_data\_length;}
+\DoxyCodeLine{02797\ \}}
+\DoxyCodeLine{02798\ }
+\DoxyCodeLine{02803\ \textcolor{keywordtype}{void}\ Multifile::Subfile::}
+\DoxyCodeLine{02804\ rewrite\_index\_data\_start(ostream\ \&write,\ \mbox{\hyperlink{classMultifile}{Multifile}}\ *multifile)\ \{}
+\DoxyCodeLine{02805\ \ \ nassertv(\_index\_start\ !=\ (streampos)0);}
+\DoxyCodeLine{02806\ }
+\DoxyCodeLine{02807\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ data\_start\_offset\ =\ 4;}
+\DoxyCodeLine{02808\ \ \ \textcolor{keywordtype}{size\_t}\ data\_start\_pos\ =\ \_index\_start\ +\ (streampos)data\_start\_offset;}
+\DoxyCodeLine{02809\ \ \ write.seekp(data\_start\_pos\ +\ multifile-\/>\_offset);}
+\DoxyCodeLine{02810\ \ \ nassertv(!write.fail());}
+\DoxyCodeLine{02811\ }
+\DoxyCodeLine{02812\ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ writer(write);}
+\DoxyCodeLine{02813\ \ \ writer.add\_uint32(multifile-\/>streampos\_to\_word(\_data\_start));}
+\DoxyCodeLine{02814\ \ \ writer.add\_uint32(\_data\_length);}
+\DoxyCodeLine{02815\ \ \ writer.add\_uint16(\_flags);}
+\DoxyCodeLine{02816\ \ \ \textcolor{keywordflow}{if}\ ((\_flags\ \&\ (SF\_compressed\ |\ SF\_encrypted))\ !=\ 0)\ \{}
+\DoxyCodeLine{02817\ \ \ \ \ writer.add\_uint32(\_uncompressed\_length);}
+\DoxyCodeLine{02818\ \ \ \}}
+\DoxyCodeLine{02819\ \ \ \textcolor{keywordflow}{if}\ (multifile-\/>\_record\_timestamp)\ \{}
+\DoxyCodeLine{02820\ \ \ \ \ writer.add\_uint32(\_timestamp);}
+\DoxyCodeLine{02821\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{02822\ \ \ \ \ writer.add\_uint32(0);}
+\DoxyCodeLine{02823\ \ \ \}}
+\DoxyCodeLine{02824\ \}}
+\DoxyCodeLine{02825\ }
+\DoxyCodeLine{02830\ \textcolor{keywordtype}{void}\ Multifile::Subfile::}
+\DoxyCodeLine{02831\ rewrite\_index\_flags(ostream\ \&write)\ \{}
+\DoxyCodeLine{02832\ \ \ \textcolor{comment}{//\ If\ the\ subfile\ has\ never\ even\ been\ recorded\ to\ disk,\ we\ don't\ need\ to\ do}}
+\DoxyCodeLine{02833\ \ \ \textcolor{comment}{//\ anything\ at\ all\ in\ this\ function.}}
+\DoxyCodeLine{02834\ \ \ \textcolor{keywordflow}{if}\ (\_index\_start\ !=\ (streampos)0)\ \{}
+\DoxyCodeLine{02835\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{size\_t}\ flags\_offset\ =\ 4\ +\ 4\ +\ 4;}
+\DoxyCodeLine{02836\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ flags\_pos\ =\ \_index\_start\ +\ (streampos)flags\_offset;}
+\DoxyCodeLine{02837\ \ \ \ \ write.seekp(flags\_pos);}
+\DoxyCodeLine{02838\ \ \ \ \ nassertv(!write.fail());}
+\DoxyCodeLine{02839\ }
+\DoxyCodeLine{02840\ \ \ \ \ \mbox{\hyperlink{classStreamWriter}{StreamWriter}}\ writer(write);}
+\DoxyCodeLine{02841\ \ \ \ \ writer.add\_uint16(\_flags);}
+\DoxyCodeLine{02842\ \ \ \}}
+\DoxyCodeLine{02843\ \}}
+
+\end{DoxyCode}

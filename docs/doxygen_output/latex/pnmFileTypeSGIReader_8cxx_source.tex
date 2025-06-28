@@ -1,0 +1,488 @@
+\doxysection{pnm\+File\+Type\+SGIReader.\+cxx}
+\hypertarget{pnmFileTypeSGIReader_8cxx_source}{}\label{pnmFileTypeSGIReader_8cxx_source}\index{panda/src/pnmimagetypes/pnmFileTypeSGIReader.cxx@{panda/src/pnmimagetypes/pnmFileTypeSGIReader.cxx}}
+\mbox{\hyperlink{pnmFileTypeSGIReader_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmFileTypeSGI_8h}{pnmFileTypeSGI.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ HAVE\_SGI\_RGB}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pnmimagetypes_8h}{config\_pnmimagetypes.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{sgi_8h}{sgi.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmImage_8h}{pnmImage.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmReader_8h}{pnmReader.h}}"{}}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnotify_8h}{pnotify.h}}"{}}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \textcolor{keyword}{using\ }std::istream;}
+\DoxyCodeLine{00027\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{comment}{//\ Much\ code\ in\ this\ file\ is\ borrowed\ from\ Netpbm,\ specifically\ sgitopnm.c.}}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \textcolor{comment}{/*\ sgitopnm.c\ -\/\ read\ an\ SGI\ image\ and\ and\ produce\ a\ portable\ anymap}}
+\DoxyCodeLine{00032\ \textcolor{comment}{**}}
+\DoxyCodeLine{00033\ \textcolor{comment}{**\ Copyright\ (C)\ 1994\ by\ Ingo\ Wilken\ (Ingo.Wilken@informatik.uni-\/oldenburg.de)}}
+\DoxyCodeLine{00034\ \textcolor{comment}{**}}
+\DoxyCodeLine{00035\ \textcolor{comment}{**\ Based\ on\ the\ SGI\ image\ description\ v0.9\ by\ Paul\ Haeberli\ (paul@sgi.comp)}}
+\DoxyCodeLine{00036\ \textcolor{comment}{**\ Available\ via\ ftp\ from\ sgi.com:graphics/SGIIMAGESPEC}}
+\DoxyCodeLine{00037\ \textcolor{comment}{**}}
+\DoxyCodeLine{00038\ \textcolor{comment}{**\ Permission\ to\ use,\ copy,\ modify,\ and\ distribute\ this\ software\ and\ its}}
+\DoxyCodeLine{00039\ \textcolor{comment}{**\ documentation\ for\ any\ purpose\ and\ without\ fee\ is\ hereby\ granted,\ provided}}
+\DoxyCodeLine{00040\ \textcolor{comment}{**\ that\ the\ above\ copyright\ notice\ appear\ in\ all\ copies\ and\ that\ both\ that}}
+\DoxyCodeLine{00041\ \textcolor{comment}{**\ copyright\ notice\ and\ this\ permission\ notice\ appear\ in\ supporting}}
+\DoxyCodeLine{00042\ \textcolor{comment}{**\ documentation.\ \ This\ software\ is\ provided\ "{}as\ is"{}\ without\ express\ or}}
+\DoxyCodeLine{00043\ \textcolor{comment}{**\ implied\ warranty.}}
+\DoxyCodeLine{00044\ \textcolor{comment}{**}}
+\DoxyCodeLine{00045\ \textcolor{comment}{**\ 29Jan94:\ first\ version}}
+\DoxyCodeLine{00046\ \textcolor{comment}{**\ 08Feb94:\ minor\ bugfix}}
+\DoxyCodeLine{00047\ \textcolor{comment}{*/}}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \textcolor{comment}{/*\ entry\ in\ RLE\ offset\ table\ */}}
+\DoxyCodeLine{00050\ \textcolor{keyword}{typedef}\ PNMFileTypeSGI::Reader::TabEntry\ TabEntry;}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \textcolor{keyword}{typedef}\ \textcolor{keywordtype}{short}\ \ \ \ \ \ \ ScanElem;}
+\DoxyCodeLine{00053\ \textcolor{keyword}{typedef}\ ScanElem\ *\ \ ScanLine;}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00055\ \textcolor{comment}{/*\ prototypes\ */}}
+\DoxyCodeLine{00056\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ get\_byte\ (\ istream*\ f\ );}
+\DoxyCodeLine{00057\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{long}\ get\_big\_long\ (istream\ *f);}
+\DoxyCodeLine{00058\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{short}\ get\_big\_short\ (istream\ *f);}
+\DoxyCodeLine{00059\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{short}\ get\_byte\_as\_short\ (istream\ *f);}
+\DoxyCodeLine{00060\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}\ readerr\ (istream\ *f);}
+\DoxyCodeLine{00061\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ *\ xmalloc\ (\textcolor{keywordtype}{int}\ bytes);}
+\DoxyCodeLine{00062\ \textcolor{preprocessor}{\#define\ MALLOC(n,\ type)\ \ \ \ \ (type\ *)xmalloc((n)\ *\ sizeof(type))}}
+\DoxyCodeLine{00063\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *\ compression\_name\ (\textcolor{keywordtype}{char}\ compr);}
+\DoxyCodeLine{00064\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ \ \ \ \ \ \ read\_bytes\ (istream\ *ifp,\ \textcolor{keywordtype}{int}\ n,\ \textcolor{keywordtype}{char}\ *buf);}
+\DoxyCodeLine{00065\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}\ read\_header(istream\ *ifp,\ \mbox{\hyperlink{structHeader}{Header}}\ *head,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&magic\_number);}
+\DoxyCodeLine{00066\ \textcolor{keyword}{static}\ TabEntry\ *\ read\_table\ (istream\ *ifp,\ \textcolor{keywordtype}{int}\ tablen);}
+\DoxyCodeLine{00067\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ \ \ \ \ \ \ read\_channel\ (istream\ *ifp,\ \textcolor{keywordtype}{int}\ xsize,\ \textcolor{keywordtype}{int}\ ysize,}
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ zsize,\ \textcolor{keywordtype}{int}\ bpc,\ TabEntry\ *table,}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ScanElem\ *channel\_data,\ \textcolor{keywordtype}{long}\ table\_start,}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ channel,\ \textcolor{keywordtype}{int}\ row);}
+\DoxyCodeLine{00071\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ \ \ \ \ \ \ rle\_decompress\ (ScanElem\ *src,\ \textcolor{keywordtype}{long}\ srclen,\ ScanElem\ *dest,\ \textcolor{keywordtype}{long}\ destlen);}
+\DoxyCodeLine{00072\ }
+\DoxyCodeLine{00073\ \textcolor{preprocessor}{\#define\ WORSTCOMPR(x)\ \ \ (2*(x)\ +\ 2)}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \textcolor{preprocessor}{\#define\ MAXVAL\_BYTE\ \ \ \ \ 255}}
+\DoxyCodeLine{00076\ \textcolor{preprocessor}{\#define\ MAXVAL\_WORD\ \ \ \ \ 65535}}
+\DoxyCodeLine{00077\ }
+\DoxyCodeLine{00078\ \textcolor{comment}{//\ This\ flag\ shouldn't\ really\ be\ a\ static\ global,\ but\ it's\ a\ little\ tricky\ to}}
+\DoxyCodeLine{00079\ \textcolor{comment}{//\ fix\ and\ it\ doesn't\ do\ any\ harm,\ since\ it\ only\ controls\ whether\ an\ error}}
+\DoxyCodeLine{00080\ \textcolor{comment}{//\ message\ is\ repeated.}}
+\DoxyCodeLine{00081\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}\ eof\_err\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00083\ }
+\DoxyCodeLine{00087\ PNMFileTypeSGI::Reader::}
+\DoxyCodeLine{00088\ Reader(\mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type,\ istream\ *file,\ \textcolor{keywordtype}{bool}\ owns\_file,\ \textcolor{keywordtype}{string}\ magic\_number)\ :}
+\DoxyCodeLine{00089\ \ \ \mbox{\hyperlink{classPNMReader}{PNMReader}}(type,\ file,\ owns\_file)}
+\DoxyCodeLine{00090\ \{}
+\DoxyCodeLine{00091\ \ \ eof\_err\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00092\ \ \ table\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00093\ }
+\DoxyCodeLine{00094\ \ \ \textcolor{keywordflow}{if}\ (!read\_magic\_number(\_file,\ magic\_number,\ 4))\ \{}
+\DoxyCodeLine{00095\ \ \ \ \ \textcolor{comment}{//\ No\ magic\ number.\ \ No\ image.}}
+\DoxyCodeLine{00096\ \ \ \ \ \textcolor{keywordflow}{if}\ (pnmimage\_sgi\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00097\ \ \ \ \ \ \ pnmimage\_sgi\_cat.debug()}
+\DoxyCodeLine{00098\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}RGB\ file\ appears\ to\ be\ empty.\(\backslash\)n"{}};}
+\DoxyCodeLine{00099\ \ \ \ \ \}}
+\DoxyCodeLine{00100\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00101\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00102\ \ \ \}}
+\DoxyCodeLine{00103\ }
+\DoxyCodeLine{00104\ \ \ \mbox{\hyperlink{structHeader}{Header}}\ head;}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00106\ \ \ \textcolor{keywordflow}{if}\ (!::read\_header(file,\ \&head,\ magic\_number))\ \{}
+\DoxyCodeLine{00107\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00108\ \ \ \}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ \textcolor{keywordtype}{long}\ pixmax\ =\ (head.bpc\ ==\ 1)\ ?\ MAXVAL\_BYTE\ :\ MAXVAL\_WORD;}
+\DoxyCodeLine{00111\ \ \ \textcolor{keywordflow}{if}(\ pixmax\ >\ PNM\_MAXMAXVAL\ )\ \{}
+\DoxyCodeLine{00112\ \ \ \ \ pnmimage\_sgi\_cat.error()}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Cannot\ read\ RGB\ image\ with\ maxval\ of\ "{}}\ <<\ pixmax}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}-\/-\/largest\ allowable\ maxval\ is\ currently\ "{}}\ <<\ PNM\_MAXMAXVAL\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00115\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00116\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00117\ \ \ \}}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ \_maxval\ =\ (xelval)pixmax;}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00121\ \ \ table\_start\ =\ file-\/>tellg();}
+\DoxyCodeLine{00122\ \ \ \textcolor{keywordflow}{if}(\ head.storage\ !=\ STORAGE\_VERBATIM\ )}
+\DoxyCodeLine{00123\ \ \ \ \ table\ =\ read\_table(file,\ head.ysize\ *\ head.zsize);}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \ \ \_x\_size\ =\ head.xsize;}
+\DoxyCodeLine{00126\ \ \ \_y\_size\ =\ head.ysize;}
+\DoxyCodeLine{00127\ \ \ \_num\_channels\ =\ std::min((\textcolor{keywordtype}{int})head.zsize,\ 4);}
+\DoxyCodeLine{00128\ \ \ bpc\ =\ head.bpc;}
+\DoxyCodeLine{00129\ }
+\DoxyCodeLine{00130\ \ \ current\_row\ =\ \_y\_size\ -\/\ 1;}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ \ \ \textcolor{keywordflow}{if}\ (\_is\_valid\ \&\&\ pnmimage\_sgi\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00133\ \ \ \ \ head.name[79]\ =\ \textcolor{charliteral}{'\(\backslash\)0'};\ \ \textcolor{comment}{/*\ just\ to\ be\ safe\ */}}
+\DoxyCodeLine{00134\ \ \ \ \ pnmimage\_sgi\_cat.debug()}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Read\ RGB\ image:\(\backslash\)n"{}}}
+\DoxyCodeLine{00136\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ raster\ size\ "{}}\ <<\ head.xsize\ <<\ \textcolor{stringliteral}{"{}\ x\ "{}}\ <<\ head.ysize}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ "{}}\ <<\ head.zsize\ <<\ \textcolor{stringliteral}{"{}\ channels\(\backslash\)n"{}}}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ compression:\ "{}}\ <<\ (int)head.storage\ <<\ \textcolor{stringliteral}{"{}\ =\ "{}}}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ <<\ compression\_name(head.storage)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}}}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ image\ name:\ "{}}\ <<\ head.name\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}}}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ bpc:\ "{}}\ <<\ (int)head.bpc\ <<\ \textcolor{stringliteral}{"{}\ dimension:\ "{}}\ <<\ head.dimension\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}}}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ pixmin:\ "{}}\ <<\ head.pixmin\ <<\ \textcolor{stringliteral}{"{}\ pixmax:\ "{}}\ <<\ head.pixmax}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ \ colormap:\ "{}}\ <<\ head.colormap\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00144\ \ \ \}}
+\DoxyCodeLine{00145\ \}}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00150\ PNMFileTypeSGI::Reader::}
+\DoxyCodeLine{00151\ \string~Reader()\ \{}
+\DoxyCodeLine{00152\ \ \ \textcolor{keywordflow}{if}\ (table\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00153\ \ \ \ \ free(table);}
+\DoxyCodeLine{00154\ \ \ \}}
+\DoxyCodeLine{00155\ \}}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00163\ \textcolor{keywordtype}{bool}\ PNMFileTypeSGI::Reader::}
+\DoxyCodeLine{00164\ supports\_read\_row()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00165\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00166\ \}}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00174\ \textcolor{keywordtype}{bool}\ PNMFileTypeSGI::Reader::}
+\DoxyCodeLine{00175\ read\_row(\mbox{\hyperlink{structpixel}{xel}}\ *row\_data,\ xelval\ *alpha\_data,\ \textcolor{keywordtype}{int}\ x\_size,\ \textcolor{keywordtype}{int}\ y\_size)\ \{}
+\DoxyCodeLine{00176\ \ \ \textcolor{keywordflow}{if}\ (!is\_valid())\ \{}
+\DoxyCodeLine{00177\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00178\ \ \ \}}
+\DoxyCodeLine{00179\ \ \ nassertr(current\_row\ >=\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00180\ }
+\DoxyCodeLine{00181\ \ \ ScanElem\ *red\ =\ (ScanElem\ *)alloca(x\_size\ *\ \textcolor{keyword}{sizeof}(ScanElem));}
+\DoxyCodeLine{00182\ \ \ ScanElem\ *grn\ =\ (ScanElem\ *)alloca(x\_size\ *\ \textcolor{keyword}{sizeof}(ScanElem));}
+\DoxyCodeLine{00183\ \ \ ScanElem\ *blu\ =\ (ScanElem\ *)alloca(x\_size\ *\ \textcolor{keyword}{sizeof}(ScanElem));}
+\DoxyCodeLine{00184\ \ \ ScanElem\ *alpha\ =\ (ScanElem\ *)alloca(x\_size\ *\ \textcolor{keyword}{sizeof}(ScanElem));}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00186\ \ \ read\_channel(\_file,\ x\_size,\ y\_size,\ \_num\_channels,\ bpc,\ table,\ red,}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ table\_start,\ 0,\ current\_row);}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordflow}{if}\ (!is\_grayscale())\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ read\_channel(\_file,\ x\_size,\ y\_size,\ \_num\_channels,\ bpc,\ table,\ grn,}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ table\_start,\ 1,\ current\_row);}
+\DoxyCodeLine{00192\ \ \ \ \ read\_channel(\_file,\ x\_size,\ y\_size,\ \_num\_channels,\ bpc,\ table,\ blu,}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ table\_start,\ 2,\ current\_row);}
+\DoxyCodeLine{00194\ \ \ \}}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{00197\ \ \ \ \ read\_channel(\_file,\ x\_size,\ y\_size,\ \_num\_channels,\ bpc,\ table,\ alpha,}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ table\_start,\ \_num\_channels\ -\/\ 1,\ current\_row);}
+\DoxyCodeLine{00199\ \ \ \}}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ x\_size;\ x++)\ \{}
+\DoxyCodeLine{00202\ \ \ \ \ \textcolor{keywordflow}{if}\ (is\_grayscale())\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ PPM\_PUTB(row\_data[x],\ (xelval)red[x]);}
+\DoxyCodeLine{00204\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ xelval\ r,\ g,\ b;}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ r\ =\ (xelval)red[x];}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ g\ =\ (xelval)grn[x];}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ b\ =\ (xelval)blu[x];}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ PPM\_ASSIGN(row\_data[x],\ r,\ g,\ b);}
+\DoxyCodeLine{00210\ \ \ \ \ \}}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00212\ \ \ \ \ \textcolor{keywordflow}{if}\ (has\_alpha())\ \{}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ alpha\_data[x]\ =\ (xelval)alpha[x];}
+\DoxyCodeLine{00214\ \ \ \ \ \}}
+\DoxyCodeLine{00215\ \ \ \}}
+\DoxyCodeLine{00216\ \ \ current\_row-\/-\/;}
+\DoxyCodeLine{00217\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00218\ \}}
+\DoxyCodeLine{00219\ }
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}}
+\DoxyCodeLine{00223\ read\_header(istream\ *ifp,\ \mbox{\hyperlink{structHeader}{Header}}\ *head,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&magic\_number)\ \{}
+\DoxyCodeLine{00224\ \ \ \ \ nassertr(magic\_number.size()\ ==\ 4,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00225\ \ \ \ \ head-\/>magic\ =}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ ((\textcolor{keywordtype}{unsigned}\ char)magic\_number[0]\ <<\ 8)\ |}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ ((\textcolor{keywordtype}{unsigned}\ char)magic\_number[1]);}
+\DoxyCodeLine{00228\ \ \ \ \ head-\/>storage\ \ \ =\ (\textcolor{keywordtype}{unsigned}\ char)magic\_number[2];}
+\DoxyCodeLine{00229\ \ \ \ \ head-\/>bpc\ \ \ \ \ \ \ =\ (\textcolor{keywordtype}{unsigned}\ char)magic\_number[3];}
+\DoxyCodeLine{00230\ \ \ \ \ head-\/>dimension\ =\ get\_big\_short(ifp);}
+\DoxyCodeLine{00231\ \ \ \ \ head-\/>xsize\ \ \ \ \ =\ get\_big\_short(ifp);}
+\DoxyCodeLine{00232\ \ \ \ \ head-\/>ysize\ \ \ \ \ =\ get\_big\_short(ifp);}
+\DoxyCodeLine{00233\ \ \ \ \ head-\/>zsize\ \ \ \ \ =\ get\_big\_short(ifp);}
+\DoxyCodeLine{00234\ \ \ \ \ head-\/>pixmin\ \ \ \ =\ get\_big\_long(ifp);}
+\DoxyCodeLine{00235\ \ \ \ \ head-\/>pixmax\ \ \ \ =\ get\_big\_long(ifp);}
+\DoxyCodeLine{00236\ \ \ \ \ read\_bytes(ifp,\ 4,\ head-\/>dummy1);}
+\DoxyCodeLine{00237\ \ \ \ \ read\_bytes(ifp,\ 80,\ head-\/>name);}
+\DoxyCodeLine{00238\ \ \ \ \ head-\/>colormap\ \ =\ get\_big\_long(ifp);}
+\DoxyCodeLine{00239\ \ \ \ \ read\_bytes(ifp,\ 404,\ head-\/>dummy2);}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ \ \ \textcolor{keywordflow}{if}\ (head-\/>magic\ !=\ SGI\_MAGIC)\ \{}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ pnmimage\_sgi\_cat.error()}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ magic\ number:\ not\ an\ SGI\ image\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00245\ \ \ \ \ \}}
+\DoxyCodeLine{00246\ }
+\DoxyCodeLine{00247\ \ \ \ \ \textcolor{keywordflow}{if}\ (head-\/>storage\ !=\ 0\ \&\&\ head-\/>storage\ !=\ 1)\ \{}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ pnmimage\_sgi\_cat.error()}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unknown\ compression\ type.\(\backslash\)n"{}};}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00251\ \ \ \ \ \}}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ \ \ \textcolor{keywordflow}{if}\ (head-\/>bpc\ <\ 1\ ||\ head-\/>bpc\ >\ 2)\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ pnmimage\_sgi\_cat.error()}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Illegal\ precision\ value\ "{}}\ <<\ head-\/>bpc\ <<\ \textcolor{stringliteral}{"{}\ (only\ 1-\/2\ allowed)\(\backslash\)n"{}};}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00257\ \ \ \ \ \}}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \ \ \textcolor{comment}{//\ Actually,\ some\ old\ broken\ SGI\ image\ writers\ put\ garbage\ in\ this\ field,}}
+\DoxyCodeLine{00260\ \ \ \ \ \textcolor{comment}{//\ so\ just\ ignore\ it.}}
+\DoxyCodeLine{00261\ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00262\ \textcolor{comment}{\ \ \ \ if\ (head-\/>colormap\ !=\ CMAP\_NORMAL)\ \{}}
+\DoxyCodeLine{00263\ \textcolor{comment}{\ \ \ \ \ \ pnmimage\_sgi\_cat.error()}}
+\DoxyCodeLine{00264\ \textcolor{comment}{\ \ \ \ \ \ \ \ <<\ "{}Unsupported\ non-\/normal\ pixel\ data\ ("{}\ <<\ head-\/>colormap\ <<\ "{})\(\backslash\)n"{};}}
+\DoxyCodeLine{00265\ \textcolor{comment}{\ \ \ \ \ \ return\ false;}}
+\DoxyCodeLine{00266\ \textcolor{comment}{\ \ \ \ \}}}
+\DoxyCodeLine{00267\ \textcolor{comment}{\ \ \ \ */}}
+\DoxyCodeLine{00268\ }
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{comment}{/*\ adjust\ ysize/zsize\ to\ dimension,\ just\ to\ be\ sure\ */}}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \ \ \ \ \textcolor{comment}{//\ On\ reflection,\ this\ is\ a\ bad\ idea.\ \ Ignore\ the\ number\ of\ dimensions,}}
+\DoxyCodeLine{00272\ \ \ \ \ \textcolor{comment}{//\ and\ take\ the\ xsizeysizezsize\ at\ face\ value.\ \ The\ table\ was\ written}}
+\DoxyCodeLine{00273\ \ \ \ \ \textcolor{comment}{//\ based\ on\ these\ numbers,\ after\ all;\ you\ can't\ just\ change\ them}}
+\DoxyCodeLine{00274\ \ \ \ \ \textcolor{comment}{//\ arbitrarily.}}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00276\ \ \ \ \ \textcolor{comment}{/*}}
+\DoxyCodeLine{00277\ \textcolor{comment}{\ \ \ \ switch(\ head-\/>dimension\ )\ \{}}
+\DoxyCodeLine{00278\ \textcolor{comment}{\ \ \ \ case\ 1:}}
+\DoxyCodeLine{00279\ \textcolor{comment}{\ \ \ \ \ \ head-\/>ysize\ =\ 1;}}
+\DoxyCodeLine{00280\ \textcolor{comment}{\ \ \ \ \ \ break;}}
+\DoxyCodeLine{00281\ \textcolor{comment}{\ \ \ \ case\ 2:}}
+\DoxyCodeLine{00282\ \textcolor{comment}{\ \ \ \ \ \ head-\/>zsize\ =\ 1;}}
+\DoxyCodeLine{00283\ \textcolor{comment}{\ \ \ \ \ \ break;}}
+\DoxyCodeLine{00284\ \textcolor{comment}{\ \ \ \ case\ 3:}}
+\DoxyCodeLine{00285\ \textcolor{comment}{\ \ \ \ \ \ switch(\ head-\/>zsize\ )\ \{}}
+\DoxyCodeLine{00286\ \textcolor{comment}{\ \ \ \ \ \ case\ 1:}}
+\DoxyCodeLine{00287\ \textcolor{comment}{\ \ \ \ \ \ case\ 2:}}
+\DoxyCodeLine{00288\ \textcolor{comment}{\ \ \ \ \ \ \ \ head-\/>dimension\ =\ 2;}}
+\DoxyCodeLine{00289\ \textcolor{comment}{\ \ \ \ \ \ \ \ break;}}
+\DoxyCodeLine{00290\ \textcolor{comment}{\ \ \ \ \ \ case\ 3:}}
+\DoxyCodeLine{00291\ \textcolor{comment}{\ \ \ \ \ \ case\ 4:}}
+\DoxyCodeLine{00292\ \textcolor{comment}{\ \ \ \ \ \ \ \ break;}}
+\DoxyCodeLine{00293\ \textcolor{comment}{}}
+\DoxyCodeLine{00294\ \textcolor{comment}{\ \ \ \ \ \ default:}}
+\DoxyCodeLine{00295\ \textcolor{comment}{\ \ \ \ \ \ \ \ pnmimage\_sgi\_cat.warning()}}
+\DoxyCodeLine{00296\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ <<\ "{}Using\ only\ first\ 4\ channels\ of\ "{}\ <<\ head-\/>zsize}}
+\DoxyCodeLine{00297\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ <<\ "{}-\/channel\ image.\(\backslash\)n"{};}}
+\DoxyCodeLine{00298\ \textcolor{comment}{\ \ \ \ \ \ \ \ head-\/>zsize\ =\ 4;}}
+\DoxyCodeLine{00299\ \textcolor{comment}{\ \ \ \ \ \ \ \ break;}}
+\DoxyCodeLine{00300\ \textcolor{comment}{\ \ \ \ \ \ \}}}
+\DoxyCodeLine{00301\ \textcolor{comment}{\ \ \ \ \ \ break;}}
+\DoxyCodeLine{00302\ \textcolor{comment}{\ \ \ \ default:}}
+\DoxyCodeLine{00303\ \textcolor{comment}{\ \ \ \ \ \ pnmimage\_sgi\_cat.error()}}
+\DoxyCodeLine{00304\ \textcolor{comment}{\ \ \ \ \ \ \ \ <<\ "{}Illegal\ dimension\ value\ "{}\ <<\ head-\/>dimension}}
+\DoxyCodeLine{00305\ \textcolor{comment}{\ \ \ \ \ \ \ \ <<\ "{}\ (only\ 1-\/3\ allowed)\(\backslash\)n"{};}}
+\DoxyCodeLine{00306\ \textcolor{comment}{\ \ \ \ \ \ return\ false;}}
+\DoxyCodeLine{00307\ \textcolor{comment}{\ \ \ \ \}}}
+\DoxyCodeLine{00308\ \textcolor{comment}{\ \ \ \ */}}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00311\ \}}
+\DoxyCodeLine{00312\ }
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00314\ \textcolor{keyword}{static}\ TabEntry\ *}
+\DoxyCodeLine{00315\ read\_table(istream\ *ifp,\ \textcolor{keywordtype}{int}\ tablen)\ \{}
+\DoxyCodeLine{00316\ \ \ \ \ TabEntry\ *table;}
+\DoxyCodeLine{00317\ \ \ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00318\ }
+\DoxyCodeLine{00319\ \ \ \ \ table\ =\ MALLOC(tablen,\ TabEntry);}
+\DoxyCodeLine{00320\ }
+\DoxyCodeLine{00321\ \ \ \ \ \textcolor{keywordflow}{for}(\ i\ =\ 0;\ i\ <\ tablen;\ i++\ )\ \{}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ table[i].start\ =\ get\_big\_long(ifp);}
+\DoxyCodeLine{00323\ \ \ \ \ \}}
+\DoxyCodeLine{00324\ \ \ \ \ \textcolor{keywordflow}{for}(\ i\ =\ 0;\ i\ <\ tablen;\ i++\ )\ \{}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ table[i].length\ =\ get\_big\_long(ifp);}
+\DoxyCodeLine{00326\ \ \ \ \ \}}
+\DoxyCodeLine{00327\ }
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{keywordflow}{return}\ table;}
+\DoxyCodeLine{00329\ \}}
+\DoxyCodeLine{00330\ }
+\DoxyCodeLine{00331\ }
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00333\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00334\ read\_channel(istream\ *ifp,}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ xsize,\ \textcolor{keywordtype}{int}\ ysize,\ \textcolor{keywordtype}{int},\ \textcolor{keywordtype}{int}\ bpc,}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ \ \ \ \ \ TabEntry\ *table,}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ \ \ \ \ \ ScanElem\ *channel\_data,\ \textcolor{keywordtype}{long}\ table\_start,}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ channel,\ \textcolor{keywordtype}{int}\ row)\ \{}
+\DoxyCodeLine{00339\ \ \ \ \ ScanElem\ *temp\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00340\ \ \ \ \ \textcolor{keywordtype}{int}\ sgi\_index,\ i;}
+\DoxyCodeLine{00341\ \ \ \ \ \textcolor{keywordtype}{long}\ offset,\ length;}
+\DoxyCodeLine{00342\ }
+\DoxyCodeLine{00343\ \ \ \ \ short\ (*func)(istream\ *);}
+\DoxyCodeLine{00344\ \ \ \ \ func\ =\ (bpc==1)\ ?\ get\_byte\_as\_short\ :\ get\_big\_short;}
+\DoxyCodeLine{00345\ }
+\DoxyCodeLine{00346\ \ \ \ \ \textcolor{keywordflow}{if}\ (\ table\ )\ \{}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ temp\ =\ (ScanElem\ *)alloca(WORSTCOMPR(xsize)\ *\ \textcolor{keyword}{sizeof}(ScanElem));}
+\DoxyCodeLine{00348\ \ \ \ \ \}}
+\DoxyCodeLine{00349\ }
+\DoxyCodeLine{00350\ \ \ \ \ sgi\_index\ =\ channel\ *\ ysize\ +\ row;}
+\DoxyCodeLine{00351\ \ \ \ \ \textcolor{keywordflow}{if}(\ table\ )\ \{}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ offset\ =\ table[sgi\_index].start;}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ length\ =\ table[sgi\_index].length;}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \textcolor{keywordflow}{if}(\ bpc\ ==\ 2\ )}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ length\ /=\ 2;\ \ \ \textcolor{comment}{/*\ doc\ says\ length\ is\ in\ bytes,\ we\ are\ reading\ words\ */}}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \textcolor{keywordflow}{if}(!ifp-\/>seekg(offset))}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}seek\ error\ for\ offset\ \%ld"{}},\ offset);}
+\DoxyCodeLine{00358\ }
+\DoxyCodeLine{00359\ \ \ \ \ \ \ nassertv(length\ <=\ WORSTCOMPR(xsize));}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \textcolor{keywordflow}{for}(\ i\ =\ 0;\ i\ <\ length;\ i++\ )}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ temp[i]\ =\ (*func)(ifp);}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00363\ \ \ \ \ \ \ rle\_decompress(temp,\ length,\ channel\_data,\ xsize);}
+\DoxyCodeLine{00364\ \ \ \ \ \}}
+\DoxyCodeLine{00365\ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ offset\ =\ sgi\_index\ *\ xsize\ +\ table\_start;}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \textcolor{keywordflow}{if}(!ifp-\/>seekg(offset))}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}seek\ error\ for\ offset\ \%ld"{}},\ offset);}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \textcolor{keywordflow}{for}(\ i\ =\ 0;\ i\ <\ xsize;\ i++\ )}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ channel\_data[i]\ =\ (*func)(ifp);}
+\DoxyCodeLine{00371\ \ \ \ \ \}}
+\DoxyCodeLine{00372\ \}}
+\DoxyCodeLine{00373\ }
+\DoxyCodeLine{00374\ }
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00376\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00377\ rle\_decompress(ScanElem\ *src,}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{long}\ srcleft,}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ScanElem\ *dest,}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{long}\ destleft)\ \{}
+\DoxyCodeLine{00381\ \ \ \ \ \textcolor{keywordtype}{int}\ count;}
+\DoxyCodeLine{00382\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ el;}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00384\ \ \ \ \ \textcolor{keywordflow}{while}(\ srcleft\ )\ \{}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \ \ el\ =\ (\textcolor{keywordtype}{unsigned}\ char)(*src++\ \&\ 0xff);}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \ \ -\/-\/srcleft;}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \ \ count\ =\ (int)(el\ \&\ 0x7f);}
+\DoxyCodeLine{00388\ }
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}(\ destleft\ <\ count\ )}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}RLE\ error:\ too\ much\ input\ data\ (space\ left\ \%d,\ need\ \%d)"{}},\ destleft,\ count);}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}(\ count\ ==\ 0\ )}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ destleft\ -\/=\ count;}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}(\ el\ \&\ 0x80\ )\ \{}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}(\ srcleft\ <\ count\ )}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}RLE\ error:\ not\ enough\ data\ for\ literal\ run\ (data\ left\ \%d,\ need\ \%d)"{}},\ srcleft,\ count);}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \ \ \ \ srcleft\ -\/=\ count;}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}(\ count-\/-\/\ )}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ *src++;}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}(\ srcleft\ ==\ 0\ )}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}RLE\ error:\ not\ enough\ data\ for\ replicate\ run"{}});}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}(\ count-\/-\/\ )}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ *dest++\ =\ *src;}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \ \ \ \ ++src;}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \ \ \ \ \ \ -\/-\/srcleft;}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00409\ \ \ \ \ \}}
+\DoxyCodeLine{00410\ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}RLE\ error:\ no\ terminating\ 0-\/byte"{}});}
+\DoxyCodeLine{00411\ \}}
+\DoxyCodeLine{00412\ }
+\DoxyCodeLine{00413\ }
+\DoxyCodeLine{00414\ \textcolor{comment}{/*\ basic\ I/O\ functions,\ taken\ from\ ilbmtoppm.c\ */}}
+\DoxyCodeLine{00415\ }
+\DoxyCodeLine{00416\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{short}}
+\DoxyCodeLine{00417\ get\_big\_short(istream\ *ifp)\ \{}
+\DoxyCodeLine{00418\ \ \ \ \ \textcolor{keywordtype}{short}\ s;}
+\DoxyCodeLine{00419\ }
+\DoxyCodeLine{00420\ \ \ \ \ \textcolor{keywordflow}{if}(\ pm\_readbigshort(ifp,\ \&s)\ ==\ -\/1\ )}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \ \ s\ =\ readerr(ifp);}
+\DoxyCodeLine{00422\ }
+\DoxyCodeLine{00423\ \ \ \ \ \textcolor{keywordflow}{return}\ s;}
+\DoxyCodeLine{00424\ \}}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{long}}
+\DoxyCodeLine{00427\ get\_big\_long(istream\ *ifp)\ \{}
+\DoxyCodeLine{00428\ \ \ \ \ \textcolor{keywordtype}{long}\ l;}
+\DoxyCodeLine{00429\ }
+\DoxyCodeLine{00430\ \ \ \ \ \textcolor{keywordflow}{if}(\ pm\_readbiglong(ifp,\ \&l)\ ==\ -\/1\ )}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ \ \ l\ =\ readerr(ifp);}
+\DoxyCodeLine{00432\ }
+\DoxyCodeLine{00433\ \ \ \ \ \textcolor{keywordflow}{return}\ l;}
+\DoxyCodeLine{00434\ \}}
+\DoxyCodeLine{00435\ }
+\DoxyCodeLine{00436\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}}
+\DoxyCodeLine{00437\ get\_byte(istream\ *ifp)\ \{}
+\DoxyCodeLine{00438\ \ \ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00439\ }
+\DoxyCodeLine{00440\ \ \ \ \ i\ =\ ifp-\/>get();}
+\DoxyCodeLine{00441\ \ \ \ \ \textcolor{keywordflow}{if}(\ i\ ==\ EOF\ )}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \ \ i\ =\ readerr(ifp);}
+\DoxyCodeLine{00443\ }
+\DoxyCodeLine{00444\ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})\ i;}
+\DoxyCodeLine{00445\ \}}
+\DoxyCodeLine{00446\ }
+\DoxyCodeLine{00447\ }
+\DoxyCodeLine{00448\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}}
+\DoxyCodeLine{00449\ readerr(istream\ *f)\ \{}
+\DoxyCodeLine{00450\ \ \ \textcolor{keywordflow}{if}\ (!eof\_err)\ \{}
+\DoxyCodeLine{00451\ \ \ \ \ \textcolor{keywordflow}{if}\ (!f-\/>eof())\ \{}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ pnmimage\_sgi\_cat.warning()}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Read\ error\ on\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00454\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ pnmimage\_sgi\_cat.warning()}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Premature\ EOF\ on\ file.\(\backslash\)n"{}};}
+\DoxyCodeLine{00457\ \ \ \ \ \}}
+\DoxyCodeLine{00458\ \ \ \ \ eof\_err\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00459\ \ \ \}}
+\DoxyCodeLine{00460\ }
+\DoxyCodeLine{00461\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00462\ \}}
+\DoxyCodeLine{00463\ }
+\DoxyCodeLine{00464\ }
+\DoxyCodeLine{00465\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00466\ read\_bytes(istream\ *ifp,}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ n,}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ *buf)\ \{}
+\DoxyCodeLine{00469\ \ \ \ \ \textcolor{keywordtype}{int}\ r;}
+\DoxyCodeLine{00470\ }
+\DoxyCodeLine{00471\ \ \ \ \ ifp-\/>read(buf,\ n);}
+\DoxyCodeLine{00472\ \ \ \ \ r\ =\ ifp-\/>gcount();}
+\DoxyCodeLine{00473\ \ \ \ \ \textcolor{keywordflow}{if}(\ r\ !=\ n\ )\ \{}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ readerr(ifp);}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ memset(buf+r,\ 0,\ n-\/r);}
+\DoxyCodeLine{00476\ \ \ \ \ \}}
+\DoxyCodeLine{00477\ \ \ \ \ Thread::consider\_yield();}
+\DoxyCodeLine{00478\ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ }
+\DoxyCodeLine{00481\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{short}}
+\DoxyCodeLine{00482\ get\_byte\_as\_short(istream\ *ifp)\ \{}
+\DoxyCodeLine{00483\ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{short})get\_byte(ifp);}
+\DoxyCodeLine{00484\ \}}
+\DoxyCodeLine{00485\ }
+\DoxyCodeLine{00486\ }
+\DoxyCodeLine{00487\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ *}
+\DoxyCodeLine{00488\ xmalloc(\textcolor{keywordtype}{int}\ bytes)\ \{}
+\DoxyCodeLine{00489\ \ \ \ \ \textcolor{keywordtype}{void}\ *mem;}
+\DoxyCodeLine{00490\ }
+\DoxyCodeLine{00491\ \ \ \ \ \textcolor{keywordflow}{if}(\ bytes\ ==\ 0\ )}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00493\ }
+\DoxyCodeLine{00494\ \ \ \ \ mem\ =\ malloc(bytes);}
+\DoxyCodeLine{00495\ \ \ \ \ \textcolor{keywordflow}{if}(\ mem\ ==\ \textcolor{keyword}{nullptr}\ )}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{pnmimage__base_8cxx_a893dc64f7df73a34ac05e4fadc248da5}{pm\_error}}(\textcolor{stringliteral}{"{}out\ of\ memory\ allocating\ \%d\ bytes"{}},\ bytes);}
+\DoxyCodeLine{00497\ \ \ \ \ \textcolor{keywordflow}{return}\ mem;}
+\DoxyCodeLine{00498\ \}}
+\DoxyCodeLine{00499\ }
+\DoxyCodeLine{00500\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *}
+\DoxyCodeLine{00501\ compression\_name(\textcolor{keywordtype}{char}\ compr)\ \{}
+\DoxyCodeLine{00502\ \ \ \ \ \textcolor{keywordflow}{switch}(\ compr\ )\ \{}
+\DoxyCodeLine{00503\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ STORAGE\_VERBATIM:}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}none"{}};}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ STORAGE\_RLE:}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}RLE"{}};}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}unknown"{}};}
+\DoxyCodeLine{00509\ \ \ \ \ \}}
+\DoxyCodeLine{00510\ \}}
+\DoxyCodeLine{00511\ }
+\DoxyCodeLine{00512\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_SGI\_RGB}}
+
+\end{DoxyCode}

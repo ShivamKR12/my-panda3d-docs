@@ -1,0 +1,269 @@
+\doxysection{pnm\+File\+Type\+Android\+Reader.\+cxx}
+\hypertarget{pnmFileTypeAndroidReader_8cxx_source}{}\label{pnmFileTypeAndroidReader_8cxx_source}\index{panda/src/android/pnmFileTypeAndroidReader.cxx@{panda/src/android/pnmFileTypeAndroidReader.cxx}}
+\mbox{\hyperlink{pnmFileTypeAndroidReader_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{pnmFileTypeAndroid_8h}{pnmFileTypeAndroid.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ ANDROID}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pnmimagetypes_8h}{config\_pnmimagetypes.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__express_8h}{config\_express.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ <android/bitmap.h>}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ <jni.h>}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{comment}{//\ These\ tables\ linearly\ map\ 4-\/bit,\ 5-\/bit\ or\ 6-\/bit\ to\ 8-\/bit\ values.}}
+\DoxyCodeLine{00025\ \textcolor{keyword}{static}\ uint8\_t\ scale\_table\_4[16];}
+\DoxyCodeLine{00026\ \textcolor{keyword}{static}\ uint8\_t\ scale\_table\_5[32];}
+\DoxyCodeLine{00027\ \textcolor{keyword}{static}\ uint8\_t\ scale\_table\_6[64];}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ init\_scale\_tables()\ \{}
+\DoxyCodeLine{00030\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{bool}\ initialized\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00031\ \ \ \textcolor{keywordflow}{if}\ (!initialized)\ \{}
+\DoxyCodeLine{00032\ \ \ \ \ \textcolor{keywordtype}{int}\ i;}
+\DoxyCodeLine{00033\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ 16;\ ++i)\ \{}
+\DoxyCodeLine{00034\ \ \ \ \ \ \ scale\_table\_4[i]\ =\ 255\ *\ i\ /\ 15;}
+\DoxyCodeLine{00035\ \ \ \ \ \}}
+\DoxyCodeLine{00036\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ 32;\ ++i)\ \{}
+\DoxyCodeLine{00037\ \ \ \ \ \ \ scale\_table\_5[i]\ =\ 255\ *\ i\ /\ 31;}
+\DoxyCodeLine{00038\ \ \ \ \ \}}
+\DoxyCodeLine{00039\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ 64;\ ++i)\ \{}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ scale\_table\_6[i]\ =\ 255\ *\ i\ /\ 63;}
+\DoxyCodeLine{00041\ \ \ \ \ \}}
+\DoxyCodeLine{00042\ \ \ \ \ initialized\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00043\ \ \ \}}
+\DoxyCodeLine{00044\ \}}
+\DoxyCodeLine{00045\ }
+\DoxyCodeLine{00046\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ conv\_rgb565(uint16\_t\ in,\ \mbox{\hyperlink{structpixel}{xel}}\ \&out)\ \{}
+\DoxyCodeLine{00047\ \ \ out.r\ =\ scale\_table\_5[(in\ >>\ 11)\ \&\ 31];}
+\DoxyCodeLine{00048\ \ \ out.g\ =\ scale\_table\_6[(in\ >>\ 5)\ \&\ 63];}
+\DoxyCodeLine{00049\ \ \ out.b\ =\ scale\_table\_5[in\ \&\ 31];}
+\DoxyCodeLine{00050\ \}}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ conv\_rgba4444(uint16\_t\ in,\ \mbox{\hyperlink{structpixel}{xel}}\ \&rgb,\ xelval\ \&alpha)\ \{}
+\DoxyCodeLine{00053\ \ \ rgb.r\ =\ scale\_table\_4[(in\ >>\ 12)\ \&\ 0xF];}
+\DoxyCodeLine{00054\ \ \ rgb.g\ =\ scale\_table\_4[(in\ >>\ 8)\ \&\ 0xF];}
+\DoxyCodeLine{00055\ \ \ rgb.b\ =\ scale\_table\_4[(in\ >>\ 4)\ \&\ 0xF];}
+\DoxyCodeLine{00056\ \ \ alpha\ =\ scale\_table\_4[in\ \&\ 0xF];}
+\DoxyCodeLine{00057\ \}}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00062\ PNMFileTypeAndroid::Reader::}
+\DoxyCodeLine{00063\ Reader(\mbox{\hyperlink{classPNMFileType}{PNMFileType}}\ *type,\ std::istream\ *file,\ \textcolor{keywordtype}{bool}\ owns\_file,\ std::string\ magic\_number)\ :}
+\DoxyCodeLine{00064\ \ \ \mbox{\hyperlink{classPNMReader}{PNMReader}}(type,\ file,\ owns\_file),\ \_bitmap(nullptr)}
+\DoxyCodeLine{00065\ \{}
+\DoxyCodeLine{00066\ \ \ \textcolor{comment}{//\ Hope\ we\ can\ putback()\ more\ than\ one\ character.}}
+\DoxyCodeLine{00067\ \ \ \textcolor{keywordflow}{for}\ (std::string::reverse\_iterator\ mi\ =\ magic\_number.rbegin();}
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \ mi\ !=\ magic\_number.rend();\ ++mi)\ \{}
+\DoxyCodeLine{00069\ \ \ \ \ \_file-\/>putback(*mi);}
+\DoxyCodeLine{00070\ \ \ \};}
+\DoxyCodeLine{00071\ \ \ \textcolor{keywordflow}{if}\ (\_file-\/>fail())\ \{}
+\DoxyCodeLine{00072\ \ \ \ \ android\_cat.error()}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ put\ back\ magic\ number.\(\backslash\)n"{}};}
+\DoxyCodeLine{00074\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00075\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00076\ \ \ \}}
+\DoxyCodeLine{00077\ }
+\DoxyCodeLine{00078\ \ \ std::streampos\ pos\ =\ \_file-\/>tellg();}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00081\ \ \ \_env\ =\ current\_thread-\/>get\_jni\_env();}
+\DoxyCodeLine{00082\ \ \ nassertd(\_env\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00083\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00084\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00085\ \ \ \}}
+\DoxyCodeLine{00086\ }
+\DoxyCodeLine{00087\ \ \ jobject\ opts\ =\ \_env-\/>CallStaticObjectMethod(jni\_PandaActivity,}
+\DoxyCodeLine{00088\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ jni\_PandaActivity\_readBitmapSize,}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (jlong)\ \_file);}
+\DoxyCodeLine{00090\ \ \ \_file-\/>clear();}
+\DoxyCodeLine{00091\ \ \ \_file-\/>seekg(pos);}
+\DoxyCodeLine{00092\ \ \ \textcolor{keywordflow}{if}\ (\_file-\/>tellg()\ !=\ pos)\ \{}
+\DoxyCodeLine{00093\ \ \ \ \ android\_cat.error()}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unable\ to\ seek\ back\ to\ beginning.\(\backslash\)n"{}};}
+\DoxyCodeLine{00095\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00096\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00097\ \ \ \}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \_x\_size\ =\ \_env-\/>GetIntField(opts,\ jni\_BitmapFactory\_Options\_outWidth);}
+\DoxyCodeLine{00100\ \ \ \_y\_size\ =\ \_env-\/>GetIntField(opts,\ jni\_BitmapFactory\_Options\_outHeight);}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \ \ \textcolor{keywordflow}{if}\ (\_x\_size\ <\ 0\ ||\ \_y\_size\ <\ 0)\ \{}
+\DoxyCodeLine{00103\ \ \ \ \ android\_cat.error()}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ read\ header\ of\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00105\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00106\ \ \ \}}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00108\ \ \ \textcolor{comment}{//\ Apparently\ we\ have\ to\ know\ this\ even\ though\ we\ don't\ yet.}}
+\DoxyCodeLine{00109\ \ \ \_num\_channels\ =\ 4;}
+\DoxyCodeLine{00110\ \ \ \_maxval\ =\ 255;}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \textcolor{keywordflow}{if}\ (android\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00113\ \ \ \ \ android\_cat.debug()}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Reading\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00115\ \ \ \}}
+\DoxyCodeLine{00116\ \}}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00121\ PNMFileTypeAndroid::Reader::}
+\DoxyCodeLine{00122\ \string~Reader()\ \{}
+\DoxyCodeLine{00123\ \ \ \textcolor{keywordflow}{if}\ (\_bitmap\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ \_env-\/>DeleteGlobalRef(\_bitmap);}
+\DoxyCodeLine{00125\ \ \ \}}
+\DoxyCodeLine{00126\ \}}
+\DoxyCodeLine{00127\ }
+\DoxyCodeLine{00136\ \textcolor{keywordtype}{void}\ PNMFileTypeAndroid::Reader::}
+\DoxyCodeLine{00137\ prepare\_read()\ \{}
+\DoxyCodeLine{00138\ \ \ \_sample\_size\ =\ 2;}
+\DoxyCodeLine{00139\ \ \ \_orig\_x\_size\ =\ \_x\_size;}
+\DoxyCodeLine{00140\ \ \ \_orig\_y\_size\ =\ \_y\_size;}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00142\ \ \ \textcolor{keywordflow}{if}\ (\_has\_read\_size\ \&\&\ \_read\_x\_size\ !=\ 0\ \&\&\ \_read\_y\_size\ !=\ 0)\ \{}
+\DoxyCodeLine{00143\ \ \ \ \ \textcolor{keywordtype}{int}\ x\_reduction\ =\ \_orig\_x\_size\ /\ \_read\_x\_size;}
+\DoxyCodeLine{00144\ \ \ \ \ \textcolor{keywordtype}{int}\ y\_reduction\ =\ \_orig\_y\_size\ /\ \_read\_y\_size;}
+\DoxyCodeLine{00145\ }
+\DoxyCodeLine{00146\ \ \ \ \ \_sample\_size\ =\ std::max(std::min(x\_reduction,\ y\_reduction),\ 1);}
+\DoxyCodeLine{00147\ \ \ \}}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ \_bitmap\ =\ \_env-\/>CallStaticObjectMethod(jni\_PandaActivity,}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ jni\_PandaActivity\_readBitmap,}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (jlong)\ \_file,\ \_sample\_size);}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ \ \ \textcolor{keywordflow}{if}\ (\_bitmap\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00154\ \ \ \ \ android\_cat.error()}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ read\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00156\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00158\ \ \ \}}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \_bitmap\ =\ \_env-\/>NewGlobalRef(\_bitmap);}
+\DoxyCodeLine{00161\ }
+\DoxyCodeLine{00162\ \ \ AndroidBitmapInfo\ info;}
+\DoxyCodeLine{00163\ \ \ \textcolor{keywordflow}{if}\ (AndroidBitmap\_getInfo(\_env,\ \_bitmap,\ \&info)\ <\ 0)\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ android\_cat.error()}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ get\ info\ of\ "{}}\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00166\ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00167\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00168\ \ \ \}}
+\DoxyCodeLine{00169\ }
+\DoxyCodeLine{00170\ \ \ \_x\_size\ =\ info.width;}
+\DoxyCodeLine{00171\ \ \ \_y\_size\ =\ info.height;}
+\DoxyCodeLine{00172\ \ \ \_format\ =\ info.format;}
+\DoxyCodeLine{00173\ \ \ \_stride\ =\ info.stride;}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00175\ \ \ \textcolor{comment}{//\ Note:\ we\ could\ be\ setting\ maxval\ more\ appropriately,\ but\ this\ only\ causes}}
+\DoxyCodeLine{00176\ \ \ \textcolor{comment}{//\ texture.cxx\ to\ end\ up\ rescaling\ it\ later.\ \ Best\ to\ do\ the\ scaling}}
+\DoxyCodeLine{00177\ \ \ \textcolor{comment}{//\ ourselves,\ using\ efficient\ tables.}}
+\DoxyCodeLine{00178\ \ \ \_maxval\ =\ 255;}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00180\ \ \ \textcolor{keywordflow}{switch}\ (info.format)\ \{}
+\DoxyCodeLine{00181\ \ \ \ \ \textcolor{keywordflow}{case}\ ANDROID\_BITMAP\_FORMAT\_RGBA\_8888:}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \_num\_channels\ =\ 4;}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ android\_cat.debug()}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Bitmap\ has\ format\ RGBA\_8888\(\backslash\)n"{}};}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00186\ \ \ \ \ \textcolor{keywordflow}{case}\ ANDROID\_BITMAP\_FORMAT\_RGB\_565:}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \_num\_channels\ =\ 3;}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ android\_cat.debug()}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Bitmap\ has\ format\ RGB\_565\(\backslash\)n"{}};}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00191\ \ \ \ \ \textcolor{keywordflow}{case}\ ANDROID\_BITMAP\_FORMAT\_RGBA\_4444:}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \_num\_channels\ =\ 4;}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ android\_cat.debug()}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Bitmap\ has\ format\ RGBA\_4444\(\backslash\)n"{}};}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00196\ \ \ \ \ \textcolor{keywordflow}{case}\ ANDROID\_BITMAP\_FORMAT\_A\_8:}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \_num\_channels\ =\ 1;}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ android\_cat.debug()}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Bitmap\ has\ format\ A\_8\(\backslash\)n"{}};}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00201\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ android\_cat.error()}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Unsupported\ bitmap\ format!\(\backslash\)n"{}};}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \_num\_channels\ =\ 0;}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \_is\_valid\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00207\ \ \ \}}
+\DoxyCodeLine{00208\ \}}
+\DoxyCodeLine{00209\ }
+\DoxyCodeLine{00219\ \textcolor{keywordtype}{int}\ PNMFileTypeAndroid::Reader::}
+\DoxyCodeLine{00220\ read\_data(\mbox{\hyperlink{structpixel}{xel}}\ *rgb,\ xelval\ *alpha)\ \{}
+\DoxyCodeLine{00221\ \ \ \textcolor{keywordflow}{if}\ (!\_is\_valid)\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00223\ \ \ \}}
+\DoxyCodeLine{00224\ \ \ \textcolor{keywordtype}{void}\ *ptr;}
+\DoxyCodeLine{00225\ \ \ \textcolor{keywordflow}{if}\ (AndroidBitmap\_lockPixels(\_env,\ \_bitmap,\ \&ptr)\ <\ 0)\ \{}
+\DoxyCodeLine{00226\ \ \ \ \ android\_cat.error()}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ lock\ bitmap\ for\ reading.\(\backslash\)n"{}};}
+\DoxyCodeLine{00228\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00229\ \ \ \}}
+\DoxyCodeLine{00230\ }
+\DoxyCodeLine{00231\ \ \ \textcolor{keywordflow}{switch}\ (\_format)\ \{}
+\DoxyCodeLine{00232\ \ \ \ \ \textcolor{keywordflow}{case}\ ANDROID\_BITMAP\_FORMAT\_RGBA\_8888:\ \{}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ nassertr(\_stride\ ==\ \_x\_size\ *\ 4,\ 0);}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ uint8\_t\ *data\ =\ (uint8\_t\ *)\ ptr;}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ \ \ rgb[x].r\ =\ data[0];}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \ \ rgb[x].g\ =\ data[1];}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \ \ rgb[x].b\ =\ data[2];}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \ \ \ \ alpha[x]\ =\ data[3];}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ \ \ data\ +=\ 4;}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ rgb\ +=\ \_x\_size;}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ alpha\ +=\ \_y\_size;}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00247\ \ \ \ \ \}}
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{keywordflow}{case}\ ANDROID\_BITMAP\_FORMAT\_RGB\_565:\ \{}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ nassertr(\_stride\ ==\ \_x\_size\ *\ 2,\ 0);}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ init\_scale\_tables();}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \ \ \ \ \ \ uint16\_t\ *data\ =\ (uint16\_t\ *)\ ptr;}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \ \ conv\_rgb565(data[x],\ rgb[x]);}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ data\ +=\ \_x\_size;}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ rgb\ +=\ \_x\_size;}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00261\ \ \ \ \ \}}
+\DoxyCodeLine{00262\ \ \ \ \ \textcolor{keywordflow}{case}\ ANDROID\_BITMAP\_FORMAT\_RGBA\_4444:\ \{}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ nassertr(\_stride\ ==\ \_x\_size\ *\ 2,\ 0);}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ init\_scale\_tables();}
+\DoxyCodeLine{00265\ }
+\DoxyCodeLine{00266\ \ \ \ \ \ \ uint16\_t\ *data\ =\ (uint16\_t\ *)\ ptr;}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ \ \ conv\_rgba4444(data[x],\ rgb[x],\ alpha[x]);}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ data\ +=\ \_x\_size;}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ rgb\ +=\ \_x\_size;}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \ \ alpha\ +=\ \_x\_size;}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00276\ \ \ \ \ \}}
+\DoxyCodeLine{00277\ \ \ \ \ \textcolor{keywordflow}{case}\ ANDROID\_BITMAP\_FORMAT\_A\_8:\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ nassertr(\_stride\ ==\ \_x\_size,\ 0);}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ uint8\_t\ *data\ =\ (uint8\_t\ *)\ ptr;}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ y\ =\ 0;\ y\ <\ \_y\_size;\ ++y)\ \{}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ x\ =\ 0;\ x\ <\ \_x\_size;\ ++x)\ \{}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \ \ \ \ alpha[x]\ =\ data[x];}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ data\ +=\ \_x\_size;}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \ \ alpha\ +=\ \_x\_size;}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00288\ \ \ \ \ \}}
+\DoxyCodeLine{00289\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ AndroidBitmap\_unlockPixels(\_env,\ \_bitmap);}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00292\ \ \ \}}
+\DoxyCodeLine{00293\ }
+\DoxyCodeLine{00294\ \ \ AndroidBitmap\_unlockPixels(\_env,\ \_bitmap);}
+\DoxyCodeLine{00295\ \ \ \textcolor{keywordflow}{return}\ \_y\_size;}
+\DoxyCodeLine{00296\ \}}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ ANDROID}}
+
+\end{DoxyCode}

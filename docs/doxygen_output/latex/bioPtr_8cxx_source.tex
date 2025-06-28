@@ -1,0 +1,261 @@
+\doxysection{bio\+Ptr.\+cxx}
+\hypertarget{bioPtr_8cxx_source}{}\label{bioPtr_8cxx_source}\index{panda/src/downloader/bioPtr.cxx@{panda/src/downloader/bioPtr.cxx}}
+\mbox{\hyperlink{bioPtr_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{bioPtr_8h}{bioPtr.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{urlSpec_8h}{urlSpec.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__downloader_8h}{config\_downloader.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{openSSLWrapper_8h}{openSSLWrapper.h}}"{}}\ \ \textcolor{comment}{//\ must\ be\ included\ before\ any\ other\ openssl.}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ <openssl/ssl.h>}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <winsock2.h>}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ <sys/socket.h>}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ <netinet/in.h>}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ <arpa/inet.h>}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ <netdb.h>}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ <fcntl.h>}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{comment}{//\ For\ some\ reason\ in\ msys\ those\ two\ macros\ are\ not\ defined\ correctly\ in\ the}}
+\DoxyCodeLine{00035\ \textcolor{comment}{//\ header\ file\ ws2tcpip.h}}
+\DoxyCodeLine{00036\ \textcolor{comment}{//\ Also,\ those\ lines\ will\ be\ removed\ when\ the\ engine\ change}}
+\DoxyCodeLine{00037\ \textcolor{comment}{//\ \_WIN32\_WINNT\ to\ 0x0600}}
+\DoxyCodeLine{00038\ \textcolor{preprocessor}{\#ifndef\ AI\_ADDRCONFIG}}
+\DoxyCodeLine{00039\ \textcolor{preprocessor}{\#define\ AI\_ADDRCONFIG\ 0x00000400}}
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ \textcolor{preprocessor}{\#ifndef\ AI\_V4MAPPED}}
+\DoxyCodeLine{00043\ \textcolor{preprocessor}{\#define\ AI\_V4MAPPED\ 0x00000800}}
+\DoxyCodeLine{00044\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00045\ }
+\DoxyCodeLine{00046\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00048\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00049\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{string}\ format\_error()\ \{}
+\DoxyCodeLine{00050\ \ \ PVOID\ buffer;}
+\DoxyCodeLine{00051\ \ \ DWORD\ len;}
+\DoxyCodeLine{00052\ \ \ len\ =\ FormatMessage(FORMAT\_MESSAGE\_ALLOCATE\_BUFFER\ |\ FORMAT\_MESSAGE\_FROM\_SYSTEM,}
+\DoxyCodeLine{00053\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{nullptr},\ WSAGetLastError(),\ 0,\ (LPTSTR)\&buffer,\ 0,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00054\ \ \ \textcolor{keywordflow}{if}\ (len\ ==\ 0)\ \{}
+\DoxyCodeLine{00055\ \ \ \ \ \textcolor{keywordflow}{return}\ string(\textcolor{stringliteral}{"{}Unknown\ error\ message"{}});}
+\DoxyCodeLine{00056\ \ \ \}}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00058\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *text\ =\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *)buffer;}
+\DoxyCodeLine{00059\ \ \ \textcolor{keywordflow}{while}\ (len\ >\ 0\ \&\&\ isspace(text[len\ -\/\ 1]))\ \{}
+\DoxyCodeLine{00060\ \ \ \ \ -\/-\/len;}
+\DoxyCodeLine{00061\ \ \ \}}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00063\ \ \ \textcolor{keywordtype}{string}\ result(text,\ len);}
+\DoxyCodeLine{00064\ \ \ LocalFree(buffer);}
+\DoxyCodeLine{00065\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00066\ \}}
+\DoxyCodeLine{00067\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00068\ \textcolor{preprocessor}{\#define\ format\_error()\ strerror(errno)}}
+\DoxyCodeLine{00069\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00071\ \textcolor{preprocessor}{\#if\ defined(\_WIN32)\ \&\&\ defined(LIBRESSL\_VERSION\_NUMBER)}}
+\DoxyCodeLine{00077\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}}
+\DoxyCodeLine{00078\ sock\_should\_retry(\textcolor{keywordtype}{int}\ i)\ \{}
+\DoxyCodeLine{00079\ \ \ \textcolor{keywordflow}{if}\ (i\ ==\ 0\ ||\ i\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00080\ \ \ \ \ \textcolor{keywordtype}{int}\ err\ =\ WSAGetLastError();}
+\DoxyCodeLine{00081\ }
+\DoxyCodeLine{00082\ \ \ \ \ \textcolor{keywordflow}{switch}\ (err)\ \{}
+\DoxyCodeLine{00083\ \ \ \ \ \textcolor{keywordflow}{case}\ WSAEWOULDBLOCK:}
+\DoxyCodeLine{00084\ \ \ \ \ \textcolor{keywordflow}{case}\ ENOTCONN:}
+\DoxyCodeLine{00085\ \ \ \ \ \textcolor{keywordflow}{case}\ EINPROGRESS:}
+\DoxyCodeLine{00086\ \ \ \ \ \textcolor{keywordflow}{case}\ EALREADY:}
+\DoxyCodeLine{00087\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 1;}
+\DoxyCodeLine{00088\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00090\ \ \ \ \ \}}
+\DoxyCodeLine{00091\ \ \ \}}
+\DoxyCodeLine{00092\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00093\ \}}
+\DoxyCodeLine{00094\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00095\ \textcolor{preprocessor}{\#define\ sock\_should\_retry(err)\ BIO\_sock\_should\_retry(err)}}
+\DoxyCodeLine{00096\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00103\ BioPtr::}
+\DoxyCodeLine{00104\ BioPtr(\textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url)\ :\ \_connecting(false)\ \{}
+\DoxyCodeLine{00105\ \ \ \textcolor{keywordflow}{if}\ (url.get\_scheme()\ ==\ \textcolor{stringliteral}{"{}file"{}})\ \{}
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{comment}{//\ We're\ just\ reading\ a\ disk\ file.}}
+\DoxyCodeLine{00107\ \ \ \ \ \textcolor{keywordtype}{string}\ filename\ =\ URLSpec::unquote(url.get\_path());}
+\DoxyCodeLine{00108\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00109\ \ \ \ \ \textcolor{comment}{//\ On\ Windows,\ we\ have\ to\ munge\ the\ filename\ specially,\ because\ it's\ been}}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{comment}{//\ URL-\/munged.\ \ It\ might\ begin\ with\ a\ leading\ slash\ as\ well\ as\ a\ drive}}
+\DoxyCodeLine{00111\ \ \ \ \ \textcolor{comment}{//\ letter.\ \ Clean\ up\ that\ nonsense.}}
+\DoxyCodeLine{00112\ \ \ \ \ \textcolor{keywordflow}{if}\ (!filename.empty())\ \{}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (filename[0]\ ==\ \textcolor{charliteral}{'/'}\ ||\ filename[0]\ ==\ \textcolor{charliteral}{'\(\backslash\)\(\backslash\)'})\ \{}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ fname\ =\ \mbox{\hyperlink{classFilename_ab17a80adaab942d6570d114d6f0675c3}{Filename::from\_os\_specific}}(filename.substr(1));}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (fname.is\_local())\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Put\ the\ slash\ back\ on.}}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ \ \ fname\ =\ string(\textcolor{stringliteral}{"{}/"{}})\ +\ fname.get\_fullpath();}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00119\ \ \ \ \ \ \ \ \ filename\ =\ fname.to\_os\_specific();}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00121\ \ \ \ \ \}}
+\DoxyCodeLine{00122\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00123\ \ \ \ \ \_server\_name\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00124\ \ \ \ \ \_port\ =\ 0;}
+\DoxyCodeLine{00125\ \ \ \ \ \_bio\ =\ BIO\_new\_file(filename.c\_str(),\ \textcolor{stringliteral}{"{}rb"{}});}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00127\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00128\ \ \ \ \ \textcolor{comment}{//\ A\ normal\ network-\/based\ URL.\ \ We\ don't\ use\ BIO\_new\_connect\ since\ it}}
+\DoxyCodeLine{00129\ \ \ \ \ \textcolor{comment}{//\ doesn't\ handle\ IPv6\ properly.}}
+\DoxyCodeLine{00130\ \ \ \ \ \_server\_name\ =\ url.get\_server();}
+\DoxyCodeLine{00131\ \ \ \ \ \_port\ =\ url.get\_port();}
+\DoxyCodeLine{00132\ \ \ \ \ \_bio\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{comment}{//\ These\ hints\ tell\ getaddrinfo\ what\ kind\ of\ address\ to\ return.}}
+\DoxyCodeLine{00135\ \ \ \ \ \textcolor{keyword}{struct\ }addrinfo\ hints,\ *res\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00136\ \ \ \ \ memset(\&hints,\ 0,\ \textcolor{keyword}{sizeof}(hints));}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ \ \ hints.ai\_flags\ =\ AI\_V4MAPPED\ |\ AI\_ADDRCONFIG;}
+\DoxyCodeLine{00139\ \ \ \ \ hints.ai\_family\ =\ support\_ipv6\ ?\ AF\_UNSPEC\ :\ AF\_INET;}
+\DoxyCodeLine{00140\ \ \ \ \ hints.ai\_socktype\ =\ SOCK\_STREAM;}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00142\ \ \ \ \ \textcolor{comment}{//\ Resolve\ the\ hostname\ or\ address\ string.}}
+\DoxyCodeLine{00143\ \ \ \ \ \textcolor{keywordtype}{int}\ result\ =\ getaddrinfo(\_server\_name.c\_str(),\ \textcolor{keyword}{nullptr},\ \&hints,\ \&res);}
+\DoxyCodeLine{00144\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *errmsg;}
+\DoxyCodeLine{00146\ \textcolor{preprocessor}{\#ifndef\ \_WIN32}}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ ==\ EAI\_SYSTEM\ \&\&\ errno\ !=\ 0)\ \{}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ errmsg\ =\ strerror(errno);}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00150\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ errmsg\ =\ gai\_strerror(result);}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ downloader\_cat.error()}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ resolve\ "{}}\ <<\ url.get\_server()\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ errmsg\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00157\ \ \ \ \ \}}
+\DoxyCodeLine{00158\ \ \ \ \ nassertv(res\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ res-\/>ai\_addr\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \ \ \textcolor{comment}{//\ Store\ the\ real\ resolved\ address.}}
+\DoxyCodeLine{00161\ \ \ \ \ \textcolor{keywordtype}{char}\ buf[48];}
+\DoxyCodeLine{00162\ \ \ \ \ buf[0]\ =\ 0;}
+\DoxyCodeLine{00163\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00164\ \ \ \ \ DWORD\ bufsize\ =\ \textcolor{keyword}{sizeof}(buf);}
+\DoxyCodeLine{00165\ \ \ \ \ WSAAddressToStringA(res-\/>ai\_addr,\ res-\/>ai\_addrlen,\ \textcolor{keyword}{nullptr},\ buf,\ \&bufsize);}
+\DoxyCodeLine{00166\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00167\ \ \ \ \ \textcolor{keywordflow}{if}\ (res-\/>ai\_addr-\/>sa\_family\ ==\ AF\_INET)\ \{}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ inet\_ntop(AF\_INET,\ (\textcolor{keywordtype}{char}\ *)\&((sockaddr\_in\ *)res-\/>ai\_addr)-\/>sin\_addr,\ buf,\ \textcolor{keyword}{sizeof}(buf));}
+\DoxyCodeLine{00169\ }
+\DoxyCodeLine{00170\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (res-\/>ai\_addr-\/>sa\_family\ ==\ AF\_INET6)\ \{}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ inet\_ntop(AF\_INET6,\ (\textcolor{keywordtype}{char}\ *)\&((sockaddr\_in6\ *)res-\/>ai\_addr)-\/>sin6\_addr,\ buf,\ \textcolor{keyword}{sizeof}(buf));}
+\DoxyCodeLine{00172\ \ \ \ \ \}}
+\DoxyCodeLine{00173\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00175\ \ \ \ \ \textcolor{keywordflow}{if}\ (buf[0])\ \{}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \_server\_name\ =\ buf;}
+\DoxyCodeLine{00177\ \ \ \ \ \}}
+\DoxyCodeLine{00178\ \ \ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ downloader\_cat.debug()}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Resolved\ "{}}\ <<\ url.get\_server()\ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}\ <<\ buf\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00181\ \ \ \ \ \}}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ \ \ \ \ \textcolor{comment}{//\ Create\ the\ socket.}}
+\DoxyCodeLine{00184\ \ \ \ \ \textcolor{keywordtype}{int}\ fd\ =\ socket(res-\/>ai\_family,\ SOCK\_STREAM,\ IPPROTO\_TCP);}
+\DoxyCodeLine{00185\ \ \ \ \ \textcolor{keywordflow}{if}\ (fd\ <\ 0)\ \{}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ downloader\_cat.error()}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ create\ socket:\ "{}}\ <<\ format\_error()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \_bio\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ freeaddrinfo(res);}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00191\ \ \ \ \ \}}
+\DoxyCodeLine{00192\ }
+\DoxyCodeLine{00193\ \ \ \ \ \textcolor{comment}{//\ Store\ the\ address\ and\ length\ for\ later\ use\ in\ connect().}}
+\DoxyCodeLine{00194\ \ \ \ \ nassertv(res-\/>ai\_addrlen\ <=\ \textcolor{keyword}{sizeof}(\_addr));}
+\DoxyCodeLine{00195\ \ \ \ \ memcpy(\&\_addr,\ res-\/>ai\_addr,\ res-\/>ai\_addrlen);}
+\DoxyCodeLine{00196\ \ \ \ \ \_addrlen\ =\ res-\/>ai\_addrlen;}
+\DoxyCodeLine{00197\ \ \ \ \ freeaddrinfo(res);}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00199\ \ \ \ \ \textcolor{comment}{//\ Also\ set\ the\ port\ we'd\ like\ to\ connect\ to.}}
+\DoxyCodeLine{00200\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_addr.ss\_family\ ==\ AF\_INET)\ \{}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ ((sockaddr\_in\ \&)\_addr).sin\_port\ =\ htons(\_port);}
+\DoxyCodeLine{00202\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_addr.ss\_family\ ==\ AF\_INET6)\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ ((sockaddr\_in6\ \&)\_addr).sin6\_port\ =\ htons(\_port);}
+\DoxyCodeLine{00204\ \ \ \ \ \}}
+\DoxyCodeLine{00205\ }
+\DoxyCodeLine{00206\ \ \ \ \ \_bio\ =\ BIO\_new\_socket(fd,\ 1);}
+\DoxyCodeLine{00207\ \ \ \}}
+\DoxyCodeLine{00208\ \}}
+\DoxyCodeLine{00209\ }
+\DoxyCodeLine{00213\ \textcolor{keywordtype}{void}\ BioPtr::}
+\DoxyCodeLine{00214\ set\_nbio(\textcolor{keywordtype}{bool}\ nbio)\ \{}
+\DoxyCodeLine{00215\ \ \ \textcolor{keywordflow}{if}\ (\_bio\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00217\ \ \ \}}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00219\ \ \ \textcolor{keywordtype}{int}\ fd\ =\ -\/1;}
+\DoxyCodeLine{00220\ \ \ BIO\_get\_fd(\_bio,\ \&fd);}
+\DoxyCodeLine{00221\ \ \ nassertv\_always(fd\ >=\ 0);}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00223\ \ \ BIO\_socket\_nbio(fd,\ nbio);}
+\DoxyCodeLine{00224\ \}}
+\DoxyCodeLine{00225\ }
+\DoxyCodeLine{00229\ \textcolor{keywordtype}{bool}\ BioPtr::}
+\DoxyCodeLine{00230\ connect()\ \{}
+\DoxyCodeLine{00231\ \ \ \textcolor{keywordflow}{if}\ (\_bio\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00232\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00233\ \ \ \}}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00235\ \ \ \textcolor{keywordtype}{int}\ fd\ =\ -\/1;}
+\DoxyCodeLine{00236\ \ \ BIO\_get\_fd(\_bio,\ \&fd);}
+\DoxyCodeLine{00237\ \ \ nassertr(fd\ >=\ 0,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00238\ }
+\DoxyCodeLine{00239\ \ \ \textcolor{keywordtype}{int}\ result;}
+\DoxyCodeLine{00240\ \ \ \textcolor{keywordflow}{if}\ (\_connecting)\ \{}
+\DoxyCodeLine{00241\ \ \ \ \ result\ =\ BIO\_sock\_error(fd);}
+\DoxyCodeLine{00242\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00243\ \ \ \ \ result\ =\ ::connect(fd,\ (\mbox{\hyperlink{structsockaddr}{sockaddr}}\ *)\&\_addr,\ \_addrlen);}
+\DoxyCodeLine{00244\ \ \ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0\ \&\&\ sock\_should\_retry(-\/1))\ \{}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ still\ in\ progress;\ we\ should\ retry\ later.\ \ This\ causes}}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \textcolor{comment}{//\ should\_retry()\ to\ return\ true.}}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ BIO\_set\_flags(\_bio,\ BIO\_FLAGS\_SHOULD\_RETRY);}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \_connecting\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00250\ \ \ \ \ \}}
+\DoxyCodeLine{00251\ \ \ \}}
+\DoxyCodeLine{00252\ \ \ BIO\_clear\_retry\_flags(\_bio);}
+\DoxyCodeLine{00253\ \ \ \_connecting\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \ \ \textcolor{keywordflow}{if}\ (result\ !=\ 0)\ \{}
+\DoxyCodeLine{00256\ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ connect\ to\ "{}}\ <<\ \_server\_name\ <<\ \textcolor{stringliteral}{"{}\ port\ "{}}\ <<\ \_port}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ format\_error()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00259\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00260\ \ \ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00263\ \}}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00268\ \textcolor{keywordtype}{bool}\ BioPtr::}
+\DoxyCodeLine{00269\ should\_retry()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00270\ \ \ \textcolor{keywordflow}{return}\ (\_bio\ !=\ \textcolor{keyword}{nullptr})\ \&\&\ BIO\_should\_retry(\_bio);}
+\DoxyCodeLine{00271\ \}}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00276\ BioPtr::}
+\DoxyCodeLine{00277\ \string~BioPtr()\ \{}
+\DoxyCodeLine{00278\ \ \ \textcolor{keywordflow}{if}\ (\_bio\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00279\ \ \ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_debug()\ \&\&\ !\_server\_name.empty())\ \{}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ downloader\_cat.debug()}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Dropping\ connection\ to\ "{}}\ <<\ \_server\_name\ <<\ \textcolor{stringliteral}{"{}\ port\ "{}}\ <<\ \_port\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00282\ \ \ \ \ \}}
+\DoxyCodeLine{00283\ }
+\DoxyCodeLine{00284\ \ \ \ \ BIO\_free\_all(\_bio);}
+\DoxyCodeLine{00285\ \ \ \ \ \_bio\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00286\ \ \ \}}
+\DoxyCodeLine{00287\ \}}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+
+\end{DoxyCode}

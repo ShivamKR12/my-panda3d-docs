@@ -1,0 +1,671 @@
+\doxysection{http\+Channel\+\_\+emscripten.\+cxx}
+\hypertarget{httpChannel__emscripten_8cxx_source}{}\label{httpChannel__emscripten_8cxx_source}\index{panda/src/downloader/httpChannel\_emscripten.cxx@{panda/src/downloader/httpChannel\_emscripten.cxx}}
+\mbox{\hyperlink{httpChannel__emscripten_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{httpChannel__emscripten_8h}{httpChannel\_emscripten.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#ifdef\ \_\_EMSCRIPTEN\_\_}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{string__utils_8h}{string\_utils.h}}"{}}}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ <emscripten/em\_asm.h>}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#define\ \_NOTIFY\_HTTP\_CHANNEL\_ID\ \ \ "{}["{}\ <<\ this\ <<\ "{}]\ "{}}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#ifndef\ CPPPARSER}}
+\DoxyCodeLine{00025\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \textcolor{keywordtype}{char}\ *EMSCRIPTEN\_KEEPALIVE}
+\DoxyCodeLine{00026\ \_extend\_string(std::string\ *str,\ \textcolor{keywordtype}{int}\ length)\ \{}
+\DoxyCodeLine{00027\ \ \ \textcolor{keywordtype}{size\_t}\ offset\ =\ str-\/>size();}
+\DoxyCodeLine{00028\ \ \ str-\/>resize(offset\ +\ (\textcolor{keywordtype}{size\_t})length);}
+\DoxyCodeLine{00029\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{char}\ *)str-\/>data()\ +\ offset;}
+\DoxyCodeLine{00030\ \}}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \textcolor{keywordtype}{void}\ EMSCRIPTEN\_KEEPALIVE}
+\DoxyCodeLine{00033\ \_write\_stream(std::ostream\ *strm,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *data,\ \textcolor{keywordtype}{int}\ length)\ \{}
+\DoxyCodeLine{00034\ \ \ strm-\/>write(data,\ (\textcolor{keywordtype}{size\_t})length);}
+\DoxyCodeLine{00035\ \}}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \textcolor{keywordtype}{bool}\ EMSCRIPTEN\_KEEPALIVE}
+\DoxyCodeLine{00038\ \_http\_channel\_run(HTTPChannel\ *channel)\ \{}
+\DoxyCodeLine{00039\ \ \ \textcolor{keywordflow}{return}\ channel-\/>run();}
+\DoxyCodeLine{00040\ \}}
+\DoxyCodeLine{00041\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ HTTPChannel::\_type\_handle;}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00048\ HTTPChannel::}
+\DoxyCodeLine{00049\ HTTPChannel(HTTPClient\ *client)\ :}
+\DoxyCodeLine{00050\ \ \ \_client(client)}
+\DoxyCodeLine{00051\ \{}
+\DoxyCodeLine{00052\ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00053\ \ \ \ \ downloader\_cat.debug()}
+\DoxyCodeLine{00054\ \ \ \ \ \ \ <<\ \_NOTIFY\_HTTP\_CHANNEL\_ID}
+\DoxyCodeLine{00055\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}created.\(\backslash\)n"{}};}
+\DoxyCodeLine{00056\ \ \ \}}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00058\ \ \ EM\_ASM(\{}
+\DoxyCodeLine{00059\ \ \ \ \ \textcolor{keywordflow}{if}\ (!window.\_httpChannels)\ \{}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ window.\_httpChannels\ =\ \{\};}
+\DoxyCodeLine{00061\ \ \ \ \ \}}
+\DoxyCodeLine{00062\ \ \ \ \ var\ xhr\ =\ \textcolor{keyword}{new}\ XMLHttpRequest();}
+\DoxyCodeLine{00063\ \ \ \ \ window.\_httpChannels[\$0]\ =\ xhr;}
+\DoxyCodeLine{00064\ \ \ \},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \ \ \textcolor{comment}{//\ \_nonblocking\ is\ true\ if\ the\ XHR\ is\ actually\ in\ non-\/blocking\ mode.}}
+\DoxyCodeLine{00067\ \ \ \_nonblocking\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00069\ \ \ \textcolor{comment}{//\ \_wanted\_nonblocking\ is\ true\ if\ the\ user\ specifically\ requested\ one\ of\ the}}
+\DoxyCodeLine{00070\ \ \ \textcolor{comment}{//\ non-\/blocking\ interfaces.\ \ It\ is\ false\ if\ the\ XHR\ is\ only\ incidentally}}
+\DoxyCodeLine{00071\ \ \ \textcolor{comment}{//\ non-\/blocking\ (for\ instance,\ because\ ASYNCIFY\ is\ on).}}
+\DoxyCodeLine{00072\ \ \ \_wanted\_nonblocking\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00074\ \ \ \_first\_byte\_requested\ =\ 0;}
+\DoxyCodeLine{00075\ \ \ \_last\_byte\_requested\ =\ 0;}
+\DoxyCodeLine{00076\ \ \ \_first\_byte\_delivered\ =\ 0;}
+\DoxyCodeLine{00077\ \ \ \_last\_byte\_delivered\ =\ 0;}
+\DoxyCodeLine{00078\ \ \ \_expected\_file\_size\ =\ 0;}
+\DoxyCodeLine{00079\ \ \ \_file\_size\ =\ 0;}
+\DoxyCodeLine{00080\ \ \ \_transfer\_file\_size\ =\ 0;}
+\DoxyCodeLine{00081\ \ \ \_got\_expected\_file\_size\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00082\ \ \ \_got\_file\_size\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00083\ \ \ \_got\_transfer\_file\_size\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00084\ \ \ \_bytes\_downloaded\ =\ 0;}
+\DoxyCodeLine{00085\ \ \ \_bytes\_requested\ =\ 0;}
+\DoxyCodeLine{00086\ \ \ \_status\_entry\ =\ StatusEntry();}
+\DoxyCodeLine{00087\ \ \ \_content\_type\ =\ \textcolor{stringliteral}{"{}application/x-\/www-\/form-\/urlencoded"{}};}
+\DoxyCodeLine{00088\ \ \ \_download\_dest\ =\ DD\_none;}
+\DoxyCodeLine{00089\ \ \ \_download\_to\_ramfile\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00090\ \ \ \_download\_to\_stream\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00091\ \}}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00096\ HTTPChannel::}
+\DoxyCodeLine{00097\ \string~HTTPChannel()\ \{}
+\DoxyCodeLine{00098\ \ \ EM\_ASM(\{}
+\DoxyCodeLine{00099\ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordflow}{if}\ (xhr)\ \{}
+\DoxyCodeLine{00101\ \ \ \ \ \ \ xhr.onprogress\ =\ null;}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ xhr.onreadystatechange\ =\ null;}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \textcolor{keyword}{delete}\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00104\ \ \ \ \ \}}
+\DoxyCodeLine{00105\ \ \ \},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00108\ \ \ \ \ downloader\_cat.debug()}
+\DoxyCodeLine{00109\ \ \ \ \ \ \ <<\ \_NOTIFY\_HTTP\_CHANNEL\_ID}
+\DoxyCodeLine{00110\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}destroyed.\(\backslash\)n"{}};}
+\DoxyCodeLine{00111\ \ \ \}}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00113\ \ \ reset\_download\_to();}
+\DoxyCodeLine{00114\ \}}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00120\ std::string\ HTTPChannel::}
+\DoxyCodeLine{00121\ get\_header\_value(\textcolor{keyword}{const}\ std::string\ \&key)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00122\ \ \ Headers::const\_iterator\ hi\ =\ \_headers.find(\mbox{\hyperlink{string__utils_8cxx_a8436b3aed06d4a4e245ab303cdf9637e}{downcase}}(key));}
+\DoxyCodeLine{00123\ \ \ \textcolor{keywordflow}{if}\ (hi\ !=\ \_headers.end())\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ \textcolor{keywordflow}{return}\ (*hi).second;}
+\DoxyCodeLine{00125\ \ \ \}}
+\DoxyCodeLine{00126\ \ \ \textcolor{keywordflow}{return}\ std::string();}
+\DoxyCodeLine{00127\ \}}
+\DoxyCodeLine{00128\ }
+\DoxyCodeLine{00140\ std::streamsize\ HTTPChannel::}
+\DoxyCodeLine{00141\ get\_file\_size()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00142\ \ \ \textcolor{keywordflow}{if}\ (\_got\_file\_size)\ \{}
+\DoxyCodeLine{00143\ \ \ \ \ \textcolor{keywordflow}{return}\ \_file\_size;}
+\DoxyCodeLine{00144\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_got\_transfer\_file\_size)\ \{}
+\DoxyCodeLine{00145\ \ \ \ \ \textcolor{keywordflow}{return}\ \_transfer\_file\_size;}
+\DoxyCodeLine{00146\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_got\_expected\_file\_size)\ \{}
+\DoxyCodeLine{00147\ \ \ \ \ \textcolor{keywordflow}{return}\ \_expected\_file\_size;}
+\DoxyCodeLine{00148\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00149\ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00150\ \ \ \}}
+\DoxyCodeLine{00151\ \}}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00157\ \textcolor{keywordtype}{void}\ HTTPChannel::}
+\DoxyCodeLine{00158\ write\_headers(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00159\ \ \ Headers::const\_iterator\ hi;}
+\DoxyCodeLine{00160\ \ \ \textcolor{keywordflow}{for}\ (hi\ =\ \_headers.begin();\ hi\ !=\ \_headers.end();\ ++hi)\ \{}
+\DoxyCodeLine{00161\ \ \ \ \ out\ <<\ (*hi).first\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ (*hi).second\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00162\ \ \ \}}
+\DoxyCodeLine{00163\ \}}
+\DoxyCodeLine{00164\ }
+\DoxyCodeLine{00175\ \textcolor{keywordtype}{bool}\ HTTPChannel::}
+\DoxyCodeLine{00176\ run()\ \{}
+\DoxyCodeLine{00177\ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00178\ \ \ \ \ downloader\_cat.spam()}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ <<\ \_NOTIFY\_HTTP\_CHANNEL\_ID}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}run().\(\backslash\)n"{}};}
+\DoxyCodeLine{00181\ \ \ \}}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ \ \ State\ state\ =\ get\_state();}
+\DoxyCodeLine{00184\ \ \ \textcolor{keywordflow}{switch}\ (state)\ \{}
+\DoxyCodeLine{00185\ \ \ \textcolor{keywordflow}{case}\ S\_unsent:}
+\DoxyCodeLine{00186\ \ \ \ \ \textcolor{comment}{//\ Invalid.}}
+\DoxyCodeLine{00187\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \ \ \textcolor{keywordflow}{case}\ S\_opened:}
+\DoxyCodeLine{00190\ \ \ \ \ \textcolor{keywordflow}{if}\ (!run\_send())\ \{}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00192\ \ \ \ \ \}}
+\DoxyCodeLine{00193\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00195\ \ \ \textcolor{keywordflow}{case}\ S\_headers\_received:}
+\DoxyCodeLine{00196\ \ \ \ \ \textcolor{keywordflow}{if}\ (!run\_headers\_received())\ \{}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00198\ \ \ \ \ \}}
+\DoxyCodeLine{00199\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00200\ }
+\DoxyCodeLine{00201\ \ \ \textcolor{keywordflow}{case}\ S\_loading:}
+\DoxyCodeLine{00202\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_download\_dest\ !=\ DD\_none)\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00204\ \ \ \ \ \}}
+\DoxyCodeLine{00205\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00206\ }
+\DoxyCodeLine{00207\ \ \ \textcolor{keywordflow}{case}\ S\_done:}
+\DoxyCodeLine{00208\ \ \ \ \ close\_download\_stream();}
+\DoxyCodeLine{00209\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00210\ \ \ \}}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00212\ \ \ \textcolor{comment}{//\ If\ we\ get\ here,\ we\ must\ be\ running\ in\ non-\/blocking\ mode.}}
+\DoxyCodeLine{00213\ \ \ \textcolor{keywordflow}{if}\ (!\_wanted\_nonblocking\ \&\&\ emscripten\_has\_asyncify())\ \{}
+\DoxyCodeLine{00214\ \ \ \ \ \textcolor{comment}{//\ But\ we\ are\ pretending\ to\ be\ in\ blocking\ mode,\ so\ we\ must\ yield\ until\ the}}
+\DoxyCodeLine{00215\ \ \ \ \ \textcolor{comment}{//\ state\ changes.}}
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{keywordflow}{while}\ (get\_state()\ !=\ state)\ \{}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ emscripten\_sleep(0);}
+\DoxyCodeLine{00218\ \ \ \ \ \}}
+\DoxyCodeLine{00219\ \ \ \}}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00221\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00222\ \}}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00227\ HTTPChannel::State\ HTTPChannel::}
+\DoxyCodeLine{00228\ get\_state()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00229\ \ \ \textcolor{keywordflow}{return}\ (State)EM\_ASM\_INT(\textcolor{keywordflow}{return}\ window.\_httpChannels[\$0].readyState,\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00230\ \}}
+\DoxyCodeLine{00231\ }
+\DoxyCodeLine{00235\ \textcolor{keywordtype}{bool}\ HTTPChannel::}
+\DoxyCodeLine{00236\ run\_send()\ \{}
+\DoxyCodeLine{00237\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ ExtraHeader\ \&header\ :\ \_send\_extra\_headers)\ \{}
+\DoxyCodeLine{00238\ \ \ \ \ EM\_ASM(\{}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ xhr.setRequestHeader(UTF8ToString(\$1),\ UTF8ToString(\$2));}
+\DoxyCodeLine{00241\ \ \ \ \ \},\ \textcolor{keyword}{this},\ header.first.c\_str(),\ header.second.c\_str());}
+\DoxyCodeLine{00242\ \ \ \}}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00244\ \ \ \textcolor{keywordflow}{if}\ (\_method\ ==\ HTTPEnum::M\_get\ ||\ \_method\ ==\ HTTPEnum::M\_head)\ \{}
+\DoxyCodeLine{00245\ \ \ \ \ \textcolor{comment}{//\ No\ body\ is\ sent\ with\ GET\ /\ HEAD\ requests.}}
+\DoxyCodeLine{00246\ \ \ \ \ EM\_ASM(\{}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ xhr.send(null);}
+\DoxyCodeLine{00249\ \ \ \ \ \},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00250\ \ \ \}}
+\DoxyCodeLine{00251\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00252\ \ \ \ \ EM\_ASM(\{}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ xhr.setRequestHeader(\textcolor{stringliteral}{"{}Content-\/Type"{}},\ UTF8ToString(\$2));}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ xhr.send(UTF8ToString(\$1));}
+\DoxyCodeLine{00256\ \ \ \ \ \},\ \textcolor{keyword}{this},\ \_body.c\_str(),\ \_content\_type.c\_str());}
+\DoxyCodeLine{00257\ \ \ \}}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00260\ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00265\ \textcolor{keywordtype}{bool}\ HTTPChannel::}
+\DoxyCodeLine{00266\ run\_headers\_received()\ \{}
+\DoxyCodeLine{00267\ \ \ \textcolor{keywordtype}{char}\ status\_string[512];}
+\DoxyCodeLine{00268\ \ \ \textcolor{keywordtype}{char}\ *header\_str\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00269\ \ \ status\_string[0]\ =\ 0;}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \ \ \textcolor{comment}{//\ Fetch\ the\ status\ code,\ text\ and\ response\ headers\ from\ JavaScript.}}
+\DoxyCodeLine{00272\ \ \ \textcolor{keywordtype}{int}\ status\_code\ =\ EM\_ASM\_INT(\{}
+\DoxyCodeLine{00273\ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00274\ \ \ \ \ stringToUTF8(xhr.statusText,\ \$1,\ 512);}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00276\ \ \ \ \ var\ headers\ =\ xhr.getAllResponseHeaders();}
+\DoxyCodeLine{00277\ \ \ \ \ var\ len\ =\ lengthBytesUTF8(headers)\ +\ 1;}
+\DoxyCodeLine{00278\ \ \ \ \ var\ buffer\ =\ \_malloc(len);}
+\DoxyCodeLine{00279\ \ \ \ \ stringToUTF8(headers,\ buffer,\ len);}
+\DoxyCodeLine{00280\ \ \ \ \ setValue(\$2,\ buffer,\ \textcolor{charliteral}{'*'});}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \ \ \ \ \textcolor{keywordflow}{return}\ xhr.status;}
+\DoxyCodeLine{00283\ \ \ \},\ \textcolor{keyword}{this},\ status\_string,\ \&header\_str);}
+\DoxyCodeLine{00284\ \ \ \_status\_entry.\_status\_code\ =\ status\_code;}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \textcolor{comment}{//\ Parse\ the\ response\ header\ string.}}
+\DoxyCodeLine{00287\ \ \ \textcolor{keywordtype}{char}\ *ptr\ =\ header\_str;}
+\DoxyCodeLine{00288\ \ \ \textcolor{keywordtype}{char}\ *delim\ =\ strstr(ptr,\ \textcolor{stringliteral}{"{}:\ "{}});}
+\DoxyCodeLine{00289\ \ \ \textcolor{keywordflow}{while}\ (delim\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00290\ \ \ \ \ std::string\ key(ptr,\ delim);}
+\DoxyCodeLine{00291\ \ \ \ \ ptr\ =\ delim\ +\ 2;}
+\DoxyCodeLine{00292\ }
+\DoxyCodeLine{00293\ \ \ \ \ std::string\ value;}
+\DoxyCodeLine{00294\ \ \ \ \ delim\ =\ strstr(ptr,\ \textcolor{stringliteral}{"{}\(\backslash\)r\(\backslash\)n"{}});}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordflow}{if}\ (delim\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ value.assign(ptr,\ delim);}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ ptr\ =\ delim\ +\ 2;}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ delim\ =\ strstr(ptr,\ \textcolor{stringliteral}{"{}:\ "{}});}
+\DoxyCodeLine{00299\ \ \ \ \ \}}
+\DoxyCodeLine{00300\ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \textcolor{comment}{//\ The\ XHR\ spec\ prescribes\ that\ there\ is\ always\ another\ CRLF}}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \textcolor{comment}{//\ after\ the\ last\ header,\ but\ we\ handle\ this\ case\ anyway.}}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ value.assign(ptr);}
+\DoxyCodeLine{00304\ \ \ \ \ \}}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00306\ \ \ \ \ \_headers[std::move(key)]\ =\ std::move(value);}
+\DoxyCodeLine{00307\ \ \ \}}
+\DoxyCodeLine{00308\ \ \ free(header\_str);}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00310\ \ \ \textcolor{comment}{//\ Look\ for\ key\ properties\ in\ the\ header\ fields.}}
+\DoxyCodeLine{00311\ \ \ \textcolor{keywordflow}{if}\ (status\_code\ ==\ 206)\ \{}
+\DoxyCodeLine{00312\ \ \ \ \ std::string\ content\_range\ =\ get\_header\_value(\textcolor{stringliteral}{"{}Content-\/Range"{}});}
+\DoxyCodeLine{00313\ \ \ \ \ \textcolor{keywordflow}{if}\ (content\_range.empty())\ \{}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ <<\ \_NOTIFY\_HTTP\_CHANNEL\_ID}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Got\ 206\ response\ without\ Content-\/Range\ header!\(\backslash\)n"{}};}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \_status\_entry.\_status\_code\ =\ SC\_invalid\_http;}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00319\ }
+\DoxyCodeLine{00320\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!parse\_content\_range(content\_range))\ \{}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ downloader\_cat.warning()}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ \ \ <<\ \_NOTIFY\_HTTP\_CHANNEL\_ID}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Couldn't\ parse\ Content-\/Range:\ "{}}\ <<\ content\_range\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \_status\_entry.\_status\_code\ =\ SC\_invalid\_http;}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00328\ \ \ \ \ \}}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00330\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00331\ \ \ \ \ \_first\_byte\_delivered\ =\ 0;}
+\DoxyCodeLine{00332\ \ \ \ \ \_last\_byte\_delivered\ =\ 0;}
+\DoxyCodeLine{00333\ \ \ \}}
+\DoxyCodeLine{00334\ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00335\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_first\_byte\_requested\ !=\ 0\ ||\ \_last\_byte\_requested\ !=\ 0\ ||}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ \_first\_byte\_delivered\ !=\ 0\ ||\ \_last\_byte\_delivered\ !=\ 0)\ \{}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ downloader\_cat.debug()}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ <<\ \_NOTIFY\_HTTP\_CHANNEL\_ID}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Requested\ byte\ range\ "{}}\ <<\ \_first\_byte\_requested}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}\ <<\ \_last\_byte\_delivered}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{};\ server\ delivers\ range\ "{}}\ <<\ \_first\_byte\_delivered}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ to\ "{}}\ <<\ \_last\_byte\_delivered}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00344\ \ \ \ \ \}}
+\DoxyCodeLine{00345\ \ \ \}}
+\DoxyCodeLine{00346\ }
+\DoxyCodeLine{00347\ \ \ \textcolor{comment}{//\ Set\ the\ \_document\_spec\ to\ reflect\ what\ we\ just\ retrieved.}}
+\DoxyCodeLine{00348\ \ \ \_document\_spec\ =\ \mbox{\hyperlink{classDocumentSpec}{DocumentSpec}}(\_request.get\_url());}
+\DoxyCodeLine{00349\ \ \ std::string\ tag\ =\ get\_header\_value(\textcolor{stringliteral}{"{}ETag"{}});}
+\DoxyCodeLine{00350\ \ \ \textcolor{keywordflow}{if}\ (!tag.empty())\ \{}
+\DoxyCodeLine{00351\ \ \ \ \ \_document\_spec.set\_tag(\mbox{\hyperlink{classHTTPEntityTag}{HTTPEntityTag}}(tag));}
+\DoxyCodeLine{00352\ \ \ \}}
+\DoxyCodeLine{00353\ \ \ std::string\ date\ =\ get\_header\_value(\textcolor{stringliteral}{"{}Last-\/Modified"{}});}
+\DoxyCodeLine{00354\ \ \ \textcolor{keywordflow}{if}\ (!date.empty())\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ \_document\_spec.set\_date(\mbox{\hyperlink{classHTTPDate}{HTTPDate}}(date));}
+\DoxyCodeLine{00356\ \ \ \}}
+\DoxyCodeLine{00357\ }
+\DoxyCodeLine{00358\ \ \ \textcolor{comment}{//\ In\ case\ we've\ got\ a\ download\ in\ effect,\ now\ we\ know\ what\ the\ first\ byte}}
+\DoxyCodeLine{00359\ \ \ \textcolor{comment}{//\ of\ the\ subdocument\ request\ will\ be,\ so\ we\ can\ open\ the\ file\ and\ position}}
+\DoxyCodeLine{00360\ \ \ \textcolor{comment}{//\ it.}}
+\DoxyCodeLine{00361\ \ \ \textcolor{keywordflow}{if}\ (status\_code\ /\ 100\ ==\ 1\ ||\ status\_code\ ==\ 204\ ||\ status\_code\ ==\ 304)\ \{}
+\DoxyCodeLine{00362\ \ \ \ \ \textcolor{comment}{//\ Never\ mind\ on\ the\ download.}}
+\DoxyCodeLine{00363\ \ \ \ \ reset\_download\_to();}
+\DoxyCodeLine{00364\ \ \ \}}
+\DoxyCodeLine{00365\ }
+\DoxyCodeLine{00366\ \ \ \textcolor{keywordflow}{if}\ (!open\_download\_file())\ \{}
+\DoxyCodeLine{00367\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00368\ \ \ \}}
+\DoxyCodeLine{00369\ }
+\DoxyCodeLine{00370\ \ \ \textcolor{keywordflow}{if}\ (\_download\_dest\ ==\ DD\_ram)\ \{}
+\DoxyCodeLine{00371\ \ \ \ \ std::string\ *dest\ =\ \&\_download\_to\_ramfile-\/>\_data;}
+\DoxyCodeLine{00372\ \ \ \ \ EM\_ASM(\{}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ var\ loaded\ =\ 0;}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ xhr.onprogress\ =\ function\ (ev)\ \{}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ var\ body\ =\ this.responseText;}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ var\ ptr\ =\ \_\_extend\_string(\$1,\ ev.loaded\ -\/\ loaded);}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (var\ i\ =\ loaded;\ i\ <\ ev.loaded;\ ++i)\ \{}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ HEAPU8[ptr\ +\ i]\ =\ body.charCodeAt(i);}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \ \ loaded\ =\ ev.loaded;}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \};}
+\DoxyCodeLine{00383\ \ \ \ \ \},\ \textcolor{keyword}{this},\ dest);}
+\DoxyCodeLine{00384\ \ \ \}}
+\DoxyCodeLine{00385\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_download\_dest\ ==\ DD\_stream)\ \{}
+\DoxyCodeLine{00386\ \ \ \ \ std::ostream\ *dest\ =\ \_download\_to\_stream;}
+\DoxyCodeLine{00387\ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[4096];}
+\DoxyCodeLine{00388\ \ \ \ \ EM\_ASM(\{}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ var\ loaded\ =\ 0;}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ xhr.onprogress\ =\ function\ (ev)\ \{}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (loaded\ <\ ev.loaded)\ \{}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \ \ var\ body\ =\ this.responseText;}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \ \ var\ size\ =\ Math.min(ev.loaded\ -\/\ read,\ 4096);}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (var\ i\ =\ read;\ i\ <\ read\ +\ size;\ ++i)\ \{}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \ \ \ \ HEAPU8[\$2\ +\ i]\ =\ body.charCodeAt(i);}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ \ \ \_\_write\_stream(\$1,\ \$2,\ size);}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \ \ loaded\ +=\ size;}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \};}
+\DoxyCodeLine{00402\ \ \ \ \ \},\ \textcolor{keyword}{this},\ dest,\ buffer);}
+\DoxyCodeLine{00403\ \ \ \}}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00405\ \ \ \_got\_expected\_file\_size\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00406\ \ \ \_got\_file\_size\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00407\ \ \ \_got\_transfer\_file\_size\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00408\ }
+\DoxyCodeLine{00409\ \ \ std::string\ content\_length\ =\ get\_header\_value(\textcolor{stringliteral}{"{}Content-\/Length"{}});}
+\DoxyCodeLine{00410\ \ \ \textcolor{keywordflow}{if}\ (!content\_length.empty())\ \{}
+\DoxyCodeLine{00411\ \ \ \ \ \_file\_size\ =\ atoi(content\_length.c\_str());}
+\DoxyCodeLine{00412\ \ \ \ \ \_got\_file\_size\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00413\ \ \ \}}
+\DoxyCodeLine{00414\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (status\_code\ ==\ 206)\ \{}
+\DoxyCodeLine{00415\ \ \ \ \ \textcolor{comment}{//\ Well,\ we\ didn't\ get\ a\ content-\/length\ from\ the\ server,\ but\ we\ can\ infer}}
+\DoxyCodeLine{00416\ \ \ \ \ \textcolor{comment}{//\ the\ number\ of\ bytes\ based\ on\ the\ range\ we're\ given.}}
+\DoxyCodeLine{00417\ \ \ \ \ \_file\_size\ =\ \_last\_byte\_delivered\ -\/\ \_first\_byte\_delivered\ +\ 1;}
+\DoxyCodeLine{00418\ \ \ \ \ \_got\_file\_size\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00419\ \ \ \}}
+\DoxyCodeLine{00420\ }
+\DoxyCodeLine{00421\ \ \ \textcolor{comment}{//\ Reset\ these\ for\ the\ next\ request.}}
+\DoxyCodeLine{00422\ \ \ clear\_extra\_headers();}
+\DoxyCodeLine{00423\ }
+\DoxyCodeLine{00424\ \ \ \textcolor{keywordflow}{return}\ (\_download\_dest\ !=\ DD\_none);}
+\DoxyCodeLine{00425\ \}}
+\DoxyCodeLine{00426\ }
+\DoxyCodeLine{00431\ \textcolor{keywordtype}{bool}\ HTTPChannel::}
+\DoxyCodeLine{00432\ begin\_request(HTTPEnum::Method\ method,\ \textcolor{keyword}{const}\ \mbox{\hyperlink{classDocumentSpec}{DocumentSpec}}\ \&url,}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ std::string\ \&body,\ \textcolor{keywordtype}{bool}\ nonblocking,}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ first\_byte,\ \textcolor{keywordtype}{size\_t}\ last\_byte)\ \{}
+\DoxyCodeLine{00435\ }
+\DoxyCodeLine{00436\ \ \ downloader\_cat.info()}
+\DoxyCodeLine{00437\ \ \ \ \ <<\ \_NOTIFY\_HTTP\_CHANNEL\_ID}
+\DoxyCodeLine{00438\ \ \ \ \ <<\ \textcolor{stringliteral}{"{}begin\ "{}}\ <<\ method\ <<\ \textcolor{stringliteral}{"{}\ "{}}\ <<\ url\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00439\ }
+\DoxyCodeLine{00440\ \ \ reset\_for\_new\_request();}
+\DoxyCodeLine{00441\ }
+\DoxyCodeLine{00442\ \ \ \_wanted\_nonblocking\ =\ nonblocking;}
+\DoxyCodeLine{00443\ \ \ \_nonblocking\ =\ nonblocking\ ||\ emscripten\_has\_asyncify();}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \ \ \_request\ =\ url;}
+\DoxyCodeLine{00446\ \ \ \_document\_spec\ =\ \mbox{\hyperlink{classDocumentSpec}{DocumentSpec}}();}
+\DoxyCodeLine{00447\ \ \ \_method\ =\ method;}
+\DoxyCodeLine{00448\ \ \ \_body\ =\ body;}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00450\ \ \ \_first\_byte\_requested\ =\ first\_byte;}
+\DoxyCodeLine{00451\ \ \ \_last\_byte\_requested\ =\ last\_byte;}
+\DoxyCodeLine{00452\ }
+\DoxyCodeLine{00453\ \ \ \textcolor{keywordtype}{bool}\ result\ =\ (bool)EM\_ASM\_INT(\{}
+\DoxyCodeLine{00454\ \ \ \ \ var\ methods\ =\ ([\textcolor{stringliteral}{"{}OPTIONS"{}},\ \textcolor{stringliteral}{"{}GET"{}},\ \textcolor{stringliteral}{"{}HEAD"{}},\ \textcolor{stringliteral}{"{}POST"{}},\ \textcolor{stringliteral}{"{}PUT"{}},\ \textcolor{stringliteral}{"{}DELETE"{}},\ \textcolor{stringliteral}{"{}TRACE"{}},\ \textcolor{stringliteral}{"{}CONNECT"{}}]);}
+\DoxyCodeLine{00455\ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00456\ \ \ \ \ \textcolor{keywordflow}{try}\ \{}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ xhr.open(methods[\$1],\ UTF8ToString(\$2),\ !!\$3);}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ xhr.withCredentials\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ xhr.overrideMimeType(\textcolor{stringliteral}{"{}text/plain;\ charset=x-\/user-\/defined"{}});}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\$4\ !=\ 0\ ||\ \$5\ !=\ 0)\ \{}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \ \ xhr.setRequestHeader(\textcolor{stringliteral}{"{}Range"{}},\ \textcolor{stringliteral}{"{}bytes="{}}\ +\ \$4\ +\ \textcolor{stringliteral}{"{}-\/"{}}\ +\ (\$5\ ||\ \textcolor{stringliteral}{"{}"{}}));}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ xhr.onprogress\ =\ null;}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ xhr.onreadystatechange\ =\ null;}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 1;}
+\DoxyCodeLine{00466\ \ \ \ \ \}}
+\DoxyCodeLine{00467\ \ \ \ \ \textcolor{keywordflow}{catch}\ (ex)\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ (console.error\ ||\ console.log)(ex);}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00470\ \ \ \ \ \}}
+\DoxyCodeLine{00471\ \ \ \},\ \textcolor{keyword}{this},\ method,\ \_request.get\_url().c\_str(),\ (int)\_nonblocking,\ (\textcolor{keywordtype}{int})first\_byte,\ (int)last\_byte);}
+\DoxyCodeLine{00472\ }
+\DoxyCodeLine{00473\ \ \ \textcolor{keywordflow}{if}\ (!result)\ \{}
+\DoxyCodeLine{00474\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00475\ \ \ \}}
+\DoxyCodeLine{00476\ }
+\DoxyCodeLine{00477\ \ \ \textcolor{keywordflow}{if}\ (\_wanted\_nonblocking)\ \{}
+\DoxyCodeLine{00478\ \ \ \ \ \textcolor{comment}{//\ Call\ run()\ automatically\ when\ the\ state\ changes.}}
+\DoxyCodeLine{00479\ \ \ \ \ EM\_ASM(\{}
+\DoxyCodeLine{00480\ \ \ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ xhr.onreadystatechange\ =\ function\ ()\ \{}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!xhr\ ||\ !\_\_http\_channel\_run(\$0))\ \{}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \ \ \ \ xhr.onreadystatechange\ =\ null;}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ \};}
+\DoxyCodeLine{00487\ \ \ \ \ \},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00488\ \ \ \}}
+\DoxyCodeLine{00489\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00490\ \ \ \ \ \textcolor{keywordflow}{return}\ run\_send()\ \&\&\ run\_headers\_received();}
+\DoxyCodeLine{00491\ \ \ \}}
+\DoxyCodeLine{00492\ }
+\DoxyCodeLine{00493\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00494\ \}}
+\DoxyCodeLine{00495\ }
+\DoxyCodeLine{00500\ \textcolor{keywordtype}{void}\ HTTPChannel::}
+\DoxyCodeLine{00501\ reset\_for\_new\_request()\ \{}
+\DoxyCodeLine{00502\ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00503\ \ \ \ \ downloader\_cat.spam()}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ <<\ \_NOTIFY\_HTTP\_CHANNEL\_ID}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}reset\_for\_new\_request.\(\backslash\)n"{}};}
+\DoxyCodeLine{00506\ \ \ \}}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00508\ \ \ EM\_ASM(\{}
+\DoxyCodeLine{00509\ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00510\ \ \ \ \ xhr.onprogress\ =\ null;}
+\DoxyCodeLine{00511\ \ \ \ \ xhr.onreadystatechange\ =\ null;}
+\DoxyCodeLine{00512\ \ \ \ \ \textcolor{keywordflow}{if}\ (xhr.readyState\ !==\ 0)\ \{}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ try\ \{}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ \ \ xhr.abort();}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ catch\ (ex)\ \{}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00518\ \ \ \ \ \}}
+\DoxyCodeLine{00519\ \ \ \},\ \textcolor{keyword}{this});}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00521\ \ \ reset\_download\_to();}
+\DoxyCodeLine{00522\ }
+\DoxyCodeLine{00523\ \ \ \_status\_entry\ =\ StatusEntry();}
+\DoxyCodeLine{00524\ }
+\DoxyCodeLine{00525\ \ \ \_bytes\_downloaded\ =\ 0;}
+\DoxyCodeLine{00526\ \ \ \_bytes\_requested\ =\ 0;}
+\DoxyCodeLine{00527\ \}}
+\DoxyCodeLine{00528\ }
+\DoxyCodeLine{00537\ \textcolor{keywordtype}{bool}\ HTTPChannel::}
+\DoxyCodeLine{00538\ open\_download\_file()\ \{}
+\DoxyCodeLine{00539\ \ \ \_subdocument\_resumes\ =\ (\_subdocument\_resumes\ \&\&\ \_first\_byte\_delivered\ !=\ 0);}
+\DoxyCodeLine{00540\ }
+\DoxyCodeLine{00541\ \ \ \textcolor{keywordflow}{if}\ (\_subdocument\_resumes)\ \{}
+\DoxyCodeLine{00542\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_download\_dest\ ==\ DD\_ram)\ \{}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_first\_byte\_delivered\ >\ \_download\_to\_ramfile-\/>\_data.length())\ \{}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \ \ downloader\_cat.info()}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \ \ \ \ <<\ \_NOTIFY\_HTTP\_CHANNEL\_ID}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ starting\ position\ of\ byte\ "{}}\ <<\ \_first\_byte\_delivered}
+\DoxyCodeLine{00547\ \ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ within\ Ramfile\ (which\ has\ "{}}}
+\DoxyCodeLine{00548\ \ \ \ \ \ \ \ \ \ \ <<\ \_download\_to\_ramfile-\/>\_data.length()\ <<\ \textcolor{stringliteral}{"{}\ bytes)\(\backslash\)n"{}};}
+\DoxyCodeLine{00549\ \ \ \ \ \ \ \ \ close\_download\_stream();}
+\DoxyCodeLine{00550\ \ \ \ \ \ \ \ \ \_status\_entry.\_status\_code\ =\ SC\_download\_invalid\_range;}
+\DoxyCodeLine{00551\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00553\ }
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_first\_byte\_delivered\ ==\ 0)\ \{}
+\DoxyCodeLine{00555\ \ \ \ \ \ \ \ \ \_download\_to\_ramfile-\/>\_data\ =\ string();}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00557\ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00558\ \ \ \ \ \ \ \ \ \_download\_to\_ramfile-\/>\_data\ =}
+\DoxyCodeLine{00559\ \ \ \ \ \ \ \ \ \ \ \_download\_to\_ramfile-\/>\_data.substr(0,\ \_first\_byte\_delivered);}
+\DoxyCodeLine{00560\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00561\ \ \ \ \ \}}
+\DoxyCodeLine{00562\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_download\_dest\ ==\ DD\_stream)\ \{}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \_download\_to\_stream-\/>seekp(\_first\_byte\_delivered);}
+\DoxyCodeLine{00564\ \ \ \ \ \}}
+\DoxyCodeLine{00565\ \ \ \}}
+\DoxyCodeLine{00566\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00567\ \ \ \ \ \textcolor{comment}{//\ If\ \_subdocument\_resumes\ is\ false,\ we\ should\ be\ sure\ to\ reset\ to\ the}}
+\DoxyCodeLine{00568\ \ \ \ \ \textcolor{comment}{//\ beginning\ of\ the\ file,\ regardless\ of\ the\ value\ of}}
+\DoxyCodeLine{00569\ \ \ \ \ \textcolor{comment}{//\ \_first\_byte\_delivered.}}
+\DoxyCodeLine{00570\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_download\_dest\ ==\ DD\_file\ ||\ \_download\_dest\ ==\ DD\_stream)\ \{}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \_download\_to\_stream-\/>seekp(0);}
+\DoxyCodeLine{00572\ \ \ \ \ \}}
+\DoxyCodeLine{00573\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_download\_dest\ ==\ DD\_ram)\ \{}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \_download\_to\_ramfile-\/>\_data\ =\ string();}
+\DoxyCodeLine{00575\ \ \ \ \ \}}
+\DoxyCodeLine{00576\ \ \ \}}
+\DoxyCodeLine{00577\ }
+\DoxyCodeLine{00578\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00579\ \}}
+\DoxyCodeLine{00580\ }
+\DoxyCodeLine{00586\ \textcolor{keywordtype}{bool}\ HTTPChannel::}
+\DoxyCodeLine{00587\ parse\_content\_range(\textcolor{keyword}{const}\ std::string\ \&content\_range)\ \{}
+\DoxyCodeLine{00588\ \ \ \textcolor{comment}{//\ First,\ get\ the\ units\ indication.}}
+\DoxyCodeLine{00589\ \ \ \textcolor{keywordtype}{size\_t}\ p\ =\ 0;}
+\DoxyCodeLine{00590\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ content\_range.length()\ \&\&\ !isspace(content\_range[p]))\ \{}
+\DoxyCodeLine{00591\ \ \ \ \ p++;}
+\DoxyCodeLine{00592\ \ \ \}}
+\DoxyCodeLine{00593\ }
+\DoxyCodeLine{00594\ \ \ std::string\ units\ =\ content\_range.substr(0,\ p);}
+\DoxyCodeLine{00595\ \ \ \textcolor{keywordflow}{while}\ (p\ <\ content\_range.length()\ \&\&\ isspace(content\_range[p]))\ \{}
+\DoxyCodeLine{00596\ \ \ \ \ p++;}
+\DoxyCodeLine{00597\ \ \ \}}
+\DoxyCodeLine{00598\ }
+\DoxyCodeLine{00599\ \ \ \textcolor{keywordflow}{if}\ (units\ ==\ \textcolor{stringliteral}{"{}bytes"{}})\ \{}
+\DoxyCodeLine{00600\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *c\_str\ =\ content\_range.c\_str();}
+\DoxyCodeLine{00601\ \ \ \ \ \textcolor{keywordtype}{char}\ *endptr;}
+\DoxyCodeLine{00602\ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ <\ content\_range.length()\ \&\&\ isdigit(content\_range[p]))\ \{}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \textcolor{keywordtype}{long}\ first\_byte\ =\ strtol(c\_str\ +\ p,\ \&endptr,\ 10);}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ p\ =\ endptr\ -\/\ c\_str;}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ <\ content\_range.length()\ \&\&\ content\_range[p]\ ==\ \textcolor{charliteral}{'-\/'})\ \{}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \ \ p++;}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (p\ <\ content\_range.length()\ \&\&\ isdigit(content\_range[p]))\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{long}\ last\_byte\ =\ strtol(c\_str\ +\ p,\ \&endptr,\ 10);}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \ \ \ \ p\ =\ endptr\ -\/\ c\_str;}
+\DoxyCodeLine{00610\ }
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (last\_byte\ >=\ first\_byte)\ \{}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ \ \ \ \ \_first\_byte\_delivered\ =\ first\_byte;}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \ \ \ \ \ \ \_last\_byte\_delivered\ =\ last\_byte;}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00615\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00618\ \ \ \ \ \}}
+\DoxyCodeLine{00619\ \ \ \}}
+\DoxyCodeLine{00620\ }
+\DoxyCodeLine{00621\ \ \ \textcolor{comment}{//\ Invalid\ or\ unhandled\ response.}}
+\DoxyCodeLine{00622\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00623\ \}}
+\DoxyCodeLine{00624\ }
+\DoxyCodeLine{00629\ \textcolor{keywordtype}{void}\ HTTPChannel::}
+\DoxyCodeLine{00630\ reset\_download\_to()\ \{}
+\DoxyCodeLine{00631\ \ \ close\_download\_stream();}
+\DoxyCodeLine{00632\ \ \ \_download\_dest\ =\ DD\_none;}
+\DoxyCodeLine{00633\ \}}
+\DoxyCodeLine{00634\ }
+\DoxyCodeLine{00639\ \textcolor{keywordtype}{void}\ HTTPChannel::}
+\DoxyCodeLine{00640\ close\_download\_stream()\ \{}
+\DoxyCodeLine{00641\ \ \ \textcolor{keywordflow}{if}\ (\_download\_to\_stream\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ \_download\_to\_stream-\/>flush();}
+\DoxyCodeLine{00643\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_download\_dest\ ==\ DD\_file)\ \{}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ VirtualFileSystem::close\_write\_file(\_download\_to\_stream);}
+\DoxyCodeLine{00645\ \ \ \ \ \}}
+\DoxyCodeLine{00646\ \ \ \}}
+\DoxyCodeLine{00647\ \ \ \_download\_to\_ramfile\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00648\ \ \ \_download\_to\_stream\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00649\ \}}
+\DoxyCodeLine{00650\ }
+\DoxyCodeLine{00674\ \textcolor{keywordtype}{bool}\ HTTPChannel::}
+\DoxyCodeLine{00675\ download\_to\_ram(\mbox{\hyperlink{classRamfile}{Ramfile}}\ *ramfile,\ \textcolor{keywordtype}{bool}\ subdocument\_resumes)\ \{}
+\DoxyCodeLine{00676\ \ \ State\ state\ =\ get\_state();}
+\DoxyCodeLine{00677\ \ \ nassertr(state\ !=\ S\_unsent,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00678\ \ \ nassertr(ramfile\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00679\ }
+\DoxyCodeLine{00680\ \ \ reset\_download\_to();}
+\DoxyCodeLine{00681\ \ \ ramfile-\/>\_pos\ =\ 0;}
+\DoxyCodeLine{00682\ \ \ \_download\_dest\ =\ DD\_ram;}
+\DoxyCodeLine{00683\ \ \ \_download\_to\_ramfile\ =\ ramfile;}
+\DoxyCodeLine{00684\ \ \ \_subdocument\_resumes\ =\ (subdocument\_resumes\ \&\&\ \_first\_byte\_delivered\ !=\ 0);}
+\DoxyCodeLine{00685\ }
+\DoxyCodeLine{00686\ \ \ \textcolor{keywordflow}{if}\ (state\ !=\ S\_done\ \&\&\ \_wanted\_nonblocking)\ \{}
+\DoxyCodeLine{00687\ \ \ \ \ \textcolor{comment}{//\ In\ nonblocking\ mode,\ we\ just\ kick\ off\ the\ request.}}
+\DoxyCodeLine{00688\ \ \ \ \ \textcolor{keywordflow}{return}\ state\ !=\ S\_opened\ ||\ run\_send();}
+\DoxyCodeLine{00689\ \ \ \}}
+\DoxyCodeLine{00690\ }
+\DoxyCodeLine{00691\ \ \ \textcolor{comment}{//\ In\ normal,\ blocking\ mode,\ go\ ahead\ and\ do\ the\ download.}}
+\DoxyCodeLine{00692\ \ \ \textcolor{keywordflow}{if}\ (!open\_download\_file())\ \{}
+\DoxyCodeLine{00693\ \ \ \ \ reset\_download\_to();}
+\DoxyCodeLine{00694\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00695\ \ \ \}}
+\DoxyCodeLine{00696\ }
+\DoxyCodeLine{00697\ \ \ \textcolor{keywordflow}{if}\ (state\ !=\ S\_done)\ \{}
+\DoxyCodeLine{00698\ \ \ \ \ \textcolor{keywordflow}{while}\ (run())\ \{}
+\DoxyCodeLine{00699\ \ \ \ \ \}}
+\DoxyCodeLine{00700\ \ \ \}}
+\DoxyCodeLine{00701\ }
+\DoxyCodeLine{00702\ \ \ \textcolor{comment}{//\ Copy\ the\ entire\ response\ text.}}
+\DoxyCodeLine{00703\ \ \ \textcolor{keywordtype}{int}\ bytes\_read\ =\ EM\_ASM\_INT(\{}
+\DoxyCodeLine{00704\ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00705\ \ \ \ \ var\ state\ =\ xhr.readyState;}
+\DoxyCodeLine{00706\ \ \ \ \ var\ body\ =\ xhr.responseText;}
+\DoxyCodeLine{00707\ \ \ \ \ var\ ptr\ =\ \_\_extend\_string(\$1,\ body.length);}
+\DoxyCodeLine{00708\ \ \ \ \ \textcolor{keywordflow}{for}\ (var\ i\ =\ 0;\ i\ <\ body.length;\ ++i)\ \{}
+\DoxyCodeLine{00709\ \ \ \ \ \ \ HEAPU8[ptr\ +\ i]\ =\ body.charCodeAt(i);}
+\DoxyCodeLine{00710\ \ \ \ \ \}}
+\DoxyCodeLine{00711\ \ \ \ \ \textcolor{keywordflow}{return}\ state;}
+\DoxyCodeLine{00712\ \ \ \},\ \textcolor{keyword}{this},\ \&ramfile-\/>\_data);}
+\DoxyCodeLine{00713\ }
+\DoxyCodeLine{00714\ \ \ \_bytes\_downloaded\ =\ bytes\_read;}
+\DoxyCodeLine{00715\ }
+\DoxyCodeLine{00716\ \ \ close\_download\_stream();}
+\DoxyCodeLine{00717\ }
+\DoxyCodeLine{00718\ \ \ \textcolor{keywordflow}{return}\ is\_valid();}
+\DoxyCodeLine{00719\ \}}
+\DoxyCodeLine{00720\ }
+\DoxyCodeLine{00745\ \textcolor{keywordtype}{bool}\ HTTPChannel::}
+\DoxyCodeLine{00746\ download\_to\_stream(std::ostream\ *strm,\ \textcolor{keywordtype}{bool}\ subdocument\_resumes)\ \{}
+\DoxyCodeLine{00747\ \ \ State\ state\ =\ get\_state();}
+\DoxyCodeLine{00748\ \ \ nassertr(state\ !=\ S\_unsent,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00749\ }
+\DoxyCodeLine{00750\ \ \ reset\_download\_to();}
+\DoxyCodeLine{00751\ \ \ \_download\_dest\ =\ DD\_stream;}
+\DoxyCodeLine{00752\ \ \ \_download\_to\_stream\ =\ strm;}
+\DoxyCodeLine{00753\ \ \ \_download\_to\_stream-\/>clear();}
+\DoxyCodeLine{00754\ \ \ \_subdocument\_resumes\ =\ subdocument\_resumes;}
+\DoxyCodeLine{00755\ }
+\DoxyCodeLine{00756\ \ \ \textcolor{keywordflow}{if}\ (state\ !=\ S\_done\ \&\&\ \_wanted\_nonblocking)\ \{}
+\DoxyCodeLine{00757\ \ \ \ \ \textcolor{comment}{//\ In\ nonblocking\ mode,\ we\ just\ kick\ off\ the\ request.}}
+\DoxyCodeLine{00758\ \ \ \ \ \textcolor{keywordflow}{return}\ state\ !=\ S\_opened\ ||\ run\_send();}
+\DoxyCodeLine{00759\ \ \ \}}
+\DoxyCodeLine{00760\ }
+\DoxyCodeLine{00761\ \ \ \textcolor{comment}{//\ In\ normal,\ blocking\ mode,\ go\ ahead\ and\ do\ the\ download.}}
+\DoxyCodeLine{00762\ \ \ \textcolor{keywordflow}{if}\ (!open\_download\_file())\ \{}
+\DoxyCodeLine{00763\ \ \ \ \ reset\_download\_to();}
+\DoxyCodeLine{00764\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00765\ \ \ \}}
+\DoxyCodeLine{00766\ }
+\DoxyCodeLine{00767\ \ \ \textcolor{keywordflow}{if}\ (state\ !=\ S\_done)\ \{}
+\DoxyCodeLine{00768\ \ \ \ \ \textcolor{keywordflow}{while}\ (run())\ \{}
+\DoxyCodeLine{00769\ \ \ \ \ \}}
+\DoxyCodeLine{00770\ \ \ \}}
+\DoxyCodeLine{00771\ }
+\DoxyCodeLine{00772\ \ \ \textcolor{comment}{//\ Copy\ the\ entire\ response\ text.}}
+\DoxyCodeLine{00773\ \ \ \textcolor{keywordtype}{char}\ buffer[4096];}
+\DoxyCodeLine{00774\ \ \ \textcolor{keywordtype}{int}\ bytes\_read\ =\ EM\_ASM\_INT(\{}
+\DoxyCodeLine{00775\ \ \ \ \ var\ xhr\ =\ window.\_httpChannels[\$0];}
+\DoxyCodeLine{00776\ \ \ \ \ var\ state\ =\ xhr.readyState;}
+\DoxyCodeLine{00777\ \ \ \ \ var\ body\ =\ xhr.responseText;}
+\DoxyCodeLine{00778\ \ \ \ \ var\ read\ =\ 0;}
+\DoxyCodeLine{00779\ \ \ \ \ \textcolor{keywordflow}{while}\ (read\ <\ body.length)\ \{}
+\DoxyCodeLine{00780\ \ \ \ \ \ \ var\ size\ =\ Math.min(body.length\ -\/\ read,\ 4096);}
+\DoxyCodeLine{00781\ \ \ \ \ \ \ for\ (var\ dest\ =\ \$2;\ dest\ <\ \$2\ +\ size;\ ++dest)\ \{}
+\DoxyCodeLine{00782\ \ \ \ \ \ \ \ \ HEAP8[(dest>>0)]\ =\ body.charCodeAt(read++)\ \&\ 0xff;}
+\DoxyCodeLine{00783\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00784\ \ \ \ \ \ \ \_\_write\_stream(\$1,\ \$2,\ size);}
+\DoxyCodeLine{00785\ \ \ \ \ \}}
+\DoxyCodeLine{00786\ \ \ \ \ \textcolor{keywordflow}{return}\ read;}
+\DoxyCodeLine{00787\ \ \ \},\ \textcolor{keyword}{this},\ strm,\ buffer);}
+\DoxyCodeLine{00788\ }
+\DoxyCodeLine{00789\ \ \ strm-\/>flush();}
+\DoxyCodeLine{00790\ \ \ \_bytes\_downloaded\ =\ bytes\_read;}
+\DoxyCodeLine{00791\ }
+\DoxyCodeLine{00792\ \ \ close\_download\_stream();}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00794\ \ \ \textcolor{keywordflow}{return}\ is\_valid();}
+\DoxyCodeLine{00795\ \}}
+\DoxyCodeLine{00796\ }
+\DoxyCodeLine{00797\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_\_EMSCRIPTEN\_\_}}
+
+\end{DoxyCode}

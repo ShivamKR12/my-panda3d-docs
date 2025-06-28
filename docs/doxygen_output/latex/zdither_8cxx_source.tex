@@ -1,0 +1,165 @@
+\doxysection{zdither.\+cxx}
+\hypertarget{zdither_8cxx_source}{}\label{zdither_8cxx_source}\index{panda/src/tinydisplay/zdither.cxx@{panda/src/tinydisplay/zdither.cxx}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{/*\ }}
+\DoxyCodeLine{00002\ \textcolor{comment}{\ *\ Highly\ optimised\ dithering\ 16\ bits\ -\/>\ 8\ bits.\ }}
+\DoxyCodeLine{00003\ \textcolor{comment}{\ *\ The\ formulas\ were\ taken\ in\ Mesa\ (Bob\ Mercier\ mercier@hollywood.cinenet.net).}}
+\DoxyCodeLine{00004\ \textcolor{comment}{\ */}}
+\DoxyCodeLine{00005\ }
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#include\ <stdlib.h>}}
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#include\ <stdio.h>}}
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#include\ "{}zbuffer.h"{}}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#include\ <assert.h>}}
+\DoxyCodeLine{00010\ }
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#if\ defined(TGL\_FEATURE\_8\_BITS)}}
+\DoxyCodeLine{00012\ }
+\DoxyCodeLine{00013\ \textcolor{preprocessor}{\#define\ \_R\ \ 5}}
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#define\ \_G\ \ 9}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#define\ \_B\ \ 5}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#define\ \_DX\ 4}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#define\ \_DY\ 4}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#define\ \_D\ \ (\_DX*\_DY)}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#define\ \_MIX(r,g,b)\ (\ ((g)<<6)\ |\ ((b)<<3)\ |\ (r)\ )}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#define\ DITHER\_TABLE\_SIZE\ (1\ <<\ 15)}}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#define\ DITHER\_INDEX(r,g,b)\ ((b)\ +\ (g)\ *\ \_B\ +\ (r)\ *\ (\_B\ *\ \_G))}}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#define\ MAXC\ \ \ \ 256}}
+\DoxyCodeLine{00026\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}\ kernel8[\_DY*\_DX]\ =\ \{}
+\DoxyCodeLine{00027\ \ \ \ \ 0\ *\ MAXC,\ \ 8\ *\ MAXC,\ \ 2\ *\ MAXC,\ 10\ *\ MAXC,}
+\DoxyCodeLine{00028\ \ \ \ 12\ *\ MAXC,\ \ 4\ *\ MAXC,\ 14\ *\ MAXC,\ \ 6\ *\ MAXC,}
+\DoxyCodeLine{00029\ \ \ \ \ 3\ *\ MAXC,\ 11\ *\ MAXC,\ \ 1\ *\ MAXC,\ \ 9\ *\ MAXC,}
+\DoxyCodeLine{00030\ \ \ \ 15\ *\ MAXC,\ \ 7\ *\ MAXC,\ 13\ *\ MAXC,\ \ 5\ *\ MAXC,}
+\DoxyCodeLine{00031\ \};}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{comment}{/*\ we\ build\ the\ color\ table\ and\ the\ lookup\ table\ */}}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00035\ \textcolor{keywordtype}{void}\ ZB\_initDither(\mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *zb,\textcolor{keywordtype}{int}\ nb\_colors,}
+\DoxyCodeLine{00036\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *color\_indexes,\textcolor{keywordtype}{int}\ *color\_table)}
+\DoxyCodeLine{00037\ \{}
+\DoxyCodeLine{00038\ \ \ \textcolor{keywordtype}{int}\ c,r,g,b,i,index,r1,g1,b1;}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \ \ \textcolor{keywordflow}{if}\ (nb\_colors\ <\ (\_R\ *\ \_G\ *\ \_B))\ \{}
+\DoxyCodeLine{00041\ \ \ \ \ fprintf(stderr,\textcolor{stringliteral}{"{}zdither:\ not\ enough\ colors\(\backslash\)n"{}});}
+\DoxyCodeLine{00042\ \ \ \ \ exit(1);}
+\DoxyCodeLine{00043\ \ \ \}}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \ \ \textcolor{keywordflow}{for}(i=0;i<nb\_colors;i++)\ color\_table[i]=0;}
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00047\ \ \ zb-\/>nb\_colors=nb\_colors;}
+\DoxyCodeLine{00048\ \ \ zb-\/>ctable=gl\_malloc(nb\_colors\ *\ \textcolor{keyword}{sizeof}(\textcolor{keywordtype}{int}));}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \ \ \textcolor{keywordflow}{for}\ (r\ =\ 0;\ r\ <\ \_R;\ r++)\ \{}
+\DoxyCodeLine{00051\ \ \ \ \ \textcolor{keywordflow}{for}\ (g\ =\ 0;\ g\ <\ \_G;\ g++)\ \{}
+\DoxyCodeLine{00052\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (b\ =\ 0;\ b\ <\ \_B;\ b++)\ \{}
+\DoxyCodeLine{00053\ \ \ \ \ r1=(r*255)\ /\ (\_R\ -\/\ 1);}
+\DoxyCodeLine{00054\ \ \ \ \ g1=(g*255)\ /\ (\_G\ -\/\ 1);}
+\DoxyCodeLine{00055\ \ \ \ \ b1=(b*255)\ /\ (\_B\ -\/\ 1);}
+\DoxyCodeLine{00056\ \ \ \ \ index=DITHER\_INDEX(r,g,b);}
+\DoxyCodeLine{00057\ \ \ \ \ c=(r1\ <<\ 16)\ |\ (g1\ <<\ 8)\ |\ b1;}
+\DoxyCodeLine{00058\ \ \ \ \ zb-\/>ctable[index]=c;}
+\DoxyCodeLine{00059\ \ \ \ \ color\_table[index]=c;}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00061\ \ \ \ \ \}}
+\DoxyCodeLine{00062\ \ \ \}}
+\DoxyCodeLine{00063\ }
+\DoxyCodeLine{00064\ \ \ zb-\/>dctable=gl\_malloc(\ DITHER\_TABLE\_SIZE\ );}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \ \ \textcolor{keywordflow}{for}(i=0;i<DITHER\_TABLE\_SIZE;i++)\ \{}
+\DoxyCodeLine{00067\ \ \ \ \ r=(i\ >>\ 12)\ \&\ 0x7;}
+\DoxyCodeLine{00068\ \ \ \ \ g=(i\ >>\ 8)\ \&\ 0xF;}
+\DoxyCodeLine{00069\ \ \ \ \ b=(i\ >>\ 3)\ \&\ 0x7;}
+\DoxyCodeLine{00070\ \ \ \ \ index=DITHER\_INDEX(r,g,b);}
+\DoxyCodeLine{00071\ \ \ \ \ zb-\/>dctable[i]=color\_indexes[index];}
+\DoxyCodeLine{00072\ \ \ \}}
+\DoxyCodeLine{00073\ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00076\ ZB\_closeDither(\mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *zb)\ \{}
+\DoxyCodeLine{00077\ \ \ gl\_free(zb-\/>ctable);}
+\DoxyCodeLine{00078\ \ \ gl\_free(zb-\/>dctable);}
+\DoxyCodeLine{00079\ \}}
+\DoxyCodeLine{00080\ }
+\DoxyCodeLine{00081\ \textcolor{preprocessor}{\#if\ 0}}
+\DoxyCodeLine{00082\ \textcolor{keywordtype}{int}}
+\DoxyCodeLine{00083\ ZDither\_lookupColor(\textcolor{keywordtype}{int}\ r,\textcolor{keywordtype}{int}\ g,\textcolor{keywordtype}{int}\ b)\ \{}
+\DoxyCodeLine{00084\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *ctable=zdither\_color\_table;}
+\DoxyCodeLine{00085\ \ \ \textcolor{keywordflow}{return}\ ctable[\_MIX(\_DITH0(\_R,\ r),\ \_DITH0(\_G,\ g),\_DITH0(\_B,\ b))];}
+\DoxyCodeLine{00086\ \}}
+\DoxyCodeLine{00087\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00088\ }
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00090\ \textcolor{preprocessor}{\#define\ DITHER\_PIXEL2(a)\ \ \ \ \ \ \ \ \ \ \ \ \(\backslash\)}}
+\DoxyCodeLine{00091\ \textcolor{preprocessor}{\{\ \(\backslash\)}}
+\DoxyCodeLine{00092\ \textcolor{preprocessor}{\ \ int\ v,t,r,g,c;\ \ \ \ \ \ \ \ \ \ \ \(\backslash\)}}
+\DoxyCodeLine{00093\ \textcolor{preprocessor}{\ \ v=*(unsigned\ int\ *)(pp+(a));\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \(\backslash\)}}
+\DoxyCodeLine{00094\ \textcolor{preprocessor}{\ \ g=(v\ \&\ 0x07DF07DF)\ +\ g\_d;\ \(\backslash\)}}
+\DoxyCodeLine{00095\ \textcolor{preprocessor}{\ \ r=(((v\ \&\ 0xF800F800)\ >>\ 2)\ +\ r\_d)\ \&\ 0x70007000;\ \(\backslash\)}}
+\DoxyCodeLine{00096\ \textcolor{preprocessor}{\ \ t=r\ |\ g;\ \(\backslash\)}}
+\DoxyCodeLine{00097\ \textcolor{preprocessor}{\ \ c=ctable[t\ \&\ 0xFFFF]\ |\ (ctable[t\ >>\ 16]\ <<\ 8);\ \(\backslash\)}}
+\DoxyCodeLine{00098\ \textcolor{preprocessor}{\ \ *(unsigned\ short\ *)(dest+(a))=c;\ \ \(\backslash\)}}
+\DoxyCodeLine{00099\ \textcolor{preprocessor}{\}}}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \textcolor{comment}{/*\ NOTE:\ all\ the\ memory\ access\ are\ 16\ bit\ aligned,\ so\ if\ buf\ or}}
+\DoxyCodeLine{00102\ \textcolor{comment}{\ \ \ linesize\ are\ not\ multiple\ of\ 2,\ it\ cannot\ work\ efficiently\ (or}}
+\DoxyCodeLine{00103\ \textcolor{comment}{\ \ \ hang!)\ */}}
+\DoxyCodeLine{00104\ }
+\DoxyCodeLine{00105\ \textcolor{keywordtype}{void}}
+\DoxyCodeLine{00106\ ZB\_ditherFrameBuffer(\mbox{\hyperlink{structZBuffer}{ZBuffer}}\ *zb,\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *buf,}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ linesize)\ \{}
+\DoxyCodeLine{00108\ \ \ \textcolor{keywordtype}{int}\ xk,yk,x,y,c1,c2;}
+\DoxyCodeLine{00109\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *dest1;}
+\DoxyCodeLine{00110\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ *pp1;}
+\DoxyCodeLine{00111\ \ \ \textcolor{keywordtype}{int}\ r\_d,g\_d,b\_d;}
+\DoxyCodeLine{00112\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *ctable=zb-\/>dctable;}
+\DoxyCodeLine{00113\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *dest;}
+\DoxyCodeLine{00114\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ *pp;}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ assert(\ ((\textcolor{keywordtype}{long})buf\ \&\ 1)\ ==\ 0\ \&\&\ (linesize\ \&\ 1)\ ==\ 0);}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \ \ \textcolor{keywordflow}{for}(yk=0;yk<4;yk++)\ \{}
+\DoxyCodeLine{00119\ \ \ \ \ \textcolor{keywordflow}{for}(xk=0;xk<4;xk+=2)\ \{}
+\DoxyCodeLine{00120\ \textcolor{preprocessor}{\#if\ BYTE\_ORDER\ ==\ BIG\_ENDIAN}}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ c1=kernel8[yk*4+xk+1];}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ c2=kernel8[yk*4+xk];}
+\DoxyCodeLine{00123\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ c1=kernel8[yk*4+xk];}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ c2=kernel8[yk*4+xk+1];}
+\DoxyCodeLine{00126\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ r\_d=((c1\ <<\ 2)\ \&\ 0xF800)\ >>\ 2;}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ g\_d=(c1\ >>\ 4)\ \&\ 0x07C0;}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ b\_d=(c1\ >>\ 9)\ \&\ 0x001F;}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ }
+\DoxyCodeLine{00131\ \ \ \ \ \ \ r\_d|=(((c2\ <<\ 2)\ \&\ 0xF800)\ >>\ 2)\ <<\ 16;}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ g\_d|=((c2\ >>\ 4)\ \&\ 0x07C0)\ <<\ 16;}
+\DoxyCodeLine{00133\ \ \ \ \ \ \ b\_d|=((c2\ >>\ 9)\ \&\ 0x001F)\ <<\ 16;}
+\DoxyCodeLine{00134\ \ \ \ \ \ \ g\_d=b\_d\ |\ g\_d;}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00136\ \ \ \ \ \ \ dest1=buf\ +\ (yk\ *\ linesize)\ +\ xk;}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ pp1=zb-\/>pbuf\ +\ (yk\ *\ zb-\/>xsize)\ +\ xk;}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ }
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \textcolor{keywordflow}{for}(y=yk;y<zb-\/>ysize;y+=4)\ \{}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ dest=dest1;}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ pp=pp1;}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}(x=xk;x<zb-\/>xsize;x+=16)\ \{}
+\DoxyCodeLine{00143\ }
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \ \ DITHER\_PIXEL2(0);}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \ \ DITHER\_PIXEL2(1*4);}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \ \ DITHER\_PIXEL2(2*4);}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ \ \ \ DITHER\_PIXEL2(3*4);}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \ \ pp+=16;}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \ \ dest+=16;}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ dest1+=linesize*4;}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \ \ pp1+=zb-\/>xsize*4;}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00155\ \ \ \ \ \}}
+\DoxyCodeLine{00156\ \ \ \}}
+\DoxyCodeLine{00157\ \}}
+\DoxyCodeLine{00158\ }
+\DoxyCodeLine{00159\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

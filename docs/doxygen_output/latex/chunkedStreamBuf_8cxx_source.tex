@@ -1,0 +1,218 @@
+\doxysection{chunked\+Stream\+Buf.\+cxx}
+\hypertarget{chunkedStreamBuf_8cxx_source}{}\label{chunkedStreamBuf_8cxx_source}\index{panda/src/downloader/chunkedStreamBuf.cxx@{panda/src/downloader/chunkedStreamBuf.cxx}}
+\mbox{\hyperlink{chunkedStreamBuf_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{chunkedStreamBuf_8h}{chunkedStreamBuf.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__downloader_8h}{config\_downloader.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ <ctype.h>}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{comment}{//\ This\ module\ is\ not\ compiled\ if\ OpenSSL\ is\ not\ available.}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#ifdef\ HAVE\_OPENSSL}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00024\ ChunkedStreamBuf::}
+\DoxyCodeLine{00025\ ChunkedStreamBuf()\ \{}
+\DoxyCodeLine{00026\ \ \ \_chunk\_remaining\ =\ 0;}
+\DoxyCodeLine{00027\ \ \ \_done\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00028\ \ \ \_wanted\_nonblocking\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00029\ \ \ \_read\_state\ =\ ISocketStream::RS\_initial;}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_IOSTREAM}}
+\DoxyCodeLine{00032\ \ \ \_buffer\ =\ (\textcolor{keywordtype}{char}\ *)PANDA\_MALLOC\_ARRAY(4096);}
+\DoxyCodeLine{00033\ \ \ \textcolor{keywordtype}{char}\ *ebuf\ =\ \_buffer\ +\ 4096;}
+\DoxyCodeLine{00034\ \ \ setg(\_buffer,\ ebuf,\ ebuf);}
+\DoxyCodeLine{00035\ \ \ setp(\_buffer,\ ebuf);}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00038\ \ \ allocate();}
+\DoxyCodeLine{00039\ \ \ setg(base(),\ ebuf(),\ ebuf());}
+\DoxyCodeLine{00040\ \ \ setp(base(),\ ebuf());}
+\DoxyCodeLine{00041\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00042\ \}}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00047\ ChunkedStreamBuf::}
+\DoxyCodeLine{00048\ \string~ChunkedStreamBuf()\ \{}
+\DoxyCodeLine{00049\ \ \ close\_read();}
+\DoxyCodeLine{00050\ \textcolor{preprocessor}{\#ifdef\ PHAVE\_IOSTREAM}}
+\DoxyCodeLine{00051\ \ \ PANDA\_FREE\_ARRAY(\_buffer);}
+\DoxyCodeLine{00052\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00053\ \}}
+\DoxyCodeLine{00054\ }
+\DoxyCodeLine{00059\ \textcolor{keywordtype}{void}\ ChunkedStreamBuf::}
+\DoxyCodeLine{00060\ open\_read(BioStreamPtr\ *source,\ HTTPChannel\ *doc)\ \{}
+\DoxyCodeLine{00061\ \ \ \_source\ =\ source;}
+\DoxyCodeLine{00062\ \ \ nassertv(!\_source.is\_null());}
+\DoxyCodeLine{00063\ \ \ \_chunk\_remaining\ =\ 0;}
+\DoxyCodeLine{00064\ \ \ \_done\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00065\ \ \ \_wanted\_nonblocking\ =\ doc-\/>\_wanted\_nonblocking;}
+\DoxyCodeLine{00066\ \ \ \_read\_state\ =\ ISocketStream::RS\_reading;}
+\DoxyCodeLine{00067\ \ \ \_doc\ =\ doc;}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00069\ \ \ \textcolor{keywordflow}{if}\ (\_doc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00070\ \ \ \ \ \_read\_index\ =\ doc-\/>\_read\_index;}
+\DoxyCodeLine{00071\ \ \ \ \ \_doc-\/>\_transfer\_file\_size\ =\ 0;}
+\DoxyCodeLine{00072\ \ \ \ \ \_doc-\/>\_got\_transfer\_file\_size\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00074\ \ \ \ \ \textcolor{comment}{//\ Read\ a\ little\ bit\ from\ the\ file\ to\ get\ the\ first\ chunk\ (and\ therefore}}
+\DoxyCodeLine{00075\ \ \ \ \ \textcolor{comment}{//\ the\ file\ size,\ or\ at\ least\ the\ size\ of\ the\ first\ chunk).}}
+\DoxyCodeLine{00076\ \ \ \ \ underflow();}
+\DoxyCodeLine{00077\ \ \ \}}
+\DoxyCodeLine{00078\ \}}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00083\ \textcolor{keywordtype}{void}\ ChunkedStreamBuf::}
+\DoxyCodeLine{00084\ close\_read()\ \{}
+\DoxyCodeLine{00085\ \ \ \_source.clear();}
+\DoxyCodeLine{00086\ \}}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00092\ \textcolor{keywordtype}{int}\ ChunkedStreamBuf::}
+\DoxyCodeLine{00093\ underflow()\ \{}
+\DoxyCodeLine{00094\ \ \ \textcolor{comment}{//\ Sometimes\ underflow()\ is\ called\ even\ if\ the\ buffer\ is\ not\ empty.}}
+\DoxyCodeLine{00095\ \ \ \textcolor{keywordflow}{if}\ (gptr()\ >=\ egptr())\ \{}
+\DoxyCodeLine{00096\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ buffer\_size\ =\ egptr()\ -\/\ eback();}
+\DoxyCodeLine{00097\ \ \ \ \ gbump(-\/(\textcolor{keywordtype}{int})buffer\_size);}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ num\_bytes\ =\ buffer\_size;}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ read\_count\ =\ read\_chars(gptr(),\ buffer\_size);}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_count\ !=\ num\_bytes)\ \{}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \textcolor{comment}{//\ Oops,\ we\ didn't\ read\ what\ we\ thought\ we\ would.}}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_count\ ==\ 0)\ \{}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \ \ gbump(num\_bytes);}
+\DoxyCodeLine{00106\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ EOF;}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \ \ \ \ \ \ \textcolor{comment}{//\ Slide\ what\ we\ did\ read\ to\ the\ top\ of\ the\ buffer.}}
+\DoxyCodeLine{00110\ \ \ \ \ \ \ nassertr(read\_count\ <\ num\_bytes,\ EOF);}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ delta\ =\ num\_bytes\ -\/\ read\_count;}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ memmove(gptr()\ +\ delta,\ gptr(),\ read\_count);}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ gbump(delta);}
+\DoxyCodeLine{00114\ \ \ \ \ \}}
+\DoxyCodeLine{00115\ \ \ \}}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00117\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char})*gptr();}
+\DoxyCodeLine{00118\ \}}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00124\ \textcolor{keywordtype}{size\_t}\ ChunkedStreamBuf::}
+\DoxyCodeLine{00125\ read\_chars(\textcolor{keywordtype}{char}\ *start,\ \textcolor{keywordtype}{size\_t}\ length)\ \{}
+\DoxyCodeLine{00126\ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00127\ \ \ \ \ nassertr(!\_source.is\_null(),\ 0);}
+\DoxyCodeLine{00128\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_done)\ \{}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00130\ \ \ \ \ \}}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_chunk\_remaining\ !=\ 0)\ \{}
+\DoxyCodeLine{00133\ \ \ \ \ \ \ \textcolor{comment}{//\ Extract\ some\ of\ the\ bytes\ remaining\ in\ the\ chunk.}}
+\DoxyCodeLine{00134\ \ \ \ \ \ \ length\ =\ std::min(length,\ \_chunk\_remaining);}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ (*\_source)-\/>read(start,\ length);}
+\DoxyCodeLine{00136\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ read\_count\ =\ (*\_source)-\/>gcount();}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_wanted\_nonblocking)\ \{}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (read\_count\ ==\ 0\ \&\&\ !(*\_source)-\/>is\_closed())\ \{}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Simulate\ blocking.}}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ \ \ thread\_yield();}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ \ \ (*\_source)-\/>read(start,\ length);}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \ \ read\_count\ =\ (*\_source)-\/>gcount();}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \_chunk\_remaining\ -\/=\ read\_count;}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_count\ ==\ 0\ \&\&\ (*\_source)-\/>is\_closed())\ \{}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Whoops,\ the\ socket\ closed\ while\ we\ were\ downloading.}}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \_read\_state\ =\ ISocketStream::RS\_error;}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ read\_count;}
+\DoxyCodeLine{00153\ \ \ \ \ \}}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00155\ \ \ \ \ \textcolor{comment}{//\ Read\ the\ next\ chunk.}}
+\DoxyCodeLine{00156\ \ \ \ \ std::string\ line;}
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{keywordtype}{bool}\ got\_line\ =\ http\_getline(line);}
+\DoxyCodeLine{00158\ \ \ \ \ \textcolor{keywordflow}{while}\ (got\_line\ \&\&\ line.empty())\ \{}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \textcolor{comment}{//\ Skip\ blank\ lines.\ \ There\ really\ should\ be\ exactly\ one\ blank\ line,\ but}}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \textcolor{comment}{//\ who's\ counting?\ \ It's\ tricky\ to\ count\ and\ maintain\ reentry\ for}}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \textcolor{comment}{//\ nonblocking\ IO.}}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ got\_line\ =\ http\_getline(line);}
+\DoxyCodeLine{00163\ \ \ \ \ \}}
+\DoxyCodeLine{00164\ \ \ \ \ \textcolor{keywordflow}{if}\ (!got\_line)\ \{}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \textcolor{comment}{//\ EOF\ (or\ data\ unavailable)\ while\ trying\ to\ read\ the\ chunk\ size.}}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((*\_source)-\/>is\_closed())\ \{}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Whoops,\ the\ socket\ closed\ while\ we\ were\ downloading.}}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \_read\_state\ =\ ISocketStream::RS\_error;}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_wanted\_nonblocking)\ \{}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Simulate\ blocking.}}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ thread\_yield();}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{continue};\ \ \textcolor{comment}{//\ back\ to\ the\ top.}}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00178\ \ \ \ \ \}}
+\DoxyCodeLine{00179\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ chunk\_size\ =\ (size\_t)strtol(line.c\_str(),\ \textcolor{keyword}{nullptr},\ 16);}
+\DoxyCodeLine{00180\ \ \ \ \ \textcolor{keywordflow}{if}\ (downloader\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ downloader\_cat.spam()}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Got\ chunk\ of\ size\ "{}}\ <<\ chunk\_size\ <<\ \textcolor{stringliteral}{"{}\ bytes.\(\backslash\)n"{}};}
+\DoxyCodeLine{00183\ \ \ \ \ \}}
+\DoxyCodeLine{00184\ }
+\DoxyCodeLine{00185\ \ \ \ \ \textcolor{keywordflow}{if}\ (chunk\_size\ ==\ 0)\ \{}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \textcolor{comment}{//\ Last\ chunk;\ we're\ done.}}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \_done\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_doc\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ \_read\_index\ ==\ \_doc-\/>\_read\_index)\ \{}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \_doc-\/>\_file\_size\ =\ \_doc-\/>\_transfer\_file\_size;}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ \_doc-\/>\_got\_file\_size\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \_read\_state\ =\ ISocketStream::RS\_complete;}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00194\ \ \ \ \ \}}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_doc\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ \_read\_index\ ==\ \_doc-\/>\_read\_index)\ \{}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \_doc-\/>\_transfer\_file\_size\ +=\ chunk\_size;}
+\DoxyCodeLine{00198\ \ \ \ \ \}}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00200\ \ \ \ \ \_chunk\_remaining\ =\ chunk\_size;}
+\DoxyCodeLine{00201\ }
+\DoxyCodeLine{00202\ \ \ \ \ \textcolor{comment}{//\ Back\ to\ the\ top.}}
+\DoxyCodeLine{00203\ \ \ \}}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00205\ \ \ \textcolor{comment}{//\ Never\ gets\ here.}}
+\DoxyCodeLine{00206\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00207\ \}}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00214\ \textcolor{keywordtype}{bool}\ ChunkedStreamBuf::}
+\DoxyCodeLine{00215\ http\_getline(std::string\ \&str)\ \{}
+\DoxyCodeLine{00216\ \ \ nassertr(!\_source.is\_null(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00217\ \ \ \textcolor{keywordtype}{int}\ ch\ =\ (*\_source)-\/>get();}
+\DoxyCodeLine{00218\ \ \ \textcolor{keywordflow}{while}\ (!(*\_source)-\/>eof()\ \&\&\ !(*\_source)-\/>fail())\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ \textcolor{keywordflow}{switch}\ (ch)\ \{}
+\DoxyCodeLine{00220\ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)n'}:}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \textcolor{comment}{//\ end-\/of-\/line\ character,\ we're\ done.}}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ str\ =\ \_working\_getline;}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \_working\_getline\ =\ std::string();}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Trim\ trailing\ whitespace.\ \ We're\ not\ required\ to\ do\ this\ per\ the}}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ HTTP\ spec,\ but\ let's\ be\ generous.}}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ p\ =\ str.length();}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ >\ 0\ \&\&\ isspace(str[p\ -\/\ 1]))\ \{}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \ \ -\/-\/p;}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ str\ =\ str.substr(0,\ p);}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00233\ }
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00235\ }
+\DoxyCodeLine{00236\ \ \ \ \ \textcolor{keywordflow}{case}\ \textcolor{charliteral}{'\(\backslash\)r'}:}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \textcolor{comment}{//\ Ignore\ CR\ characters.}}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00239\ }
+\DoxyCodeLine{00240\ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \_working\_getline\ +=\ (char)ch;}
+\DoxyCodeLine{00242\ \ \ \ \ \}}
+\DoxyCodeLine{00243\ \ \ \ \ ch\ =\ (*\_source)-\/>get();}
+\DoxyCodeLine{00244\ \ \ \}}
+\DoxyCodeLine{00245\ }
+\DoxyCodeLine{00246\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00247\ \}}
+\DoxyCodeLine{00248\ }
+\DoxyCodeLine{00249\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+
+\end{DoxyCode}

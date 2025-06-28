@@ -1,0 +1,477 @@
+\doxysection{ffmpeg\+Audio\+Cursor.\+cxx}
+\hypertarget{ffmpegAudioCursor_8cxx_source}{}\label{ffmpegAudioCursor_8cxx_source}\index{panda/src/ffmpeg/ffmpegAudioCursor.cxx@{panda/src/ffmpeg/ffmpegAudioCursor.cxx}}
+\mbox{\hyperlink{ffmpegAudioCursor_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__ffmpeg_8h}{config\_ffmpeg.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{ffmpegAudioCursor_8h}{ffmpegAudioCursor.h}}"{}}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{ffmpegAudio_8h}{ffmpegAudio.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \{}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\ \ \#include\ <libavutil/dict.h>}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\ \ \#include\ <libavutil/opt.h>}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\ \ \#include\ <libavcodec/avcodec.h>}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\ \ \#include\ <libavformat/avformat.h>}}
+\DoxyCodeLine{00023\ \}}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#ifdef\ HAVE\_SWRESAMPLE}}
+\DoxyCodeLine{00026\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \{}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\ \ \#include\ <libswresample/swresample.h>}}
+\DoxyCodeLine{00028\ \}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ FfmpegAudioCursor::\_type\_handle;}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#if\ LIBAVFORMAT\_VERSION\_MAJOR\ <\ 53}}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\ \ \#define\ AVMEDIA\_TYPE\_AUDIO\ CODEC\_TYPE\_AUDIO}}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\#ifndef\ AVCODEC\_MAX\_AUDIO\_FRAME\_SIZE}}
+\DoxyCodeLine{00038\ \textcolor{comment}{//\ More\ recent\ versions\ of\ ffmpeg\ no\ longer\ define\ this.}}
+\DoxyCodeLine{00039\ \textcolor{preprocessor}{\#define\ AVCODEC\_MAX\_AUDIO\_FRAME\_SIZE\ 192000}}
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00045\ FfmpegAudioCursor::}
+\DoxyCodeLine{00046\ FfmpegAudioCursor(\mbox{\hyperlink{classFfmpegAudio}{FfmpegAudio}}\ *src)\ :}
+\DoxyCodeLine{00047\ \ \ \mbox{\hyperlink{classMovieAudioCursor}{MovieAudioCursor}}(src),}
+\DoxyCodeLine{00048\ \ \ \_filename(src-\/>\_filename),}
+\DoxyCodeLine{00049\ \ \ \_packet(nullptr),}
+\DoxyCodeLine{00050\ \ \ \_packet\_data(nullptr),}
+\DoxyCodeLine{00051\ \ \ \_format\_ctx(nullptr),}
+\DoxyCodeLine{00052\ \ \ \_audio\_ctx(nullptr),}
+\DoxyCodeLine{00053\ \ \ \_frame(nullptr),}
+\DoxyCodeLine{00054\ \ \ \_buffer(nullptr),}
+\DoxyCodeLine{00055\ \ \ \_buffer\_alloc(nullptr),}
+\DoxyCodeLine{00056\ \ \ \_resample\_ctx(nullptr)}
+\DoxyCodeLine{00057\ \{}
+\DoxyCodeLine{00058\ \ \ \textcolor{keywordflow}{if}\ (!\_ffvfile.open\_vfs(\_filename))\ \{}
+\DoxyCodeLine{00059\ \ \ \ \ cleanup();}
+\DoxyCodeLine{00060\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00061\ \ \ \}}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00063\ \ \ \_format\_ctx\ =\ \_ffvfile.get\_format\_context();}
+\DoxyCodeLine{00064\ \ \ nassertv(\_format\_ctx\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \ \ \textcolor{keywordflow}{if}\ (avformat\_find\_stream\_info(\_format\_ctx,\ \textcolor{keyword}{nullptr})\ <\ 0)\ \{}
+\DoxyCodeLine{00067\ \ \ \ \ cleanup();}
+\DoxyCodeLine{00068\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00069\ \ \ \}}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00071\ \ \ \textcolor{comment}{//\ As\ of\ libavformat\ version\ 57.41.100,\ AVStream.codec\ is\ deprecated\ in\ favor}}
+\DoxyCodeLine{00072\ \ \ \textcolor{comment}{//\ of\ AVStream.codecpar.\ \ Fortunately,\ the\ two\ structures\ have}}
+\DoxyCodeLine{00073\ \ \ \textcolor{comment}{//\ similarly-\/named\ members,\ so\ we\ can\ just\ switch\ out\ the\ declaration.}}
+\DoxyCodeLine{00074\ \textcolor{preprocessor}{\#if\ LIBAVFORMAT\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 41,\ 100)}}
+\DoxyCodeLine{00075\ \ \ AVCodecParameters\ *codecpar;}
+\DoxyCodeLine{00076\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00077\ \ \ AVCodecContext\ *codecpar;}
+\DoxyCodeLine{00078\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \ \ \textcolor{comment}{//\ Find\ the\ audio\ stream}}
+\DoxyCodeLine{00081\ \ \ AVStream\ *stream\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00082\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (int)\_format\_ctx-\/>nb\_streams;\ i++)\ \{}
+\DoxyCodeLine{00083\ \textcolor{preprocessor}{\#if\ LIBAVFORMAT\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 41,\ 100)}}
+\DoxyCodeLine{00084\ \ \ \ \ codecpar\ =\ \_format\_ctx-\/>streams[i]-\/>codecpar;}
+\DoxyCodeLine{00085\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00086\ \ \ \ \ codecpar\ =\ \_format\_ctx-\/>streams[i]-\/>codec;}
+\DoxyCodeLine{00087\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00088\ \ \ \ \ \textcolor{keywordflow}{if}\ (codecpar-\/>codec\_type\ ==\ AVMEDIA\_TYPE\_AUDIO)\ \{}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \_audio\_index\ =\ i;}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ stream\ =\ \_format\_ctx-\/>streams[i];}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00092\ \ \ \ \ \}}
+\DoxyCodeLine{00093\ \ \ \}}
+\DoxyCodeLine{00094\ }
+\DoxyCodeLine{00095\ \ \ \textcolor{keywordflow}{if}\ (stream\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00096\ \ \ \ \ cleanup();}
+\DoxyCodeLine{00097\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00098\ \ \ \}}
+\DoxyCodeLine{00099\ }
+\DoxyCodeLine{00100\ \ \ \_audio\_timebase\ =\ av\_q2d(stream-\/>time\_base);}
+\DoxyCodeLine{00101\ \ \ \_audio\_rate\ =\ codecpar-\/>sample\_rate;}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00103\ \ \ \textcolor{comment}{//\ As\ of\ libavformat\ version\ 60.25.100,\ the\ deprecated}}
+\DoxyCodeLine{00104\ \ \ \textcolor{comment}{//\ AVCodecParameters.channels\ has\ been\ removed.}}
+\DoxyCodeLine{00105\ \ \ \textcolor{comment}{//\ AVCodecParameters.ch\_layout\ is\ available\ since\ version\ 59.18.101.}}
+\DoxyCodeLine{00106\ \textcolor{preprocessor}{\#if\ LIBAVFORMAT\_VERSION\_INT\ >=\ AV\_VERSION\_INT(59,\ 18,\ 101)}}
+\DoxyCodeLine{00107\ \ \ \_audio\_channels\ =\ codecpar-\/>ch\_layout.nb\_channels;}
+\DoxyCodeLine{00108\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00109\ \ \ \_audio\_channels\ =\ codecpar-\/>channels;}
+\DoxyCodeLine{00110\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{/*\ LIBAVFORMAT\_VERSION\_INT\ */}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \ \ \textcolor{keyword}{const}\ AVCodec\ *pAudioCodec\ =\ avcodec\_find\_decoder(codecpar-\/>codec\_id);}
+\DoxyCodeLine{00113\ \ \ \textcolor{keywordflow}{if}\ (pAudioCodec\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00114\ \ \ \ \ cleanup();}
+\DoxyCodeLine{00115\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00116\ \ \ \}}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \ \ \_audio\_ctx\ =\ avcodec\_alloc\_context3(pAudioCodec);}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{if}\ (\_audio\_ctx\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ cleanup();}
+\DoxyCodeLine{00122\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00123\ \ \ \}}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00125\ \textcolor{preprocessor}{\#if\ LIBAVFORMAT\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 41,\ 100)}}
+\DoxyCodeLine{00126\ \ \ avcodec\_parameters\_to\_context(\_audio\_ctx,\ codecpar);}
+\DoxyCodeLine{00127\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00128\ \ \ avcodec\_copy\_context(\_audio\_ctx,\ codecpar);}
+\DoxyCodeLine{00129\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00130\ }
+\DoxyCodeLine{00131\ \ \ AVDictionary\ *opts\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00132\ \ \ av\_dict\_set(\&opts,\ \textcolor{stringliteral}{"{}request\_sample\_fmt"{}},\ \textcolor{stringliteral}{"{}s16"{}},\ 0);}
+\DoxyCodeLine{00133\ \ \ \textcolor{keywordflow}{if}\ (avcodec\_open2(\_audio\_ctx,\ pAudioCodec,\ \textcolor{keyword}{nullptr})\ <\ 0)\ \{}
+\DoxyCodeLine{00134\ \ \ \ \ cleanup();}
+\DoxyCodeLine{00135\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00136\ \ \ \}}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ av\_dict\_free(\&opts);}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ \ \ \textcolor{comment}{//\ Set\ up\ the\ resample\ context\ if\ necessary.}}
+\DoxyCodeLine{00141\ \ \ \textcolor{keywordflow}{if}\ (\_audio\_ctx-\/>sample\_fmt\ !=\ AV\_SAMPLE\_FMT\_S16)\ \{}
+\DoxyCodeLine{00142\ \textcolor{preprocessor}{\#ifdef\ HAVE\_SWRESAMPLE}}
+\DoxyCodeLine{00143\ \ \ \ \ \textcolor{keywordflow}{if}\ (ffmpeg\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ ffmpeg\_cat.debug()}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Codec\ does\ not\ use\ signed\ 16-\/bit\ sample\ format.\ \ Setting\ up\ swresample\ context.\(\backslash\)n"{}};}
+\DoxyCodeLine{00146\ \ \ \ \ \}}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \ \ \ \ \_resample\_ctx\ =\ swr\_alloc();}
+\DoxyCodeLine{00149\ }
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{comment}{//\ As\ of\ libavformat\ version\ 60.25.100,\ the\ deprecated}}
+\DoxyCodeLine{00151\ \ \ \ \ \textcolor{comment}{//\ AVCodecContext.channel\_layout\ has\ been\ removed.}}
+\DoxyCodeLine{00152\ \ \ \ \ \textcolor{comment}{//\ AVCodecContext.ch\_layout\ is\ available\ since\ version\ 59.18.101.}}
+\DoxyCodeLine{00153\ \textcolor{preprocessor}{\#if\ LIBAVFORMAT\_VERSION\_INT\ >=\ AV\_VERSION\_INT(59,\ 18,\ 101)}}
+\DoxyCodeLine{00154\ \ \ \ \ av\_opt\_set\_chlayout(\_resample\_ctx,\ \textcolor{stringliteral}{"{}in\_chlayout"{}},\ \&\_audio\_ctx-\/>ch\_layout,\ 0);}
+\DoxyCodeLine{00155\ \ \ \ \ av\_opt\_set\_chlayout(\_resample\_ctx,\ \textcolor{stringliteral}{"{}out\_chlayout"{}},\ \&\_audio\_ctx-\/>ch\_layout,\ 0);}
+\DoxyCodeLine{00156\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00157\ \ \ \ \ av\_opt\_set\_int(\_resample\_ctx,\ \textcolor{stringliteral}{"{}in\_channel\_count"{}},\ \_audio\_channels,\ 0);}
+\DoxyCodeLine{00158\ \ \ \ \ av\_opt\_set\_int(\_resample\_ctx,\ \textcolor{stringliteral}{"{}out\_channel\_count"{}},\ \_audio\_channels,\ 0);}
+\DoxyCodeLine{00159\ \ \ \ \ av\_opt\_set\_int(\_resample\_ctx,\ \textcolor{stringliteral}{"{}in\_channel\_layout"{}},\ \_audio\_ctx-\/>channel\_layout,\ 0);}
+\DoxyCodeLine{00160\ \ \ \ \ av\_opt\_set\_int(\_resample\_ctx,\ \textcolor{stringliteral}{"{}out\_channel\_layout"{}},\ \_audio\_ctx-\/>channel\_layout,\ 0);}
+\DoxyCodeLine{00161\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{/*\ LIBAVFORMAT\_VERSION\_INT\ */}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00163\ \ \ \ \ av\_opt\_set\_int(\_resample\_ctx,\ \textcolor{stringliteral}{"{}in\_sample\_rate"{}},\ \_audio\_ctx-\/>sample\_rate,\ 0);}
+\DoxyCodeLine{00164\ \ \ \ \ av\_opt\_set\_int(\_resample\_ctx,\ \textcolor{stringliteral}{"{}out\_sample\_rate"{}},\ \_audio\_ctx-\/>sample\_rate,\ 0);}
+\DoxyCodeLine{00165\ \ \ \ \ av\_opt\_set\_sample\_fmt(\_resample\_ctx,\ \textcolor{stringliteral}{"{}in\_sample\_fmt"{}},\ \_audio\_ctx-\/>sample\_fmt,\ 0);}
+\DoxyCodeLine{00166\ \ \ \ \ av\_opt\_set\_sample\_fmt(\_resample\_ctx,\ \textcolor{stringliteral}{"{}out\_sample\_fmt"{}},\ AV\_SAMPLE\_FMT\_S16,\ 0);}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \ \ \ \ \textcolor{keywordflow}{if}\ (swr\_init(\_resample\_ctx)\ !=\ 0)\ \{}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ ffmpeg\_cat.error()}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Failed\ to\ set\ up\ resample\ context.\(\backslash\)n"{}};}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \_resample\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00172\ \ \ \ \ \}}
+\DoxyCodeLine{00173\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00174\ \ \ \ \ ffmpeg\_cat.error()}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Codec\ does\ not\ use\ signed\ 16-\/bit\ sample\ format,\ but\ support\ for\ libswresample\ has\ not\ been\ enabled.\(\backslash\)n"{}};}
+\DoxyCodeLine{00176\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{/*\ HAVE\_SWRESAMPLE\ */}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00177\ \ \ \}}
+\DoxyCodeLine{00178\ }
+\DoxyCodeLine{00179\ \ \ \_length\ =\ (\_format\_ctx-\/>duration\ *\ 1.0)\ /\ AV\_TIME\_BASE;}
+\DoxyCodeLine{00180\ \ \ \_can\_seek\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00181\ \ \ \_can\_seek\_fast\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(55,\ 45,\ 101)}}
+\DoxyCodeLine{00184\ \ \ \_frame\ =\ av\_frame\_alloc();}
+\DoxyCodeLine{00185\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00186\ \ \ \_frame\ =\ avcodec\_alloc\_frame();}
+\DoxyCodeLine{00187\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 12,\ 100)}}
+\DoxyCodeLine{00190\ \ \ \_packet\ =\ av\_packet\_alloc();}
+\DoxyCodeLine{00191\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00192\ \ \ \_packet\ =\ \textcolor{keyword}{new}\ AVPacket;}
+\DoxyCodeLine{00193\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00194\ }
+\DoxyCodeLine{00195\ \ \ \_buffer\_size\ =\ AVCODEC\_MAX\_AUDIO\_FRAME\_SIZE\ /\ 2;}
+\DoxyCodeLine{00196\ \ \ \_buffer\_alloc\ =\ \textcolor{keyword}{new}\ int16\_t[\_buffer\_size\ +\ 64];}
+\DoxyCodeLine{00197\ }
+\DoxyCodeLine{00198\ \ \ \textcolor{comment}{//\ Allocate\ enough\ space\ for\ 1024\ samples\ per\ channel.}}
+\DoxyCodeLine{00199\ \ \ \textcolor{keywordflow}{if}\ ((\_packet\ ==\ \textcolor{keyword}{nullptr})||(\_buffer\_alloc\ ==\ \textcolor{keyword}{nullptr}))\ \{}
+\DoxyCodeLine{00200\ \ \ \ \ cleanup();}
+\DoxyCodeLine{00201\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00202\ \ \ \}}
+\DoxyCodeLine{00203\ \ \ memset(\_packet,\ 0,\ \textcolor{keyword}{sizeof}(AVPacket));}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00205\ \ \ \textcolor{comment}{//\ Align\ the\ buffer\ to\ a\ 64-\/byte\ boundary\ The\ ffmpeg\ codec\ likes\ this,}}
+\DoxyCodeLine{00206\ \ \ \textcolor{comment}{//\ because\ it\ uses\ SSESSE2.}}
+\DoxyCodeLine{00207\ \ \ \_buffer\ =\ \_buffer\_alloc;}
+\DoxyCodeLine{00208\ \ \ \textcolor{keywordflow}{while}\ (((\textcolor{keywordtype}{size\_t})\_buffer)\ \&\ 31)\ \{}
+\DoxyCodeLine{00209\ \ \ \ \ \_buffer\ +=\ 1;}
+\DoxyCodeLine{00210\ \ \ \}}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00212\ \ \ fetch\_packet();}
+\DoxyCodeLine{00213\ \ \ \_initial\_dts\ =\ \_packet-\/>dts;}
+\DoxyCodeLine{00214\ \ \ \_last\_seek\ =\ 0;}
+\DoxyCodeLine{00215\ \ \ \_samples\_read\ =\ 0;}
+\DoxyCodeLine{00216\ \ \ \_buffer\_head\ =\ 0;}
+\DoxyCodeLine{00217\ \ \ \_buffer\_tail\ =\ 0;}
+\DoxyCodeLine{00218\ \}}
+\DoxyCodeLine{00219\ }
+\DoxyCodeLine{00223\ FfmpegAudioCursor::}
+\DoxyCodeLine{00224\ \string~FfmpegAudioCursor()\ \{}
+\DoxyCodeLine{00225\ \ \ \mbox{\hyperlink{classFfmpegAudioCursor_ae0e8c242cef7c55b949b3b43e379fe65}{cleanup}}();}
+\DoxyCodeLine{00226\ \}}
+\DoxyCodeLine{00227\ }
+\DoxyCodeLine{00231\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFfmpegAudioCursor_ae0e8c242cef7c55b949b3b43e379fe65}{FfmpegAudioCursor::}}}
+\DoxyCodeLine{00232\ \mbox{\hyperlink{classFfmpegAudioCursor_ae0e8c242cef7c55b949b3b43e379fe65}{cleanup}}()\ \{}
+\DoxyCodeLine{00233\ \ \ \textcolor{keywordflow}{if}\ (\_audio\_ctx\ \&\&\ \_audio\_ctx-\/>codec)\ \{}
+\DoxyCodeLine{00234\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 37,\ 100)}}
+\DoxyCodeLine{00235\ \ \ \ \ \textcolor{comment}{//\ We\ need\ to\ drain\ the\ codec\ to\ prevent\ a\ memory\ leak.}}
+\DoxyCodeLine{00236\ \ \ \ \ avcodec\_send\_packet(\_audio\_ctx,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00237\ \ \ \ \ \textcolor{keywordflow}{while}\ (avcodec\_receive\_frame(\_audio\_ctx,\ \_frame)\ ==\ 0)\ \{\}}
+\DoxyCodeLine{00238\ \ \ \ \ avcodec\_flush\_buffers(\_audio\_ctx);}
+\DoxyCodeLine{00239\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(55,\ 52,\ 0)}}
+\DoxyCodeLine{00242\ \ \ \ \ avcodec\_free\_context(\&\_audio\_ctx);}
+\DoxyCodeLine{00243\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00244\ \ \ \ \ avcodec\_close(\_audio\_ctx);}
+\DoxyCodeLine{00245\ \ \ \ \ av\_free(\_audio\_ctx);}
+\DoxyCodeLine{00246\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00247\ \ \ \}}
+\DoxyCodeLine{00248\ \ \ \_audio\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00250\ \ \ \textcolor{keywordflow}{if}\ (\_frame)\ \{}
+\DoxyCodeLine{00251\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(55,\ 45,\ 101)}}
+\DoxyCodeLine{00252\ \ \ \ \ av\_frame\_free(\&\_frame);}
+\DoxyCodeLine{00253\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00254\ \ \ \ \ avcodec\_free\_frame(\&\_frame);}
+\DoxyCodeLine{00255\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00256\ \ \ \ \ \_frame\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00257\ \ \ \}}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \textcolor{keywordflow}{if}\ (\_packet)\ \{}
+\DoxyCodeLine{00260\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 12,\ 100)}}
+\DoxyCodeLine{00261\ \ \ \ \ av\_packet\_free(\&\_packet);}
+\DoxyCodeLine{00262\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00263\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_packet-\/>data)\ \{}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ av\_free\_packet(\_packet);}
+\DoxyCodeLine{00265\ \ \ \ \ \}}
+\DoxyCodeLine{00266\ \ \ \ \ \textcolor{keyword}{delete}\ \_packet;}
+\DoxyCodeLine{00267\ \ \ \ \ \_packet\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00268\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00269\ \ \ \}}
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \ \ \textcolor{keywordflow}{if}\ (\_buffer\_alloc)\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ \textcolor{keyword}{delete}[]\ \_buffer\_alloc;}
+\DoxyCodeLine{00273\ \ \ \ \ \_buffer\_alloc\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00274\ \ \ \ \ \_buffer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00275\ \ \ \}}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00277\ \ \ \textcolor{keywordflow}{if}\ (\_format\_ctx)\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ \_ffvfile.\mbox{\hyperlink{classFfmpegVirtualFile_aef80bdfd1568eaa67c5732b116db3334}{close}}();}
+\DoxyCodeLine{00279\ \ \ \ \ \_format\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00280\ \ \ \}}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \textcolor{preprocessor}{\#ifdef\ HAVE\_SWRESAMPLE}}
+\DoxyCodeLine{00283\ \ \ \textcolor{keywordflow}{if}\ (\_resample\_ctx)\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ swr\_free(\&\_resample\_ctx);}
+\DoxyCodeLine{00285\ \ \ \ \ \_resample\_ctx\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00286\ \ \ \}}
+\DoxyCodeLine{00287\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00288\ }
+\DoxyCodeLine{00289\ \ \ \_audio\_index\ =\ -\/1;}
+\DoxyCodeLine{00290\ \}}
+\DoxyCodeLine{00291\ }
+\DoxyCodeLine{00296\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classFfmpegAudioCursor_ad9befa6c310234a7db3b7880e674d3d4}{FfmpegAudioCursor::}}}
+\DoxyCodeLine{00297\ \mbox{\hyperlink{classFfmpegAudioCursor_ad9befa6c310234a7db3b7880e674d3d4}{fetch\_packet}}()\ \{}
+\DoxyCodeLine{00298\ \ \ \textcolor{keywordflow}{if}\ (\_packet-\/>data)\ \{}
+\DoxyCodeLine{00299\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 12,\ 100)}}
+\DoxyCodeLine{00300\ \ \ \ \ av\_packet\_unref(\_packet);}
+\DoxyCodeLine{00301\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00302\ \ \ \ \ av\_free\_packet(\_packet);}
+\DoxyCodeLine{00303\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00304\ \ \ \}}
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordflow}{while}\ (av\_read\_frame(\_format\_ctx,\ \_packet)\ >=\ 0)\ \{}
+\DoxyCodeLine{00306\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_packet-\/>stream\_index\ ==\ \_audio\_index)\ \{}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \_packet\_size\ =\ \_packet-\/>size;}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \_packet\_data\ =\ \_packet-\/>data;}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00310\ \ \ \ \ \}}
+\DoxyCodeLine{00311\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 12,\ 100)}}
+\DoxyCodeLine{00312\ \ \ \ \ av\_packet\_unref(\_packet);}
+\DoxyCodeLine{00313\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00314\ \ \ \ \ av\_free\_packet(\_packet);}
+\DoxyCodeLine{00315\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00316\ \ \ \}}
+\DoxyCodeLine{00317\ \ \ \_packet-\/>data\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00318\ \ \ \_packet\_size\ =\ 0;}
+\DoxyCodeLine{00319\ \ \ \_packet\_data\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00320\ \}}
+\DoxyCodeLine{00321\ }
+\DoxyCodeLine{00327\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classFfmpegAudioCursor_a0315d7dfeb4167609a5b345c3c2b53c6}{FfmpegAudioCursor::}}}
+\DoxyCodeLine{00328\ \mbox{\hyperlink{classFfmpegAudioCursor_a0315d7dfeb4167609a5b345c3c2b53c6}{reload\_buffer}}()\ \{}
+\DoxyCodeLine{00329\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 37,\ 100)}}
+\DoxyCodeLine{00330\ \ \ \textcolor{comment}{//\ lavc\ >=\ 57.37.100\ deprecates\ the\ old\ (avcodec\_decode\_audio*)\ API\ in\ favor}}
+\DoxyCodeLine{00331\ \ \ \textcolor{comment}{//\ of\ a\ newer,\ asynchronous\ API.\ \ This\ is\ great\ for\ our\ purposes\ -\/\ it\ gives}}
+\DoxyCodeLine{00332\ \ \ \textcolor{comment}{//\ the\ codec\ the\ opportunity\ to\ decode\ in\ the\ background\ (e.g.\ in\ another}}
+\DoxyCodeLine{00333\ \ \ \textcolor{comment}{//\ thread\ or\ on\ a\ dedicated\ hardware\ coprocessor).}}
+\DoxyCodeLine{00334\ }
+\DoxyCodeLine{00335\ \ \ \textcolor{comment}{//\ First,\ let's\ fill\ the\ codec's\ input\ buffer\ with\ as\ many\ packets\ as\ it'll}}
+\DoxyCodeLine{00336\ \ \ \textcolor{comment}{//\ take:}}
+\DoxyCodeLine{00337\ \ \ \textcolor{keywordtype}{int}\ ret\ =\ 0;}
+\DoxyCodeLine{00338\ \ \ \textcolor{keywordflow}{while}\ (\_packet-\/>data\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00339\ \ \ \ \ ret\ =\ avcodec\_send\_packet(\_audio\_ctx,\ \_packet);}
+\DoxyCodeLine{00340\ }
+\DoxyCodeLine{00341\ \ \ \ \ \textcolor{keywordflow}{if}\ (ret\ !=\ 0)\ \{}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \textcolor{comment}{//\ Nonzero\ return\ code\ is\ an\ error.}}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00344\ \ \ \ \ \}}
+\DoxyCodeLine{00345\ }
+\DoxyCodeLine{00346\ \ \ \ \ \textcolor{comment}{//\ If\ we\ got\ here,\ the\ codec\ took\ the\ packet!\ \ Fetch\ another\ one.}}
+\DoxyCodeLine{00347\ \ \ \ \ \mbox{\hyperlink{classFfmpegAudioCursor_ad9befa6c310234a7db3b7880e674d3d4}{fetch\_packet}}();}
+\DoxyCodeLine{00348\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_packet-\/>data\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \textcolor{comment}{//\ fetch\_packet()\ says\ we're\ out\ of\ packets.\ \ Let\ the\ codec\ know.}}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ ret\ =\ avcodec\_send\_packet(\_audio\_ctx,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00351\ \ \ \ \ \}}
+\DoxyCodeLine{00352\ \ \ \}}
+\DoxyCodeLine{00353\ }
+\DoxyCodeLine{00354\ \ \ \textcolor{comment}{//\ Expected\ ret\ codes\ are\ 0\ (we\ ran\ out\ of\ packets)\ and\ EAGAIN\ (codec\ full)}}
+\DoxyCodeLine{00355\ \ \ \textcolor{keywordflow}{if}\ ((ret\ !=\ 0)\ \&\&\ (ret\ !=\ AVERROR(EAGAIN)))\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \textcolor{comment}{//\ Some\ odd\ error\ happened.\ \ We\ can't\ proceed.}}
+\DoxyCodeLine{00357\ \ \ \ \ ffmpeg\_cat.error()}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}avcodec\_send\_packet\ returned\ "{}}\ <<\ ret\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00359\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00360\ \ \ \}}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ \textcolor{comment}{//\ Now\ we\ retrieve\ our\ frame!}}
+\DoxyCodeLine{00363\ \ \ ret\ =\ avcodec\_receive\_frame(\_audio\_ctx,\ \_frame);}
+\DoxyCodeLine{00364\ }
+\DoxyCodeLine{00365\ \ \ \textcolor{keywordflow}{if}\ (ret\ ==\ AVERROR\_EOF)\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ \textcolor{comment}{//\ The\ only\ way\ for\ this\ to\ happen\ is\ if\ we're\ out\ of\ packets.}}
+\DoxyCodeLine{00367\ \ \ \ \ nassertr(\_packet-\/>data\ ==\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00369\ \ \ \ \ \textcolor{comment}{//\ Synthesize\ silence:}}
+\DoxyCodeLine{00370\ \ \ \ \ \_buffer\_head\ =\ 0;}
+\DoxyCodeLine{00371\ \ \ \ \ \_buffer\_tail\ =\ \_buffer\_size;}
+\DoxyCodeLine{00372\ \ \ \ \ memset(\_buffer,\ 0,\ \_buffer\_size\ *\ 2);}
+\DoxyCodeLine{00373\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00374\ }
+\DoxyCodeLine{00375\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (ret\ !=\ 0)\ \{}
+\DoxyCodeLine{00376\ \ \ \ \ \textcolor{comment}{//\ Some\ odd\ error\ happened.\ \ We\ can't\ proceed.}}
+\DoxyCodeLine{00377\ \ \ \ \ ffmpeg\_cat.error()}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}avcodec\_receive\_frame\ returned\ "{}}\ <<\ ret\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00379\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00380\ \ \ \}}
+\DoxyCodeLine{00381\ }
+\DoxyCodeLine{00382\ \ \ \textcolor{comment}{//\ We\ now\ have\ \_frame.\ \ It\ will\ be\ handled\ below.}}
+\DoxyCodeLine{00383\ }
+\DoxyCodeLine{00384\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00385\ \ \ \textcolor{keywordtype}{int}\ got\_frame\ =\ 0;}
+\DoxyCodeLine{00386\ \ \ \textcolor{keywordflow}{while}\ (!got\_frame)\ \{}
+\DoxyCodeLine{00387\ \ \ \ \ \textcolor{comment}{//\ If\ we're\ out\ of\ packets,\ generate\ silence.}}
+\DoxyCodeLine{00388\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_packet-\/>data\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \_buffer\_head\ =\ 0;}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \_buffer\_tail\ =\ \_buffer\_size;}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ memset(\_buffer,\ 0,\ \_buffer\_size\ *\ 2);}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00393\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_packet\_size\ ==\ 0)\ \{}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \mbox{\hyperlink{classFfmpegAudioCursor_ad9befa6c310234a7db3b7880e674d3d4}{fetch\_packet}}();}
+\DoxyCodeLine{00395\ \ \ \ \ \}}
+\DoxyCodeLine{00396\ }
+\DoxyCodeLine{00397\ \ \ \ \ AVPacket\ *pkt;}
+\DoxyCodeLine{00398\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 12,\ 100)}}
+\DoxyCodeLine{00399\ \ \ \ \ pkt\ =\ av\_packet\_alloc();}
+\DoxyCodeLine{00400\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00401\ \ \ \ \ AVPacket\ \_pkt;}
+\DoxyCodeLine{00402\ \ \ \ \ pkt\ =\ \&\_pkt;}
+\DoxyCodeLine{00403\ \ \ \ \ av\_init\_packet(pkt);}
+\DoxyCodeLine{00404\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00405\ \ \ \ \ pkt-\/>data\ =\ \_packet\_data;}
+\DoxyCodeLine{00406\ \ \ \ \ pkt-\/>size\ =\ \_packet\_size;}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00408\ \ \ \ \ \textcolor{keywordtype}{int}\ len\ =\ avcodec\_decode\_audio4(\_audio\_ctx,\ \_frame,\ \&got\_frame,\ pkt);}
+\DoxyCodeLine{00409\ \ \ \ \ movies\_debug(\textcolor{stringliteral}{"{}avcodec\_decode\_audio4\ returned\ "{}}\ <<\ len);}
+\DoxyCodeLine{00410\ }
+\DoxyCodeLine{00411\ \textcolor{preprocessor}{\#if\ LIBAVCODEC\_VERSION\_INT\ >=\ AV\_VERSION\_INT(57,\ 12,\ 100)}}
+\DoxyCodeLine{00412\ \ \ \ \ av\_packet\_free(\&pkt);}
+\DoxyCodeLine{00413\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00414\ \ \ \ \ av\_free\_packet(pkt);}
+\DoxyCodeLine{00415\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00416\ }
+\DoxyCodeLine{00417\ \ \ \ \ \textcolor{keywordflow}{if}\ (len\ <\ 0)\ \{}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00419\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (len\ ==\ 0)\ \{}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00421\ \ \ \ \ \}}
+\DoxyCodeLine{00422\ \ \ \ \ \_packet\_data\ +=\ len;}
+\DoxyCodeLine{00423\ \ \ \ \ \_packet\_size\ -\/=\ len;}
+\DoxyCodeLine{00424\ \ \ \}}
+\DoxyCodeLine{00425\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00426\ }
+\DoxyCodeLine{00427\ \ \ \textcolor{keywordtype}{int}\ bufsize;}
+\DoxyCodeLine{00428\ \textcolor{preprocessor}{\#ifdef\ HAVE\_SWRESAMPLE}}
+\DoxyCodeLine{00429\ \ \ \textcolor{keywordflow}{if}\ (\_resample\_ctx)\ \{}
+\DoxyCodeLine{00430\ \ \ \ \ \textcolor{comment}{//\ Resample\ the\ data\ to\ signed\ 16-\/bit\ sample\ format.}}
+\DoxyCodeLine{00431\ \ \ \ \ bufsize\ =\ swr\_convert(\_resample\_ctx,\ (uint8\_t\ **)\&\_buffer,\ \_buffer\_size\ /\ 2,\ (\textcolor{keyword}{const}\ uint8\_t**)\_frame-\/>extended\_data,\ \_frame-\/>nb\_samples);}
+\DoxyCodeLine{00432\ \ \ \ \ bufsize\ *=\ \_audio\_channels\ *\ 2;}
+\DoxyCodeLine{00433\ \ \ \}\ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00434\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00435\ \ \ \{}
+\DoxyCodeLine{00436\ \ \ \ \ bufsize\ =\ \_frame-\/>linesize[0];}
+\DoxyCodeLine{00437\ \ \ \ \ memcpy(\_buffer,\ \_frame-\/>data[0],\ bufsize);}
+\DoxyCodeLine{00438\ \ \ \}}
+\DoxyCodeLine{00439\ \textcolor{preprocessor}{\#if\ LIBAVUTIL\_VERSION\_INT\ >\ AV\_VERSION\_INT(52,\ 19,\ 100)}}
+\DoxyCodeLine{00440\ \ \ av\_frame\_unref(\_frame);}
+\DoxyCodeLine{00441\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00442\ }
+\DoxyCodeLine{00443\ \ \ \textcolor{keywordflow}{if}\ (bufsize\ >\ 0)\ \{}
+\DoxyCodeLine{00444\ \ \ \ \ \_buffer\_head\ =\ 0;}
+\DoxyCodeLine{00445\ \ \ \ \ \_buffer\_tail\ =\ (bufsize/2);}
+\DoxyCodeLine{00446\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00447\ \ \ \}}
+\DoxyCodeLine{00448\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00449\ \}}
+\DoxyCodeLine{00450\ }
+\DoxyCodeLine{00455\ \textcolor{keywordtype}{void}\ FfmpegAudioCursor::}
+\DoxyCodeLine{00456\ seek(\textcolor{keywordtype}{double}\ t)\ \{}
+\DoxyCodeLine{00457\ \ \ int64\_t\ target\_ts\ =\ (int64\_t)(t\ /\ \_audio\_timebase);}
+\DoxyCodeLine{00458\ \ \ \textcolor{keywordflow}{if}\ (target\_ts\ <\ (int64\_t)(\_initial\_dts))\ \{}
+\DoxyCodeLine{00459\ \ \ \ \ \textcolor{comment}{//\ Attempts\ to\ seek\ before\ the\ first\ packet\ will\ fail.}}
+\DoxyCodeLine{00460\ \ \ \ \ target\_ts\ =\ \_initial\_dts;}
+\DoxyCodeLine{00461\ \ \ \}}
+\DoxyCodeLine{00462\ \ \ \textcolor{keywordflow}{if}\ (av\_seek\_frame(\_format\_ctx,\ \_audio\_index,\ target\_ts,\ AVSEEK\_FLAG\_BACKWARD)\ <\ 0)\ \{}
+\DoxyCodeLine{00463\ \ \ \ \ ffmpeg\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Seek\ failure.\ Shutting\ down\ movie.\(\backslash\)n"{}};}
+\DoxyCodeLine{00464\ \ \ \ \ \mbox{\hyperlink{classFfmpegAudioCursor_ae0e8c242cef7c55b949b3b43e379fe65}{cleanup}}();}
+\DoxyCodeLine{00465\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00466\ \ \ \}}
+\DoxyCodeLine{00467\ \ \ avcodec\_flush\_buffers(\_audio\_ctx);}
+\DoxyCodeLine{00468\ \ \ \_buffer\_head\ =\ 0;}
+\DoxyCodeLine{00469\ \ \ \_buffer\_tail\ =\ 0;}
+\DoxyCodeLine{00470\ \ \ \mbox{\hyperlink{classFfmpegAudioCursor_ad9befa6c310234a7db3b7880e674d3d4}{fetch\_packet}}();}
+\DoxyCodeLine{00471\ \ \ \textcolor{keywordtype}{double}\ ts\ =\ \_packet-\/>dts\ *\ \_audio\_timebase;}
+\DoxyCodeLine{00472\ \ \ \textcolor{keywordflow}{if}\ (t\ >\ ts)\ \{}
+\DoxyCodeLine{00473\ \ \ \ \ \textcolor{keywordtype}{int}\ skip\ =\ (int)((t-\/ts)\ *\ \_audio\_rate);}
+\DoxyCodeLine{00474\ \ \ \ \ \mbox{\hyperlink{classFfmpegAudioCursor_a0c34f6f967ef91be5a2a5657276a09ea}{read\_samples}}(skip,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00475\ \ \ \}}
+\DoxyCodeLine{00476\ \ \ \_last\_seek\ =\ t;}
+\DoxyCodeLine{00477\ \ \ \_samples\_read\ =\ 0;}
+\DoxyCodeLine{00478\ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00485\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classFfmpegAudioCursor_a0c34f6f967ef91be5a2a5657276a09ea}{FfmpegAudioCursor::}}}
+\DoxyCodeLine{00486\ \mbox{\hyperlink{classFfmpegAudioCursor_a0c34f6f967ef91be5a2a5657276a09ea}{read\_samples}}(\textcolor{keywordtype}{int}\ n,\ int16\_t\ *data)\ \{}
+\DoxyCodeLine{00487\ \ \ \textcolor{keywordtype}{int}\ desired\ =\ n\ *\ \_audio\_channels;}
+\DoxyCodeLine{00488\ }
+\DoxyCodeLine{00489\ \ \ \textcolor{keywordflow}{while}\ (desired\ >\ 0)\ \{}
+\DoxyCodeLine{00490\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_buffer\_head\ ==\ \_buffer\_tail)\ \{}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \textcolor{keywordflow}{if}(!\mbox{\hyperlink{classFfmpegAudioCursor_a0315d7dfeb4167609a5b345c3c2b53c6}{reload\_buffer}}())\{}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00493\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00494\ \ \ \ \ \ \ movies\_debug(\textcolor{stringliteral}{"{}read\_samples()\ desired\ samples:\ "{}}\ <<\ desired\ <<\ \textcolor{stringliteral}{"{}\ N:"{}}\ <<\ n);}
+\DoxyCodeLine{00495\ \ \ \ \ \}}
+\DoxyCodeLine{00496\ \ \ \ \ \textcolor{keywordtype}{int}\ available\ =\ \_buffer\_tail\ -\/\ \_buffer\_head;}
+\DoxyCodeLine{00497\ \ \ \ \ \textcolor{keywordtype}{int}\ ncopy\ =\ (desired\ >\ available)\ ?\ available\ :\ desired;}
+\DoxyCodeLine{00498\ \ \ \ \ \textcolor{keywordflow}{if}\ (ncopy)\ \{}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (data\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ \ \ memcpy(data,\ \_buffer\ +\ \_buffer\_head,\ ncopy\ *\ 2);}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \ \ data\ +=\ ncopy;}
+\DoxyCodeLine{00502\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00503\ \ \ \ \ \ \ desired\ -\/=\ ncopy;}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \_buffer\_head\ +=\ ncopy;}
+\DoxyCodeLine{00505\ \ \ \ \ \}}
+\DoxyCodeLine{00506\ }
+\DoxyCodeLine{00507\ \ \ \}}
+\DoxyCodeLine{00508\ \ \ \_samples\_read\ +=\ n;}
+\DoxyCodeLine{00509\ \ \ \textcolor{keywordflow}{return}\ n;}
+\DoxyCodeLine{00510\ \}}
+
+\end{DoxyCode}

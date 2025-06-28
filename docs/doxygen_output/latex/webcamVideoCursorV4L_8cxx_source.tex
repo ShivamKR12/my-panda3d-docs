@@ -1,0 +1,531 @@
+\doxysection{webcam\+Video\+Cursor\+V4\+L.\+cxx}
+\hypertarget{webcamVideoCursorV4L_8cxx_source}{}\label{webcamVideoCursorV4L_8cxx_source}\index{panda/src/vision/webcamVideoCursorV4L.cxx@{panda/src/vision/webcamVideoCursorV4L.cxx}}
+\mbox{\hyperlink{webcamVideoCursorV4L_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{webcamVideoCursorV4L_8h}{webcamVideoCursorV4L.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__vision_8h}{config\_vision.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{webcamVideoV4L_8h}{webcamVideoV4L.h}}"{}}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{movieVideoCursor_8h}{movieVideoCursor.h}}"{}}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#if\ defined(HAVE\_VIDEO4LINUX)\ \&\&\ !defined(CPPPARSER)}}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ <fcntl.h>}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ <sys/mman.h>}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <sys/ioctl.h>}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#ifdef\ HAVE\_JPEG}}
+\DoxyCodeLine{00028\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \{}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\ \ \#include\ <jpeglib.h>}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\ \ \#include\ <jerror.h>}}
+\DoxyCodeLine{00031\ \}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{setjmp_8h}{setjmp.h}}>}}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ WebcamVideoCursorV4L::\_type\_handle;}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \textcolor{preprocessor}{\#define\ clamp(x)\ std::min(std::max(x,\ 0.0),\ 255.0)}}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ INLINE\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ yuv\_to\_bgr(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *dest,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *src)\ \{}
+\DoxyCodeLine{00041\ \ \ \textcolor{keywordtype}{double}\ y1\ =\ (255\ /\ 219.0)\ *\ (src[0]\ -\/\ 16);}
+\DoxyCodeLine{00042\ \ \ \textcolor{keywordtype}{double}\ pb\ =\ (255\ /\ 224.0)\ *\ (src[1]\ -\/\ 128);}
+\DoxyCodeLine{00043\ \ \ \textcolor{keywordtype}{double}\ pr\ =\ (255\ /\ 224.0)\ *\ (src[2]\ -\/\ 128);}
+\DoxyCodeLine{00044\ \ \ dest[2]\ =\ clamp(1.0\ *\ y1\ +\ 0\ \ \ \ \ *\ pb\ +\ 1.402\ *\ pr);}
+\DoxyCodeLine{00045\ \ \ dest[1]\ =\ clamp(1.0\ *\ y1\ -\/\ 0.344\ *\ pb\ -\/\ 0.714\ *\ pr);}
+\DoxyCodeLine{00046\ \ \ dest[0]\ =\ clamp(1.0\ *\ y1\ +\ 1.772\ *\ pb\ +\ 0\ \ \ \ \ *\ pr);}
+\DoxyCodeLine{00047\ \}}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ INLINE\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ yuyv\_to\_bgrbgr(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *dest,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *src)\ \{}
+\DoxyCodeLine{00050\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ yuv[]\ =\ \{src[0],\ src[1],\ src[3]\};}
+\DoxyCodeLine{00051\ \ \ yuv\_to\_bgr(dest,\ yuv);}
+\DoxyCodeLine{00052\ \ \ yuv[0]\ =\ src[2];}
+\DoxyCodeLine{00053\ \ \ yuv\_to\_bgr(dest\ +\ 3,\ yuv);}
+\DoxyCodeLine{00054\ \}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ INLINE\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ yuyv\_to\_bgrabgra(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *dest,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *src)\ \{}
+\DoxyCodeLine{00057\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ yuv[]\ =\ \{src[0],\ src[1],\ src[3]\};}
+\DoxyCodeLine{00058\ \ \ yuv\_to\_bgr(dest,\ yuv);}
+\DoxyCodeLine{00059\ \ \ yuv[0]\ =\ src[2];}
+\DoxyCodeLine{00060\ \ \ yuv\_to\_bgr(dest\ +\ 4,\ yuv);}
+\DoxyCodeLine{00061\ \ \ dest[3]\ =\ 0xff;}
+\DoxyCodeLine{00062\ \ \ dest[7]\ =\ 0xff;}
+\DoxyCodeLine{00063\ \}}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ INLINE\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ rgb\_to\_bgr(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *dest,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *src)\ \{}
+\DoxyCodeLine{00066\ \ \ dest[0]\ =\ src[2];}
+\DoxyCodeLine{00067\ \ \ dest[1]\ =\ src[1];}
+\DoxyCodeLine{00068\ \ \ dest[2]\ =\ src[0];}
+\DoxyCodeLine{00069\ \}}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00071\ INLINE\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ rgb\_to\_bgra(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *dest,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *src)\ \{}
+\DoxyCodeLine{00072\ \ \ dest[0]\ =\ src[2];}
+\DoxyCodeLine{00073\ \ \ dest[1]\ =\ src[1];}
+\DoxyCodeLine{00074\ \ \ dest[2]\ =\ src[0];}
+\DoxyCodeLine{00075\ \ \ dest[3]\ =\ 0xff;}
+\DoxyCodeLine{00076\ \}}
+\DoxyCodeLine{00077\ }
+\DoxyCodeLine{00078\ \textcolor{preprocessor}{\#if\ defined(HAVE\_JPEG)\ \&\&\ !defined(CPPPARSER)}}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \textcolor{keyword}{struct\ }my\_error\_mgr\ \{}
+\DoxyCodeLine{00081\ \ \ \textcolor{keyword}{struct\ }jpeg\_error\_mgr\ pub;}
+\DoxyCodeLine{00082\ \ \ jmp\_buf\ setjmp\_buffer;}
+\DoxyCodeLine{00083\ \};}
+\DoxyCodeLine{00084\ }
+\DoxyCodeLine{00085\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }my\_error\_mgr\ *my\_error\_ptr;}
+\DoxyCodeLine{00086\ }
+\DoxyCodeLine{00087\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ my\_error\_exit\ (j\_common\_ptr\ cinfo)\ \{}
+\DoxyCodeLine{00088\ \ \ \textcolor{comment}{//\ Output\ the\ error\ message}}
+\DoxyCodeLine{00089\ \ \ \textcolor{keywordtype}{char}\ buffer[JMSG\_LENGTH\_MAX];}
+\DoxyCodeLine{00090\ \ \ (*cinfo-\/>err-\/>format\_message)\ (cinfo,\ buffer);}
+\DoxyCodeLine{00091\ \ \ vision\_cat.error()\ <<\ buffer\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00092\ \ \ \textcolor{comment}{//\ cinfo-\/>err\ really\ points\ to\ a\ my\_error\_mgr\ struct,\ so\ coerce\ pointer}}
+\DoxyCodeLine{00093\ \ \ my\_error\_ptr\ myerr\ =\ (my\_error\_ptr)\ cinfo-\/>err;}
+\DoxyCodeLine{00094\ \ \ \textcolor{comment}{//\ Return\ control\ to\ the\ setjmp\ point}}
+\DoxyCodeLine{00095\ \ \ longjmp(myerr-\/>setjmp\_buffer,\ 1);}
+\DoxyCodeLine{00096\ \}}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00098\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ my\_output\_message\ (j\_common\_ptr\ cinfo)\{}
+\DoxyCodeLine{00099\ \ \ \textcolor{keywordtype}{char}\ buffer[JMSG\_LENGTH\_MAX];}
+\DoxyCodeLine{00100\ \ \ (*cinfo-\/>err-\/>format\_message)\ (cinfo,\ buffer);}
+\DoxyCodeLine{00101\ \ \ vision\_cat.warning()\ <<\ buffer\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00102\ \}}
+\DoxyCodeLine{00103\ }
+\DoxyCodeLine{00104\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ my\_init\_source(j\_decompress\_ptr\ cinfo)\ \{}
+\DoxyCodeLine{00105\ \}}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{boolean}\ my\_fill\_input\_buffer(j\_decompress\_ptr\ cinfo)\ \{}
+\DoxyCodeLine{00108\ \ \ \textcolor{keyword}{struct\ }jpeg\_source\_mgr\ *src\ =\ cinfo-\/>src;}
+\DoxyCodeLine{00109\ \ \ \textcolor{keyword}{static}\ JOCTET\ FakeEOI[]\ =\ \{0xFF,\ JPEG\_EOI\};}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ WARNMS(cinfo,\ JWRN\_JPEG\_EOF);}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00113\ \ \ src-\/>next\_input\_byte\ =\ FakeEOI;}
+\DoxyCodeLine{00114\ \ \ src-\/>bytes\_in\_buffer\ =\ 2;}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ \textcolor{keywordflow}{return}\ TRUE;}
+\DoxyCodeLine{00117\ \}}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ my\_skip\_input\_data(j\_decompress\_ptr\ cinfo,\ \textcolor{keywordtype}{long}\ num\_bytes)\ \{}
+\DoxyCodeLine{00120\ \ \ \textcolor{keyword}{struct\ }jpeg\_source\_mgr\ *src\ =\ cinfo-\/>src;}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00122\ \ \ \textcolor{keywordflow}{if}\ (num\_bytes\ >=\ (\textcolor{keywordtype}{long})\ src-\/>bytes\_in\_buffer)\ \{}
+\DoxyCodeLine{00123\ \ \ \ \ my\_fill\_input\_buffer(cinfo);}
+\DoxyCodeLine{00124\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00125\ \ \ \}}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00127\ \ \ src-\/>bytes\_in\_buffer\ -\/=\ num\_bytes;}
+\DoxyCodeLine{00128\ \ \ src-\/>next\_input\_byte\ +=\ num\_bytes;}
+\DoxyCodeLine{00129\ \}}
+\DoxyCodeLine{00130\ }
+\DoxyCodeLine{00131\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ my\_term\_source(j\_decompress\_ptr\ cinfo)\ \{}
+\DoxyCodeLine{00132\ \}}
+\DoxyCodeLine{00133\ }
+\DoxyCodeLine{00134\ \textcolor{comment}{//\ Huffman\ tables\ used\ for\ MJPEG\ streams\ that\ omit\ them.}}
+\DoxyCodeLine{00135\ \textcolor{keyword}{static}\ JHUFF\_TBL\ dc\_luminance\_tbl\ =\ \{}
+\DoxyCodeLine{00136\ \ \ \{0,\ 0,\ 1,\ 5,\ 1,\ 1,\ 1,\ 1,\ 1,\ 1,\ 0,\ 0,\ 0,\ 0,\ 0,\ 0,\ 0\},}
+\DoxyCodeLine{00137\ \ \ \{0,\ 1,\ 2,\ 3,\ 4,\ 5,\ 6,\ 7,\ 8,\ 9,\ 10,\ 11\},}
+\DoxyCodeLine{00138\ \ \ FALSE}
+\DoxyCodeLine{00139\ \};}
+\DoxyCodeLine{00140\ }
+\DoxyCodeLine{00141\ \textcolor{keyword}{static}\ JHUFF\_TBL\ dc\_chrominance\_tbl\ =\ \{}
+\DoxyCodeLine{00142\ \ \ \{0,\ 0,\ 3,\ 1,\ 1,\ 1,\ 1,\ 1,\ 1,\ 1,\ 1,\ 1,\ 0,\ 0,\ 0,\ 0,\ 0\},}
+\DoxyCodeLine{00143\ \ \ \{0,\ 1,\ 2,\ 3,\ 4,\ 5,\ 6,\ 7,\ 8,\ 9,\ 10,\ 11\},}
+\DoxyCodeLine{00144\ \ \ FALSE}
+\DoxyCodeLine{00145\ \};}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00147\ \textcolor{keyword}{static}\ JHUFF\_TBL\ ac\_luminance\_tbl\ =\ \{}
+\DoxyCodeLine{00148\ \ \ \{0,\ 0,\ 2,\ 1,\ 3,\ 3,\ 2,\ 4,\ 3,\ 5,\ 5,\ 4,\ 4,\ 0,\ 0,\ 1,\ 0x7d\},}
+\DoxyCodeLine{00149\ \ \ \{}
+\DoxyCodeLine{00150\ \ \ \ \ 0x01,\ 0x02,\ 0x03,\ 0x00,\ 0x04,\ 0x11,\ 0x05,\ 0x12,\ 0x21,}
+\DoxyCodeLine{00151\ \ \ \ \ 0x31,\ 0x41,\ 0x06,\ 0x13,\ 0x51,\ 0x61,\ 0x07,\ 0x22,\ 0x71,}
+\DoxyCodeLine{00152\ \ \ \ \ 0x14,\ 0x32,\ 0x81,\ 0x91,\ 0xa1,\ 0x08,\ 0x23,\ 0x42,\ 0xb1,}
+\DoxyCodeLine{00153\ \ \ \ \ 0xc1,\ 0x15,\ 0x52,\ 0xd1,\ 0xf0,\ 0x24,\ 0x33,\ 0x62,\ 0x72,}
+\DoxyCodeLine{00154\ \ \ \ \ 0x82,\ 0x09,\ 0x0a,\ 0x16,\ 0x17,\ 0x18,\ 0x19,\ 0x1a,\ 0x25,}
+\DoxyCodeLine{00155\ \ \ \ \ 0x26,\ 0x27,\ 0x28,\ 0x29,\ 0x2a,\ 0x34,\ 0x35,\ 0x36,\ 0x37,}
+\DoxyCodeLine{00156\ \ \ \ \ 0x38,\ 0x39,\ 0x3a,\ 0x43,\ 0x44,\ 0x45,\ 0x46,\ 0x47,\ 0x48,}
+\DoxyCodeLine{00157\ \ \ \ \ 0x49,\ 0x4a,\ 0x53,\ 0x54,\ 0x55,\ 0x56,\ 0x57,\ 0x58,\ 0x59,}
+\DoxyCodeLine{00158\ \ \ \ \ 0x5a,\ 0x63,\ 0x64,\ 0x65,\ 0x66,\ 0x67,\ 0x68,\ 0x69,\ 0x6a,}
+\DoxyCodeLine{00159\ \ \ \ \ 0x73,\ 0x74,\ 0x75,\ 0x76,\ 0x77,\ 0x78,\ 0x79,\ 0x7a,\ 0x83,}
+\DoxyCodeLine{00160\ \ \ \ \ 0x84,\ 0x85,\ 0x86,\ 0x87,\ 0x88,\ 0x89,\ 0x8a,\ 0x92,\ 0x93,}
+\DoxyCodeLine{00161\ \ \ \ \ 0x94,\ 0x95,\ 0x96,\ 0x97,\ 0x98,\ 0x99,\ 0x9a,\ 0xa2,\ 0xa3,}
+\DoxyCodeLine{00162\ \ \ \ \ 0xa4,\ 0xa5,\ 0xa6,\ 0xa7,\ 0xa8,\ 0xa9,\ 0xaa,\ 0xb2,\ 0xb3,}
+\DoxyCodeLine{00163\ \ \ \ \ 0xb4,\ 0xb5,\ 0xb6,\ 0xb7,\ 0xb8,\ 0xb9,\ 0xba,\ 0xc2,\ 0xc3,}
+\DoxyCodeLine{00164\ \ \ \ \ 0xc4,\ 0xc5,\ 0xc6,\ 0xc7,\ 0xc8,\ 0xc9,\ 0xca,\ 0xd2,\ 0xd3,}
+\DoxyCodeLine{00165\ \ \ \ \ 0xd4,\ 0xd5,\ 0xd6,\ 0xd7,\ 0xd8,\ 0xd9,\ 0xda,\ 0xe1,\ 0xe2,}
+\DoxyCodeLine{00166\ \ \ \ \ 0xe3,\ 0xe4,\ 0xe5,\ 0xe6,\ 0xe7,\ 0xe8,\ 0xe9,\ 0xea,\ 0xf1,}
+\DoxyCodeLine{00167\ \ \ \ \ 0xf2,\ 0xf3,\ 0xf4,\ 0xf5,\ 0xf6,\ 0xf7,\ 0xf8,\ 0xf9,\ 0xfa}
+\DoxyCodeLine{00168\ \ \ \},}
+\DoxyCodeLine{00169\ \ \ FALSE}
+\DoxyCodeLine{00170\ \};}
+\DoxyCodeLine{00171\ }
+\DoxyCodeLine{00172\ \textcolor{keyword}{static}\ JHUFF\_TBL\ ac\_chrominance\_tbl\ =\ \{}
+\DoxyCodeLine{00173\ \ \ \{0,\ 0,\ 2,\ 1,\ 2,\ 4,\ 4,\ 3,\ 4,\ 7,\ 5,\ 4,\ 4,\ 0,\ 1,\ 2,\ 0x77\},}
+\DoxyCodeLine{00174\ \ \ \{}
+\DoxyCodeLine{00175\ \ \ \ \ 0x00,\ 0x01,\ 0x02,\ 0x03,\ 0x11,\ 0x04,\ 0x05,\ 0x21,\ 0x31,}
+\DoxyCodeLine{00176\ \ \ \ \ 0x06,\ 0x12,\ 0x41,\ 0x51,\ 0x07,\ 0x61,\ 0x71,\ 0x13,\ 0x22,}
+\DoxyCodeLine{00177\ \ \ \ \ 0x32,\ 0x81,\ 0x08,\ 0x14,\ 0x42,\ 0x91,\ 0xa1,\ 0xb1,\ 0xc1,}
+\DoxyCodeLine{00178\ \ \ \ \ 0x09,\ 0x23,\ 0x33,\ 0x52,\ 0xf0,\ 0x15,\ 0x62,\ 0x72,\ 0xd1,}
+\DoxyCodeLine{00179\ \ \ \ \ 0x0a,\ 0x16,\ 0x24,\ 0x34,\ 0xe1,\ 0x25,\ 0xf1,\ 0x17,\ 0x18,}
+\DoxyCodeLine{00180\ \ \ \ \ 0x19,\ 0x1a,\ 0x26,\ 0x27,\ 0x28,\ 0x29,\ 0x2a,\ 0x35,\ 0x36,}
+\DoxyCodeLine{00181\ \ \ \ \ 0x37,\ 0x38,\ 0x39,\ 0x3a,\ 0x43,\ 0x44,\ 0x45,\ 0x46,\ 0x47,}
+\DoxyCodeLine{00182\ \ \ \ \ 0x48,\ 0x49,\ 0x4a,\ 0x53,\ 0x54,\ 0x55,\ 0x56,\ 0x57,\ 0x58,}
+\DoxyCodeLine{00183\ \ \ \ \ 0x59,\ 0x5a,\ 0x63,\ 0x64,\ 0x65,\ 0x66,\ 0x67,\ 0x68,\ 0x69,}
+\DoxyCodeLine{00184\ \ \ \ \ 0x6a,\ 0x73,\ 0x74,\ 0x75,\ 0x76,\ 0x77,\ 0x78,\ 0x79,\ 0x7a,}
+\DoxyCodeLine{00185\ \ \ \ \ 0x82,\ 0x83,\ 0x84,\ 0x85,\ 0x86,\ 0x87,\ 0x88,\ 0x89,\ 0x8a,}
+\DoxyCodeLine{00186\ \ \ \ \ 0x92,\ 0x93,\ 0x94,\ 0x95,\ 0x96,\ 0x97,\ 0x98,\ 0x99,\ 0x9a,}
+\DoxyCodeLine{00187\ \ \ \ \ 0xa2,\ 0xa3,\ 0xa4,\ 0xa5,\ 0xa6,\ 0xa7,\ 0xa8,\ 0xa9,\ 0xaa,}
+\DoxyCodeLine{00188\ \ \ \ \ 0xb2,\ 0xb3,\ 0xb4,\ 0xb5,\ 0xb6,\ 0xb7,\ 0xb8,\ 0xb9,\ 0xba,}
+\DoxyCodeLine{00189\ \ \ \ \ 0xc2,\ 0xc3,\ 0xc4,\ 0xc5,\ 0xc6,\ 0xc7,\ 0xc8,\ 0xc9,\ 0xca,}
+\DoxyCodeLine{00190\ \ \ \ \ 0xd2,\ 0xd3,\ 0xd4,\ 0xd5,\ 0xd6,\ 0xd7,\ 0xd8,\ 0xd9,\ 0xda,}
+\DoxyCodeLine{00191\ \ \ \ \ 0xe2,\ 0xe3,\ 0xe4,\ 0xe5,\ 0xe6,\ 0xe7,\ 0xe8,\ 0xe9,\ 0xea,}
+\DoxyCodeLine{00192\ \ \ \ \ 0xf2,\ 0xf3,\ 0xf4,\ 0xf5,\ 0xf6,\ 0xf7,\ 0xf8,\ 0xf9,\ 0xfa}
+\DoxyCodeLine{00193\ \ \ \},}
+\DoxyCodeLine{00194\ \ \ FALSE}
+\DoxyCodeLine{00195\ \};}
+\DoxyCodeLine{00196\ }
+\DoxyCodeLine{00197\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00202\ WebcamVideoCursorV4L::}
+\DoxyCodeLine{00203\ WebcamVideoCursorV4L(WebcamVideoV4L\ *src)\ :\ \mbox{\hyperlink{classMovieVideoCursor}{MovieVideoCursor}}(src)\ \{}
+\DoxyCodeLine{00204\ \ \ \_size\_x\ =\ src-\/>\_size\_x;}
+\DoxyCodeLine{00205\ \ \ \_size\_y\ =\ src-\/>\_size\_y;}
+\DoxyCodeLine{00206\ \ \ \_num\_components\ =\ 3;}
+\DoxyCodeLine{00207\ \ \ \_length\ =\ 1.0E10;}
+\DoxyCodeLine{00208\ \ \ \_can\_seek\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00209\ \ \ \_can\_seek\_fast\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00210\ \ \ \_aborted\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00211\ \ \ \_streaming\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00212\ \ \ \_ready\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00213\ \ \ memset(\&\_format,\ 0,\ \textcolor{keyword}{sizeof}(\textcolor{keyword}{struct}\ v4l2\_format));}
+\DoxyCodeLine{00214\ }
+\DoxyCodeLine{00215\ \ \ \_buffers\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00216\ \ \ \_buflens\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00218\ \ \ \textcolor{keywordtype}{int}\ mode\ =\ O\_RDWR;}
+\DoxyCodeLine{00219\ \ \ \textcolor{keywordflow}{if}\ (!v4l\_blocking)\ \{}
+\DoxyCodeLine{00220\ \ \ \ \ mode\ |=\ O\_NONBLOCK;}
+\DoxyCodeLine{00221\ \ \ \}}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00223\ \ \ \_fd\ =\ open(src-\/>\_device.c\_str(),\ mode);}
+\DoxyCodeLine{00224\ \ \ \textcolor{keywordflow}{if}\ (-\/1\ ==\ \_fd)\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Failed\ to\ open\ "{}}\ <<\ src-\/>\_device.c\_str()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00226\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00227\ \ \ \}}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00229\ \ \ \textcolor{comment}{//\ Find\ the\ best\ format\ in\ our\ \_pformats\ vector.\ \ MJPEG\ is\ preferred\ over}}
+\DoxyCodeLine{00230\ \ \ \textcolor{comment}{//\ YUYV,\ as\ it's\ much\ smaller.}}
+\DoxyCodeLine{00231\ \ \ \_format.type\ =\ V4L2\_BUF\_TYPE\_VIDEO\_CAPTURE;}
+\DoxyCodeLine{00232\ \ \ \_format.fmt.pix.pixelformat\ =\ src-\/>\_pformat;}
+\DoxyCodeLine{00233\ }
+\DoxyCodeLine{00234\ \ \ \textcolor{keywordflow}{switch}\ (\_format.fmt.pix.pixelformat)\ \{}
+\DoxyCodeLine{00235\ \textcolor{preprocessor}{\#ifdef\ HAVE\_JPEG}}
+\DoxyCodeLine{00236\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_MJPEG:}
+\DoxyCodeLine{00237\ \ \ \ \ \_num\_components\ =\ 3;}
+\DoxyCodeLine{00238\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00239\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_YUYV:}
+\DoxyCodeLine{00242\ \ \ \ \ \_num\_components\ =\ 3;}
+\DoxyCodeLine{00243\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00245\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_BGR24:}
+\DoxyCodeLine{00246\ \ \ \ \ \_num\_components\ =\ 3;}
+\DoxyCodeLine{00247\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00248\ }
+\DoxyCodeLine{00249\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_BGR32:}
+\DoxyCodeLine{00250\ \ \ \ \ \_num\_components\ =\ 4;}
+\DoxyCodeLine{00251\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_RGB24:}
+\DoxyCodeLine{00254\ \ \ \ \ \_num\_components\ =\ 3;}
+\DoxyCodeLine{00255\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00256\ }
+\DoxyCodeLine{00257\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_RGB32:}
+\DoxyCodeLine{00258\ \ \ \ \ \_num\_components\ =\ 4;}
+\DoxyCodeLine{00259\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00260\ }
+\DoxyCodeLine{00261\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_GREY:}
+\DoxyCodeLine{00262\ \ \ \ \ \_num\_components\ =\ 1;}
+\DoxyCodeLine{00263\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00265\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00266\ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Unsupported\ pixel\ format\ "{}}\ <<\ src-\/>get\_pixel\_format()\ <<\ \textcolor{stringliteral}{"{}!\(\backslash\)n"{}};}
+\DoxyCodeLine{00267\ \ \ \ \ \_ready\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00268\ \ \ \ \ close(\_fd);}
+\DoxyCodeLine{00269\ \ \ \ \ \_fd\ =\ -\/1;}
+\DoxyCodeLine{00270\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00271\ \ \ \}}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00273\ \ \ \textcolor{comment}{//\ Request\ a\ format\ of\ this\ size,\ and\ no\ interlacing}}
+\DoxyCodeLine{00274\ \ \ \_format.fmt.pix.width\ =\ \_size\_x;}
+\DoxyCodeLine{00275\ \ \ \_format.fmt.pix.height\ =\ \_size\_y;}
+\DoxyCodeLine{00276\ \ \ \_format.fmt.pix.field\ =\ V4L2\_FIELD\_NONE;}
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \textcolor{comment}{//\ Now\ politely\ ask\ the\ driver\ to\ switch\ to\ this\ format}}
+\DoxyCodeLine{00279\ \ \ \textcolor{keywordflow}{if}\ (-\/1\ ==\ ioctl(\_fd,\ VIDIOC\_S\_FMT,\ \&\_format))\ \{}
+\DoxyCodeLine{00280\ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Driver\ rejected\ format!\(\backslash\)n"{}};}
+\DoxyCodeLine{00281\ \ \ \ \ \_ready\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00282\ \ \ \ \ close(\_fd);}
+\DoxyCodeLine{00283\ \ \ \ \ \_fd\ =\ -\/1;}
+\DoxyCodeLine{00284\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00285\ \ \ \}}
+\DoxyCodeLine{00286\ }
+\DoxyCodeLine{00287\ \ \ \_size\_x\ =\ \_format.fmt.pix.width;}
+\DoxyCodeLine{00288\ \ \ \_size\_y\ =\ \_format.fmt.pix.height;}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00290\ \ \ \textcolor{keyword}{struct\ }v4l2\_streamparm\ streamparm;}
+\DoxyCodeLine{00291\ \ \ memset(\&streamparm,\ 0,\ \textcolor{keyword}{sizeof}\ streamparm);}
+\DoxyCodeLine{00292\ \ \ streamparm.type\ =\ V4L2\_BUF\_TYPE\_VIDEO\_CAPTURE;}
+\DoxyCodeLine{00293\ \ \ streamparm.parm.capture.timeperframe.numerator\ =\ 1;}
+\DoxyCodeLine{00294\ \ \ streamparm.parm.capture.timeperframe.denominator\ =\ src-\/>\_fps;}
+\DoxyCodeLine{00295\ \ \ \textcolor{keywordflow}{if}\ (ioctl(\_fd,\ VIDIOC\_S\_PARM,\ \&streamparm)\ <\ 0)\ \{}
+\DoxyCodeLine{00296\ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Driver\ rejected\ framerate!\(\backslash\)n"{}};}
+\DoxyCodeLine{00297\ \ \ \}}
+\DoxyCodeLine{00298\ }
+\DoxyCodeLine{00299\ \ \ \textcolor{keyword}{struct\ }v4l2\_requestbuffers\ req;}
+\DoxyCodeLine{00300\ \ \ memset(\&req,\ 0,\ \textcolor{keyword}{sizeof}\ req);}
+\DoxyCodeLine{00301\ \ \ req.count\ =\ 4;}
+\DoxyCodeLine{00302\ \ \ req.type\ =\ V4L2\_BUF\_TYPE\_VIDEO\_CAPTURE;}
+\DoxyCodeLine{00303\ \ \ req.memory\ =\ V4L2\_MEMORY\_MMAP;}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordflow}{if}\ (-\/1\ ==\ ioctl\ (\_fd,\ VIDIOC\_REQBUFS,\ \&req))\ \{}
+\DoxyCodeLine{00306\ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Failed\ to\ request\ buffers\ from\ webcam!\(\backslash\)n"{}};}
+\DoxyCodeLine{00307\ \ \ \}}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00309\ \ \ \textcolor{keywordflow}{if}\ (req.count\ <\ 2)\ \{}
+\DoxyCodeLine{00310\ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Insufficient\ buffer\ memory!\(\backslash\)n"{}};}
+\DoxyCodeLine{00311\ \ \ \}}
+\DoxyCodeLine{00312\ }
+\DoxyCodeLine{00313\ \ \ \_bufcount\ =\ req.count;}
+\DoxyCodeLine{00314\ \ \ \_buffers\ =\ (\textcolor{keywordtype}{void}\ **)\ calloc\ (req.count,\ sizeof\ (\textcolor{keywordtype}{void}*));}
+\DoxyCodeLine{00315\ \ \ \_buflens\ =\ (\textcolor{keywordtype}{size\_t}*)\ calloc\ (req.count,\ sizeof\ (\textcolor{keywordtype}{size\_t}));}
+\DoxyCodeLine{00316\ }
+\DoxyCodeLine{00317\ \ \ \textcolor{keywordflow}{if}\ (!\_buffers\ ||\ !\_buflens)\ \{}
+\DoxyCodeLine{00318\ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Not\ enough\ memory!\(\backslash\)n"{}};}
+\DoxyCodeLine{00319\ \ \ \}}
+\DoxyCodeLine{00320\ }
+\DoxyCodeLine{00321\ \ \ \textcolor{comment}{//\ Set\ up\ the\ mmap\ buffers}}
+\DoxyCodeLine{00322\ \ \ \textcolor{keyword}{struct\ }v4l2\_buffer\ buf;}
+\DoxyCodeLine{00323\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (\textcolor{keywordtype}{unsigned}\ int)\_bufcount;\ ++i)\ \{}
+\DoxyCodeLine{00324\ \ \ \ \ memset(\&buf,\ 0,\ \textcolor{keyword}{sizeof}\ buf);}
+\DoxyCodeLine{00325\ \ \ \ \ buf.type\ =\ V4L2\_BUF\_TYPE\_VIDEO\_CAPTURE;}
+\DoxyCodeLine{00326\ \ \ \ \ buf.memory\ =\ V4L2\_MEMORY\_MMAP;}
+\DoxyCodeLine{00327\ \ \ \ \ buf.index\ =\ i;}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00329\ \ \ \ \ \textcolor{keywordflow}{if}\ (-\/1\ ==\ ioctl(\_fd,\ VIDIOC\_QUERYBUF,\ \&buf))\ \{}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Failed\ to\ query\ buffer!\(\backslash\)n"{}};}
+\DoxyCodeLine{00331\ \ \ \ \ \}}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00333\ \ \ \ \ \_buflens[i]\ =\ buf.length;}
+\DoxyCodeLine{00334\ \ \ \ \ \_buffers[i]\ =\ mmap\ (\textcolor{keyword}{nullptr},\ buf.length,\ PROT\_READ\ |\ PROT\_WRITE,\ MAP\_SHARED,\ \_fd,\ buf.m.offset);}
+\DoxyCodeLine{00335\ }
+\DoxyCodeLine{00336\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_buffers[i]\ ==\ MAP\_FAILED)\ \{}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Failed\ to\ map\ buffer!\(\backslash\)n"{}};}
+\DoxyCodeLine{00338\ \ \ \ \ \}}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00340\ \ \ \ \ \textcolor{keywordflow}{if}\ (-\/1\ ==\ ioctl(\_fd,\ VIDIOC\_QBUF,\ \&buf))\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Failed\ to\ exchange\ buffer\ with\ driver!\(\backslash\)n"{}};}
+\DoxyCodeLine{00342\ \ \ \ \ \}}
+\DoxyCodeLine{00343\ \ \ \}}
+\DoxyCodeLine{00344\ }
+\DoxyCodeLine{00345\ \ \ \textcolor{keyword}{enum}\ v4l2\_buf\_type\ type\ =\ V4L2\_BUF\_TYPE\_VIDEO\_CAPTURE;}
+\DoxyCodeLine{00346\ \ \ \textcolor{keywordflow}{if}\ (-\/1\ ==\ ioctl(\_fd,\ VIDIOC\_STREAMON,\ \&type))\ \{}
+\DoxyCodeLine{00347\ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Failed\ to\ stream\ from\ buffer!\(\backslash\)n"{}};}
+\DoxyCodeLine{00348\ \ \ \}}
+\DoxyCodeLine{00349\ }
+\DoxyCodeLine{00350\ \textcolor{preprocessor}{\#ifdef\ HAVE\_JPEG}}
+\DoxyCodeLine{00351\ \ \ \textcolor{comment}{//\ Initialize\ the\ JPEG\ library,\ if\ necessary}}
+\DoxyCodeLine{00352\ \ \ \textcolor{keywordflow}{if}\ (\_format.fmt.pix.pixelformat\ ==\ V4L2\_PIX\_FMT\_MJPEG)\ \{}
+\DoxyCodeLine{00353\ \ \ \ \ jpeg\_create\_decompress(\&\_cinfo);}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00355\ \ \ \ \ \_cinfo.src\ =\ (\textcolor{keyword}{struct\ }jpeg\_source\_mgr\ *)}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ (*\_cinfo.mem-\/>alloc\_small)\ ((j\_common\_ptr)\ \&\_cinfo,\ JPOOL\_PERMANENT,}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{sizeof}(\textcolor{keyword}{struct}\ jpeg\_source\_mgr));}
+\DoxyCodeLine{00358\ \ \ \ \ \textcolor{comment}{//\ Set\ up\ function\ pointers}}
+\DoxyCodeLine{00359\ \ \ \ \ \_cinfo.src-\/>init\_source\ =\ my\_init\_source;}
+\DoxyCodeLine{00360\ \ \ \ \ \_cinfo.src-\/>fill\_input\_buffer\ =\ my\_fill\_input\_buffer;}
+\DoxyCodeLine{00361\ \ \ \ \ \_cinfo.src-\/>skip\_input\_data\ =\ my\_skip\_input\_data;}
+\DoxyCodeLine{00362\ \ \ \ \ \_cinfo.src-\/>resync\_to\_restart\ =\ jpeg\_resync\_to\_restart;}
+\DoxyCodeLine{00363\ \ \ \ \ \_cinfo.src-\/>term\_source\ =\ my\_term\_source;}
+\DoxyCodeLine{00364\ \ \ \}}
+\DoxyCodeLine{00365\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00366\ \ \ \_ready\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00367\ \}}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00372\ WebcamVideoCursorV4L::}
+\DoxyCodeLine{00373\ \string~WebcamVideoCursorV4L()\ \{}
+\DoxyCodeLine{00374\ \textcolor{preprocessor}{\#ifdef\ HAVE\_JPEG}}
+\DoxyCodeLine{00375\ \ \ \textcolor{keywordflow}{if}\ (\_format.fmt.pix.pixelformat\ ==\ V4L2\_PIX\_FMT\_MJPEG)\ \{}
+\DoxyCodeLine{00376\ \ \ \ \ jpeg\_destroy\_decompress(\&\_cinfo);}
+\DoxyCodeLine{00377\ \ \ \}}
+\DoxyCodeLine{00378\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00379\ \ \ \textcolor{keywordflow}{if}\ (-\/1\ !=\ \_fd)\ \{}
+\DoxyCodeLine{00380\ \ \ \ \ \textcolor{keyword}{enum}\ v4l2\_buf\_type\ type\ =\ V4L2\_BUF\_TYPE\_VIDEO\_CAPTURE;}
+\DoxyCodeLine{00381\ \ \ \ \ ioctl(\_fd,\ VIDIOC\_STREAMOFF,\ \&type);}
+\DoxyCodeLine{00382\ \ \ \ \ close(\_fd);}
+\DoxyCodeLine{00383\ \ \ \}}
+\DoxyCodeLine{00384\ \ \ \textcolor{keywordflow}{if}\ (\_buffers)\ \{}
+\DoxyCodeLine{00385\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ (\textcolor{keywordtype}{unsigned}\ int)\_bufcount;\ ++i)\ \{}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ munmap(\_buffers[i],\ \_buflens[i]);}
+\DoxyCodeLine{00387\ \ \ \ \ \}}
+\DoxyCodeLine{00388\ \ \ \ \ free(\_buffers);}
+\DoxyCodeLine{00389\ \ \ \}}
+\DoxyCodeLine{00390\ \ \ \textcolor{keywordflow}{if}\ (\_buflens)\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ free(\_buflens);}
+\DoxyCodeLine{00392\ \ \ \}}
+\DoxyCodeLine{00393\ \}}
+\DoxyCodeLine{00394\ }
+\DoxyCodeLine{00398\ PT(\mbox{\hyperlink{classMovieVideoCursor_1_1Buffer}{MovieVideoCursor::Buffer}})\ WebcamVideoCursorV4L::}
+\DoxyCodeLine{00399\ fetch\_buffer()\ \{}
+\DoxyCodeLine{00400\ \ \ \textcolor{keywordflow}{if}\ (!\_ready)\ \{}
+\DoxyCodeLine{00401\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00402\ \ \ \}}
+\DoxyCodeLine{00403\ }
+\DoxyCodeLine{00404\ \ \ PT(\mbox{\hyperlink{classBuffer}{Buffer}})\ buffer\ =\ get\_standard\_buffer();}
+\DoxyCodeLine{00405\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *block\ =\ buffer-\/>\_block;}
+\DoxyCodeLine{00406\ \ \ \textcolor{keyword}{struct\ }v4l2\_buffer\ vbuf;}
+\DoxyCodeLine{00407\ \ \ memset(\&vbuf,\ 0,\ \textcolor{keyword}{sizeof}\ vbuf);}
+\DoxyCodeLine{00408\ \ \ vbuf.type\ =\ V4L2\_BUF\_TYPE\_VIDEO\_CAPTURE;}
+\DoxyCodeLine{00409\ \ \ vbuf.memory\ =\ V4L2\_MEMORY\_MMAP;}
+\DoxyCodeLine{00410\ \ \ \textcolor{keywordflow}{if}\ (-\/1\ ==\ ioctl(\_fd,\ VIDIOC\_DQBUF,\ \&vbuf)\ \&\&\ errno\ !=\ EIO)\ \{}
+\DoxyCodeLine{00411\ \ \ \ \ \textcolor{keywordflow}{if}\ (errno\ ==\ EAGAIN)\ \{}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \textcolor{comment}{//\ Simply\ nothing\ is\ available\ yet.}}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00414\ \ \ \ \ \}}
+\DoxyCodeLine{00415\ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Failed\ to\ dequeue\ buffer!\(\backslash\)n"{}};}
+\DoxyCodeLine{00416\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00417\ \ \ \}}
+\DoxyCodeLine{00418\ \ \ nassertr(vbuf.index\ <\ \_bufcount,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00419\ \ \ \textcolor{keywordtype}{size\_t}\ bufsize\ =\ \_buflens[vbuf.index];}
+\DoxyCodeLine{00420\ \ \ \textcolor{keywordtype}{size\_t}\ old\_bpl\ =\ \_format.fmt.pix.bytesperline;}
+\DoxyCodeLine{00421\ \ \ \textcolor{keywordtype}{size\_t}\ new\_bpl\ =\ \_size\_x\ *\ \_num\_components;}
+\DoxyCodeLine{00422\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *buf\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *)\ \_buffers[vbuf.index];}
+\DoxyCodeLine{00423\ }
+\DoxyCodeLine{00424\ \ \ \textcolor{keywordflow}{switch}\ (\_format.fmt.pix.pixelformat)\ \{}
+\DoxyCodeLine{00425\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_MJPEG:\ \{}
+\DoxyCodeLine{00426\ \textcolor{preprocessor}{\#ifdef\ HAVE\_JPEG}}
+\DoxyCodeLine{00427\ \ \ \ \ \textcolor{keyword}{struct\ }my\_error\_mgr\ jerr;}
+\DoxyCodeLine{00428\ \ \ \ \ \_cinfo.err\ =\ jpeg\_std\_error(\&jerr.pub);}
+\DoxyCodeLine{00429\ \ \ \ \ jerr.pub.error\_exit\ =\ my\_error\_exit;}
+\DoxyCodeLine{00430\ \ \ \ \ jerr.pub.output\_message\ =\ my\_output\_message;}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *newbuf\ =\ (\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}*)\ malloc(new\_bpl\ *\ \_size\_y);}
+\DoxyCodeLine{00433\ }
+\DoxyCodeLine{00434\ \ \ \ \ \textcolor{comment}{//\ Establish\ the\ setjmp\ return\ context\ for\ my\_error\_exit\ to\ use}}
+\DoxyCodeLine{00435\ \ \ \ \ \textcolor{keywordflow}{if}\ (setjmp(jerr.setjmp\_buffer))\ \{}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ jpeg\_abort\_decompress(\&\_cinfo);}
+\DoxyCodeLine{00437\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ \textcolor{comment}{//\ Set\ up\ data\ pointer}}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \_cinfo.src-\/>bytes\_in\_buffer\ =\ bufsize;}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \_cinfo.src-\/>next\_input\_byte\ =\ buf;}
+\DoxyCodeLine{00441\ }
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (jpeg\_read\_header(\&\_cinfo,\ TRUE)\ ==\ JPEG\_HEADER\_OK)\ \{}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_cinfo.dc\_huff\_tbl\_ptrs[0]\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Many\ MJPEG\ streams\ do\ not\ include\ huffman\ tables.\ \ Remedy\ this.}}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ \ \ \ \ \_cinfo.dc\_huff\_tbl\_ptrs[0]\ =\ \&dc\_luminance\_tbl;}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \ \ \ \ \_cinfo.dc\_huff\_tbl\_ptrs[1]\ =\ \&dc\_chrominance\_tbl;}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \ \ \ \ \_cinfo.ac\_huff\_tbl\_ptrs[0]\ =\ \&ac\_luminance\_tbl;}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \ \ \ \ \_cinfo.ac\_huff\_tbl\_ptrs[1]\ =\ \&ac\_chrominance\_tbl;}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00450\ }
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \ \ \_cinfo.scale\_num\ =\ 1;}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \ \ \_cinfo.scale\_denom\ =\ 1;}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ \ \ \_cinfo.out\_color\_space\ =\ JCS\_RGB;}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \ \ \_cinfo.dct\_method\ =\ JDCT\_IFAST;}
+\DoxyCodeLine{00455\ }
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (jpeg\_start\_decompress(\&\_cinfo)\ \&\&\ \_cinfo.output\_components\ ==\ 3}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \ \ \ \ \&\&\ \_size\_x\ ==\ \_cinfo.output\_width\ \&\&\ \_size\_y\ ==\ \_cinfo.output\_height)\ \{}
+\DoxyCodeLine{00458\ }
+\DoxyCodeLine{00459\ \ \ \ \ \ \ \ \ \ \ JSAMPLE\ *buffer\_end\ =\ newbuf\ +\ new\_bpl\ *\ \_cinfo.output\_height;}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ \ \ \ \ JSAMPLE\ *rowptr\ =\ newbuf;}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (\_cinfo.output\_scanline\ <\ \_cinfo.output\_height)\ \{}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ \ \ \ \ \ \ nassertd(rowptr\ +\ new\_bpl\ <=\ buffer\_end)\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ \ \ \ \ \ \ jpeg\_read\_scanlines(\&\_cinfo,\ \&rowptr,\ \_cinfo.output\_height);}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \ \ \ \ \ \ rowptr\ +=\ new\_bpl;}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00466\ }
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_cinfo.output\_scanline\ <\ \_cinfo.output\_height)\ \{}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ \ \ \ \ jpeg\_abort\_decompress(\&\_cinfo);}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ \ \ \ \ \ \ jpeg\_finish\_decompress(\&\_cinfo);}
+\DoxyCodeLine{00471\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00473\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00474\ \ \ \ \ \}}
+\DoxyCodeLine{00475\ }
+\DoxyCodeLine{00476\ \ \ \ \ \textcolor{comment}{//\ Flip\ the\ image\ vertically}}
+\DoxyCodeLine{00477\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ row\ =\ 0;\ row\ <\ \_size\_y;\ ++row)\ \{}
+\DoxyCodeLine{00478\ \ \ \ \ \ \ memcpy(block\ +\ (\_size\_y\ -\/\ row\ -\/\ 1)\ *\ new\_bpl,\ newbuf\ +\ row\ *\ new\_bpl,\ new\_bpl);}
+\DoxyCodeLine{00479\ \ \ \ \ \}}
+\DoxyCodeLine{00480\ \ \ \ \ free(newbuf);}
+\DoxyCodeLine{00481\ }
+\DoxyCodeLine{00482\ \ \ \ \ \textcolor{comment}{//\ Swap\ red\ \ blue}}
+\DoxyCodeLine{00483\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ ex;}
+\DoxyCodeLine{00484\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ new\_bpl\ *\ \_size\_y;\ i\ +=\ 3)\ \{}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ ex\ =\ block[i];}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ block[i]\ =\ block[i\ +\ 2];}
+\DoxyCodeLine{00487\ \ \ \ \ \ \ block[i\ +\ 2]\ =\ ex;}
+\DoxyCodeLine{00488\ \ \ \ \ \}}
+\DoxyCodeLine{00489\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00490\ \ \ \ \ nassert\_raise(\textcolor{stringliteral}{"{}JPEG\ support\ not\ compiled-\/in"{}});}
+\DoxyCodeLine{00491\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00492\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00493\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00494\ \ \ \}}
+\DoxyCodeLine{00495\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_YUYV:}
+\DoxyCodeLine{00496\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ row\ =\ 0;\ row\ <\ \_size\_y;\ ++row)\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ c\ =\ 0;}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ old\_bpl;\ i\ +=\ 4)\ \{}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ \ \ yuyv\_to\_bgrbgr(block\ +\ (\_size\_y\ -\/\ row\ -\/\ 1)\ *\ new\_bpl\ +\ c,\ buf\ +\ row\ *\ old\_bpl\ +\ i);}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ \ \ c\ +=\ 6;}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00502\ \ \ \ \ \}}
+\DoxyCodeLine{00503\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00504\ }
+\DoxyCodeLine{00505\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_BGR24:}
+\DoxyCodeLine{00506\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_BGR32:}
+\DoxyCodeLine{00507\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_GREY:}
+\DoxyCodeLine{00508\ \ \ \ \ \textcolor{comment}{//\ Simplest\ case:\ copying\ every\ row\ verbatim.}}
+\DoxyCodeLine{00509\ \ \ \ \ nassertr(old\_bpl\ ==\ new\_bpl,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00510\ }
+\DoxyCodeLine{00511\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ row\ =\ 0;\ row\ <\ \_size\_y;\ ++row)\ \{}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ memcpy(block\ +\ (\_size\_y\ -\/\ row\ -\/\ 1)\ *\ new\_bpl,\ buf\ +\ row\ *\ old\_bpl,\ new\_bpl);}
+\DoxyCodeLine{00513\ \ \ \ \ \}}
+\DoxyCodeLine{00514\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00515\ }
+\DoxyCodeLine{00516\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_RGB24:}
+\DoxyCodeLine{00517\ \ \ \ \ \textcolor{comment}{//\ Swap\ components.}}
+\DoxyCodeLine{00518\ \ \ \ \ nassertr(old\_bpl\ ==\ new\_bpl,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00519\ }
+\DoxyCodeLine{00520\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ row\ =\ 0;\ row\ <\ \_size\_y;\ ++row)\ \{}
+\DoxyCodeLine{00521\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ old\_bpl;\ i\ +=\ 3)\ \{}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \ \ rgb\_to\_bgr(block\ +\ (\_size\_y\ -\/\ row\ -\/\ 1)\ *\ old\_bpl\ +\ i,\ buf\ +\ row\ *\ old\_bpl\ +\ i);}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00524\ \ \ \ \ \}}
+\DoxyCodeLine{00525\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00526\ }
+\DoxyCodeLine{00527\ \ \ \textcolor{keywordflow}{case}\ V4L2\_PIX\_FMT\_RGB32:}
+\DoxyCodeLine{00528\ \ \ \ \ \textcolor{comment}{//\ Swap\ components.}}
+\DoxyCodeLine{00529\ \ \ \ \ nassertr(old\_bpl\ ==\ new\_bpl,\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00530\ }
+\DoxyCodeLine{00531\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ row\ =\ 0;\ row\ <\ \_size\_y;\ ++row)\ \{}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ old\_bpl;\ i\ +=\ 4)\ \{}
+\DoxyCodeLine{00533\ \ \ \ \ \ \ \ \ rgb\_to\_bgra(block\ +\ (\_size\_y\ -\/\ row\ -\/\ 1)\ *\ old\_bpl\ +\ i,\ buf\ +\ row\ *\ old\_bpl\ +\ i\ +\ 1);}
+\DoxyCodeLine{00534\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00535\ \ \ \ \ \}}
+\DoxyCodeLine{00536\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00537\ \ \ \}}
+\DoxyCodeLine{00538\ }
+\DoxyCodeLine{00539\ \ \ \textcolor{keywordflow}{if}\ (-\/1\ ==\ ioctl(\_fd,\ VIDIOC\_QBUF,\ \&vbuf))\ \{}
+\DoxyCodeLine{00540\ \ \ \ \ vision\_cat.error()\ <<\ \textcolor{stringliteral}{"{}Failed\ to\ exchange\ buffer\ with\ driver!\(\backslash\)n"{}};}
+\DoxyCodeLine{00541\ \ \ \}}
+\DoxyCodeLine{00542\ }
+\DoxyCodeLine{00543\ \ \ \textcolor{keywordflow}{return}\ buffer;}
+\DoxyCodeLine{00544\ \}}
+\DoxyCodeLine{00545\ }
+\DoxyCodeLine{00546\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

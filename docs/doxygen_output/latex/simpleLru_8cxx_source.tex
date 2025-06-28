@@ -1,0 +1,191 @@
+\doxysection{simple\+Lru.\+cxx}
+\hypertarget{simpleLru_8cxx_source}{}\label{simpleLru_8cxx_source}\index{panda/src/gobj/simpleLru.cxx@{panda/src/gobj/simpleLru.cxx}}
+\mbox{\hyperlink{simpleLru_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{simpleLru_8h}{simpleLru.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{indent_8h}{indent.h}}"{}}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{comment}{//\ We\ define\ this\ as\ a\ reference\ to\ an\ allocated\ object,\ instead\ of\ as\ a}}
+\DoxyCodeLine{00020\ \textcolor{comment}{//\ concrete\ object,\ so\ that\ it\ won't\ get\ destructed\ when\ the\ program\ exits.}}
+\DoxyCodeLine{00021\ \textcolor{comment}{//\ (If\ it\ did,\ there\ would\ be\ an\ ordering\ issue\ between\ it\ and\ the\ various}}
+\DoxyCodeLine{00022\ \textcolor{comment}{//\ concrete\ SimpleLru\ objects\ which\ reference\ it.)}}
+\DoxyCodeLine{00023\ \mbox{\hyperlink{classLightMutex}{LightMutex}}\ \&SimpleLru::\_global\_lock\ =\ *\textcolor{keyword}{new}\ \mbox{\hyperlink{classLightMutex}{LightMutex}};}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00028\ SimpleLru::}
+\DoxyCodeLine{00029\ SimpleLru(\textcolor{keyword}{const}\ std::string\ \&name,\ \textcolor{keywordtype}{size\_t}\ max\_size)\ :}
+\DoxyCodeLine{00030\ \ \ \mbox{\hyperlink{classLinkedListNode}{LinkedListNode}}(true),}
+\DoxyCodeLine{00031\ \ \ \mbox{\hyperlink{classNamable}{Namable}}(name)}
+\DoxyCodeLine{00032\ \{}
+\DoxyCodeLine{00033\ \ \ \_total\_size\ =\ 0;}
+\DoxyCodeLine{00034\ \ \ \_max\_size\ =\ max\_size;}
+\DoxyCodeLine{00035\ \ \ \_active\_marker\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}(0);}
+\DoxyCodeLine{00036\ \}}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00041\ SimpleLru::}
+\DoxyCodeLine{00042\ \string~SimpleLru()\ \{}
+\DoxyCodeLine{00043\ \ \ \textcolor{keyword}{delete}\ \_active\_marker;}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00046\ \ \ \textcolor{comment}{//\ We're\ shutting\ down.\ \ Force-\/remove\ everything\ remaining,\ but\ don't}}
+\DoxyCodeLine{00047\ \ \ \textcolor{comment}{//\ explicitly\ evict\ it\ (that\ would\ force\ vertex\ buffers\ to\ write\ themselves}}
+\DoxyCodeLine{00048\ \ \ \textcolor{comment}{//\ to\ disk\ unnecessarily).}}
+\DoxyCodeLine{00049\ \ \ \textcolor{keywordflow}{while}\ (\_next\ !=\ (\mbox{\hyperlink{classLinkedListNode}{LinkedListNode}}\ *)\textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00050\ \ \ \ \ nassertv(\_next\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00051\ \ \ \ \ ((\mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *)\_next)-\/>\_lru\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00052\ \ \ \ \ ((\mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *)\_next)-\/>remove\_from\_list();}
+\DoxyCodeLine{00053\ \ \ \}}
+\DoxyCodeLine{00054\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00055\ \}}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00063\ \textcolor{keywordtype}{void}\ SimpleLruPage::}
+\DoxyCodeLine{00064\ enqueue\_lru(\mbox{\hyperlink{classSimpleLru}{SimpleLru}}\ *lru)\ \{}
+\DoxyCodeLine{00065\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(SimpleLru::\_global\_lock);}
+\DoxyCodeLine{00066\ }
+\DoxyCodeLine{00067\ \ \ \textcolor{keywordflow}{if}\ (\_lru\ ==\ lru)\ \{}
+\DoxyCodeLine{00068\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_lru\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ remove\_from\_list();}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ insert\_before(\_lru);}
+\DoxyCodeLine{00071\ \ \ \ \ \}}
+\DoxyCodeLine{00072\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00073\ \ \ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ \textcolor{keywordflow}{if}\ (\_lru\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00076\ \ \ \ \ remove\_from\_list();}
+\DoxyCodeLine{00077\ \ \ \ \ \_lru-\/>\_total\_size\ -\/=\ \_lru\_size;}
+\DoxyCodeLine{00078\ \ \ \ \ \_lru\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00079\ \ \ \}}
+\DoxyCodeLine{00080\ }
+\DoxyCodeLine{00081\ \ \ \_lru\ =\ lru;}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00083\ \ \ \textcolor{keywordflow}{if}\ (\_lru\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00084\ \ \ \ \ \_lru-\/>\_total\_size\ +=\ \_lru\_size;}
+\DoxyCodeLine{00085\ \ \ \ \ insert\_before(\_lru);}
+\DoxyCodeLine{00086\ \ \ \}}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00088\ \ \ \textcolor{comment}{//\ Let's\ not\ automatically\ evict\ pages;\ instead,\ we'll\ evict\ only\ on\ an}}
+\DoxyCodeLine{00089\ \ \ \textcolor{comment}{//\ explicit\ epoch\ test.\ \ \_lru-\/>consider\_evict();}}
+\DoxyCodeLine{00090\ \}}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00096\ \textcolor{keywordtype}{size\_t}\ SimpleLru::}
+\DoxyCodeLine{00097\ count\_active\_size()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00098\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_global\_lock);}
+\DoxyCodeLine{00099\ \ \ \textcolor{keywordtype}{size\_t}\ total\ =\ 0;}
+\DoxyCodeLine{00100\ }
+\DoxyCodeLine{00101\ \ \ \mbox{\hyperlink{classLinkedListNode}{LinkedListNode}}\ *node\ =\ \_prev;}
+\DoxyCodeLine{00102\ \ \ \textcolor{keywordflow}{while}\ (node\ !=\ \_active\_marker\ \&\&\ node\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00103\ \ \ \ \ total\ +=\ ((\mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *)node)-\/>get\_lru\_size();}
+\DoxyCodeLine{00104\ \ \ \ \ node\ =\ ((\mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *)node)-\/>\_prev;}
+\DoxyCodeLine{00105\ \ \ \}}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \ \ \textcolor{keywordflow}{return}\ total;}
+\DoxyCodeLine{00108\ \}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00113\ \textcolor{keywordtype}{void}\ SimpleLru::}
+\DoxyCodeLine{00114\ output(ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00115\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_global\_lock);}
+\DoxyCodeLine{00116\ \ \ out\ <<\ \textcolor{stringliteral}{"{}SimpleLru\ "{}}\ <<\ get\_name()}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ "{}}\ <<\ \_total\_size\ <<\ \textcolor{stringliteral}{"{}\ of\ "{}}\ <<\ \_max\_size;}
+\DoxyCodeLine{00118\ \}}
+\DoxyCodeLine{00119\ }
+\DoxyCodeLine{00123\ \textcolor{keywordtype}{void}\ SimpleLru::}
+\DoxyCodeLine{00124\ write(ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00125\ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level)\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}:\(\backslash\)n"{}};}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00127\ \ \ \textcolor{comment}{//\ We\ write\ out\ the\ list\ backwards.\ \ Things\ we\ write\ out\ first\ are\ the}}
+\DoxyCodeLine{00128\ \ \ \textcolor{comment}{//\ freshest\ in\ the\ LRU.\ \ Things\ at\ the\ end\ of\ the\ list\ will\ be\ the\ next\ to}}
+\DoxyCodeLine{00129\ \ \ \textcolor{comment}{//\ be\ evicted.}}
+\DoxyCodeLine{00130\ }
+\DoxyCodeLine{00131\ \ \ \mbox{\hyperlink{classLightMutexHolder}{LightMutexHolder}}\ holder(\_global\_lock);}
+\DoxyCodeLine{00132\ \ \ \mbox{\hyperlink{classLinkedListNode}{LinkedListNode}}\ *node\ =\ \_prev;}
+\DoxyCodeLine{00133\ \ \ \textcolor{keywordflow}{while}\ (node\ !=\ \_active\_marker\ \&\&\ node\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00134\ \ \ \ \ \mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *page\ =\ (\mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *)node;}
+\DoxyCodeLine{00135\ \ \ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level\ +\ 2)\ <<\ *page\ <<\ \textcolor{stringliteral}{"{}\ (active)\(\backslash\)n"{}};}
+\DoxyCodeLine{00136\ \ \ \ \ node\ =\ page-\/>\_prev;}
+\DoxyCodeLine{00137\ \ \ \}}
+\DoxyCodeLine{00138\ \ \ \textcolor{keywordflow}{if}\ (node\ ==\ \_active\_marker)\ \{}
+\DoxyCodeLine{00139\ \ \ \ \ node\ =\ \_active\_marker-\/>\_prev;}
+\DoxyCodeLine{00140\ \ \ \ \ \textcolor{keywordflow}{while}\ (node\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *page\ =\ (\mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *)node;}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level\ +\ 2)\ <<\ *page\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ node\ =\ page-\/>\_prev;}
+\DoxyCodeLine{00144\ \ \ \ \ \}}
+\DoxyCodeLine{00145\ \ \ \}}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00147\ \textcolor{preprocessor}{\#ifndef\ NDEBUG}}
+\DoxyCodeLine{00148\ \ \ ((\mbox{\hyperlink{classSimpleLru}{SimpleLru}}\ *)\textcolor{keyword}{this})-\/>do\_validate();}
+\DoxyCodeLine{00149\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00150\ \}}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00157\ \textcolor{keywordtype}{void}\ SimpleLru::}
+\DoxyCodeLine{00158\ do\_evict\_to(\textcolor{keywordtype}{size\_t}\ target\_size,\ \textcolor{keywordtype}{bool}\ hard\_evict)\ \{}
+\DoxyCodeLine{00159\ \ \ \textcolor{keywordflow}{if}\ (\_next\ ==\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00160\ \ \ \ \ \textcolor{comment}{//\ Nothing\ in\ the\ queue.}}
+\DoxyCodeLine{00161\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00162\ \ \ \}}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00164\ \ \ \textcolor{comment}{//\ Store\ the\ current\ end\ of\ the\ list.\ \ If\ pages\ re-\/enqueue\ themselves\ during}}
+\DoxyCodeLine{00165\ \ \ \textcolor{comment}{//\ this\ traversal,\ we\ don't\ want\ to\ visit\ them\ twice.}}
+\DoxyCodeLine{00166\ \ \ \mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *end\ =\ (\mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *)\_prev;}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \ \ \textcolor{comment}{//\ Now\ walk\ through\ the\ list.}}
+\DoxyCodeLine{00169\ \ \ \mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *node\ =\ (\mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *)\_next;}
+\DoxyCodeLine{00170\ \ \ \textcolor{keywordflow}{while}\ (\_total\_size\ >\ target\_size)\ \{}
+\DoxyCodeLine{00171\ \ \ \ \ \mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *next\ =\ (\mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *)node-\/>\_next;}
+\DoxyCodeLine{00172\ }
+\DoxyCodeLine{00173\ \ \ \ \ \textcolor{comment}{//\ We\ must\ release\ the\ lock\ while\ we\ call\ evict\_lru().}}
+\DoxyCodeLine{00174\ \ \ \ \ \_global\_lock.unlock();}
+\DoxyCodeLine{00175\ \ \ \ \ node-\/>evict\_lru();}
+\DoxyCodeLine{00176\ \ \ \ \ \_global\_lock.lock();}
+\DoxyCodeLine{00177\ }
+\DoxyCodeLine{00178\ \ \ \ \ \textcolor{keywordflow}{if}\ (node\ ==\ end\ ||\ node\ ==\ \_prev)\ \{}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ reach\ the\ original\ tail\ of\ the\ list,\ stop.}}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00181\ \ \ \ \ \}}
+\DoxyCodeLine{00182\ \ \ \ \ \textcolor{keywordflow}{if}\ (!hard\_evict\ \&\&\ node\ ==\ \_active\_marker)\ \{}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \textcolor{comment}{//\ Also\ stop\ if\ we\ reach\ the\ active\ marker.\ \ Nodes\ beyond\ this\ were}}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \textcolor{comment}{//\ added\ within\ this\ epoch.}}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00186\ \ \ \ \ \}}
+\DoxyCodeLine{00187\ \ \ \ \ node\ =\ next;}
+\DoxyCodeLine{00188\ \ \ \}}
+\DoxyCodeLine{00189\ \}}
+\DoxyCodeLine{00190\ }
+\DoxyCodeLine{00195\ \textcolor{keywordtype}{bool}\ SimpleLru::}
+\DoxyCodeLine{00196\ do\_validate()\ \{}
+\DoxyCodeLine{00197\ \ \ \textcolor{keywordtype}{size\_t}\ total\ =\ 0;}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00199\ \ \ \mbox{\hyperlink{classLinkedListNode}{LinkedListNode}}\ *node\ =\ \_next;}
+\DoxyCodeLine{00200\ \ \ \textcolor{keywordflow}{while}\ (node\ !=\ \textcolor{keyword}{this})\ \{}
+\DoxyCodeLine{00201\ \ \ \ \ total\ +=\ ((\mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *)node)-\/>get\_lru\_size();}
+\DoxyCodeLine{00202\ \ \ \ \ node\ =\ ((\mbox{\hyperlink{classSimpleLruPage}{SimpleLruPage}}\ *)node)-\/>\_next;}
+\DoxyCodeLine{00203\ \ \ \}}
+\DoxyCodeLine{00204\ }
+\DoxyCodeLine{00205\ \ \ \textcolor{keywordflow}{return}\ (total\ ==\ \_total\_size);}
+\DoxyCodeLine{00206\ \}}
+\DoxyCodeLine{00207\ }
+\DoxyCodeLine{00211\ SimpleLruPage::}
+\DoxyCodeLine{00212\ \string~SimpleLruPage()\ \{}
+\DoxyCodeLine{00213\ \ \ \textcolor{keywordflow}{if}\ (\_lru\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00214\ \ \ \ \ dequeue\_lru();}
+\DoxyCodeLine{00215\ \ \ \}}
+\DoxyCodeLine{00216\ \}}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00228\ \textcolor{keywordtype}{void}\ SimpleLruPage::}
+\DoxyCodeLine{00229\ evict\_lru()\ \{}
+\DoxyCodeLine{00230\ \ \ dequeue\_lru();}
+\DoxyCodeLine{00231\ \}}
+\DoxyCodeLine{00232\ }
+\DoxyCodeLine{00236\ \textcolor{keywordtype}{void}\ SimpleLruPage::}
+\DoxyCodeLine{00237\ output(ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00238\ \ \ out\ <<\ \textcolor{stringliteral}{"{}page\ "{}}\ <<\ \textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{},\ "{}}\ <<\ \_lru\_size;}
+\DoxyCodeLine{00239\ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00244\ \textcolor{keywordtype}{void}\ SimpleLruPage::}
+\DoxyCodeLine{00245\ write(ostream\ \&out,\ \textcolor{keywordtype}{int}\ indent\_level)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00246\ \ \ \mbox{\hyperlink{indent_8cxx_a20c026b79ac844b38fcd02e70a7497d1}{indent}}(out,\ indent\_level)\ <<\ *\textcolor{keyword}{this}\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00247\ \}}
+
+\end{DoxyCode}

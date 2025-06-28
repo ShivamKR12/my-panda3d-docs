@@ -1,0 +1,338 @@
+\doxysection{portal\+Clipper.\+cxx}
+\hypertarget{portalClipper_8cxx_source}{}\label{portalClipper_8cxx_source}\index{panda/src/pgraph/portalClipper.cxx@{panda/src/pgraph/portalClipper.cxx}}
+\mbox{\hyperlink{portalClipper_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{portalClipper_8h}{portalClipper.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullTraverser_8h}{cullTraverser.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullTraverserData_8h}{cullTraverserData.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{transformState_8h}{transformState.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{renderState_8h}{renderState.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{fogAttrib_8h}{fogAttrib.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullHandler_8h}{cullHandler.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{dcast_8h}{dcast.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomNode_8h}{geomNode.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__pgraph_8h}{config\_pgraph.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{boundingSphere_8h}{boundingSphere.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{colorAttrib_8h}{colorAttrib.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{renderModeAttrib_8h}{renderModeAttrib.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{cullFaceAttrib_8h}{cullFaceAttrib.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{depthOffsetAttrib_8h}{depthOffsetAttrib.h}}"{}}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexWriter_8h}{geomVertexWriter.h}}"{}}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomLinestrips_8h}{geomLinestrips.h}}"{}}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomPoints_8h}{geomPoints.h}}"{}}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{keyword}{using\ }std::endl;}
+\DoxyCodeLine{00034\ \textcolor{keyword}{using\ }std::max;}
+\DoxyCodeLine{00035\ \textcolor{keyword}{using\ }std::min;}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ PortalClipper::\_type\_handle;}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00042\ PortalClipper::}
+\DoxyCodeLine{00043\ PortalClipper(\mbox{\hyperlink{classGeometricBoundingVolume}{GeometricBoundingVolume}}\ *frustum,\ \mbox{\hyperlink{classSceneSetup}{SceneSetup}}\ *scene\_setup):}
+\DoxyCodeLine{00044\ \_reduced\_viewport\_min(-\/1,-\/1),}
+\DoxyCodeLine{00045\ \_reduced\_viewport\_max(1,1),}
+\DoxyCodeLine{00046\ \_clip\_state(nullptr)}
+\DoxyCodeLine{00047\ \{}
+\DoxyCodeLine{00048\ \ \ \_previous\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomNode}{GeomNode}}(\textcolor{stringliteral}{"{}my\_frustum"{}});}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \ \ \_view\_frustum\ =\ \_reduced\_frustum\ =\ DCAST(\mbox{\hyperlink{classBoundingHexahedron}{BoundingHexahedron}},\ frustum);}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \ \ \_scene\_setup\ =\ scene\_setup;}
+\DoxyCodeLine{00054\ \}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00059\ PortalClipper::}
+\DoxyCodeLine{00060\ \string~PortalClipper()\ \{}
+\DoxyCodeLine{00061\ \}}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00068\ \textcolor{keywordtype}{void}\ PortalClipper::}
+\DoxyCodeLine{00069\ move\_to(\textcolor{keyword}{const}\ LVecBase3\ \&v)\ \{}
+\DoxyCodeLine{00070\ \ \ \textcolor{comment}{//\ We\ create\ a\ new\ SegmentList\ with\ the\ initial\ point\ in\ it.}}
+\DoxyCodeLine{00071\ \ \ \mbox{\hyperlink{classpvector}{SegmentList}}\ segs;}
+\DoxyCodeLine{00072\ \ \ segs.push\_back(Point(v,\ \_color));}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00074\ \ \ \textcolor{comment}{//\ And\ add\ this\ list\ to\ the\ list\ of\ segments.}}
+\DoxyCodeLine{00075\ \ \ \_list.push\_back(segs);}
+\DoxyCodeLine{00076\ \}}
+\DoxyCodeLine{00077\ }
+\DoxyCodeLine{00083\ \textcolor{keywordtype}{void}\ PortalClipper::}
+\DoxyCodeLine{00084\ draw\_to(\textcolor{keyword}{const}\ LVecBase3\ \&v)\ \{}
+\DoxyCodeLine{00085\ \ \ \textcolor{keywordflow}{if}\ (\_list.empty())\ \{}
+\DoxyCodeLine{00086\ \ \ \ \ \textcolor{comment}{//\ Let\ our\ first\ call\ to\ draw\_to()\ be\ an\ implicit\ move\_to().}}
+\DoxyCodeLine{00087\ \ \ \ \ move\_to(v);}
+\DoxyCodeLine{00088\ }
+\DoxyCodeLine{00089\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00090\ \ \ \ \ \textcolor{comment}{//\ Get\ the\ current\ SegmentList,\ which\ was\ the\ last\ one\ we\ added\ to\ the}}
+\DoxyCodeLine{00091\ \ \ \ \ \textcolor{comment}{//\ LineList.}}
+\DoxyCodeLine{00092\ \ \ \ \ \mbox{\hyperlink{classpvector}{SegmentList}}\ \&segs\ =\ \_list.back();}
+\DoxyCodeLine{00093\ }
+\DoxyCodeLine{00094\ \ \ \ \ \textcolor{comment}{//\ Add\ the\ new\ point.}}
+\DoxyCodeLine{00095\ \ \ \ \ segs.push\_back(Point(v,\ \_color));}
+\DoxyCodeLine{00096\ \ \ \}}
+\DoxyCodeLine{00097\ \}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00103\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPortalClipper_a56433ff196ffb21979bdee48e4c4eb1a}{PortalClipper::}}}
+\DoxyCodeLine{00104\ \mbox{\hyperlink{classPortalClipper_a56433ff196ffb21979bdee48e4c4eb1a}{draw\_hexahedron}}(\mbox{\hyperlink{classBoundingHexahedron}{BoundingHexahedron}}\ *frustum)\ \{}
+\DoxyCodeLine{00105\ \ \ \textcolor{comment}{//\ walk\ the\ view\ frustum\ as\ it\ should\ be\ drawn}}
+\DoxyCodeLine{00106\ \ \ move\_to(frustum-\/>get\_point(0));}
+\DoxyCodeLine{00107\ \ \ draw\_to(frustum-\/>get\_point(1));}
+\DoxyCodeLine{00108\ \ \ draw\_to(frustum-\/>get\_point(2));}
+\DoxyCodeLine{00109\ \ \ draw\_to(frustum-\/>get\_point(3));}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00111\ \ \ move\_to(frustum-\/>get\_point(4));}
+\DoxyCodeLine{00112\ \ \ draw\_to(frustum-\/>get\_point(0));}
+\DoxyCodeLine{00113\ \ \ draw\_to(frustum-\/>get\_point(3));}
+\DoxyCodeLine{00114\ \ \ draw\_to(frustum-\/>get\_point(7));}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00116\ \ \ move\_to(frustum-\/>get\_point(5));}
+\DoxyCodeLine{00117\ \ \ draw\_to(frustum-\/>get\_point(4));}
+\DoxyCodeLine{00118\ \ \ draw\_to(frustum-\/>get\_point(7));}
+\DoxyCodeLine{00119\ \ \ draw\_to(frustum-\/>get\_point(6));}
+\DoxyCodeLine{00120\ }
+\DoxyCodeLine{00121\ \ \ move\_to(frustum-\/>get\_point(1));}
+\DoxyCodeLine{00122\ \ \ draw\_to(frustum-\/>get\_point(5));}
+\DoxyCodeLine{00123\ \ \ draw\_to(frustum-\/>get\_point(6));}
+\DoxyCodeLine{00124\ \ \ draw\_to(frustum-\/>get\_point(2));}
+\DoxyCodeLine{00125\ \}}
+\DoxyCodeLine{00130\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPortalClipper_a25e7d124f413375d3273d32e740d0cba}{PortalClipper::}}}
+\DoxyCodeLine{00131\ \mbox{\hyperlink{classPortalClipper_a25e7d124f413375d3273d32e740d0cba}{draw\_current\_portal}}()}
+\DoxyCodeLine{00132\ \{}
+\DoxyCodeLine{00133\ \ \ move\_to(\_portal\_node-\/>get\_vertex(0));}
+\DoxyCodeLine{00134\ \ \ draw\_to(\_portal\_node-\/>get\_vertex(1));}
+\DoxyCodeLine{00135\ \ \ draw\_to(\_portal\_node-\/>get\_vertex(2));}
+\DoxyCodeLine{00136\ \ \ draw\_to(\_portal\_node-\/>get\_vertex(3));}
+\DoxyCodeLine{00137\ \}}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00144\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPortalClipper_ac277a106b934e92996a2d5ceb81e0e05}{PortalClipper::}}}
+\DoxyCodeLine{00145\ \mbox{\hyperlink{classPortalClipper_ac277a106b934e92996a2d5ceb81e0e05}{draw\_lines}}()\ \{}
+\DoxyCodeLine{00146\ \ \ \textcolor{keywordflow}{if}\ (!\_list.empty())\ \{}
+\DoxyCodeLine{00147\ \ \ \ \ \_created\_data\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ \ \ PT(\mbox{\hyperlink{classGeomVertexData}{GeomVertexData}})\ vdata\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomVertexData}{GeomVertexData}}}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ (\textcolor{stringliteral}{"{}portal"{}},\ GeomVertexFormat::get\_v3c(),\ Geom::UH\_static);}
+\DoxyCodeLine{00151\ \ \ \ \ \mbox{\hyperlink{classGeomVertexWriter}{GeomVertexWriter}}\ vertex(vdata,\ InternalName::get\_vertex());}
+\DoxyCodeLine{00152\ \ \ \ \ \mbox{\hyperlink{classGeomVertexWriter}{GeomVertexWriter}}\ \mbox{\hyperlink{structcolor}{color}}(vdata,\ InternalName::get\_color());}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00154\ \ \ \ \ PT(\mbox{\hyperlink{classGeomLinestrips}{GeomLinestrips}})\ lines\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomLinestrips}{GeomLinestrips}}(Geom::UH\_static);}
+\DoxyCodeLine{00155\ \ \ \ \ PT(\mbox{\hyperlink{classGeomPoints}{GeomPoints}})\ points\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeomPoints}{GeomPoints}}(Geom::UH\_static);}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{keywordtype}{int}\ v\ =\ 0;}
+\DoxyCodeLine{00158\ \ \ \ \ LineList::const\_iterator\ ll;}
+\DoxyCodeLine{00159\ \ \ \ \ SegmentList::const\_iterator\ sl;}
+\DoxyCodeLine{00160\ }
+\DoxyCodeLine{00161\ \ \ \ \ \textcolor{keywordflow}{for}\ (ll\ =\ \_list.begin();\ ll\ !=\ \_list.end();\ ll++)\ \{}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classpvector}{SegmentList}}\ \&segs\ =\ (*ll);}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (segs.size()\ <\ 2)\ \{}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ A\ segment\ of\ length\ 1\ is\ just\ a\ point.}}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (sl\ =\ segs.begin();\ sl\ !=\ segs.end();\ sl++)\ \{}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \ \ points-\/>add\_vertex(v);}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \ \ vertex.add\_data3((*sl).\_point);}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}.add\_data4((*sl).\_color);}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ \ \ v++;}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ points-\/>close\_primitive();}
+\DoxyCodeLine{00173\ }
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ A\ segment\ of\ length\ 2\ or\ more\ is\ a\ line\ segment\ or\ segments.}}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (sl\ =\ segs.begin();\ sl\ !=\ segs.end();\ sl++)\ \{}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \ \ \ \ lines-\/>add\_vertex(v);}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \ \ \ \ vertex.add\_data3((*sl).\_point);}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structcolor}{color}}.add\_data4((*sl).\_color);}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ \ \ v++;}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ lines-\/>close\_primitive();}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00184\ \ \ \ \ \}}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00186\ \ \ \ \ \textcolor{keywordflow}{if}\ (lines-\/>get\_num\_vertices()\ !=\ 0)\ \{}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGeom}{Geom}})\ geom\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeom}{Geom}}(vdata);}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ geom-\/>add\_primitive(lines);}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \_previous-\/>add\_geom(geom);}
+\DoxyCodeLine{00190\ \ \ \ \ \}}
+\DoxyCodeLine{00191\ \ \ \ \ \textcolor{keywordflow}{if}\ (points-\/>get\_num\_vertices()\ !=\ 0)\ \{}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ PT(\mbox{\hyperlink{classGeom}{Geom}})\ geom\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classGeom}{Geom}}(vdata);}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ geom-\/>add\_primitive(points);}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \_previous-\/>add\_geom(geom);}
+\DoxyCodeLine{00195\ \ \ \ \ \}}
+\DoxyCodeLine{00196\ \ \ \}}
+\DoxyCodeLine{00197\ \}}
+\DoxyCodeLine{00202\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPortalClipper_ad27297877c09641b373efbde86bc8ed5}{PortalClipper::}}}
+\DoxyCodeLine{00203\ \mbox{\hyperlink{classPortalClipper_ad27297877c09641b373efbde86bc8ed5}{prepare\_portal}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classNodePath}{NodePath}}\ \&node\_path)}
+\DoxyCodeLine{00204\ \{}
+\DoxyCodeLine{00205\ \ \ \textcolor{comment}{//\ Get\ the\ Portal\ Node\ from\ this\ node\_path}}
+\DoxyCodeLine{00206\ \ \ \mbox{\hyperlink{classPandaNode}{PandaNode}}\ *node\ =\ node\_path.node();}
+\DoxyCodeLine{00207\ \ \ \_portal\_node\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00208\ \ \ \textcolor{keywordflow}{if}\ (node-\/>is\_of\_type(PortalNode::get\_class\_type()))\ \{}
+\DoxyCodeLine{00209\ \ \ \ \ \_portal\_node\ =\ DCAST(\mbox{\hyperlink{classPortalNode}{PortalNode}},\ node);}
+\DoxyCodeLine{00210\ \ \ \}}
+\DoxyCodeLine{00211\ \ \ nassertr(\_portal\_node\ !=\ \textcolor{keyword}{nullptr},\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00212\ }
+\DoxyCodeLine{00213\ \ \ \textcolor{comment}{//\ Get\ the\ geometry\ from\ the\ portal}}
+\DoxyCodeLine{00214\ \ \ \textcolor{keywordflow}{if}\ (portal\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00215\ \ \ \ \ portal\_cat.spam()\ <<\ *\_portal\_node\ <<\ endl;}
+\DoxyCodeLine{00216\ \ \ \}}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00218\ \ \ \textcolor{comment}{//\ Get\ the\ camera\ transformation\ matrix}}
+\DoxyCodeLine{00219\ \ \ CPT(\mbox{\hyperlink{classTransformState}{TransformState}})\ ctransform\ =\ node\_path.get\_transform(\_scene\_setup-\/>get\_cull\_center());}
+\DoxyCodeLine{00220\ \ \ \textcolor{comment}{//\ CPT(TransformState)\ ctransform\ =}}
+\DoxyCodeLine{00221\ \ \ \textcolor{comment}{//\ node\_path.get\_transform(\_scene\_setup-\/>get\_camera\_path());}}
+\DoxyCodeLine{00222\ \ \ LMatrix4\ cmat\ =\ ctransform-\/>get\_mat();}
+\DoxyCodeLine{00223\ \ \ \textcolor{keywordflow}{if}\ (portal\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00224\ \ \ \ \ portal\_cat.spam()\ <<\ cmat\ <<\ endl;}
+\DoxyCodeLine{00225\ \ \ \}}
+\DoxyCodeLine{00226\ }
+\DoxyCodeLine{00227\ \ \ LVertex\ temp[4];}
+\DoxyCodeLine{00228\ \ \ temp[0]\ =\ \_portal\_node-\/>get\_vertex(0);}
+\DoxyCodeLine{00229\ \ \ temp[1]\ =\ \_portal\_node-\/>get\_vertex(1);}
+\DoxyCodeLine{00230\ \ \ temp[2]\ =\ \_portal\_node-\/>get\_vertex(2);}
+\DoxyCodeLine{00231\ \ \ temp[3]\ =\ \_portal\_node-\/>get\_vertex(3);}
+\DoxyCodeLine{00232\ }
+\DoxyCodeLine{00233\ \ \ \textcolor{keywordflow}{if}\ (portal\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ portal\_cat.spam()\ <<\ \textcolor{stringliteral}{"{}before\ transformation\ to\ camera\ space"{}}\ <<\ endl;}
+\DoxyCodeLine{00235\ \ \ \ \ portal\_cat.spam()\ <<\ temp[0]\ <<\ endl;}
+\DoxyCodeLine{00236\ \ \ \ \ portal\_cat.spam()\ <<\ temp[1]\ <<\ endl;}
+\DoxyCodeLine{00237\ \ \ \ \ portal\_cat.spam()\ <<\ temp[2]\ <<\ endl;}
+\DoxyCodeLine{00238\ \ \ \ \ portal\_cat.spam()\ <<\ temp[3]\ <<\ endl;}
+\DoxyCodeLine{00239\ \ \ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ temp[0]\ =\ temp[0]*cmat;}
+\DoxyCodeLine{00242\ \ \ temp[1]\ =\ temp[1]*cmat;}
+\DoxyCodeLine{00243\ \ \ temp[2]\ =\ temp[2]*cmat;}
+\DoxyCodeLine{00244\ \ \ temp[3]\ =\ temp[3]*cmat;}
+\DoxyCodeLine{00245\ }
+\DoxyCodeLine{00246\ \ \ LPlane\ portal\_plane(temp[0],\ temp[1],\ temp[2]);}
+\DoxyCodeLine{00247\ \ \ \textcolor{keywordflow}{if}\ (!is\_facing\_view(portal\_plane))\ \{}
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{keywordflow}{if}\ (portal\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ portal\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}portal\ failed\ 1st\ level\ test\ (isn't\ facing\ the\ camera)\(\backslash\)n"{}};}
+\DoxyCodeLine{00250\ \ \ \ \ \}}
+\DoxyCodeLine{00251\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00252\ \ \ \}}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \ \ \textcolor{keywordflow}{if}\ (portal\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ portal\_cat.spam()\ <<\ \textcolor{stringliteral}{"{}after\ transformation\ to\ camera\ space"{}}\ <<\ endl;}
+\DoxyCodeLine{00256\ \ \ \ \ portal\_cat.spam()\ <<\ temp[0]\ <<\ endl;}
+\DoxyCodeLine{00257\ \ \ \ \ portal\_cat.spam()\ <<\ temp[1]\ <<\ endl;}
+\DoxyCodeLine{00258\ \ \ \ \ portal\_cat.spam()\ <<\ temp[2]\ <<\ endl;}
+\DoxyCodeLine{00259\ \ \ \ \ portal\_cat.spam()\ <<\ temp[3]\ <<\ endl;}
+\DoxyCodeLine{00260\ \ \ \}}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \ \ \textcolor{comment}{//\ check\ if\ the\ portal\ intersects\ with\ the\ cameras\ 0\ point\ (center\ of}}
+\DoxyCodeLine{00263\ \ \ \textcolor{comment}{//\ projection).\ In\ that\ case\ the\ portal\ will\ invert\ itself.\ \ portals}}
+\DoxyCodeLine{00264\ \ \ \textcolor{comment}{//\ intersecting\ the\ near\ plane\ or\ the\ 0\ point\ are\ a\ weird\ case\ anyhow,}}
+\DoxyCodeLine{00265\ \ \ \textcolor{comment}{//\ therefore\ we\ don't\ reduce\ the\ frustum\ any\ further\ and\ just\ return\ true.}}
+\DoxyCodeLine{00266\ \ \ \textcolor{comment}{//\ In\ effect\ the\ portal\ doesn't\ reduce\ visibility\ but\ will\ draw\ everything}}
+\DoxyCodeLine{00267\ \ \ \textcolor{comment}{//\ in\ its\ out\ cell}}
+\DoxyCodeLine{00268\ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classLens}{Lens}}\ *lens\ =\ \_scene\_setup-\/>get\_lens();}
+\DoxyCodeLine{00269\ \ \ LVector3\ forward\ =\ LVector3::forward(lens-\/>get\_coordinate\_system());}
+\DoxyCodeLine{00270\ \ \ \textcolor{keywordtype}{int}\ forward\_axis;}
+\DoxyCodeLine{00271\ \ \ \textcolor{keywordflow}{if}\ (forward[1])\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ forward\_axis\ =\ 1;}
+\DoxyCodeLine{00273\ \ \ \}}
+\DoxyCodeLine{00274\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (forward[2])\ \{}
+\DoxyCodeLine{00275\ \ \ \ \ forward\_axis\ =\ 2;}
+\DoxyCodeLine{00276\ \ \ \}}
+\DoxyCodeLine{00277\ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ forward\_axis\ =\ 0;}
+\DoxyCodeLine{00279\ \ \ \}}
+\DoxyCodeLine{00280\ \ \ \textcolor{keywordflow}{if}\ ((temp[0][forward\_axis]\ *\ forward[forward\_axis]\ <=\ 0)\ ||}
+\DoxyCodeLine{00281\ \ \ \ \ (temp[1][forward\_axis]\ *\ forward[forward\_axis]\ <=\ 0)\ ||}
+\DoxyCodeLine{00282\ \ \ \ \ (temp[2][forward\_axis]\ *\ forward[forward\_axis]\ <=\ 0)\ ||}
+\DoxyCodeLine{00283\ \ \ \ \ (temp[3][forward\_axis]\ *\ forward[forward\_axis]\ <=\ 0))\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ \textcolor{keywordflow}{if}\ (portal\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ portal\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}portal\ intersects\ with\ center\ of\ projection.."{}}\ <<\ endl;}
+\DoxyCodeLine{00286\ \ \ \ \ \}}
+\DoxyCodeLine{00287\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00288\ \ \ \}}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00290\ \ \ \textcolor{comment}{//\ project\ portal\ points,\ so\ they\ are\ in\ the\ -\/1..1\ range}}
+\DoxyCodeLine{00291\ \ \ LPoint3\ projected\_coords[4];}
+\DoxyCodeLine{00292\ \ \ lens-\/>project(temp[0],\ projected\_coords[0]);}
+\DoxyCodeLine{00293\ \ \ lens-\/>project(temp[1],\ projected\_coords[1]);}
+\DoxyCodeLine{00294\ \ \ lens-\/>project(temp[2],\ projected\_coords[2]);}
+\DoxyCodeLine{00295\ \ \ lens-\/>project(temp[3],\ projected\_coords[3]);}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \ \ \textcolor{keywordflow}{if}\ (portal\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00298\ \ \ \ \ portal\_cat.spam()\ <<\ \textcolor{stringliteral}{"{}after\ projection\ to\ 2d"{}}\ <<\ endl;}
+\DoxyCodeLine{00299\ \ \ \ \ portal\_cat.spam()\ <<\ projected\_coords[0]\ <<\ endl;}
+\DoxyCodeLine{00300\ \ \ \ \ portal\_cat.spam()\ <<\ projected\_coords[1]\ <<\ endl;}
+\DoxyCodeLine{00301\ \ \ \ \ portal\_cat.spam()\ <<\ projected\_coords[2]\ <<\ endl;}
+\DoxyCodeLine{00302\ \ \ \ \ portal\_cat.spam()\ <<\ projected\_coords[3]\ <<\ endl;}
+\DoxyCodeLine{00303\ \ \ \}}
+\DoxyCodeLine{00304\ }
+\DoxyCodeLine{00305\ \ \ \textcolor{comment}{//\ calculate\ axis\ aligned\ bounding\ box\ of\ the\ portal}}
+\DoxyCodeLine{00306\ \ \ PN\_stdfloat\ min\_x,\ max\_x,\ min\_y,\ max\_y;}
+\DoxyCodeLine{00307\ \ \ min\_x\ =\ min(min(min(projected\_coords[0][0],\ projected\_coords[1][0]),\ projected\_coords[2][0]),\ projected\_coords[3][0]);}
+\DoxyCodeLine{00308\ \ \ max\_x\ =\ max(max(max(projected\_coords[0][0],\ projected\_coords[1][0]),\ projected\_coords[2][0]),\ projected\_coords[3][0]);}
+\DoxyCodeLine{00309\ \ \ min\_y\ =\ min(min(min(projected\_coords[0][1],\ projected\_coords[1][1]),\ projected\_coords[2][1]),\ projected\_coords[3][1]);}
+\DoxyCodeLine{00310\ \ \ max\_y\ =\ max(max(max(projected\_coords[0][1],\ projected\_coords[1][1]),\ projected\_coords[2][1]),\ projected\_coords[3][1]);}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \ \ \textcolor{keywordflow}{if}\ (portal\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00313\ \ \ \ \ portal\_cat.spam()\ <<\ \textcolor{stringliteral}{"{}min\_x\ "{}}\ <<\ min\_x\ <<\ \textcolor{stringliteral}{"{};max\_x\ "{}}\ <<\ max\_x\ <<\ \textcolor{stringliteral}{"{};min\_y\ "{}}\ <<\ min\_y\ <<\ \textcolor{stringliteral}{"{};max\_y\ "{}}\ <<\ max\_y\ <<\ endl;}
+\DoxyCodeLine{00314\ \ \ \}}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ \ \ \textcolor{comment}{//\ clip\ the\ minima\ and\ maxima\ against\ the\ viewport}}
+\DoxyCodeLine{00317\ \ \ min\_x\ =\ max(min\_x,\ \_reduced\_viewport\_min[0]);}
+\DoxyCodeLine{00318\ \ \ min\_y\ =\ max(min\_y,\ \_reduced\_viewport\_min[1]);}
+\DoxyCodeLine{00319\ \ \ max\_x\ =\ min(max\_x,\ \_reduced\_viewport\_max[0]);}
+\DoxyCodeLine{00320\ \ \ max\_y\ =\ min(max\_y,\ \_reduced\_viewport\_max[1]);}
+\DoxyCodeLine{00321\ }
+\DoxyCodeLine{00322\ \ \ \textcolor{keywordflow}{if}\ (portal\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00323\ \ \ \ \ portal\_cat.spam()\ <<\ \textcolor{stringliteral}{"{}after\ clipping:\ min\_x\ "{}}\ <<\ min\_x\ <<\ \textcolor{stringliteral}{"{};max\_x\ "{}}\ <<\ max\_x\ <<\ \textcolor{stringliteral}{"{};min\_y\ "{}}\ <<\ min\_y\ <<\ \textcolor{stringliteral}{"{};max\_y\ "{}}\ <<\ max\_y\ <<\ endl;}
+\DoxyCodeLine{00324\ \ \ \}}
+\DoxyCodeLine{00325\ }
+\DoxyCodeLine{00326\ \ \ \textcolor{keywordflow}{if}\ ((min\_x\ >=\ max\_x)\ ||\ (min\_y\ >=\ max\_y))\ \{}
+\DoxyCodeLine{00327\ \ \ \ \ \textcolor{keywordflow}{if}\ (portal\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ portal\_cat.debug()\ <<\ \textcolor{stringliteral}{"{}portal\ got\ clipped\ away\ \(\backslash\)n"{}};}
+\DoxyCodeLine{00329\ \ \ \ \ \}}
+\DoxyCodeLine{00330\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00331\ \ \ \}}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00333\ \ \ \textcolor{comment}{//\ here\ we\ know\ the\ portal\ is\ in\ view\ and\ we\ have\ its\ clipped\ extents}}
+\DoxyCodeLine{00334\ \ \ \_reduced\_viewport\_min.set(min\_x,\ min\_y);}
+\DoxyCodeLine{00335\ \ \ \_reduced\_viewport\_max.set(max\_x,\ max\_y);}
+\DoxyCodeLine{00336\ }
+\DoxyCodeLine{00337\ \ \ \textcolor{comment}{//\ calculate\ the\ near\ and\ far\ points\ so\ we\ can\ construct\ a\ frustum}}
+\DoxyCodeLine{00338\ \ \ LPoint3\ near\_point[4];}
+\DoxyCodeLine{00339\ \ \ LPoint3\ far\_point[4];}
+\DoxyCodeLine{00340\ \ \ lens-\/>extrude(LPoint2(min\_x,\ min\_y),\ near\_point[0],\ far\_point[0]);}
+\DoxyCodeLine{00341\ \ \ lens-\/>extrude(LPoint2(max\_x,\ min\_y),\ near\_point[1],\ far\_point[1]);}
+\DoxyCodeLine{00342\ \ \ lens-\/>extrude(LPoint2(max\_x,\ max\_y),\ near\_point[2],\ far\_point[2]);}
+\DoxyCodeLine{00343\ \ \ lens-\/>extrude(LPoint2(min\_x,\ max\_y),\ near\_point[3],\ far\_point[3]);}
+\DoxyCodeLine{00344\ }
+\DoxyCodeLine{00345\ \ \ \textcolor{comment}{//\ With\ these\ points,\ construct\ the\ new\ reduced\ frustum}}
+\DoxyCodeLine{00346\ \ \ \_reduced\_frustum\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classBoundingHexahedron}{BoundingHexahedron}}(far\_point[0],\ far\_point[1],\ far\_point[2],\ far\_point[3],}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ near\_point[0],\ near\_point[1],\ near\_point[2],\ near\_point[3]);}
+\DoxyCodeLine{00348\ }
+\DoxyCodeLine{00349\ \ \ \textcolor{keywordflow}{if}\ (portal\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00350\ \ \ \ \ portal\_cat.debug()\ <<\ *\_reduced\_frustum\ <<\ endl;}
+\DoxyCodeLine{00351\ \ \ \}}
+\DoxyCodeLine{00352\ }
+\DoxyCodeLine{00353\ \ \ \textcolor{comment}{//\ do\ debug\ rendering,\ if\ requested}}
+\DoxyCodeLine{00354\ \ \ \textcolor{keywordflow}{if}\ (debug\_portal\_cull)\ \{}
+\DoxyCodeLine{00355\ \ \ \ \ \textcolor{comment}{//\ draw\ the\ reduced\ frustum}}
+\DoxyCodeLine{00356\ \ \ \ \ \_color\ =\ LColor(0,0,1,1);}
+\DoxyCodeLine{00357\ \ \ \ \ \mbox{\hyperlink{classPortalClipper_a56433ff196ffb21979bdee48e4c4eb1a}{draw\_hexahedron}}(DCAST(\mbox{\hyperlink{classBoundingHexahedron}{BoundingHexahedron}},\ \_reduced\_frustum));}
+\DoxyCodeLine{00358\ }
+\DoxyCodeLine{00359\ \ \ \ \ \textcolor{comment}{//\ lets\ first\ add\ the\ clipped\ portal\ (in\ yellow)}}
+\DoxyCodeLine{00360\ \ \ \ \ \_color\ =\ LColor(1,1,0,1);}
+\DoxyCodeLine{00361\ \ \ \ \ move\_to((near\_point[0]*0.99+far\_point[0]*0.01));\ \textcolor{comment}{//\ I\ choose\ a\ point\ in\ the\ middle\ between\ near\ and\ far..\ could\ also\ be\ some\ other\ z\ value..}}
+\DoxyCodeLine{00362\ \ \ \ \ draw\_to((near\_point[1]*0.99+far\_point[1]*0.01));}
+\DoxyCodeLine{00363\ \ \ \ \ draw\_to((near\_point[2]*0.99+far\_point[2]*0.01));}
+\DoxyCodeLine{00364\ \ \ \ \ draw\_to((near\_point[3]*0.99+far\_point[3]*0.01));}
+\DoxyCodeLine{00365\ \ \ \ \ draw\_to((near\_point[0]*0.99+far\_point[0]*0.01));}
+\DoxyCodeLine{00366\ }
+\DoxyCodeLine{00367\ \ \ \ \ \textcolor{comment}{//\ ok,\ now\ lets\ add\ the\ original\ portal\ (in\ cyan)}}
+\DoxyCodeLine{00368\ \ \ \ \ \_color\ =\ LColor(0,1,1,1);}
+\DoxyCodeLine{00369\ \ \ \ \ move\_to(temp[0]);}
+\DoxyCodeLine{00370\ \ \ \ \ draw\_to(temp[1]);}
+\DoxyCodeLine{00371\ \ \ \ \ draw\_to(temp[2]);}
+\DoxyCodeLine{00372\ \ \ \ \ draw\_to(temp[3]);}
+\DoxyCodeLine{00373\ \ \ \ \ draw\_to(temp[0]);}
+\DoxyCodeLine{00374\ \ \ \}}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00376\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00377\ \}}
+
+\end{DoxyCode}

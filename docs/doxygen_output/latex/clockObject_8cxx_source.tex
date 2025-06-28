@@ -1,0 +1,511 @@
+\doxysection{clock\+Object.\+cxx}
+\hypertarget{clockObject_8cxx_source}{}\label{clockObject_8cxx_source}\index{panda/src/putil/clockObject.cxx@{panda/src/putil/clockObject.cxx}}
+\mbox{\hyperlink{clockObject_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{clockObject_8h}{clockObject.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__putil_8h}{config\_putil.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{configVariableEnum_8h}{configVariableEnum.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{string__utils_8h}{string\_utils.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{thread_8h}{thread.h}}"{}}}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ \textcolor{keyword}{using\ }std::istream;}
+\DoxyCodeLine{00021\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00022\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ void\ (*ClockObject::\_start\_clock\_wait)()\ =\ ClockObject::dummy\_clock\_wait;}
+\DoxyCodeLine{00025\ void\ (*ClockObject::\_start\_clock\_busy\_wait)()\ =\ ClockObject::dummy\_clock\_wait;}
+\DoxyCodeLine{00026\ void\ (*ClockObject::\_stop\_clock\_wait)()\ =\ ClockObject::dummy\_clock\_wait;}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \mbox{\hyperlink{structpatomic}{patomic<ClockObject\ *>}}\ ClockObject::\_global\_clock(\textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00029\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ ClockObject::\_type\_handle;}
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00034\ ClockObject::}
+\DoxyCodeLine{00035\ ClockObject(Mode\ mode)\ :\ \_mode(mode),\ \_ticks(get\_class\_type())\ \{}
+\DoxyCodeLine{00036\ \ \ \_true\_clock\ =\ TrueClock::get\_global\_ptr();}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \ \ \_start\_short\_time\ =\ \_true\_clock-\/>get\_short\_time();}
+\DoxyCodeLine{00039\ \ \ \_start\_long\_time\ =\ \_true\_clock-\/>get\_long\_time();}
+\DoxyCodeLine{00040\ \ \ \_actual\_frame\_time\ =\ 0.0;}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ \ \ \mbox{\hyperlink{classConfigVariableDouble}{ConfigVariableDouble}}\ max\_dt}
+\DoxyCodeLine{00043\ \ \ \ \ (\textcolor{stringliteral}{"{}max-\/dt"{}},\ -\/1.0,}
+\DoxyCodeLine{00044\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}Sets\ a\ limit\ on\ the\ value\ returned\ by\ ClockObject::get\_dt().\ \ If\ "{}}}
+\DoxyCodeLine{00045\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}this\ value\ is\ less\ than\ zero,\ no\ limit\ is\ imposed;\ "{}}}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}otherwise,\ this\ is\ the\ maximum\ value\ that\ will\ ever\ "{}}}
+\DoxyCodeLine{00047\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}be\ returned\ by\ get\_dt(),\ regardless\ of\ how\ much\ time\ "{}}}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}has\ actually\ elapsed\ between\ frames.\ \ See\ ClockObject::set\_dt()."{}}));}
+\DoxyCodeLine{00049\ \ \ \mbox{\hyperlink{classConfigVariableDouble}{ConfigVariableDouble}}\ clock\_frame\_rate}
+\DoxyCodeLine{00050\ \ \ \ \ (\textcolor{stringliteral}{"{}clock-\/frame-\/rate"{}},\ 1.0,}
+\DoxyCodeLine{00051\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}In\ non-\/real-\/time\ clock\ mode,\ sets\ the\ number\ of\ frames\ per\ "{}}}
+\DoxyCodeLine{00052\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}second\ that\ we\ should\ appear\ to\ be\ running.\ \ In\ forced\ "{}}}
+\DoxyCodeLine{00053\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}mode\ or\ limited\ mode,\ sets\ our\ target\ frame\ rate.\ \ In\ "{}}}
+\DoxyCodeLine{00054\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}normal\ mode,\ this\ has\ no\ effect.\ \ See\ ClockObject::set\_frame\_rate()."{}}));}
+\DoxyCodeLine{00055\ \ \ \mbox{\hyperlink{classConfigVariableDouble}{ConfigVariableDouble}}\ clock\_degrade\_factor}
+\DoxyCodeLine{00056\ \ \ \ \ (\textcolor{stringliteral}{"{}clock-\/degrade-\/factor"{}},\ 1.0,}
+\DoxyCodeLine{00057\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}In\ degrade\ clock\ mode,\ returns\ the\ ratio\ by\ which\ the\ "{}}}
+\DoxyCodeLine{00058\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}performance\ is\ degraded.\ \ A\ value\ of\ 2.0\ causes\ the\ "{}}}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}clock\ to\ be\ slowed\ down\ by\ a\ factor\ of\ two\ (reducing\ "{}}}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}performance\ to\ 1/2\ what\ would\ be\ otherwise).\ \ See\ ClockObject::set\_degrade\_factor()."{}}));}
+\DoxyCodeLine{00061\ \ \ \mbox{\hyperlink{classConfigVariableDouble}{ConfigVariableDouble}}\ average\_frame\_rate\_interval}
+\DoxyCodeLine{00062\ \ \ \ \ (\textcolor{stringliteral}{"{}average-\/frame-\/rate-\/interval"{}},\ 1.0,}
+\DoxyCodeLine{00063\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}See\ ClockObject::set\_average\_frame\_rate\_interval()."{}}));}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ \ \ \_max\_dt\ =\ max\_dt;}
+\DoxyCodeLine{00066\ \ \ \_user\_frame\_rate\ =\ clock\_frame\_rate;}
+\DoxyCodeLine{00067\ \ \ \_degrade\_factor\ =\ clock\_degrade\_factor;}
+\DoxyCodeLine{00068\ \ \ \_average\_frame\_rate\_interval\ =\ average\_frame\_rate\_interval;}
+\DoxyCodeLine{00069\ }
+\DoxyCodeLine{00070\ \ \ \_error\_count\ =\ \_true\_clock-\/>get\_error\_count();}
+\DoxyCodeLine{00071\ \}}
+\DoxyCodeLine{00072\ }
+\DoxyCodeLine{00076\ ClockObject::}
+\DoxyCodeLine{00077\ ClockObject(\textcolor{keyword}{const}\ \mbox{\hyperlink{classClockObject}{ClockObject}}\ \&copy)\ :}
+\DoxyCodeLine{00078\ \ \ \_true\_clock(copy.\_true\_clock),}
+\DoxyCodeLine{00079\ \ \ \_mode(copy.\_mode),}
+\DoxyCodeLine{00080\ \ \ \_start\_short\_time(copy.\_start\_short\_time),}
+\DoxyCodeLine{00081\ \ \ \_start\_long\_time(copy.\_start\_long\_time),}
+\DoxyCodeLine{00082\ \ \ \_actual\_frame\_time(copy.\_actual\_frame\_time),}
+\DoxyCodeLine{00083\ \ \ \_max\_dt(copy.\_max\_dt),}
+\DoxyCodeLine{00084\ \ \ \_user\_frame\_rate(copy.\_user\_frame\_rate),}
+\DoxyCodeLine{00085\ \ \ \_degrade\_factor(copy.\_degrade\_factor),}
+\DoxyCodeLine{00086\ \ \ \_error\_count(copy.\_error\_count),}
+\DoxyCodeLine{00087\ \ \ \_average\_frame\_rate\_interval(copy.\_average\_frame\_rate\_interval),}
+\DoxyCodeLine{00088\ \ \ \_ticks(copy.\_ticks),}
+\DoxyCodeLine{00089\ \ \ \_cycler(copy.\_cycler)}
+\DoxyCodeLine{00090\ \{}
+\DoxyCodeLine{00091\ \}}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00132\ \textcolor{keywordtype}{void}\ ClockObject::}
+\DoxyCodeLine{00133\ set\_mode(ClockObject::Mode\ mode)\ \{}
+\DoxyCodeLine{00134\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00135\ \ \ nassertv(current\_thread-\/>get\_pipeline\_stage()\ ==\ 0);}
+\DoxyCodeLine{00136\ \ \ CDWriter\ cdata(\_cycler,\ current\_thread);}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ \_mode\ =\ mode;}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ \ \ \textcolor{comment}{//\ In\ case\ we\ have\ set\ the\ clock\ to\ one\ of\ the\ modes\ that\ uses}}
+\DoxyCodeLine{00141\ \ \ \textcolor{comment}{//\ \_reported\_frame\_time\_epoch,\ recompute\ the\ epoch.}}
+\DoxyCodeLine{00142\ \ \ \textcolor{keywordflow}{switch}\ (\_mode)\ \{}
+\DoxyCodeLine{00143\ \ \ \textcolor{keywordflow}{case}\ M\_non\_real\_time:}
+\DoxyCodeLine{00144\ \ \ \textcolor{keywordflow}{case}\ M\_forced:}
+\DoxyCodeLine{00145\ \ \ \ \ cdata-\/>\_reported\_frame\_time\_epoch\ =\ cdata-\/>\_reported\_frame\_time\ -\/}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ cdata-\/>\_frame\_count\ /\ \_user\_frame\_rate;}
+\DoxyCodeLine{00147\ \ \ \ \ cdata-\/>\_dt\ =\ 1.0\ /\ \_user\_frame\_rate;}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00151\ \ \ \}}
+\DoxyCodeLine{00152\ \}}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00160\ \textcolor{keywordtype}{void}\ ClockObject::}
+\DoxyCodeLine{00161\ set\_real\_time(\textcolor{keywordtype}{double}\ time)\ \{}
+\DoxyCodeLine{00162\ \textcolor{preprocessor}{\#ifdef\ NOTIFY\_DEBUG}}
+\DoxyCodeLine{00163\ \ \ \textcolor{comment}{//\ This\ is\ only\ a\ debug\ message,\ since\ it\ happens\ during\ normal\ development,}}
+\DoxyCodeLine{00164\ \ \ \textcolor{comment}{//\ particularly\ at\ startup,\ or\ whenever\ you\ break\ into\ the\ task\ loop.}}
+\DoxyCodeLine{00165\ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug()\ \&\&\ \textcolor{keyword}{this}\ ==\ \_global\_clock.load(std::memory\_order\_relaxed))\ \{}
+\DoxyCodeLine{00166\ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Adjusting\ global\ clock's\ real\ time\ by\ "{}}\ <<\ time\ -\/\ get\_real\_time()}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ seconds.\(\backslash\)n"{}};}
+\DoxyCodeLine{00169\ \ \ \}}
+\DoxyCodeLine{00170\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NOTIFY\_DEBUG}}
+\DoxyCodeLine{00171\ \ \ \_start\_short\_time\ =\ \_true\_clock-\/>get\_short\_time()\ -\/\ time;}
+\DoxyCodeLine{00172\ \ \ \_start\_long\_time\ =\ \_true\_clock-\/>get\_long\_time()\ -\/\ time;}
+\DoxyCodeLine{00173\ \}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00180\ \textcolor{keywordtype}{void}\ ClockObject::}
+\DoxyCodeLine{00181\ set\_frame\_time(\textcolor{keywordtype}{double}\ time,\ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00182\ \ \ nassertv(current\_thread-\/>get\_pipeline\_stage()\ ==\ 0);}
+\DoxyCodeLine{00183\ \textcolor{preprocessor}{\#ifdef\ NOTIFY\_DEBUG}}
+\DoxyCodeLine{00184\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{this}\ ==\ \_global\_clock.load(std::memory\_order\_relaxed)\ \&\&\ \_mode\ !=\ M\_slave)\ \{}
+\DoxyCodeLine{00185\ \ \ \ \ util\_cat.warning()}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Adjusting\ global\ clock's\ frame\ time\ by\ "{}}\ <<\ time\ -\/\ get\_frame\_time()}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ seconds.\(\backslash\)n"{}};}
+\DoxyCodeLine{00188\ \ \ \}}
+\DoxyCodeLine{00189\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NOTIFY\_DEBUG}}
+\DoxyCodeLine{00190\ \ \ CDWriter\ cdata(\_cycler,\ current\_thread);}
+\DoxyCodeLine{00191\ \ \ \_actual\_frame\_time\ =\ time;}
+\DoxyCodeLine{00192\ \ \ cdata-\/>\_reported\_frame\_time\ =\ time;}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00194\ \ \ \textcolor{comment}{//\ Recompute\ the\ epoch\ in\ case\ we\ are\ in\ a\ mode\ that\ relies\ on\ this.}}
+\DoxyCodeLine{00195\ \ \ cdata-\/>\_reported\_frame\_time\_epoch\ =\ cdata-\/>\_reported\_frame\_time\ -\/}
+\DoxyCodeLine{00196\ \ \ \ \ cdata-\/>\_frame\_count\ /\ \_user\_frame\_rate;}
+\DoxyCodeLine{00197\ \}}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00203\ \textcolor{keywordtype}{void}\ ClockObject::}
+\DoxyCodeLine{00204\ set\_frame\_count(\textcolor{keywordtype}{int}\ frame\_count,\ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00205\ \ \ nassertv(current\_thread-\/>get\_pipeline\_stage()\ ==\ 0);}
+\DoxyCodeLine{00206\ \textcolor{preprocessor}{\#ifdef\ NOTIFY\_DEBUG}}
+\DoxyCodeLine{00207\ \ \ \textcolor{keywordflow}{if}\ (\textcolor{keyword}{this}\ ==\ \_global\_clock.load(std::memory\_order\_relaxed)\ \&\&\ \_mode\ !=\ M\_slave)\ \{}
+\DoxyCodeLine{00208\ \ \ \ \ util\_cat.warning()}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Adjusting\ global\ clock's\ frame\ count\ by\ "{}}}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ <<\ frame\_count\ -\/\ get\_frame\_count()\ <<\ \textcolor{stringliteral}{"{}\ frames.\(\backslash\)n"{}};}
+\DoxyCodeLine{00211\ \ \ \}}
+\DoxyCodeLine{00212\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ NOTIFY\_DEBUG}}
+\DoxyCodeLine{00213\ \ \ CDWriter\ cdata(\_cycler,\ current\_thread);}
+\DoxyCodeLine{00214\ \ \ cdata-\/>\_frame\_count\ =\ frame\_count;}
+\DoxyCodeLine{00215\ }
+\DoxyCodeLine{00216\ \ \ \textcolor{comment}{//\ Recompute\ the\ epoch\ in\ case\ we\ are\ in\ a\ mode\ that\ relies\ on\ this.}}
+\DoxyCodeLine{00217\ \ \ cdata-\/>\_reported\_frame\_time\_epoch\ =\ cdata-\/>\_reported\_frame\_time\ -\/}
+\DoxyCodeLine{00218\ \ \ \ \ cdata-\/>\_frame\_count\ /\ \_user\_frame\_rate;}
+\DoxyCodeLine{00219\ \}}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00229\ \textcolor{keywordtype}{void}\ ClockObject::}
+\DoxyCodeLine{00230\ set\_dt(\textcolor{keywordtype}{double}\ dt)\ \{}
+\DoxyCodeLine{00231\ \ \ \textcolor{keywordflow}{if}\ (\_mode\ ==\ M\_slave)\ \{}
+\DoxyCodeLine{00232\ \ \ \ \ \textcolor{comment}{//\ In\ M\_slave\ mode,\ we\ can\ set\ any\ dt\ we\ like.}}
+\DoxyCodeLine{00233\ \ \ \ \ CDWriter\ cdata(\_cycler,\ Thread::get\_current\_thread());}
+\DoxyCodeLine{00234\ \ \ \ \ cdata-\/>\_dt\ =\ dt;}
+\DoxyCodeLine{00235\ \ \ \ \ \textcolor{keywordflow}{if}\ (dt\ !=\ 0.0)\ \{}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ set\_frame\_rate(1.0\ /\ dt);}
+\DoxyCodeLine{00237\ \ \ \ \ \}}
+\DoxyCodeLine{00238\ }
+\DoxyCodeLine{00239\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00240\ \ \ \ \ \textcolor{comment}{//\ In\ any\ other\ mode,\ we\ can\ only\ set\ non-\/zero\ dt.}}
+\DoxyCodeLine{00241\ \ \ \ \ nassertv(dt\ !=\ 0.0);}
+\DoxyCodeLine{00242\ \ \ \ \ set\_frame\_rate(1.0\ /\ dt);}
+\DoxyCodeLine{00243\ \ \ \}}
+\DoxyCodeLine{00244\ \}}
+\DoxyCodeLine{00245\ }
+\DoxyCodeLine{00253\ \textcolor{keywordtype}{void}\ ClockObject::}
+\DoxyCodeLine{00254\ set\_frame\_rate(\textcolor{keywordtype}{double}\ frame\_rate)\ \{}
+\DoxyCodeLine{00255\ \ \ nassertv(frame\_rate\ !=\ 0.0);}
+\DoxyCodeLine{00256\ }
+\DoxyCodeLine{00257\ \ \ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread\ =\ Thread::get\_current\_thread();}
+\DoxyCodeLine{00258\ \ \ nassertv(current\_thread-\/>get\_pipeline\_stage()\ ==\ 0);}
+\DoxyCodeLine{00259\ }
+\DoxyCodeLine{00260\ \ \ CDWriter\ cdata(\_cycler,\ current\_thread);}
+\DoxyCodeLine{00261\ \ \ \_user\_frame\_rate\ =\ frame\_rate;}
+\DoxyCodeLine{00262\ }
+\DoxyCodeLine{00263\ \ \ \textcolor{keywordflow}{switch}\ (\_mode)\ \{}
+\DoxyCodeLine{00264\ \ \ \textcolor{keywordflow}{case}\ M\_non\_real\_time:}
+\DoxyCodeLine{00265\ \ \ \textcolor{keywordflow}{case}\ M\_forced:}
+\DoxyCodeLine{00266\ \ \ \ \ cdata-\/>\_reported\_frame\_time\_epoch\ =\ cdata-\/>\_reported\_frame\_time\ -\/}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ cdata-\/>\_frame\_count\ /\ \_user\_frame\_rate;}
+\DoxyCodeLine{00268\ \ \ \ \ cdata-\/>\_dt\ =\ 1.0\ /\ \_user\_frame\_rate;}
+\DoxyCodeLine{00269\ }
+\DoxyCodeLine{00270\ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00271\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00272\ \ \ \}}
+\DoxyCodeLine{00273\ \}}
+\DoxyCodeLine{00274\ }
+\DoxyCodeLine{00280\ \textcolor{keywordtype}{double}\ ClockObject::}
+\DoxyCodeLine{00281\ get\_average\_frame\_rate(\mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00282\ \ \ CDStageReader\ cdata(\_cycler,\ 0,\ current\_thread);}
+\DoxyCodeLine{00283\ \ \ \textcolor{keywordflow}{if}\ (\_ticks.size()\ <=\ 1)\ \{}
+\DoxyCodeLine{00284\ \ \ \ \ \textcolor{keywordflow}{return}\ 0.0;}
+\DoxyCodeLine{00285\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00286\ \ \ \ \ \textcolor{keywordflow}{return}\ \_ticks.size()\ /\ (cdata-\/>\_reported\_frame\_time\ -\/\ \_ticks.front());}
+\DoxyCodeLine{00287\ \ \ \}}
+\DoxyCodeLine{00288\ \}}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00294\ \textcolor{keywordtype}{double}\ ClockObject::}
+\DoxyCodeLine{00295\ get\_max\_frame\_duration(\mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00296\ \ \ CDStageReader\ cdata(\_cycler,\ 0,\ current\_thread);}
+\DoxyCodeLine{00297\ \ \ \textcolor{keywordtype}{double}\ max\_duration\ =\ 0.0;}
+\DoxyCodeLine{00298\ \ \ \textcolor{keywordtype}{double}\ cur\_duration\ =\ 0.0;}
+\DoxyCodeLine{00299\ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{00300\ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ \_ticks.size()\ -\/\ 1;\ i++)\ \{}
+\DoxyCodeLine{00301\ \ \ \ \ cur\_duration\ =\ \_ticks[i\ +\ 1]\ -\/\ \_ticks[i];}
+\DoxyCodeLine{00302\ \ \ \ \ \textcolor{keywordflow}{if}\ (cur\_duration\ >\ max\_duration)\ \{}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ max\_duration\ =\ cur\_duration;}
+\DoxyCodeLine{00304\ \ \ \ \ \}}
+\DoxyCodeLine{00305\ \ \ \}}
+\DoxyCodeLine{00306\ \ \ \textcolor{keywordflow}{return}\ max\_duration;}
+\DoxyCodeLine{00307\ \}}
+\DoxyCodeLine{00308\ }
+\DoxyCodeLine{00320\ \textcolor{keywordtype}{double}\ ClockObject::}
+\DoxyCodeLine{00321\ calc\_frame\_rate\_deviation(\mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00322\ \ \ CDStageReader\ cdata(\_cycler,\ 0,\ current\_thread);}
+\DoxyCodeLine{00323\ \ \ \textcolor{keywordflow}{if}\ (\_ticks.size()\ <=\ 1)\ \{}
+\DoxyCodeLine{00324\ \ \ \ \ \textcolor{keywordflow}{return}\ 0.0;}
+\DoxyCodeLine{00325\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00326\ \ \ \ \ \textcolor{keywordtype}{double}\ mean\ =\ (\_ticks.back()\ -\/\ \_ticks.front())\ /\ (\_ticks.size()\ -\/\ 1);}
+\DoxyCodeLine{00327\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ i;}
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{keywordtype}{double}\ sum\_squares\ =\ 0.0;}
+\DoxyCodeLine{00329\ \ \ \ \ \textcolor{keywordflow}{for}\ (i\ =\ 0;\ i\ <\ \_ticks.size()\ -\/\ 1;\ ++i)\ \{}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ delta\ =\ \_ticks[i\ +\ 1]\ -\/\ \_ticks[i];}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ diff\ =\ (delta\ -\/\ mean);}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ sum\_squares\ +=\ (diff\ *\ diff);}
+\DoxyCodeLine{00333\ \ \ \ \ \}}
+\DoxyCodeLine{00334\ \ \ \ \ \textcolor{keywordtype}{double}\ deviation\_2\ =\ sum\_squares\ /\ (\_ticks.size()\ -\/\ 1);}
+\DoxyCodeLine{00335\ \ \ \ \ \textcolor{keywordflow}{return}\ sqrt(deviation\_2);}
+\DoxyCodeLine{00336\ \ \ \}}
+\DoxyCodeLine{00337\ \}}
+\DoxyCodeLine{00338\ }
+\DoxyCodeLine{00345\ \textcolor{keywordtype}{void}\ ClockObject::}
+\DoxyCodeLine{00346\ tick(\mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00347\ \ \ nassertv(current\_thread-\/>get\_pipeline\_stage()\ ==\ 0);}
+\DoxyCodeLine{00348\ \ \ CDWriter\ cdata(\_cycler,\ current\_thread);}
+\DoxyCodeLine{00349\ \ \ \textcolor{keywordtype}{double}\ old\_reported\_time\ =\ cdata-\/>\_reported\_frame\_time;}
+\DoxyCodeLine{00350\ }
+\DoxyCodeLine{00351\ \ \ \textcolor{keywordflow}{if}\ (\_mode\ !=\ M\_slave)\ \{}
+\DoxyCodeLine{00352\ \ \ \ \ \textcolor{keywordtype}{double}\ old\_time\ =\ \_actual\_frame\_time;}
+\DoxyCodeLine{00353\ \ \ \ \ \_actual\_frame\_time\ =\ get\_real\_time();}
+\DoxyCodeLine{00354\ }
+\DoxyCodeLine{00355\ \ \ \ \ \textcolor{comment}{//\ In\ case\ someone\ munged\ the\ clock\ last\ frame\ and\ sent\ us\ backward\ in}}
+\DoxyCodeLine{00356\ \ \ \ \ \textcolor{comment}{//\ time,\ clamp\ the\ previous\ time\ to\ the\ current\ time\ to\ make\ sure\ we\ don't}}
+\DoxyCodeLine{00357\ \ \ \ \ \textcolor{comment}{//\ report\ anything\ strange\ (or\ wait\ interminably).}}
+\DoxyCodeLine{00358\ \ \ \ \ old\_time\ =\ std::min(old\_time,\ \_actual\_frame\_time);}
+\DoxyCodeLine{00359\ }
+\DoxyCodeLine{00360\ \ \ \ \ ++cdata-\/>\_frame\_count;}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00362\ \ \ \ \ \textcolor{keywordflow}{switch}\ (\_mode)\ \{}
+\DoxyCodeLine{00363\ \ \ \ \ \textcolor{keywordflow}{case}\ M\_normal:}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \textcolor{comment}{//\ Time\ runs\ as\ it\ will;\ we\ simply\ report\ time\ elapsing.}}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ cdata-\/>\_dt\ =\ \_actual\_frame\_time\ -\/\ old\_time;}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ cdata-\/>\_reported\_frame\_time\ =\ \_actual\_frame\_time;}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00369\ \ \ \ \ \textcolor{keywordflow}{case}\ M\_non\_real\_time:}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \textcolor{comment}{//\ Ignore\ real\ time.\ \ We\ always\ report\ the\ same\ interval\ having\ elapsed}}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \textcolor{comment}{//\ each\ frame.}}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ cdata-\/>\_reported\_frame\_time\ =\ cdata-\/>\_reported\_frame\_time\_epoch\ +}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ cdata-\/>\_frame\_count\ /\ \_user\_frame\_rate;}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00376\ \ \ \ \ \textcolor{keywordflow}{case}\ M\_limited:}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ are\ running\ faster\ than\ the\ desired\ interval,\ slow\ down.}}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ wait\_until\_time\ =\ old\_time\ +\ 1.0\ /\ \_user\_frame\_rate;}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ wait\_until(wait\_until\_time);}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \ \ cdata-\/>\_dt\ =\ \_actual\_frame\_time\ -\/\ old\_time;}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \ \ cdata-\/>\_reported\_frame\_time\ =\ std::max(\_actual\_frame\_time,\ wait\_until\_time);}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00386\ \ \ \ \ \textcolor{keywordflow}{case}\ M\_integer:}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ dt\ =\ \_actual\_frame\_time\ -\/\ old\_time;}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ target\_dt\ =\ 1.0\ /\ \_user\_frame\_rate;}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dt\ <\ target\_dt)\ \{}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We're\ running\ faster\ than\ the\ desired\ interval,\ so\ slow\ down\ to}}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ next\ integer\ multiple\ of\ the\ frame\ rate.}}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \ \ target\_dt\ =\ target\_dt\ /\ floor(target\_dt\ /\ dt);}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We're\ running\ slower\ than\ the\ desired\ interval,\ so\ slow\ down\ to}}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ next\ integer\ divisor\ of\ the\ frame\ rate.}}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \ \ target\_dt\ =\ target\_dt\ *\ ceil(dt\ /\ target\_dt);}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ wait\_until\_time\ =\ old\_time\ +\ target\_dt;}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ wait\_until(wait\_until\_time);}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \ \ cdata-\/>\_dt\ =\ target\_dt;}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \ \ cdata-\/>\_reported\_frame\_time\ =\ wait\_until\_time;}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00405\ }
+\DoxyCodeLine{00406\ \ \ \ \ \textcolor{keywordflow}{case}\ M\_integer\_limited:}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \{}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ dt\ =\ \_actual\_frame\_time\ -\/\ old\_time;}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ target\_dt\ =\ 1.0\ /\ \_user\_frame\_rate;}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dt\ <\ target\_dt)\ \{}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We're\ running\ faster\ than\ the\ desired\ interval,\ so\ slow\ down\ to}}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ target\ frame\ rate.}}
+\DoxyCodeLine{00413\ }
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ We're\ running\ slower\ than\ the\ desired\ interval,\ so\ slow\ down\ to}}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ next\ integer\ divisor\ of\ the\ frame\ rate.}}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ \ \ target\_dt\ =\ target\_dt\ *\ ceil(dt\ /\ target\_dt);}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{double}\ wait\_until\_time\ =\ old\_time\ +\ target\_dt;}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \ \ wait\_until(wait\_until\_time);}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \ \ cdata-\/>\_dt\ =\ target\_dt;}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \ \ cdata-\/>\_reported\_frame\_time\ =\ wait\_until\_time;}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ \ \ \textcolor{keywordflow}{case}\ M\_forced:}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we\ are\ running\ faster\ than\ the\ desired\ interval,\ slow\ down.\ \ If\ we}}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \textcolor{comment}{//\ are\ running\ slower\ than\ the\ desired\ interval,\ ignore\ that\ and\ pretend}}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \textcolor{comment}{//\ we're\ running\ at\ the\ specified\ rate.}}
+\DoxyCodeLine{00430\ \ \ \ \ \ \ wait\_until(old\_time\ +\ 1.0\ /\ \_user\_frame\_rate);}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ cdata-\/>\_reported\_frame\_time\ =\ cdata-\/>\_reported\_frame\_time\_epoch\ +}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ \ \ cdata-\/>\_frame\_count\ /\ \_user\_frame\_rate;}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00434\ }
+\DoxyCodeLine{00435\ \ \ \ \ \textcolor{keywordflow}{case}\ M\_degrade:}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \textcolor{comment}{//\ Each\ frame,\ wait\ a\ certain\ fraction\ of\ the\ previous\ frame's\ time\ to}}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \textcolor{comment}{//\ degrade\ performance\ uniformly.}}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ cdata-\/>\_dt\ =\ (\_actual\_frame\_time\ -\/\ old\_time)\ *\ \_degrade\_factor;}
+\DoxyCodeLine{00439\ }
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_degrade\_factor\ <\ 1.0)\ \{}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ degrade\_factor\ is\ less\ than\ one,\ we\ want\ to\ simulate\ a}}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ higher\ frame\ rate\ by\ incrementing\ the\ clock\ more\ slowly.}}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \ \ cdata-\/>\_reported\_frame\_time\ +=\ cdata-\/>\_dt;}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ we\ simulate\ a\ lower\ frame\ rate\ by\ waiting\ until\ the}}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ appropriate\ time\ has\ elapsed.}}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \ \ wait\_until(old\_time\ +\ cdata-\/>\_dt);}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \ \ cdata-\/>\_reported\_frame\_time\ =\ \_actual\_frame\_time;}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00451\ }
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00453\ }
+\DoxyCodeLine{00454\ \ \ \ \ \textcolor{keywordflow}{case}\ M\_slave:}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \textcolor{comment}{//\ Handled\ above.}}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00457\ \ \ \ \ \}}
+\DoxyCodeLine{00458\ \ \ \}}
+\DoxyCodeLine{00459\ }
+\DoxyCodeLine{00460\ \ \ \textcolor{keywordflow}{if}\ (\_average\_frame\_rate\_interval\ >\ 0.0)\ \{}
+\DoxyCodeLine{00461\ \ \ \ \ \_ticks.push\_back(old\_reported\_time);}
+\DoxyCodeLine{00462\ \ \ \ \ \textcolor{keywordflow}{while}\ (\_ticks.size()\ >\ 2\ \&\&}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ \ \ \ \ \ cdata-\/>\_reported\_frame\_time\ -\/\ \_ticks.front()\ >\ \_average\_frame\_rate\_interval)\ \{}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \_ticks.pop\_front();}
+\DoxyCodeLine{00465\ \ \ \ \ \}}
+\DoxyCodeLine{00466\ \ \ \}}
+\DoxyCodeLine{00467\ \}}
+\DoxyCodeLine{00468\ }
+\DoxyCodeLine{00478\ \textcolor{keywordtype}{void}\ ClockObject::}
+\DoxyCodeLine{00479\ sync\_frame\_time(\mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{00480\ \ \ \textcolor{keywordflow}{if}\ (\_mode\ ==\ M\_normal)\ \{}
+\DoxyCodeLine{00481\ \ \ \ \ CDWriter\ cdata(\_cycler,\ current\_thread);}
+\DoxyCodeLine{00482\ \ \ \ \ cdata-\/>\_reported\_frame\_time\ =\ get\_real\_time();}
+\DoxyCodeLine{00483\ \ \ \}}
+\DoxyCodeLine{00484\ \}}
+\DoxyCodeLine{00485\ }
+\DoxyCodeLine{00490\ \textcolor{keywordtype}{void}\ ClockObject::}
+\DoxyCodeLine{00491\ wait\_until(\textcolor{keywordtype}{double}\ want\_time)\ \{}
+\DoxyCodeLine{00492\ \ \ \textcolor{keywordflow}{if}\ (want\_time\ <=\ \_actual\_frame\_time)\ \{}
+\DoxyCodeLine{00493\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00494\ \ \ \}}
+\DoxyCodeLine{00495\ }
+\DoxyCodeLine{00496\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00497\ \ \ (*\_start\_clock\_wait)();}
+\DoxyCodeLine{00498\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00499\ }
+\DoxyCodeLine{00500\ \ \ \textcolor{keywordtype}{double}\ wait\_interval\ =\ (want\_time\ -\/\ \_actual\_frame\_time)\ -\/\ sleep\_precision;}
+\DoxyCodeLine{00501\ }
+\DoxyCodeLine{00502\ \ \ \textcolor{keywordtype}{double}\ now\ =\ get\_real\_time();}
+\DoxyCodeLine{00503\ }
+\DoxyCodeLine{00504\ \ \ \textcolor{keywordflow}{if}\ (wait\_interval\ >\ 0.0)\ \{}
+\DoxyCodeLine{00505\ \ \ \ \ Thread::sleep(wait\_interval);}
+\DoxyCodeLine{00506\ \ \ \}}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00508\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00509\ \ \ (*\_start\_clock\_busy\_wait)();}
+\DoxyCodeLine{00510\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00511\ }
+\DoxyCodeLine{00512\ \ \ \_actual\_frame\_time\ =\ get\_real\_time();}
+\DoxyCodeLine{00513\ \ \ \textcolor{keywordflow}{if}\ (\_actual\_frame\_time\ >\ want\_time)\ \{}
+\DoxyCodeLine{00514\ \ \ \ \ \textcolor{keywordflow}{if}\ (util\_cat.is\_debug())\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ util\_cat.debug()}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Overslept\ by\ "{}}\ <<\ (int)((\_actual\_frame\_time\ -\/\ want\_time)\ *\ 1000000)}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ us\ while\ waiting\ for\ next\ frame,\ consider\ raising\ sleep-\/precision.\(\backslash\)n"{}};}
+\DoxyCodeLine{00518\ \ \ \ \ \}}
+\DoxyCodeLine{00519\ \ \ \}}
+\DoxyCodeLine{00520\ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (util\_cat.is\_spam())\ \{}
+\DoxyCodeLine{00521\ \ \ \ \ util\_cat.spam()}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Busy\ waiting\ for\ "{}}\ <<\ (int)((want\_time\ -\/\ \_actual\_frame\_time)\ *\ 1000000)}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}\ us.\(\backslash\)n"{}};}
+\DoxyCodeLine{00524\ \ \ \}}
+\DoxyCodeLine{00525\ }
+\DoxyCodeLine{00526\ \ \ \textcolor{comment}{//\ Now\ busy-\/wait\ until\ the\ actual\ time\ elapses.}}
+\DoxyCodeLine{00527\ \ \ \textcolor{keywordflow}{while}\ (\_actual\_frame\_time\ <\ want\_time)\ \{}
+\DoxyCodeLine{00528\ \ \ \ \ \_actual\_frame\_time\ =\ get\_real\_time();}
+\DoxyCodeLine{00529\ \ \ \}}
+\DoxyCodeLine{00530\ }
+\DoxyCodeLine{00531\ \textcolor{preprocessor}{\#ifdef\ DO\_PSTATS}}
+\DoxyCodeLine{00532\ \ \ (*\_stop\_clock\_wait)();}
+\DoxyCodeLine{00533\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00534\ \}}
+\DoxyCodeLine{00535\ }
+\DoxyCodeLine{00539\ \textcolor{keywordtype}{void}\ ClockObject::}
+\DoxyCodeLine{00540\ make\_global\_clock()\ \{}
+\DoxyCodeLine{00541\ \ \ \mbox{\hyperlink{classConfigVariableEnum}{ConfigVariableEnum<ClockObject::Mode>}}\ clock\_mode}
+\DoxyCodeLine{00542\ \ \ \ \ (\textcolor{stringliteral}{"{}clock-\/mode"{}},\ ClockObject::M\_normal,}
+\DoxyCodeLine{00543\ \ \ \ \ \ PRC\_DESC(\textcolor{stringliteral}{"{}Specifies\ the\ mode\ of\ the\ global\ clock.\ \ The\ default\ mode,\ normal,\ "{}}}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}is\ a\ real-\/time\ clock;\ other\ modes\ allow\ non-\/real-\/time\ special\ "{}}}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}effects\ like\ simulated\ reduced\ frame\ rate.\ \ See\ "{}}}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}ClockObject::set\_mode()."{}}));}
+\DoxyCodeLine{00547\ }
+\DoxyCodeLine{00548\ \ \ \mbox{\hyperlink{classClockObject}{ClockObject}}\ *clock\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classClockObject}{ClockObject}}(clock\_mode);}
+\DoxyCodeLine{00549\ \ \ clock-\/>local\_object();}
+\DoxyCodeLine{00550\ }
+\DoxyCodeLine{00551\ \ \ \mbox{\hyperlink{classClockObject}{ClockObject}}\ *expected\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00552\ \ \ \textcolor{keywordflow}{if}\ (!\_global\_clock.compare\_exchange\_strong(expected,\ clock,\ std::memory\_order\_release,\ std::memory\_order\_relaxed))\ \{}
+\DoxyCodeLine{00553\ \ \ \ \ \textcolor{comment}{//\ Another\ thread\ beat\ us\ to\ it.}}
+\DoxyCodeLine{00554\ \ \ \ \ \textcolor{keyword}{delete}\ clock;}
+\DoxyCodeLine{00555\ \ \ \}}
+\DoxyCodeLine{00556\ \}}
+\DoxyCodeLine{00557\ }
+\DoxyCodeLine{00563\ \textcolor{keywordtype}{void}\ ClockObject::}
+\DoxyCodeLine{00564\ dummy\_clock\_wait()\ \{}
+\DoxyCodeLine{00565\ \}}
+\DoxyCodeLine{00566\ }
+\DoxyCodeLine{00570\ ClockObject::CData::}
+\DoxyCodeLine{00571\ CData()\ \{}
+\DoxyCodeLine{00572\ \ \ \_frame\_count\ =\ 0;}
+\DoxyCodeLine{00573\ \ \ \_reported\_frame\_time\ =\ 0.0;}
+\DoxyCodeLine{00574\ \ \ \_reported\_frame\_time\_epoch\ =\ 0.0;}
+\DoxyCodeLine{00575\ \ \ \_dt\ =\ 0.0;}
+\DoxyCodeLine{00576\ \}}
+\DoxyCodeLine{00577\ }
+\DoxyCodeLine{00581\ \mbox{\hyperlink{classCycleData}{CycleData}}\ *ClockObject::CData::}
+\DoxyCodeLine{00582\ make\_copy()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00583\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{new}\ CData(*\textcolor{keyword}{this});}
+\DoxyCodeLine{00584\ \}}
+\DoxyCodeLine{00585\ }
+\DoxyCodeLine{00589\ ostream\ \&}
+\DoxyCodeLine{00590\ operator\ <<\ (ostream\ \&out,\ ClockObject::Mode\ mode)\ \{}
+\DoxyCodeLine{00591\ \ \ \textcolor{keywordflow}{switch}\ (mode)\ \{}
+\DoxyCodeLine{00592\ \ \ \textcolor{keywordflow}{case}\ ClockObject::M\_normal:}
+\DoxyCodeLine{00593\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}normal"{}};}
+\DoxyCodeLine{00594\ }
+\DoxyCodeLine{00595\ \ \ \textcolor{keywordflow}{case}\ ClockObject::M\_non\_real\_time:}
+\DoxyCodeLine{00596\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}non-\/real-\/time"{}};}
+\DoxyCodeLine{00597\ }
+\DoxyCodeLine{00598\ \ \ \textcolor{keywordflow}{case}\ ClockObject::M\_limited:}
+\DoxyCodeLine{00599\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}limited"{}};}
+\DoxyCodeLine{00600\ }
+\DoxyCodeLine{00601\ \ \ \textcolor{keywordflow}{case}\ ClockObject::M\_integer:}
+\DoxyCodeLine{00602\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}integer"{}};}
+\DoxyCodeLine{00603\ }
+\DoxyCodeLine{00604\ \ \ \textcolor{keywordflow}{case}\ ClockObject::M\_integer\_limited:}
+\DoxyCodeLine{00605\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}integer\_limited"{}};}
+\DoxyCodeLine{00606\ }
+\DoxyCodeLine{00607\ \ \ \textcolor{keywordflow}{case}\ ClockObject::M\_forced:}
+\DoxyCodeLine{00608\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}forced"{}};}
+\DoxyCodeLine{00609\ }
+\DoxyCodeLine{00610\ \ \ \textcolor{keywordflow}{case}\ ClockObject::M\_degrade:}
+\DoxyCodeLine{00611\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}degrade"{}};}
+\DoxyCodeLine{00612\ }
+\DoxyCodeLine{00613\ \ \ \textcolor{keywordflow}{case}\ ClockObject::M\_slave:}
+\DoxyCodeLine{00614\ \ \ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}slave"{}};}
+\DoxyCodeLine{00615\ \ \ \};}
+\DoxyCodeLine{00616\ }
+\DoxyCodeLine{00617\ \ \ \textcolor{keywordflow}{return}\ out\ <<\ \textcolor{stringliteral}{"{}**invalid\ ClockObject::Mode("{}}\ <<\ (int)mode\ <<\ \textcolor{stringliteral}{"{})**"{}};}
+\DoxyCodeLine{00618\ \}}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00623\ istream\ \&}
+\DoxyCodeLine{00624\ operator\ >>\ (istream\ \&in,\ ClockObject::Mode\ \&mode)\ \{}
+\DoxyCodeLine{00625\ \ \ \textcolor{keywordtype}{string}\ word;}
+\DoxyCodeLine{00626\ \ \ in\ >>\ word;}
+\DoxyCodeLine{00627\ }
+\DoxyCodeLine{00628\ \ \ \textcolor{keywordflow}{if}\ (cmp\_nocase\_uh(word,\ \textcolor{stringliteral}{"{}normal"{}})\ ==\ 0)\ \{}
+\DoxyCodeLine{00629\ \ \ \ \ mode\ =\ ClockObject::M\_normal;}
+\DoxyCodeLine{00630\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cmp\_nocase\_uh(word,\ \textcolor{stringliteral}{"{}non-\/real-\/time"{}})\ ==\ 0)\ \{}
+\DoxyCodeLine{00631\ \ \ \ \ mode\ =\ ClockObject::M\_non\_real\_time;}
+\DoxyCodeLine{00632\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cmp\_nocase\_uh(word,\ \textcolor{stringliteral}{"{}limited"{}})\ ==\ 0)\ \{}
+\DoxyCodeLine{00633\ \ \ \ \ mode\ =\ ClockObject::M\_limited;}
+\DoxyCodeLine{00634\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cmp\_nocase\_uh(word,\ \textcolor{stringliteral}{"{}integer"{}})\ ==\ 0)\ \{}
+\DoxyCodeLine{00635\ \ \ \ \ mode\ =\ ClockObject::M\_integer;}
+\DoxyCodeLine{00636\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cmp\_nocase\_uh(word,\ \textcolor{stringliteral}{"{}integer\_limited"{}})\ ==\ 0)\ \{}
+\DoxyCodeLine{00637\ \ \ \ \ mode\ =\ ClockObject::M\_integer\_limited;}
+\DoxyCodeLine{00638\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cmp\_nocase\_uh(word,\ \textcolor{stringliteral}{"{}forced"{}})\ ==\ 0)\ \{}
+\DoxyCodeLine{00639\ \ \ \ \ mode\ =\ ClockObject::M\_forced;}
+\DoxyCodeLine{00640\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cmp\_nocase\_uh(word,\ \textcolor{stringliteral}{"{}degrade"{}})\ ==\ 0)\ \{}
+\DoxyCodeLine{00641\ \ \ \ \ mode\ =\ ClockObject::M\_degrade;}
+\DoxyCodeLine{00642\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cmp\_nocase\_uh(word,\ \textcolor{stringliteral}{"{}slave"{}})\ ==\ 0)\ \{}
+\DoxyCodeLine{00643\ \ \ \ \ mode\ =\ ClockObject::M\_slave;}
+\DoxyCodeLine{00644\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00645\ \ \ \ \ util\_cat-\/>error()}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{}Invalid\ ClockObject::Mode:\ "{}}\ <<\ word\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)n"{}};}
+\DoxyCodeLine{00647\ \ \ \ \ mode\ =\ ClockObject::M\_normal;}
+\DoxyCodeLine{00648\ \ \ \}}
+\DoxyCodeLine{00649\ }
+\DoxyCodeLine{00650\ \ \ \textcolor{keywordflow}{return}\ in;}
+\DoxyCodeLine{00651\ \}}
+
+\end{DoxyCode}

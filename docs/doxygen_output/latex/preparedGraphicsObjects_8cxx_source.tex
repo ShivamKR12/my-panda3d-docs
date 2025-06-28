@@ -1,0 +1,1231 @@
+\doxysection{prepared\+Graphics\+Objects.\+cxx}
+\hypertarget{preparedGraphicsObjects_8cxx_source}{}\label{preparedGraphicsObjects_8cxx_source}\index{panda/src/gobj/preparedGraphicsObjects.cxx@{panda/src/gobj/preparedGraphicsObjects.cxx}}
+\mbox{\hyperlink{preparedGraphicsObjects_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{preparedGraphicsObjects_8h}{preparedGraphicsObjects.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{textureContext_8h}{textureContext.h}}"{}}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{vertexBufferContext_8h}{vertexBufferContext.h}}"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{indexBufferContext_8h}{indexBufferContext.h}}"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{texture_8h}{texture.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geom_8h}{geom.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomVertexArrayData_8h}{geomVertexArrayData.h}}"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomPrimitive_8h}{geomPrimitive.h}}"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{samplerContext_8h}{samplerContext.h}}"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{shader_8h}{shader.h}}"{}}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{reMutexHolder_8h}{reMutexHolder.h}}"{}}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{geomContext_8h}{geomContext.h}}"{}}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{shaderContext_8h}{shaderContext.h}}"{}}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{config__gobj_8h}{config\_gobj.h}}"{}}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{throw__event_8h}{throw\_event.h}}"{}}}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ \mbox{\hyperlink{classTypeHandle}{TypeHandle}}\ PreparedGraphicsObjects::EnqueuedObject::\_type\_handle;}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{keywordtype}{int}\ PreparedGraphicsObjects::\_name\_index\ =\ 0;}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00037\ PreparedGraphicsObjects::}
+\DoxyCodeLine{00038\ PreparedGraphicsObjects()\ :}
+\DoxyCodeLine{00039\ \ \ \_lock(\textcolor{stringliteral}{"{}PreparedGraphicsObjects::\_lock"{}}),}
+\DoxyCodeLine{00040\ \ \ \_name(init\_name()),}
+\DoxyCodeLine{00041\ \ \ \_vertex\_buffer\_cache\_size(0),}
+\DoxyCodeLine{00042\ \ \ \_index\_buffer\_cache\_size(0),}
+\DoxyCodeLine{00043\ \ \ \_texture\_residency(\_name,\ \textcolor{stringliteral}{"{}texture"{}}),}
+\DoxyCodeLine{00044\ \ \ \_vbuffer\_residency(\_name,\ \textcolor{stringliteral}{"{}vbuffer"{}}),}
+\DoxyCodeLine{00045\ \ \ \_ibuffer\_residency(\_name,\ \textcolor{stringliteral}{"{}ibuffer"{}}),}
+\DoxyCodeLine{00046\ \ \ \_sbuffer\_residency(\_name,\ \textcolor{stringliteral}{"{}sbuffer"{}}),}
+\DoxyCodeLine{00047\ \ \ \_graphics\_memory\_lru(\textcolor{stringliteral}{"{}graphics\_memory\_lru"{}},\ graphics\_memory\_limit),}
+\DoxyCodeLine{00048\ \ \ \_sampler\_object\_lru(\textcolor{stringliteral}{"{}sampler\_object\_lru"{}},\ sampler\_object\_limit)}
+\DoxyCodeLine{00049\ \{}
+\DoxyCodeLine{00050\ \ \ \textcolor{comment}{//\ GLGSG\ will\ turn\ this\ flag\ on.\ \ This\ is\ a\ temporary\ hack\ to\ disable\ this}}
+\DoxyCodeLine{00051\ \ \ \textcolor{comment}{//\ feature\ for\ DX8DX9\ for\ now,\ until\ we\ work\ out\ the\ fine\ points\ of\ updating}}
+\DoxyCodeLine{00052\ \ \ \textcolor{comment}{//\ the\ fvf\ properly.}}
+\DoxyCodeLine{00053\ \ \ \_support\_released\_buffer\_cache\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00054\ \}}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00059\ PreparedGraphicsObjects::}
+\DoxyCodeLine{00060\ \string~PreparedGraphicsObjects()\ \{}
+\DoxyCodeLine{00061\ \ \ \textcolor{comment}{//\ There\ may\ be\ objects\ that\ are\ still\ prepared\ when\ we\ destruct.\ \ If\ this}}
+\DoxyCodeLine{00062\ \ \ \textcolor{comment}{//\ is\ so,\ then\ all\ of\ the\ GSG's\ that\ own\ them\ have\ already\ destructed,\ so\ we}}
+\DoxyCodeLine{00063\ \ \ \textcolor{comment}{//\ can\ assume\ their\ resources\ were\ internally\ cleaned\ up.\ \ Besides,\ we\ may}}
+\DoxyCodeLine{00064\ \ \ \textcolor{comment}{//\ not\ even\ be\ allowed\ to\ call\ the\ GSG\ release\ methods\ since\ some\ APIs\ (eg.}}
+\DoxyCodeLine{00065\ \ \ \textcolor{comment}{//\ OpenGL)\ require\ a\ context\ current.\ \ So\ we\ just\ call\ the\ destructors.}}
+\DoxyCodeLine{00066\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00067\ }
+\DoxyCodeLine{00068\ \ \ \mbox{\hyperlink{classPreparedGraphicsObjects_a25dbf284d46e9fef6cb667c58dc3537d}{release\_all\_textures}}();}
+\DoxyCodeLine{00069\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classTextureContext}{TextureContext}}\ *tc\ :\ \_released\_textures)\ \{}
+\DoxyCodeLine{00070\ \ \ \ \ \textcolor{keyword}{delete}\ tc;}
+\DoxyCodeLine{00071\ \ \ \}}
+\DoxyCodeLine{00072\ \ \ \_released\_textures.clear();}
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00074\ \ \ \mbox{\hyperlink{classPreparedGraphicsObjects_aba0b983ecc27f47c3ccea5f7781c93bd}{release\_all\_samplers}}();}
+\DoxyCodeLine{00075\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classSamplerContext}{SamplerContext}}\ *sc\ :\ \_released\_samplers)\ \{}
+\DoxyCodeLine{00076\ \ \ \ \ \textcolor{keyword}{delete}\ sc;}
+\DoxyCodeLine{00077\ \ \ \}}
+\DoxyCodeLine{00078\ \ \ \_released\_samplers.clear();}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \ \ \mbox{\hyperlink{classPreparedGraphicsObjects_a0f00472736ce5eebb4dc2b226e1e6bce}{release\_all\_geoms}}();}
+\DoxyCodeLine{00081\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classGeomContext}{GeomContext}}\ *gc\ :\ \_released\_geoms)\ \{}
+\DoxyCodeLine{00082\ \ \ \ \ \textcolor{keyword}{delete}\ gc;}
+\DoxyCodeLine{00083\ \ \ \}}
+\DoxyCodeLine{00084\ \ \ \_released\_geoms.clear();}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00086\ \ \ \mbox{\hyperlink{classPreparedGraphicsObjects_a76828328f3f682fe752fe6548868108c}{release\_all\_shaders}}();}
+\DoxyCodeLine{00087\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classShaderContext}{ShaderContext}}\ *sc\ :\ \_released\_shaders)\ \{}
+\DoxyCodeLine{00088\ \ \ \ \ \textcolor{keyword}{delete}\ sc;}
+\DoxyCodeLine{00089\ \ \ \}}
+\DoxyCodeLine{00090\ \ \ \_released\_shaders.clear();}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00092\ \ \ \mbox{\hyperlink{classPreparedGraphicsObjects_af70583653a4410fa1b15f1ea56aa1d11}{release\_all\_vertex\_buffers}}();}
+\DoxyCodeLine{00093\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBufferContext}{BufferContext}}\ *bc\ :\ \_released\_vertex\_buffers)\ \{}
+\DoxyCodeLine{00094\ \ \ \ \ \textcolor{keyword}{delete}\ bc;}
+\DoxyCodeLine{00095\ \ \ \}}
+\DoxyCodeLine{00096\ \ \ \_released\_vertex\_buffers.clear();}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00098\ \ \ \mbox{\hyperlink{classPreparedGraphicsObjects_a898c6bd1745cb7fb66cd4d7bf504fea4}{release\_all\_index\_buffers}}();}
+\DoxyCodeLine{00099\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBufferContext}{BufferContext}}\ *bc\ :\ \_released\_index\_buffers)\ \{}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keyword}{delete}\ bc;}
+\DoxyCodeLine{00101\ \ \ \}}
+\DoxyCodeLine{00102\ \ \ \_released\_index\_buffers.clear();}
+\DoxyCodeLine{00103\ }
+\DoxyCodeLine{00104\ \ \ \mbox{\hyperlink{classPreparedGraphicsObjects_a9c965ce640c2a987edf76bc4192f1123}{release\_all\_shader\_buffers}}();}
+\DoxyCodeLine{00105\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBufferContext}{BufferContext}}\ *bc\ :\ \_released\_shader\_buffers)\ \{}
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{keyword}{delete}\ bc;}
+\DoxyCodeLine{00107\ \ \ \}}
+\DoxyCodeLine{00108\ \ \ \_released\_shader\_buffers.clear();}
+\DoxyCodeLine{00109\ \}}
+\DoxyCodeLine{00110\ }
+\DoxyCodeLine{00121\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_aa13d5058568db17f29dc3e031e4289e3}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00122\ \mbox{\hyperlink{classPreparedGraphicsObjects_aa13d5058568db17f29dc3e031e4289e3}{set\_graphics\_memory\_limit}}(\textcolor{keywordtype}{size\_t}\ limit)\ \{}
+\DoxyCodeLine{00123\ \ \ \textcolor{keywordflow}{if}\ (limit\ !=\ \_graphics\_memory\_lru.get\_max\_size())\ \{}
+\DoxyCodeLine{00124\ \ \ \ \ \_graphics\_memory\_lru.set\_max\_size(limit);}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \ \ \ \ \textcolor{comment}{//\ We\ throw\ an\ event\ here\ so\ global\ objects\ (particularly\ the}}
+\DoxyCodeLine{00127\ \ \ \ \ \textcolor{comment}{//\ TexMemWatcher)\ can\ automatically\ respond\ to\ this\ change.}}
+\DoxyCodeLine{00128\ \ \ \ \ throw\_event(\textcolor{stringliteral}{"{}graphics\_memory\_limit\_changed"{}});}
+\DoxyCodeLine{00129\ \ \ \}}
+\DoxyCodeLine{00130\ \}}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00136\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_abc6967e94f5246f34ee2ef4206db067d}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00137\ \mbox{\hyperlink{classPreparedGraphicsObjects_abc6967e94f5246f34ee2ef4206db067d}{show\_graphics\_memory\_lru}}(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00138\ \ \ \_graphics\_memory\_lru.write(out,\ 0);}
+\DoxyCodeLine{00139\ \}}
+\DoxyCodeLine{00140\ }
+\DoxyCodeLine{00145\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a4715494b08a64b0087e573e7feb96be0}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00146\ \mbox{\hyperlink{classPreparedGraphicsObjects_a4715494b08a64b0087e573e7feb96be0}{show\_residency\_trackers}}(std::ostream\ \&out)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00147\ \ \ out\ <<\ \textcolor{stringliteral}{"{}Textures:\(\backslash\)n"{}};}
+\DoxyCodeLine{00148\ \ \ \_texture\_residency.write(out,\ 2);}
+\DoxyCodeLine{00149\ }
+\DoxyCodeLine{00150\ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)nVertex\ buffers:\(\backslash\)n"{}};}
+\DoxyCodeLine{00151\ \ \ \_vbuffer\_residency.write(out,\ 2);}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)nIndex\ buffers:\(\backslash\)n"{}};}
+\DoxyCodeLine{00154\ \ \ \_ibuffer\_residency.write(out,\ 2);}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00156\ \ \ out\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)nShader\ buffers:\(\backslash\)n"{}};}
+\DoxyCodeLine{00157\ \ \ \_sbuffer\_residency.write(out,\ 2);}
+\DoxyCodeLine{00158\ \}}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00164\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a45db9601d0aaea6961a93b8e6e228a7a}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00165\ \mbox{\hyperlink{classPreparedGraphicsObjects_a45db9601d0aaea6961a93b8e6e228a7a}{enqueue\_texture}}(\mbox{\hyperlink{classTexture}{Texture}}\ *tex)\ \{}
+\DoxyCodeLine{00166\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00167\ }
+\DoxyCodeLine{00168\ \ \ \_enqueued\_textures.insert(EnqueuedTextures::value\_type(tex,\ \textcolor{keyword}{nullptr}));}
+\DoxyCodeLine{00169\ \}}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00175\ PT(\mbox{\hyperlink{classPreparedGraphicsObjects_1_1EnqueuedObject}{PreparedGraphicsObjects::EnqueuedObject}})\ PreparedGraphicsObjects::}
+\DoxyCodeLine{00176\ enqueue\_texture\_future(\mbox{\hyperlink{classTexture}{Texture}}\ *tex)\ \{}
+\DoxyCodeLine{00177\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00178\ }
+\DoxyCodeLine{00179\ \ \ std::pair<EnqueuedTextures::iterator,\ bool>\ result\ =}
+\DoxyCodeLine{00180\ \ \ \ \ \_enqueued\_textures.insert(EnqueuedTextures::value\_type(tex,\ \textcolor{keyword}{nullptr}));}
+\DoxyCodeLine{00181\ \ \ \textcolor{keywordflow}{if}\ (result.first-\/>second\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ result.first-\/>second\ =\ \textcolor{keyword}{new}\ EnqueuedObject(\textcolor{keyword}{this},\ tex);}
+\DoxyCodeLine{00183\ \ \ \}}
+\DoxyCodeLine{00184\ \ \ PT(EnqueuedObject)\ fut\ =\ result.first-\/>second;}
+\DoxyCodeLine{00185\ \ \ nassertr(!fut-\/>cancelled(),\ fut)}
+\DoxyCodeLine{00186\ \ \ \textcolor{keywordflow}{return}\ fut;}
+\DoxyCodeLine{00187\ \}}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00192\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a1f8d89b003463ec85b48a67832f65246}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00193\ \mbox{\hyperlink{classPreparedGraphicsObjects_a1f8d89b003463ec85b48a67832f65246}{is\_texture\_queued}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTexture}{Texture}}\ *tex)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00194\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \ \ EnqueuedTextures::const\_iterator\ qi\ =\ \_enqueued\_textures.find((\mbox{\hyperlink{classTexture}{Texture}}\ *)tex);}
+\DoxyCodeLine{00197\ \ \ \textcolor{keywordflow}{return}\ (qi\ !=\ \_enqueued\_textures.end());}
+\DoxyCodeLine{00198\ \}}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00209\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_aa8955cb8109a28da78f52de756baa1e8}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00210\ \mbox{\hyperlink{classPreparedGraphicsObjects_aa8955cb8109a28da78f52de756baa1e8}{dequeue\_texture}}(\mbox{\hyperlink{classTexture}{Texture}}\ *tex)\ \{}
+\DoxyCodeLine{00211\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00212\ }
+\DoxyCodeLine{00213\ \ \ EnqueuedTextures::iterator\ qi\ =\ \_enqueued\_textures.find(tex);}
+\DoxyCodeLine{00214\ \ \ \textcolor{keywordflow}{if}\ (qi\ !=\ \_enqueued\_textures.end())\ \{}
+\DoxyCodeLine{00215\ \ \ \ \ \textcolor{keywordflow}{if}\ (qi-\/>second\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ qi-\/>second-\/>notify\_removed();}
+\DoxyCodeLine{00217\ \ \ \ \ \}}
+\DoxyCodeLine{00218\ \ \ \ \ \_enqueued\_textures.erase(qi);}
+\DoxyCodeLine{00219\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00220\ \ \ \}}
+\DoxyCodeLine{00221\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00222\ \}}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00227\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a5c1ffea82760bf8132a147435f52d4ca}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00228\ \mbox{\hyperlink{classPreparedGraphicsObjects_a5c1ffea82760bf8132a147435f52d4ca}{is\_texture\_prepared}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classTexture}{Texture}}\ *tex)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00229\ \ \ \textcolor{keywordflow}{return}\ tex-\/>\mbox{\hyperlink{classTexture_accdde9cef0a1b76525fceebab0a0f389}{is\_prepared}}((\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{00230\ \}}
+\DoxyCodeLine{00231\ }
+\DoxyCodeLine{00241\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_af34c2d5663ee60380dc3b4d11c65452d}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00242\ \mbox{\hyperlink{classPreparedGraphicsObjects_af34c2d5663ee60380dc3b4d11c65452d}{release\_texture}}(\mbox{\hyperlink{classTextureContext}{TextureContext}}\ *tc)\ \{}
+\DoxyCodeLine{00243\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00245\ \ \ tc-\/>get\_texture()-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{00246\ }
+\DoxyCodeLine{00247\ \ \ \textcolor{comment}{//\ We\ have\ to\ set\ the\ Texture\ pointer\ to\ NULL\ at\ this\ point,\ since\ the}}
+\DoxyCodeLine{00248\ \ \ \textcolor{comment}{//\ Texture\ itself\ might\ destruct\ at\ any\ time\ after\ it\ has\ been\ released.}}
+\DoxyCodeLine{00249\ \ \ tc-\/>\_object\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00250\ }
+\DoxyCodeLine{00251\ \ \ \textcolor{keywordtype}{bool}\ removed\ =\ (\_prepared\_textures.erase(tc)\ !=\ 0);}
+\DoxyCodeLine{00252\ \ \ nassertv(removed);}
+\DoxyCodeLine{00253\ }
+\DoxyCodeLine{00254\ \ \ \_released\_textures.push\_back(tc);}
+\DoxyCodeLine{00255\ \}}
+\DoxyCodeLine{00256\ }
+\DoxyCodeLine{00261\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_af34c2d5663ee60380dc3b4d11c65452d}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00262\ \mbox{\hyperlink{classPreparedGraphicsObjects_af34c2d5663ee60380dc3b4d11c65452d}{release\_texture}}(\mbox{\hyperlink{classTexture}{Texture}}\ *tex)\ \{}
+\DoxyCodeLine{00263\ \ \ tex-\/>\mbox{\hyperlink{classTexture_aa2b01d0895bb0772c4831f01d2c954ea}{release}}(\textcolor{keyword}{this});}
+\DoxyCodeLine{00264\ \}}
+\DoxyCodeLine{00265\ }
+\DoxyCodeLine{00271\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a25dbf284d46e9fef6cb667c58dc3537d}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00272\ \mbox{\hyperlink{classPreparedGraphicsObjects_a25dbf284d46e9fef6cb667c58dc3537d}{release\_all\_textures}}()\ \{}
+\DoxyCodeLine{00273\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00274\ }
+\DoxyCodeLine{00275\ \ \ \textcolor{keywordtype}{int}\ num\_textures\ =\ (int)\_prepared\_textures.size()\ +\ (int)\_enqueued\_textures.size();}
+\DoxyCodeLine{00276\ }
+\DoxyCodeLine{00277\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classTextureContext}{TextureContext}}\ *tc\ :\ \_prepared\_textures)\ \{}
+\DoxyCodeLine{00278\ \ \ \ \ tc-\/>get\_texture()-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{00279\ \ \ \ \ tc-\/>\_object\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00280\ }
+\DoxyCodeLine{00281\ \ \ \ \ \_released\_textures.push\_back(tc);}
+\DoxyCodeLine{00282\ \ \ \}}
+\DoxyCodeLine{00283\ }
+\DoxyCodeLine{00284\ \ \ \_prepared\_textures.clear();}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00286\ \ \ \textcolor{comment}{//\ Mark\ any\ futures\ as\ cancelled.}}
+\DoxyCodeLine{00287\ \ \ EnqueuedTextures::iterator\ qti;}
+\DoxyCodeLine{00288\ \ \ \textcolor{keywordflow}{for}\ (qti\ =\ \_enqueued\_textures.begin();}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \ qti\ !=\ \_enqueued\_textures.end();}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \ ++qti)\ \{}
+\DoxyCodeLine{00291\ \ \ \ \ \textcolor{keywordflow}{if}\ (qti-\/>second\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ qti-\/>second-\/>notify\_removed();}
+\DoxyCodeLine{00293\ \ \ \ \ \}}
+\DoxyCodeLine{00294\ \ \ \}}
+\DoxyCodeLine{00295\ }
+\DoxyCodeLine{00296\ \ \ \_enqueued\_textures.clear();}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \ \ \textcolor{keywordflow}{return}\ num\_textures;}
+\DoxyCodeLine{00299\ \}}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00305\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a7b2bc29d67f057461567e046d0be1d90}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00306\ \mbox{\hyperlink{classPreparedGraphicsObjects_a7b2bc29d67f057461567e046d0be1d90}{get\_num\_queued\_textures}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00307\ \ \ \textcolor{keywordflow}{return}\ \_enqueued\_textures.size();}
+\DoxyCodeLine{00308\ \}}
+\DoxyCodeLine{00309\ }
+\DoxyCodeLine{00313\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a3ed4062fcfe4fc44554d170eab416c16}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00314\ \mbox{\hyperlink{classPreparedGraphicsObjects_a3ed4062fcfe4fc44554d170eab416c16}{get\_num\_prepared\_textures}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00315\ \ \ \textcolor{keywordflow}{return}\ \_prepared\_textures.size();}
+\DoxyCodeLine{00316\ \}}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00334\ \mbox{\hyperlink{classTextureContext}{TextureContext}}\ *\mbox{\hyperlink{classPreparedGraphicsObjects_ae704ff16e42ab4959e725c1af7478658}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00335\ \mbox{\hyperlink{classPreparedGraphicsObjects_ae704ff16e42ab4959e725c1af7478658}{prepare\_texture\_now}}(\mbox{\hyperlink{classTexture}{Texture}}\ *tex,\ \mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg)\ \{}
+\DoxyCodeLine{00336\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00337\ }
+\DoxyCodeLine{00338\ \ \ \textcolor{comment}{//\ Ask\ the\ GSG\ to\ create\ a\ brand\ new\ TextureContext.\ \ There\ might\ be\ several}}
+\DoxyCodeLine{00339\ \ \ \textcolor{comment}{//\ GSG's\ sharing\ the\ same\ set\ of\ textures;\ if\ so,\ it\ doesn't\ matter\ which\ of}}
+\DoxyCodeLine{00340\ \ \ \textcolor{comment}{//\ them\ creates\ the\ context\ (since\ they're\ all\ shared\ anyway).}}
+\DoxyCodeLine{00341\ \ \ \mbox{\hyperlink{classTextureContext}{TextureContext}}\ *tc\ =\ gsg-\/>prepare\_texture(tex);}
+\DoxyCodeLine{00342\ }
+\DoxyCodeLine{00343\ \ \ \textcolor{keywordflow}{if}\ (tc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00344\ \ \ \ \ \textcolor{keywordtype}{bool}\ prepared\ =\ \_prepared\_textures.insert(tc).second;}
+\DoxyCodeLine{00345\ \ \ \ \ nassertr(prepared,\ tc);}
+\DoxyCodeLine{00346\ \ \ \}}
+\DoxyCodeLine{00347\ }
+\DoxyCodeLine{00348\ \ \ \textcolor{keywordflow}{return}\ tc;}
+\DoxyCodeLine{00349\ \}}
+\DoxyCodeLine{00350\ }
+\DoxyCodeLine{00355\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a42de2dc2d52a0974865984b17886696b}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00356\ \mbox{\hyperlink{classPreparedGraphicsObjects_a42de2dc2d52a0974865984b17886696b}{enqueue\_sampler}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classSamplerState}{SamplerState}}\ \&sampler)\ \{}
+\DoxyCodeLine{00357\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00358\ }
+\DoxyCodeLine{00359\ \ \ \_enqueued\_samplers.insert(sampler);}
+\DoxyCodeLine{00360\ \}}
+\DoxyCodeLine{00361\ }
+\DoxyCodeLine{00365\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a81e61009f472eeb7bfb2ba807180b221}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00366\ \mbox{\hyperlink{classPreparedGraphicsObjects_a81e61009f472eeb7bfb2ba807180b221}{is\_sampler\_queued}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classSamplerState}{SamplerState}}\ \&sampler)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00367\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00368\ }
+\DoxyCodeLine{00369\ \ \ EnqueuedSamplers::const\_iterator\ qi\ =\ \_enqueued\_samplers.find(sampler);}
+\DoxyCodeLine{00370\ \ \ \textcolor{keywordflow}{return}\ (qi\ !=\ \_enqueued\_samplers.end());}
+\DoxyCodeLine{00371\ \}}
+\DoxyCodeLine{00372\ }
+\DoxyCodeLine{00382\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a877f59c985f9213e7cc6e666322eebbe}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00383\ \mbox{\hyperlink{classPreparedGraphicsObjects_a877f59c985f9213e7cc6e666322eebbe}{dequeue\_sampler}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classSamplerState}{SamplerState}}\ \&sampler)\ \{}
+\DoxyCodeLine{00384\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00385\ }
+\DoxyCodeLine{00386\ \ \ EnqueuedSamplers::iterator\ qi\ =\ \_enqueued\_samplers.find(sampler);}
+\DoxyCodeLine{00387\ \ \ \textcolor{keywordflow}{if}\ (qi\ !=\ \_enqueued\_samplers.end())\ \{}
+\DoxyCodeLine{00388\ \ \ \ \ \_enqueued\_samplers.erase(qi);}
+\DoxyCodeLine{00389\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00390\ \ \ \}}
+\DoxyCodeLine{00391\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00392\ \}}
+\DoxyCodeLine{00393\ }
+\DoxyCodeLine{00397\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a78ab8c5017701a3273400ffa400d6b5a}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00398\ \mbox{\hyperlink{classPreparedGraphicsObjects_a78ab8c5017701a3273400ffa400d6b5a}{is\_sampler\_prepared}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classSamplerState}{SamplerState}}\ \&sampler)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00399\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00400\ }
+\DoxyCodeLine{00401\ \ \ PreparedSamplers::const\_iterator\ it\ =\ \_prepared\_samplers.find(sampler);}
+\DoxyCodeLine{00402\ \ \ \textcolor{keywordflow}{return}\ (it\ !=\ \_prepared\_samplers.end());}
+\DoxyCodeLine{00403\ \}}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00411\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a178fa14ef996798fdec0f1afd122c771}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00412\ \mbox{\hyperlink{classPreparedGraphicsObjects_a178fa14ef996798fdec0f1afd122c771}{release\_sampler}}(\mbox{\hyperlink{classSamplerContext}{SamplerContext}}\ *sc)\ \{}
+\DoxyCodeLine{00413\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00414\ }
+\DoxyCodeLine{00415\ \ \ \_released\_samplers.insert(sc);}
+\DoxyCodeLine{00416\ \}}
+\DoxyCodeLine{00417\ }
+\DoxyCodeLine{00422\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a178fa14ef996798fdec0f1afd122c771}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00423\ \mbox{\hyperlink{classPreparedGraphicsObjects_a178fa14ef996798fdec0f1afd122c771}{release\_sampler}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classSamplerState}{SamplerState}}\ \&sampler)\ \{}
+\DoxyCodeLine{00424\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ PreparedSamplers::iterator\ it\ =\ \_prepared\_samplers.find(sampler);}
+\DoxyCodeLine{00427\ \ \ \textcolor{keywordflow}{if}\ (it\ !=\ \_prepared\_samplers.end())\ \{}
+\DoxyCodeLine{00428\ \ \ \ \ \_released\_samplers.insert(it-\/>second);}
+\DoxyCodeLine{00429\ \ \ \ \ \_prepared\_samplers.erase(it);}
+\DoxyCodeLine{00430\ \ \ \}}
+\DoxyCodeLine{00431\ }
+\DoxyCodeLine{00432\ \ \ \_enqueued\_samplers.erase(sampler);}
+\DoxyCodeLine{00433\ \}}
+\DoxyCodeLine{00434\ }
+\DoxyCodeLine{00439\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_aba0b983ecc27f47c3ccea5f7781c93bd}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00440\ \mbox{\hyperlink{classPreparedGraphicsObjects_aba0b983ecc27f47c3ccea5f7781c93bd}{release\_all\_samplers}}()\ \{}
+\DoxyCodeLine{00441\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00442\ }
+\DoxyCodeLine{00443\ \ \ \textcolor{keywordtype}{int}\ num\_samplers\ =\ (int)\_prepared\_samplers.size()\ +\ (int)\_enqueued\_samplers.size();}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00445\ \ \ PreparedSamplers::iterator\ sci;}
+\DoxyCodeLine{00446\ \ \ \textcolor{keywordflow}{for}\ (sci\ =\ \_prepared\_samplers.begin();}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \ sci\ !=\ \_prepared\_samplers.end();}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \ ++sci)\ \{}
+\DoxyCodeLine{00449\ \ \ \ \ \_released\_samplers.insert(sci-\/>second);}
+\DoxyCodeLine{00450\ \ \ \}}
+\DoxyCodeLine{00451\ }
+\DoxyCodeLine{00452\ \ \ \_prepared\_samplers.clear();}
+\DoxyCodeLine{00453\ \ \ \_enqueued\_samplers.clear();}
+\DoxyCodeLine{00454\ }
+\DoxyCodeLine{00455\ \ \ \textcolor{keywordflow}{return}\ num\_samplers;}
+\DoxyCodeLine{00456\ \}}
+\DoxyCodeLine{00457\ }
+\DoxyCodeLine{00462\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a4e8f636d6b1cc1e3c3059a01972c5f81}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00463\ \mbox{\hyperlink{classPreparedGraphicsObjects_a4e8f636d6b1cc1e3c3059a01972c5f81}{get\_num\_queued\_samplers}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00464\ \ \ \textcolor{keywordflow}{return}\ \_enqueued\_samplers.size();}
+\DoxyCodeLine{00465\ \}}
+\DoxyCodeLine{00466\ }
+\DoxyCodeLine{00470\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_ac691b73e37e4b805b24ff5e6e11ba22b}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00471\ \mbox{\hyperlink{classPreparedGraphicsObjects_ac691b73e37e4b805b24ff5e6e11ba22b}{get\_num\_prepared\_samplers}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00472\ \ \ \textcolor{keywordflow}{return}\ \_prepared\_samplers.size();}
+\DoxyCodeLine{00473\ \}}
+\DoxyCodeLine{00474\ }
+\DoxyCodeLine{00491\ \mbox{\hyperlink{classSamplerContext}{SamplerContext}}\ *\mbox{\hyperlink{classPreparedGraphicsObjects_a48fa5e9fac61516d64cfd383f90c8954}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00492\ \mbox{\hyperlink{classPreparedGraphicsObjects_a48fa5e9fac61516d64cfd383f90c8954}{prepare\_sampler\_now}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classSamplerState}{SamplerState}}\ \&sampler,\ \mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg)\ \{}
+\DoxyCodeLine{00493\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00494\ }
+\DoxyCodeLine{00495\ \ \ PreparedSamplers::const\_iterator\ it\ =\ \_prepared\_samplers.find(sampler);}
+\DoxyCodeLine{00496\ \ \ \textcolor{keywordflow}{if}\ (it\ !=\ \_prepared\_samplers.end())\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ \textcolor{keywordflow}{return}\ it-\/>second;}
+\DoxyCodeLine{00498\ \ \ \}}
+\DoxyCodeLine{00499\ }
+\DoxyCodeLine{00500\ \ \ \textcolor{comment}{//\ Ask\ the\ GSG\ to\ create\ a\ brand\ new\ SamplerContext.}}
+\DoxyCodeLine{00501\ \ \ \mbox{\hyperlink{classSamplerContext}{SamplerContext}}\ *sc\ =\ gsg-\/>prepare\_sampler(sampler);}
+\DoxyCodeLine{00502\ }
+\DoxyCodeLine{00503\ \ \ \textcolor{keywordflow}{if}\ (sc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00504\ \ \ \ \ \_prepared\_samplers[sampler]\ =\ sc;}
+\DoxyCodeLine{00505\ \ \ \}}
+\DoxyCodeLine{00506\ }
+\DoxyCodeLine{00507\ \ \ \textcolor{keywordflow}{return}\ sc;}
+\DoxyCodeLine{00508\ \}}
+\DoxyCodeLine{00509\ }
+\DoxyCodeLine{00514\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_ae994e9bc04c1dd10ef935cce122aacc0}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00515\ \mbox{\hyperlink{classPreparedGraphicsObjects_ae994e9bc04c1dd10ef935cce122aacc0}{enqueue\_geom}}(\mbox{\hyperlink{classGeom}{Geom}}\ *geom)\ \{}
+\DoxyCodeLine{00516\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00517\ }
+\DoxyCodeLine{00518\ \ \ \_enqueued\_geoms.insert(geom);}
+\DoxyCodeLine{00519\ \}}
+\DoxyCodeLine{00520\ }
+\DoxyCodeLine{00524\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a9419853618c0c691b12fe509eff54435}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00525\ \mbox{\hyperlink{classPreparedGraphicsObjects_a9419853618c0c691b12fe509eff54435}{is\_geom\_queued}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeom}{Geom}}\ *geom)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00526\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00527\ }
+\DoxyCodeLine{00528\ \ \ EnqueuedGeoms::const\_iterator\ qi\ =\ \_enqueued\_geoms.find((\mbox{\hyperlink{classGeom}{Geom}}\ *)geom);}
+\DoxyCodeLine{00529\ \ \ \textcolor{keywordflow}{return}\ (qi\ !=\ \_enqueued\_geoms.end());}
+\DoxyCodeLine{00530\ \}}
+\DoxyCodeLine{00531\ }
+\DoxyCodeLine{00541\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_ac54dc4c1cfa5591ec1dc4d4d20cf4544}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00542\ \mbox{\hyperlink{classPreparedGraphicsObjects_ac54dc4c1cfa5591ec1dc4d4d20cf4544}{dequeue\_geom}}(\mbox{\hyperlink{classGeom}{Geom}}\ *geom)\ \{}
+\DoxyCodeLine{00543\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00544\ }
+\DoxyCodeLine{00545\ \ \ EnqueuedGeoms::iterator\ qi\ =\ \_enqueued\_geoms.find(geom);}
+\DoxyCodeLine{00546\ \ \ \textcolor{keywordflow}{if}\ (qi\ !=\ \_enqueued\_geoms.end())\ \{}
+\DoxyCodeLine{00547\ \ \ \ \ \_enqueued\_geoms.erase(qi);}
+\DoxyCodeLine{00548\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00549\ \ \ \}}
+\DoxyCodeLine{00550\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00551\ \}}
+\DoxyCodeLine{00552\ }
+\DoxyCodeLine{00557\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a4bccb7827e030552ed18dd9151ec5754}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00558\ \mbox{\hyperlink{classPreparedGraphicsObjects_a4bccb7827e030552ed18dd9151ec5754}{is\_geom\_prepared}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeom}{Geom}}\ *geom)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00559\ \ \ \textcolor{keywordflow}{return}\ geom-\/>\mbox{\hyperlink{classGeom_ac7d4766bb6093bf8a3da7c387175fdfd}{is\_prepared}}((\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{00560\ \}}
+\DoxyCodeLine{00561\ }
+\DoxyCodeLine{00571\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a30c53457f4c0eb29752970b309d8b86c}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00572\ \mbox{\hyperlink{classPreparedGraphicsObjects_a30c53457f4c0eb29752970b309d8b86c}{release\_geom}}(\mbox{\hyperlink{classGeomContext}{GeomContext}}\ *gc)\ \{}
+\DoxyCodeLine{00573\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00574\ }
+\DoxyCodeLine{00575\ \ \ gc-\/>\_geom-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{00576\ }
+\DoxyCodeLine{00577\ \ \ \textcolor{comment}{//\ We\ have\ to\ set\ the\ Geom\ pointer\ to\ NULL\ at\ this\ point,\ since\ the\ Geom}}
+\DoxyCodeLine{00578\ \ \ \textcolor{comment}{//\ itself\ might\ destruct\ at\ any\ time\ after\ it\ has\ been\ released.}}
+\DoxyCodeLine{00579\ \ \ gc-\/>\_geom\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00580\ }
+\DoxyCodeLine{00581\ \ \ \textcolor{keywordtype}{bool}\ removed\ =\ (\_prepared\_geoms.erase(gc)\ !=\ 0);}
+\DoxyCodeLine{00582\ \ \ nassertv(removed);}
+\DoxyCodeLine{00583\ }
+\DoxyCodeLine{00584\ \ \ \_released\_geoms.insert(gc);}
+\DoxyCodeLine{00585\ \}}
+\DoxyCodeLine{00586\ }
+\DoxyCodeLine{00592\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a0f00472736ce5eebb4dc2b226e1e6bce}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00593\ \mbox{\hyperlink{classPreparedGraphicsObjects_a0f00472736ce5eebb4dc2b226e1e6bce}{release\_all\_geoms}}()\ \{}
+\DoxyCodeLine{00594\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00595\ }
+\DoxyCodeLine{00596\ \ \ \textcolor{keywordtype}{int}\ num\_geoms\ =\ (int)\_prepared\_geoms.size()\ +\ (int)\_enqueued\_geoms.size();}
+\DoxyCodeLine{00597\ }
+\DoxyCodeLine{00598\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classGeomContext}{GeomContext}}\ *gc\ :\ \_prepared\_geoms)\ \{}
+\DoxyCodeLine{00599\ \ \ \ \ gc-\/>\_geom-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{00600\ \ \ \ \ gc-\/>\_geom\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00602\ \ \ \ \ \_released\_geoms.insert(gc);}
+\DoxyCodeLine{00603\ \ \ \}}
+\DoxyCodeLine{00604\ }
+\DoxyCodeLine{00605\ \ \ \_prepared\_geoms.clear();}
+\DoxyCodeLine{00606\ \ \ \_enqueued\_geoms.clear();}
+\DoxyCodeLine{00607\ }
+\DoxyCodeLine{00608\ \ \ \textcolor{keywordflow}{return}\ num\_geoms;}
+\DoxyCodeLine{00609\ \}}
+\DoxyCodeLine{00610\ }
+\DoxyCodeLine{00615\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a08733a06d2183dbf22acb6467a66768b}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00616\ \mbox{\hyperlink{classPreparedGraphicsObjects_a08733a06d2183dbf22acb6467a66768b}{get\_num\_queued\_geoms}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00617\ \ \ \textcolor{keywordflow}{return}\ \_enqueued\_geoms.size();}
+\DoxyCodeLine{00618\ \}}
+\DoxyCodeLine{00619\ }
+\DoxyCodeLine{00623\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a9839688f4e1bfa32a48d55a702948f22}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00624\ \mbox{\hyperlink{classPreparedGraphicsObjects_a9839688f4e1bfa32a48d55a702948f22}{get\_num\_prepared\_geoms}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00625\ \ \ \textcolor{keywordflow}{return}\ \_prepared\_geoms.size();}
+\DoxyCodeLine{00626\ \}}
+\DoxyCodeLine{00627\ }
+\DoxyCodeLine{00644\ \mbox{\hyperlink{classGeomContext}{GeomContext}}\ *\mbox{\hyperlink{classPreparedGraphicsObjects_aac80f5c15475dff257ea6e25d5b115f2}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00645\ \mbox{\hyperlink{classPreparedGraphicsObjects_aac80f5c15475dff257ea6e25d5b115f2}{prepare\_geom\_now}}(\mbox{\hyperlink{classGeom}{Geom}}\ *geom,\ \mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg)\ \{}
+\DoxyCodeLine{00646\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00647\ }
+\DoxyCodeLine{00648\ \ \ \textcolor{comment}{//\ Ask\ the\ GSG\ to\ create\ a\ brand\ new\ GeomContext.\ \ There\ might\ be\ several}}
+\DoxyCodeLine{00649\ \ \ \textcolor{comment}{//\ GSG's\ sharing\ the\ same\ set\ of\ geoms;\ if\ so,\ it\ doesn't\ matter\ which\ of}}
+\DoxyCodeLine{00650\ \ \ \textcolor{comment}{//\ them\ creates\ the\ context\ (since\ they're\ all\ shared\ anyway).}}
+\DoxyCodeLine{00651\ \ \ \mbox{\hyperlink{classGeomContext}{GeomContext}}\ *gc\ =\ gsg-\/>prepare\_geom(geom);}
+\DoxyCodeLine{00652\ }
+\DoxyCodeLine{00653\ \ \ \textcolor{keywordflow}{if}\ (gc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00654\ \ \ \ \ \textcolor{keywordtype}{bool}\ prepared\ =\ \_prepared\_geoms.insert(gc).second;}
+\DoxyCodeLine{00655\ \ \ \ \ nassertr(prepared,\ gc);}
+\DoxyCodeLine{00656\ \ \ \}}
+\DoxyCodeLine{00657\ }
+\DoxyCodeLine{00658\ \ \ \textcolor{keywordflow}{return}\ gc;}
+\DoxyCodeLine{00659\ \}}
+\DoxyCodeLine{00660\ }
+\DoxyCodeLine{00665\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_ae89d9f2e64192a1d03ad81524591abf6}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00666\ \mbox{\hyperlink{classPreparedGraphicsObjects_ae89d9f2e64192a1d03ad81524591abf6}{enqueue\_shader}}(\mbox{\hyperlink{classShader}{Shader}}\ *shader)\ \{}
+\DoxyCodeLine{00667\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00668\ }
+\DoxyCodeLine{00669\ \ \ \_enqueued\_shaders.insert(EnqueuedShaders::value\_type(shader,\ \textcolor{keyword}{nullptr}));}
+\DoxyCodeLine{00670\ \}}
+\DoxyCodeLine{00671\ }
+\DoxyCodeLine{00676\ PT(\mbox{\hyperlink{classPreparedGraphicsObjects_1_1EnqueuedObject}{PreparedGraphicsObjects::EnqueuedObject}})\ PreparedGraphicsObjects::}
+\DoxyCodeLine{00677\ enqueue\_shader\_future(\mbox{\hyperlink{classShader}{Shader}}\ *shader)\ \{}
+\DoxyCodeLine{00678\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00679\ }
+\DoxyCodeLine{00680\ \ \ std::pair<EnqueuedShaders::iterator,\ bool>\ result\ =}
+\DoxyCodeLine{00681\ \ \ \ \ \_enqueued\_shaders.insert(EnqueuedShaders::value\_type(shader,\ \textcolor{keyword}{nullptr}));}
+\DoxyCodeLine{00682\ \ \ \textcolor{keywordflow}{if}\ (result.first-\/>second\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00683\ \ \ \ \ result.first-\/>second\ =\ \textcolor{keyword}{new}\ EnqueuedObject(\textcolor{keyword}{this},\ shader);}
+\DoxyCodeLine{00684\ \ \ \}}
+\DoxyCodeLine{00685\ \ \ PT(EnqueuedObject)\ fut\ =\ result.first-\/>second;}
+\DoxyCodeLine{00686\ \ \ nassertr(!fut-\/>cancelled(),\ fut)}
+\DoxyCodeLine{00687\ \ \ \textcolor{keywordflow}{return}\ fut;}
+\DoxyCodeLine{00688\ \}}
+\DoxyCodeLine{00689\ }
+\DoxyCodeLine{00693\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a473b9aad42c05a8d00b3c65c18f6efce}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00694\ \mbox{\hyperlink{classPreparedGraphicsObjects_a473b9aad42c05a8d00b3c65c18f6efce}{is\_shader\_queued}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classShader}{Shader}}\ *shader)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00695\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00696\ }
+\DoxyCodeLine{00697\ \ \ EnqueuedShaders::const\_iterator\ qi\ =\ \_enqueued\_shaders.find((\mbox{\hyperlink{classShader}{Shader}}\ *)shader);}
+\DoxyCodeLine{00698\ \ \ \textcolor{keywordflow}{return}\ (qi\ !=\ \_enqueued\_shaders.end());}
+\DoxyCodeLine{00699\ \}}
+\DoxyCodeLine{00700\ }
+\DoxyCodeLine{00710\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a541897e01cf3cd0f8fb55b3597c8eeb3}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00711\ \mbox{\hyperlink{classPreparedGraphicsObjects_a541897e01cf3cd0f8fb55b3597c8eeb3}{dequeue\_shader}}(\mbox{\hyperlink{classShader}{Shader}}\ *se)\ \{}
+\DoxyCodeLine{00712\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00713\ }
+\DoxyCodeLine{00714\ \ \ EnqueuedShaders::iterator\ qi\ =\ \_enqueued\_shaders.find(se);}
+\DoxyCodeLine{00715\ \ \ \textcolor{keywordflow}{if}\ (qi\ !=\ \_enqueued\_shaders.end())\ \{}
+\DoxyCodeLine{00716\ \ \ \ \ \textcolor{keywordflow}{if}\ (qi-\/>second\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00717\ \ \ \ \ \ \ qi-\/>second-\/>notify\_removed();}
+\DoxyCodeLine{00718\ \ \ \ \ \}}
+\DoxyCodeLine{00719\ \ \ \ \ \_enqueued\_shaders.erase(qi);}
+\DoxyCodeLine{00720\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00721\ \ \ \}}
+\DoxyCodeLine{00722\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00723\ \}}
+\DoxyCodeLine{00724\ }
+\DoxyCodeLine{00728\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_acd5cb9dabd93eb67d723c98a634897de}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00729\ \mbox{\hyperlink{classPreparedGraphicsObjects_acd5cb9dabd93eb67d723c98a634897de}{is\_shader\_prepared}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classShader}{Shader}}\ *shader)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00730\ \ \ \textcolor{keywordflow}{return}\ shader-\/>is\_prepared((\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{00731\ \}}
+\DoxyCodeLine{00732\ }
+\DoxyCodeLine{00742\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a98c153ead0efb71422b793e54c90f4cc}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00743\ \mbox{\hyperlink{classPreparedGraphicsObjects_a98c153ead0efb71422b793e54c90f4cc}{release\_shader}}(\mbox{\hyperlink{classShaderContext}{ShaderContext}}\ *sc)\ \{}
+\DoxyCodeLine{00744\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00745\ }
+\DoxyCodeLine{00746\ \ \ sc-\/>\_shader-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{00747\ }
+\DoxyCodeLine{00748\ \ \ \textcolor{comment}{//\ We\ have\ to\ set\ the\ Shader\ pointer\ to\ NULL\ at\ this\ point,\ since\ the\ Shader}}
+\DoxyCodeLine{00749\ \ \ \textcolor{comment}{//\ itself\ might\ destruct\ at\ any\ time\ after\ it\ has\ been\ released.}}
+\DoxyCodeLine{00750\ \ \ sc-\/>\_shader\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00751\ }
+\DoxyCodeLine{00752\ \ \ \textcolor{keywordtype}{bool}\ removed\ =\ (\_prepared\_shaders.erase(sc)\ !=\ 0);}
+\DoxyCodeLine{00753\ \ \ nassertv(removed);}
+\DoxyCodeLine{00754\ }
+\DoxyCodeLine{00755\ \ \ \_released\_shaders.insert(sc);}
+\DoxyCodeLine{00756\ \}}
+\DoxyCodeLine{00757\ }
+\DoxyCodeLine{00763\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a76828328f3f682fe752fe6548868108c}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00764\ \mbox{\hyperlink{classPreparedGraphicsObjects_a76828328f3f682fe752fe6548868108c}{release\_all\_shaders}}()\ \{}
+\DoxyCodeLine{00765\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00766\ }
+\DoxyCodeLine{00767\ \ \ \textcolor{keywordtype}{int}\ num\_shaders\ =\ (int)\_prepared\_shaders.size()\ +\ (int)\_enqueued\_shaders.size();}
+\DoxyCodeLine{00768\ }
+\DoxyCodeLine{00769\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classShaderContext}{ShaderContext}}\ *sc\ :\ \_prepared\_shaders)\ \{}
+\DoxyCodeLine{00770\ \ \ \ \ sc-\/>\_shader-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{00771\ \ \ \ \ sc-\/>\_shader\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00772\ }
+\DoxyCodeLine{00773\ \ \ \ \ \_released\_shaders.insert(sc);}
+\DoxyCodeLine{00774\ \ \ \}}
+\DoxyCodeLine{00775\ }
+\DoxyCodeLine{00776\ \ \ \_prepared\_shaders.clear();}
+\DoxyCodeLine{00777\ }
+\DoxyCodeLine{00778\ \ \ \textcolor{comment}{//\ Mark\ any\ futures\ as\ cancelled.}}
+\DoxyCodeLine{00779\ \ \ EnqueuedShaders::iterator\ qsi;}
+\DoxyCodeLine{00780\ \ \ \textcolor{keywordflow}{for}\ (qsi\ =\ \_enqueued\_shaders.begin();}
+\DoxyCodeLine{00781\ \ \ \ \ \ \ \ qsi\ !=\ \_enqueued\_shaders.end();}
+\DoxyCodeLine{00782\ \ \ \ \ \ \ \ ++qsi)\ \{}
+\DoxyCodeLine{00783\ \ \ \ \ \textcolor{keywordflow}{if}\ (qsi-\/>second\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00784\ \ \ \ \ \ \ qsi-\/>second-\/>notify\_removed();}
+\DoxyCodeLine{00785\ \ \ \ \ \}}
+\DoxyCodeLine{00786\ \ \ \}}
+\DoxyCodeLine{00787\ }
+\DoxyCodeLine{00788\ \ \ \_enqueued\_shaders.clear();}
+\DoxyCodeLine{00789\ }
+\DoxyCodeLine{00790\ \ \ \textcolor{keywordflow}{return}\ num\_shaders;}
+\DoxyCodeLine{00791\ \}}
+\DoxyCodeLine{00792\ }
+\DoxyCodeLine{00797\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a53551f80a69d1a6a9dbcba3a9187d87f}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00798\ \mbox{\hyperlink{classPreparedGraphicsObjects_a53551f80a69d1a6a9dbcba3a9187d87f}{get\_num\_queued\_shaders}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00799\ \ \ \textcolor{keywordflow}{return}\ \_enqueued\_shaders.size();}
+\DoxyCodeLine{00800\ \}}
+\DoxyCodeLine{00801\ }
+\DoxyCodeLine{00805\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a2843b80d55a448d3b65aefd0fcabb7e2}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00806\ \mbox{\hyperlink{classPreparedGraphicsObjects_a2843b80d55a448d3b65aefd0fcabb7e2}{get\_num\_prepared\_shaders}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00807\ \ \ \textcolor{keywordflow}{return}\ \_prepared\_shaders.size();}
+\DoxyCodeLine{00808\ \}}
+\DoxyCodeLine{00809\ }
+\DoxyCodeLine{00826\ \mbox{\hyperlink{classShaderContext}{ShaderContext}}\ *\mbox{\hyperlink{classPreparedGraphicsObjects_afa11213aa7b163caadbbe58d3fbe17ef}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00827\ \mbox{\hyperlink{classPreparedGraphicsObjects_afa11213aa7b163caadbbe58d3fbe17ef}{prepare\_shader\_now}}(\mbox{\hyperlink{classShader}{Shader}}\ *se,\ \mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg)\ \{}
+\DoxyCodeLine{00828\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00829\ }
+\DoxyCodeLine{00830\ \ \ \textcolor{comment}{//\ Ask\ the\ GSG\ to\ create\ a\ brand\ new\ ShaderContext.\ \ There\ might\ be\ several}}
+\DoxyCodeLine{00831\ \ \ \textcolor{comment}{//\ GSG's\ sharing\ the\ same\ set\ of\ shaders;\ if\ so,\ it\ doesn't\ matter\ which\ of}}
+\DoxyCodeLine{00832\ \ \ \textcolor{comment}{//\ them\ creates\ the\ context\ (since\ they're\ all\ shared\ anyway).}}
+\DoxyCodeLine{00833\ \ \ \mbox{\hyperlink{classShaderContext}{ShaderContext}}\ *sc\ =\ gsg-\/>prepare\_shader(se);}
+\DoxyCodeLine{00834\ }
+\DoxyCodeLine{00835\ \ \ \textcolor{keywordflow}{if}\ (sc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00836\ \ \ \ \ \textcolor{keywordtype}{bool}\ prepared\ =\ \_prepared\_shaders.insert(sc).second;}
+\DoxyCodeLine{00837\ \ \ \ \ nassertr(prepared,\ sc);}
+\DoxyCodeLine{00838\ \ \ \}}
+\DoxyCodeLine{00839\ }
+\DoxyCodeLine{00840\ \ \ \textcolor{keywordflow}{return}\ sc;}
+\DoxyCodeLine{00841\ \}}
+\DoxyCodeLine{00842\ }
+\DoxyCodeLine{00847\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a079c30ee715d902194d78a002f8956d3}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00848\ \mbox{\hyperlink{classPreparedGraphicsObjects_a079c30ee715d902194d78a002f8956d3}{enqueue\_vertex\_buffer}}(\mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *data)\ \{}
+\DoxyCodeLine{00849\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00850\ }
+\DoxyCodeLine{00851\ \ \ \_enqueued\_vertex\_buffers.insert(data);}
+\DoxyCodeLine{00852\ \}}
+\DoxyCodeLine{00853\ }
+\DoxyCodeLine{00858\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_ae9c5184ab1923a62fbd26e50e418406f}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00859\ \mbox{\hyperlink{classPreparedGraphicsObjects_ae9c5184ab1923a62fbd26e50e418406f}{is\_vertex\_buffer\_queued}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00860\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00861\ }
+\DoxyCodeLine{00862\ \ \ EnqueuedVertexBuffers::const\_iterator\ qi\ =\ \_enqueued\_vertex\_buffers.find((\mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *)data);}
+\DoxyCodeLine{00863\ \ \ \textcolor{keywordflow}{return}\ (qi\ !=\ \_enqueued\_vertex\_buffers.end());}
+\DoxyCodeLine{00864\ \}}
+\DoxyCodeLine{00865\ }
+\DoxyCodeLine{00875\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a1e4bdb510823b3ad5359172953879f67}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00876\ \mbox{\hyperlink{classPreparedGraphicsObjects_a1e4bdb510823b3ad5359172953879f67}{dequeue\_vertex\_buffer}}(\mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *data)\ \{}
+\DoxyCodeLine{00877\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00878\ }
+\DoxyCodeLine{00879\ \ \ EnqueuedVertexBuffers::iterator\ qi\ =\ \_enqueued\_vertex\_buffers.find(data);}
+\DoxyCodeLine{00880\ \ \ \textcolor{keywordflow}{if}\ (qi\ !=\ \_enqueued\_vertex\_buffers.end())\ \{}
+\DoxyCodeLine{00881\ \ \ \ \ \_enqueued\_vertex\_buffers.erase(qi);}
+\DoxyCodeLine{00882\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00883\ \ \ \}}
+\DoxyCodeLine{00884\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00885\ \}}
+\DoxyCodeLine{00886\ }
+\DoxyCodeLine{00891\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_ad2e5b057ccd7e849fa18825565ed5939}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00892\ \mbox{\hyperlink{classPreparedGraphicsObjects_ad2e5b057ccd7e849fa18825565ed5939}{is\_vertex\_buffer\_prepared}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00893\ \ \ \textcolor{keywordflow}{return}\ data-\/>is\_prepared((\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{00894\ \}}
+\DoxyCodeLine{00895\ }
+\DoxyCodeLine{00905\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_ae66e2cf8ebb5525ddd2a453639382600}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00906\ \mbox{\hyperlink{classPreparedGraphicsObjects_ae66e2cf8ebb5525ddd2a453639382600}{release\_vertex\_buffer}}(\mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *vbc)\ \{}
+\DoxyCodeLine{00907\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00908\ }
+\DoxyCodeLine{00909\ \ \ vbc-\/>get\_data()-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{00910\ }
+\DoxyCodeLine{00911\ \ \ \textcolor{keywordtype}{size\_t}\ data\_size\_bytes\ =\ vbc-\/>get\_data()-\/>get\_data\_size\_bytes();}
+\DoxyCodeLine{00912\ \ \ GeomEnums::UsageHint\ usage\_hint\ =\ vbc-\/>get\_data()-\/>get\_usage\_hint();}
+\DoxyCodeLine{00913\ }
+\DoxyCodeLine{00914\ \ \ \textcolor{comment}{//\ We\ have\ to\ set\ the\ Data\ pointer\ to\ NULL\ at\ this\ point,\ since\ the\ Data}}
+\DoxyCodeLine{00915\ \ \ \textcolor{comment}{//\ itself\ might\ destruct\ at\ any\ time\ after\ it\ has\ been\ released.}}
+\DoxyCodeLine{00916\ \ \ vbc-\/>\_object\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00917\ }
+\DoxyCodeLine{00918\ \ \ \textcolor{keywordtype}{bool}\ removed\ =\ (\_prepared\_vertex\_buffers.erase(vbc)\ !=\ 0);}
+\DoxyCodeLine{00919\ \ \ nassertv(removed);}
+\DoxyCodeLine{00920\ }
+\DoxyCodeLine{00921\ \ \ \textcolor{keywordflow}{if}\ (\_support\_released\_buffer\_cache)\ \{}
+\DoxyCodeLine{00922\ \ \ \ \ cache\_unprepared\_buffer(vbc,\ data\_size\_bytes,\ usage\_hint,}
+\DoxyCodeLine{00923\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_vertex\_buffer\_cache,}
+\DoxyCodeLine{00924\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_vertex\_buffer\_cache\_lru,\ \_vertex\_buffer\_cache\_size,}
+\DoxyCodeLine{00925\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ released\_vbuffer\_cache\_size,}
+\DoxyCodeLine{00926\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_released\_vertex\_buffers);}
+\DoxyCodeLine{00927\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00928\ \ \ \ \ \_released\_vertex\_buffers.push\_back(vbc);}
+\DoxyCodeLine{00929\ \ \ \}}
+\DoxyCodeLine{00930\ \}}
+\DoxyCodeLine{00931\ }
+\DoxyCodeLine{00937\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_af70583653a4410fa1b15f1ea56aa1d11}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00938\ \mbox{\hyperlink{classPreparedGraphicsObjects_af70583653a4410fa1b15f1ea56aa1d11}{release\_all\_vertex\_buffers}}()\ \{}
+\DoxyCodeLine{00939\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{00940\ }
+\DoxyCodeLine{00941\ \ \ \textcolor{keywordtype}{int}\ num\_vertex\_buffers\ =\ (int)\_prepared\_vertex\_buffers.size()\ +\ (int)\_enqueued\_vertex\_buffers.size();}
+\DoxyCodeLine{00942\ }
+\DoxyCodeLine{00943\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBufferContext}{BufferContext}}\ *bc\ :\ \_prepared\_vertex\_buffers)\ \{}
+\DoxyCodeLine{00944\ \ \ \ \ \mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *vbc\ =\ (\mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *)bc;}
+\DoxyCodeLine{00945\ \ \ \ \ vbc-\/>get\_data()-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{00946\ \ \ \ \ vbc-\/>\_object\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00947\ }
+\DoxyCodeLine{00948\ \ \ \ \ \_released\_vertex\_buffers.push\_back(vbc);}
+\DoxyCodeLine{00949\ \ \ \}}
+\DoxyCodeLine{00950\ }
+\DoxyCodeLine{00951\ \ \ \_prepared\_vertex\_buffers.clear();}
+\DoxyCodeLine{00952\ \ \ \_enqueued\_vertex\_buffers.clear();}
+\DoxyCodeLine{00953\ }
+\DoxyCodeLine{00954\ \ \ \textcolor{comment}{//\ Also\ clear\ the\ cache\ of\ recently-\/unprepared\ vertex\ buffers.}}
+\DoxyCodeLine{00955\ \ \ BufferCache::iterator\ bci;}
+\DoxyCodeLine{00956\ \ \ \textcolor{keywordflow}{for}\ (bci\ =\ \_vertex\_buffer\_cache.begin();}
+\DoxyCodeLine{00957\ \ \ \ \ \ \ \ bci\ !=\ \_vertex\_buffer\_cache.end();}
+\DoxyCodeLine{00958\ \ \ \ \ \ \ \ ++bci)\ \{}
+\DoxyCodeLine{00959\ \ \ \ \ \mbox{\hyperlink{classpvector}{BufferList}}\ \&buffer\_list\ =\ (*bci).second;}
+\DoxyCodeLine{00960\ \ \ \ \ nassertr(!buffer\_list.empty(),\ num\_vertex\_buffers);}
+\DoxyCodeLine{00961\ \ \ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBufferContext}{BufferContext}}\ *bc\ :\ buffer\_list)\ \{}
+\DoxyCodeLine{00962\ \ \ \ \ \ \ \mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *vbc\ =\ (\mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *)bc;}
+\DoxyCodeLine{00963\ \ \ \ \ \ \ \_released\_vertex\_buffers.push\_back(vbc);}
+\DoxyCodeLine{00964\ \ \ \ \ \}}
+\DoxyCodeLine{00965\ \ \ \}}
+\DoxyCodeLine{00966\ \ \ \_vertex\_buffer\_cache.clear();}
+\DoxyCodeLine{00967\ \ \ \_vertex\_buffer\_cache\_lru.clear();}
+\DoxyCodeLine{00968\ \ \ \_vertex\_buffer\_cache\_size\ =\ 0;}
+\DoxyCodeLine{00969\ }
+\DoxyCodeLine{00970\ \ \ \textcolor{keywordflow}{return}\ num\_vertex\_buffers;}
+\DoxyCodeLine{00971\ \}}
+\DoxyCodeLine{00972\ }
+\DoxyCodeLine{00977\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a46d68396374634d0a6f3027cd54faf46}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00978\ \mbox{\hyperlink{classPreparedGraphicsObjects_a46d68396374634d0a6f3027cd54faf46}{get\_num\_queued\_vertex\_buffers}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00979\ \ \ \textcolor{keywordflow}{return}\ \_enqueued\_vertex\_buffers.size();}
+\DoxyCodeLine{00980\ \}}
+\DoxyCodeLine{00981\ }
+\DoxyCodeLine{00986\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a2ead49c7cf089235d9e8e49e9100c567}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{00987\ \mbox{\hyperlink{classPreparedGraphicsObjects_a2ead49c7cf089235d9e8e49e9100c567}{get\_num\_prepared\_vertex\_buffers}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00988\ \ \ \textcolor{keywordflow}{return}\ \_prepared\_vertex\_buffers.size();}
+\DoxyCodeLine{00989\ \}}
+\DoxyCodeLine{00990\ }
+\DoxyCodeLine{01008\ \mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *\mbox{\hyperlink{classPreparedGraphicsObjects_afeaff6051a1dd128235fb44dd2ac1c59}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01009\ \mbox{\hyperlink{classPreparedGraphicsObjects_afeaff6051a1dd128235fb44dd2ac1c59}{prepare\_vertex\_buffer\_now}}(\mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *data,\ \mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg)\ \{}
+\DoxyCodeLine{01010\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01011\ }
+\DoxyCodeLine{01012\ \ \ \textcolor{comment}{//\ First,\ see\ if\ there\ might\ be\ a\ cached\ context\ of\ the\ appropriate\ size.}}
+\DoxyCodeLine{01013\ \ \ \textcolor{keywordtype}{size\_t}\ data\_size\_bytes\ =\ data-\/>get\_data\_size\_bytes();}
+\DoxyCodeLine{01014\ \ \ GeomEnums::UsageHint\ usage\_hint\ =\ data-\/>get\_usage\_hint();}
+\DoxyCodeLine{01015\ \ \ \mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *vbc\ =\ (\mbox{\hyperlink{classVertexBufferContext}{VertexBufferContext}}\ *)}
+\DoxyCodeLine{01016\ \ \ \ \ get\_cached\_buffer(data\_size\_bytes,\ usage\_hint,}
+\DoxyCodeLine{01017\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_vertex\_buffer\_cache,\ \_vertex\_buffer\_cache\_lru,}
+\DoxyCodeLine{01018\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_vertex\_buffer\_cache\_size);}
+\DoxyCodeLine{01019\ \ \ \textcolor{keywordflow}{if}\ (vbc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01020\ \ \ \ \ vbc-\/>\_object\ =\ data;}
+\DoxyCodeLine{01021\ }
+\DoxyCodeLine{01022\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01023\ \ \ \ \ \textcolor{comment}{//\ Ask\ the\ GSG\ to\ create\ a\ brand\ new\ VertexBufferContext.\ \ There\ might\ be}}
+\DoxyCodeLine{01024\ \ \ \ \ \textcolor{comment}{//\ several\ GSG's\ sharing\ the\ same\ set\ of\ datas;\ if\ so,\ it\ doesn't\ matter}}
+\DoxyCodeLine{01025\ \ \ \ \ \textcolor{comment}{//\ which\ of\ them\ creates\ the\ context\ (since\ they're\ all\ shared\ anyway).}}
+\DoxyCodeLine{01026\ \ \ \ \ vbc\ =\ gsg-\/>prepare\_vertex\_buffer(data);}
+\DoxyCodeLine{01027\ \ \ \}}
+\DoxyCodeLine{01028\ }
+\DoxyCodeLine{01029\ \ \ \textcolor{keywordflow}{if}\ (vbc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01030\ \ \ \ \ \textcolor{keywordtype}{bool}\ prepared\ =\ \_prepared\_vertex\_buffers.insert(vbc).second;}
+\DoxyCodeLine{01031\ \ \ \ \ nassertr(prepared,\ vbc);}
+\DoxyCodeLine{01032\ \ \ \}}
+\DoxyCodeLine{01033\ }
+\DoxyCodeLine{01034\ \ \ \textcolor{keywordflow}{return}\ vbc;}
+\DoxyCodeLine{01035\ \}}
+\DoxyCodeLine{01036\ }
+\DoxyCodeLine{01041\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_adf09abd6c22be7507612524390a07f91}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01042\ \mbox{\hyperlink{classPreparedGraphicsObjects_adf09abd6c22be7507612524390a07f91}{enqueue\_index\_buffer}}(\mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}}\ *data)\ \{}
+\DoxyCodeLine{01043\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01044\ }
+\DoxyCodeLine{01045\ \ \ \_enqueued\_index\_buffers.insert(data);}
+\DoxyCodeLine{01046\ \}}
+\DoxyCodeLine{01047\ }
+\DoxyCodeLine{01052\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a9e9ce9afd532179f713985f21e916d3a}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01053\ \mbox{\hyperlink{classPreparedGraphicsObjects_a9e9ce9afd532179f713985f21e916d3a}{is\_index\_buffer\_queued}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}}\ *data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01054\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01055\ }
+\DoxyCodeLine{01056\ \ \ EnqueuedIndexBuffers::const\_iterator\ qi\ =\ \_enqueued\_index\_buffers.find((\mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}}\ *)data);}
+\DoxyCodeLine{01057\ \ \ \textcolor{keywordflow}{return}\ (qi\ !=\ \_enqueued\_index\_buffers.end());}
+\DoxyCodeLine{01058\ \}}
+\DoxyCodeLine{01059\ }
+\DoxyCodeLine{01069\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_aff8d32c6ab9684ac0df1b14173bc0879}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01070\ \mbox{\hyperlink{classPreparedGraphicsObjects_aff8d32c6ab9684ac0df1b14173bc0879}{dequeue\_index\_buffer}}(\mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}}\ *data)\ \{}
+\DoxyCodeLine{01071\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01072\ }
+\DoxyCodeLine{01073\ \ \ EnqueuedIndexBuffers::iterator\ qi\ =\ \_enqueued\_index\_buffers.find(data);}
+\DoxyCodeLine{01074\ \ \ \textcolor{keywordflow}{if}\ (qi\ !=\ \_enqueued\_index\_buffers.end())\ \{}
+\DoxyCodeLine{01075\ \ \ \ \ \_enqueued\_index\_buffers.erase(qi);}
+\DoxyCodeLine{01076\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01077\ \ \ \}}
+\DoxyCodeLine{01078\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01079\ \}}
+\DoxyCodeLine{01080\ }
+\DoxyCodeLine{01085\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a319ec66d521c211a7b4eb229909813b7}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01086\ \mbox{\hyperlink{classPreparedGraphicsObjects_a319ec66d521c211a7b4eb229909813b7}{is\_index\_buffer\_prepared}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}}\ *data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01087\ \ \ \textcolor{keywordflow}{return}\ data-\/>is\_prepared((\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{01088\ \}}
+\DoxyCodeLine{01089\ }
+\DoxyCodeLine{01099\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_ac550c095aa65420418a2bf9c4b8c075e}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01100\ \mbox{\hyperlink{classPreparedGraphicsObjects_ac550c095aa65420418a2bf9c4b8c075e}{release\_index\_buffer}}(\mbox{\hyperlink{classIndexBufferContext}{IndexBufferContext}}\ *ibc)\ \{}
+\DoxyCodeLine{01101\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01102\ }
+\DoxyCodeLine{01103\ \ \ ibc-\/>get\_data()-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{01104\ }
+\DoxyCodeLine{01105\ \ \ \textcolor{keywordtype}{size\_t}\ data\_size\_bytes\ =\ ibc-\/>get\_data()-\/>get\_data\_size\_bytes();}
+\DoxyCodeLine{01106\ \ \ GeomEnums::UsageHint\ usage\_hint\ =\ ibc-\/>get\_data()-\/>get\_usage\_hint();}
+\DoxyCodeLine{01107\ }
+\DoxyCodeLine{01108\ \ \ \textcolor{comment}{//\ We\ have\ to\ set\ the\ Data\ pointer\ to\ NULL\ at\ this\ point,\ since\ the\ Data}}
+\DoxyCodeLine{01109\ \ \ \textcolor{comment}{//\ itself\ might\ destruct\ at\ any\ time\ after\ it\ has\ been\ released.}}
+\DoxyCodeLine{01110\ \ \ ibc-\/>\_object\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01111\ }
+\DoxyCodeLine{01112\ \ \ \textcolor{keywordtype}{bool}\ removed\ =\ (\_prepared\_index\_buffers.erase(ibc)\ !=\ 0);}
+\DoxyCodeLine{01113\ \ \ nassertv(removed);}
+\DoxyCodeLine{01114\ }
+\DoxyCodeLine{01115\ \ \ \textcolor{keywordflow}{if}\ (\_support\_released\_buffer\_cache)\ \{}
+\DoxyCodeLine{01116\ \ \ \ \ cache\_unprepared\_buffer(ibc,\ data\_size\_bytes,\ usage\_hint,}
+\DoxyCodeLine{01117\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_index\_buffer\_cache,}
+\DoxyCodeLine{01118\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_index\_buffer\_cache\_lru,\ \_index\_buffer\_cache\_size,}
+\DoxyCodeLine{01119\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ released\_ibuffer\_cache\_size,}
+\DoxyCodeLine{01120\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_released\_index\_buffers);}
+\DoxyCodeLine{01121\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01122\ \ \ \ \ \_released\_index\_buffers.push\_back(ibc);}
+\DoxyCodeLine{01123\ \ \ \}}
+\DoxyCodeLine{01124\ \}}
+\DoxyCodeLine{01125\ }
+\DoxyCodeLine{01131\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a898c6bd1745cb7fb66cd4d7bf504fea4}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01132\ \mbox{\hyperlink{classPreparedGraphicsObjects_a898c6bd1745cb7fb66cd4d7bf504fea4}{release\_all\_index\_buffers}}()\ \{}
+\DoxyCodeLine{01133\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01134\ }
+\DoxyCodeLine{01135\ \ \ \textcolor{keywordtype}{int}\ num\_index\_buffers\ =\ (int)\_prepared\_index\_buffers.size()\ +\ (int)\_enqueued\_index\_buffers.size();}
+\DoxyCodeLine{01136\ }
+\DoxyCodeLine{01137\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBufferContext}{BufferContext}}\ *bc\ :\ \_prepared\_index\_buffers)\ \{}
+\DoxyCodeLine{01138\ \ \ \ \ \mbox{\hyperlink{classIndexBufferContext}{IndexBufferContext}}\ *ibc\ =\ (\mbox{\hyperlink{classIndexBufferContext}{IndexBufferContext}}\ *)bc;}
+\DoxyCodeLine{01139\ \ \ \ \ ibc-\/>get\_data()-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{01140\ \ \ \ \ ibc-\/>\_object\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01141\ }
+\DoxyCodeLine{01142\ \ \ \ \ \_released\_index\_buffers.push\_back(ibc);}
+\DoxyCodeLine{01143\ \ \ \}}
+\DoxyCodeLine{01144\ }
+\DoxyCodeLine{01145\ \ \ \_prepared\_index\_buffers.clear();}
+\DoxyCodeLine{01146\ \ \ \_enqueued\_index\_buffers.clear();}
+\DoxyCodeLine{01147\ }
+\DoxyCodeLine{01148\ \ \ \textcolor{comment}{//\ Also\ clear\ the\ cache\ of\ recently-\/unprepared\ index\ buffers.}}
+\DoxyCodeLine{01149\ \ \ BufferCache::iterator\ bci;}
+\DoxyCodeLine{01150\ \ \ \textcolor{keywordflow}{for}\ (bci\ =\ \_index\_buffer\_cache.begin();}
+\DoxyCodeLine{01151\ \ \ \ \ \ \ \ bci\ !=\ \_index\_buffer\_cache.end();}
+\DoxyCodeLine{01152\ \ \ \ \ \ \ \ ++bci)\ \{}
+\DoxyCodeLine{01153\ \ \ \ \ \mbox{\hyperlink{classpvector}{BufferList}}\ \&buffer\_list\ =\ (*bci).second;}
+\DoxyCodeLine{01154\ \ \ \ \ nassertr(!buffer\_list.empty(),\ num\_index\_buffers);}
+\DoxyCodeLine{01155\ \ \ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBufferContext}{BufferContext}}\ *bc\ :\ buffer\_list)\ \{}
+\DoxyCodeLine{01156\ \ \ \ \ \ \ \mbox{\hyperlink{classIndexBufferContext}{IndexBufferContext}}\ *ibc\ =\ (\mbox{\hyperlink{classIndexBufferContext}{IndexBufferContext}}\ *)bc;}
+\DoxyCodeLine{01157\ \ \ \ \ \ \ \_released\_index\_buffers.push\_back(ibc);}
+\DoxyCodeLine{01158\ \ \ \ \ \}}
+\DoxyCodeLine{01159\ \ \ \}}
+\DoxyCodeLine{01160\ \ \ \_index\_buffer\_cache.clear();}
+\DoxyCodeLine{01161\ \ \ \_index\_buffer\_cache\_lru.clear();}
+\DoxyCodeLine{01162\ \ \ \_index\_buffer\_cache\_size\ =\ 0;}
+\DoxyCodeLine{01163\ }
+\DoxyCodeLine{01164\ \ \ \textcolor{keywordflow}{return}\ num\_index\_buffers;}
+\DoxyCodeLine{01165\ \}}
+\DoxyCodeLine{01166\ }
+\DoxyCodeLine{01171\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a2d4529a94a0633fad3337a269c98b14e}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01172\ \mbox{\hyperlink{classPreparedGraphicsObjects_a2d4529a94a0633fad3337a269c98b14e}{get\_num\_queued\_index\_buffers}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01173\ \ \ \textcolor{keywordflow}{return}\ \_enqueued\_index\_buffers.size();}
+\DoxyCodeLine{01174\ \}}
+\DoxyCodeLine{01175\ }
+\DoxyCodeLine{01180\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_af84ab4d05715ff737b28ac11f8932329}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01181\ \mbox{\hyperlink{classPreparedGraphicsObjects_af84ab4d05715ff737b28ac11f8932329}{get\_num\_prepared\_index\_buffers}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01182\ \ \ \textcolor{keywordflow}{return}\ \_prepared\_index\_buffers.size();}
+\DoxyCodeLine{01183\ \}}
+\DoxyCodeLine{01184\ }
+\DoxyCodeLine{01201\ \mbox{\hyperlink{classIndexBufferContext}{IndexBufferContext}}\ *\mbox{\hyperlink{classPreparedGraphicsObjects_af9bf742de2512a1a0b4acf3e90ca2ccd}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01202\ \mbox{\hyperlink{classPreparedGraphicsObjects_af9bf742de2512a1a0b4acf3e90ca2ccd}{prepare\_index\_buffer\_now}}(\mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}}\ *data,\ \mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg)\ \{}
+\DoxyCodeLine{01203\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01204\ }
+\DoxyCodeLine{01205\ \ \ \textcolor{comment}{//\ First,\ see\ if\ there\ might\ be\ a\ cached\ context\ of\ the\ appropriate\ size.}}
+\DoxyCodeLine{01206\ \ \ \textcolor{keywordtype}{size\_t}\ data\_size\_bytes\ =\ data-\/>get\_data\_size\_bytes();}
+\DoxyCodeLine{01207\ \ \ GeomEnums::UsageHint\ usage\_hint\ =\ data-\/>get\_usage\_hint();}
+\DoxyCodeLine{01208\ \ \ \mbox{\hyperlink{classIndexBufferContext}{IndexBufferContext}}\ *ibc\ =\ (\mbox{\hyperlink{classIndexBufferContext}{IndexBufferContext}}\ *)}
+\DoxyCodeLine{01209\ \ \ \ \ get\_cached\_buffer(data\_size\_bytes,\ usage\_hint,}
+\DoxyCodeLine{01210\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_index\_buffer\_cache,\ \_index\_buffer\_cache\_lru,}
+\DoxyCodeLine{01211\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_index\_buffer\_cache\_size);}
+\DoxyCodeLine{01212\ \ \ \textcolor{keywordflow}{if}\ (ibc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01213\ \ \ \ \ ibc-\/>\_object\ =\ data;}
+\DoxyCodeLine{01214\ }
+\DoxyCodeLine{01215\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01216\ \ \ \ \ \textcolor{comment}{//\ Ask\ the\ GSG\ to\ create\ a\ brand\ new\ IndexBufferContext.\ \ There\ might\ be}}
+\DoxyCodeLine{01217\ \ \ \ \ \textcolor{comment}{//\ several\ GSG's\ sharing\ the\ same\ set\ of\ datas;\ if\ so,\ it\ doesn't\ matter}}
+\DoxyCodeLine{01218\ \ \ \ \ \textcolor{comment}{//\ which\ of\ them\ creates\ the\ context\ (since\ they're\ all\ shared\ anyway).}}
+\DoxyCodeLine{01219\ \ \ \ \ ibc\ =\ gsg-\/>prepare\_index\_buffer(data);}
+\DoxyCodeLine{01220\ \ \ \}}
+\DoxyCodeLine{01221\ }
+\DoxyCodeLine{01222\ \ \ \textcolor{keywordflow}{if}\ (ibc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01223\ \ \ \ \ \textcolor{keywordtype}{bool}\ prepared\ =\ \_prepared\_index\_buffers.insert(ibc).second;}
+\DoxyCodeLine{01224\ \ \ \ \ nassertr(prepared,\ ibc);}
+\DoxyCodeLine{01225\ \ \ \}}
+\DoxyCodeLine{01226\ }
+\DoxyCodeLine{01227\ \ \ \textcolor{keywordflow}{return}\ ibc;}
+\DoxyCodeLine{01228\ \}}
+\DoxyCodeLine{01229\ }
+\DoxyCodeLine{01234\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_afb7ec2bae9d28c4c0548ec609eeb8e51}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01235\ \mbox{\hyperlink{classPreparedGraphicsObjects_afb7ec2bae9d28c4c0548ec609eeb8e51}{enqueue\_shader\_buffer}}(\mbox{\hyperlink{classShaderBuffer}{ShaderBuffer}}\ *data)\ \{}
+\DoxyCodeLine{01236\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01237\ }
+\DoxyCodeLine{01238\ \ \ \_enqueued\_shader\_buffers.insert(data);}
+\DoxyCodeLine{01239\ \}}
+\DoxyCodeLine{01240\ }
+\DoxyCodeLine{01245\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a524e4abd51279265c34df3c2213d6726}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01246\ \mbox{\hyperlink{classPreparedGraphicsObjects_a524e4abd51279265c34df3c2213d6726}{is\_shader\_buffer\_queued}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classShaderBuffer}{ShaderBuffer}}\ *data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01247\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01248\ }
+\DoxyCodeLine{01249\ \ \ EnqueuedShaderBuffers::const\_iterator\ qi\ =\ \_enqueued\_shader\_buffers.find((\mbox{\hyperlink{classShaderBuffer}{ShaderBuffer}}\ *)data);}
+\DoxyCodeLine{01250\ \ \ \textcolor{keywordflow}{return}\ (qi\ !=\ \_enqueued\_shader\_buffers.end());}
+\DoxyCodeLine{01251\ \}}
+\DoxyCodeLine{01252\ }
+\DoxyCodeLine{01262\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_ac0e3898509b4b30d463edd780a18d693}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01263\ \mbox{\hyperlink{classPreparedGraphicsObjects_ac0e3898509b4b30d463edd780a18d693}{dequeue\_shader\_buffer}}(\mbox{\hyperlink{classShaderBuffer}{ShaderBuffer}}\ *data)\ \{}
+\DoxyCodeLine{01264\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01265\ }
+\DoxyCodeLine{01266\ \ \ EnqueuedShaderBuffers::iterator\ qi\ =\ \_enqueued\_shader\_buffers.find(data);}
+\DoxyCodeLine{01267\ \ \ \textcolor{keywordflow}{if}\ (qi\ !=\ \_enqueued\_shader\_buffers.end())\ \{}
+\DoxyCodeLine{01268\ \ \ \ \ \_enqueued\_shader\_buffers.erase(qi);}
+\DoxyCodeLine{01269\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01270\ \ \ \}}
+\DoxyCodeLine{01271\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01272\ \}}
+\DoxyCodeLine{01273\ }
+\DoxyCodeLine{01278\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_aa06e2cc9cf2af3540bb5088ab92a7c58}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01279\ \mbox{\hyperlink{classPreparedGraphicsObjects_aa06e2cc9cf2af3540bb5088ab92a7c58}{is\_shader\_buffer\_prepared}}(\textcolor{keyword}{const}\ \mbox{\hyperlink{classShaderBuffer}{ShaderBuffer}}\ *data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01280\ \ \ \textcolor{keywordflow}{return}\ data-\/>is\_prepared((\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *)\textcolor{keyword}{this});}
+\DoxyCodeLine{01281\ \}}
+\DoxyCodeLine{01282\ }
+\DoxyCodeLine{01292\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a6880461c92f69406e37e4257d3f24c88}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01293\ \mbox{\hyperlink{classPreparedGraphicsObjects_a6880461c92f69406e37e4257d3f24c88}{release\_shader\_buffer}}(\mbox{\hyperlink{classBufferContext}{BufferContext}}\ *bc)\ \{}
+\DoxyCodeLine{01294\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01295\ }
+\DoxyCodeLine{01296\ \ \ \mbox{\hyperlink{classShaderBuffer}{ShaderBuffer}}\ *buffer\ =\ (\mbox{\hyperlink{classShaderBuffer}{ShaderBuffer}}\ *)bc-\/>\_object;}
+\DoxyCodeLine{01297\ \ \ buffer-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{01298\ }
+\DoxyCodeLine{01299\ \ \ \textcolor{comment}{//\ We\ have\ to\ set\ the\ ShaderBuffer\ pointer\ to\ NULL\ at\ this\ point,\ since\ the}}
+\DoxyCodeLine{01300\ \ \ \textcolor{comment}{//\ buffer\ itself\ might\ destruct\ at\ any\ time\ after\ it\ has\ been\ released.}}
+\DoxyCodeLine{01301\ \ \ bc-\/>\_object\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01302\ }
+\DoxyCodeLine{01303\ \ \ \textcolor{keywordtype}{bool}\ removed\ =\ (\_prepared\_shader\_buffers.erase(bc)\ !=\ 0);}
+\DoxyCodeLine{01304\ \ \ nassertv(removed);}
+\DoxyCodeLine{01305\ }
+\DoxyCodeLine{01306\ \ \ \_released\_shader\_buffers.push\_back(bc);}
+\DoxyCodeLine{01307\ \}}
+\DoxyCodeLine{01308\ }
+\DoxyCodeLine{01314\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a9c965ce640c2a987edf76bc4192f1123}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01315\ \mbox{\hyperlink{classPreparedGraphicsObjects_a9c965ce640c2a987edf76bc4192f1123}{release\_all\_shader\_buffers}}()\ \{}
+\DoxyCodeLine{01316\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01317\ }
+\DoxyCodeLine{01318\ \ \ \textcolor{keywordtype}{int}\ num\_shader\_buffers\ =\ (int)\_prepared\_shader\_buffers.size()\ +\ (int)\_enqueued\_shader\_buffers.size();}
+\DoxyCodeLine{01319\ }
+\DoxyCodeLine{01320\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classBufferContext}{BufferContext}}\ *bc\ :\ \_prepared\_shader\_buffers)\ \{}
+\DoxyCodeLine{01321\ \ \ \ \ ((\mbox{\hyperlink{classShaderBuffer}{ShaderBuffer}}\ *)bc-\/>\_object)-\/>clear\_prepared(\textcolor{keyword}{this});}
+\DoxyCodeLine{01322\ \ \ \ \ bc-\/>\_object\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01323\ \ \ \ \ \_released\_shader\_buffers.push\_back(bc);}
+\DoxyCodeLine{01324\ \ \ \}}
+\DoxyCodeLine{01325\ }
+\DoxyCodeLine{01326\ \ \ \_prepared\_shader\_buffers.clear();}
+\DoxyCodeLine{01327\ \ \ \_enqueued\_shader\_buffers.clear();}
+\DoxyCodeLine{01328\ }
+\DoxyCodeLine{01329\ \ \ \textcolor{keywordflow}{return}\ num\_shader\_buffers;}
+\DoxyCodeLine{01330\ \}}
+\DoxyCodeLine{01331\ }
+\DoxyCodeLine{01336\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_af4f6a71dc0d6edd72c7a21ebe1bca785}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01337\ \mbox{\hyperlink{classPreparedGraphicsObjects_af4f6a71dc0d6edd72c7a21ebe1bca785}{get\_num\_queued\_shader\_buffers}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01338\ \ \ \textcolor{keywordflow}{return}\ \_enqueued\_shader\_buffers.size();}
+\DoxyCodeLine{01339\ \}}
+\DoxyCodeLine{01340\ }
+\DoxyCodeLine{01345\ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{classPreparedGraphicsObjects_a2e05737b7c1be108200cbaab6ca38219}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01346\ \mbox{\hyperlink{classPreparedGraphicsObjects_a2e05737b7c1be108200cbaab6ca38219}{get\_num\_prepared\_shader\_buffers}}()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{01347\ \ \ \textcolor{keywordflow}{return}\ \_prepared\_shader\_buffers.size();}
+\DoxyCodeLine{01348\ \}}
+\DoxyCodeLine{01349\ }
+\DoxyCodeLine{01366\ \mbox{\hyperlink{classBufferContext}{BufferContext}}\ *\mbox{\hyperlink{classPreparedGraphicsObjects_ae12ac6231b3b0635344d226536aa05a7}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01367\ \mbox{\hyperlink{classPreparedGraphicsObjects_ae12ac6231b3b0635344d226536aa05a7}{prepare\_shader\_buffer\_now}}(\mbox{\hyperlink{classShaderBuffer}{ShaderBuffer}}\ *data,\ \mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg)\ \{}
+\DoxyCodeLine{01368\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock);}
+\DoxyCodeLine{01369\ }
+\DoxyCodeLine{01370\ \ \ \textcolor{comment}{//\ Ask\ the\ GSG\ to\ create\ a\ brand\ new\ BufferContext.\ \ There\ might\ be}}
+\DoxyCodeLine{01371\ \ \ \textcolor{comment}{//\ several\ GSG's\ sharing\ the\ same\ set\ of\ datas;\ if\ so,\ it\ doesn't\ matter}}
+\DoxyCodeLine{01372\ \ \ \textcolor{comment}{//\ which\ of\ them\ creates\ the\ context\ (since\ they're\ all\ shared\ anyway).}}
+\DoxyCodeLine{01373\ \ \ \mbox{\hyperlink{classBufferContext}{BufferContext}}\ *bc\ =\ gsg-\/>prepare\_shader\_buffer(data);}
+\DoxyCodeLine{01374\ }
+\DoxyCodeLine{01375\ \ \ \textcolor{keywordflow}{if}\ (bc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01376\ \ \ \ \ \textcolor{keywordtype}{bool}\ prepared\ =\ \_prepared\_shader\_buffers.insert(bc).second;}
+\DoxyCodeLine{01377\ \ \ \ \ nassertr(prepared,\ bc);}
+\DoxyCodeLine{01378\ \ \ \}}
+\DoxyCodeLine{01379\ }
+\DoxyCodeLine{01380\ \ \ \textcolor{keywordflow}{return}\ bc;}
+\DoxyCodeLine{01381\ \}}
+\DoxyCodeLine{01382\ }
+\DoxyCodeLine{01386\ \mbox{\hyperlink{classPreparedGraphicsObjects_1_1EnqueuedObject_a6eecba264edd2606784846c4a4f8a172}{PreparedGraphicsObjects::EnqueuedObject::}}}
+\DoxyCodeLine{01387\ \mbox{\hyperlink{classPreparedGraphicsObjects_1_1EnqueuedObject_a6eecba264edd2606784846c4a4f8a172}{EnqueuedObject}}(\mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *pgo,\ \mbox{\hyperlink{classTypedWritableReferenceCount}{TypedWritableReferenceCount}}\ *\textcolor{keywordtype}{object})\ :}
+\DoxyCodeLine{01388\ \ \ \_pgo(pgo),}
+\DoxyCodeLine{01389\ \ \ \_object(object)\ \{}
+\DoxyCodeLine{01390\ \}}
+\DoxyCodeLine{01391\ }
+\DoxyCodeLine{01395\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_1_1EnqueuedObject_a16adc85ac1ccd884e26cf7ea3498cd63}{PreparedGraphicsObjects::EnqueuedObject::}}}
+\DoxyCodeLine{01396\ \mbox{\hyperlink{classPreparedGraphicsObjects_1_1EnqueuedObject_a16adc85ac1ccd884e26cf7ea3498cd63}{set\_result}}(\mbox{\hyperlink{classSavedContext}{SavedContext}}\ *context)\ \{}
+\DoxyCodeLine{01397\ \ \ nassertv(!done());}
+\DoxyCodeLine{01398\ \ \ AsyncFuture::set\_result(context);}
+\DoxyCodeLine{01399\ \ \ \_pgo\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01400\ \}}
+\DoxyCodeLine{01401\ }
+\DoxyCodeLine{01406\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_1_1EnqueuedObject_a70c2ba2b030af90711736a4c53bc558b}{PreparedGraphicsObjects::EnqueuedObject::}}}
+\DoxyCodeLine{01407\ \mbox{\hyperlink{classPreparedGraphicsObjects_1_1EnqueuedObject_a70c2ba2b030af90711736a4c53bc558b}{notify\_removed}}()\ \{}
+\DoxyCodeLine{01408\ \ \ \_pgo\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01409\ \ \ nassertv\_always(AsyncFuture::cancel());}
+\DoxyCodeLine{01410\ \}}
+\DoxyCodeLine{01411\ }
+\DoxyCodeLine{01416\ \textcolor{keywordtype}{bool}\ \mbox{\hyperlink{classPreparedGraphicsObjects_1_1EnqueuedObject_a51631da1da18bf342e05eedbc8f18fd2}{PreparedGraphicsObjects::EnqueuedObject::}}}
+\DoxyCodeLine{01417\ \mbox{\hyperlink{classPreparedGraphicsObjects_1_1EnqueuedObject_a51631da1da18bf342e05eedbc8f18fd2}{cancel}}()\ \{}
+\DoxyCodeLine{01418\ \ \ \mbox{\hyperlink{classPreparedGraphicsObjects}{PreparedGraphicsObjects}}\ *pgo\ =\ \_pgo;}
+\DoxyCodeLine{01419\ \ \ \textcolor{keywordflow}{if}\ (\_object\ ==\ \textcolor{keyword}{nullptr}\ ||\ pgo\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01420\ \ \ \ \ nassertr(done(),\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01421\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01422\ \ \ \}}
+\DoxyCodeLine{01423\ }
+\DoxyCodeLine{01424\ \ \ \textcolor{comment}{//\ We\ don't\ upcall\ here,\ because\ the\ dequeue\ function\ will\ end\ up\ calling}}
+\DoxyCodeLine{01425\ \ \ \textcolor{comment}{//\ notify\_removed().}}
+\DoxyCodeLine{01426\ \ \ \_result\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01427\ \ \ \_pgo\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01428\ }
+\DoxyCodeLine{01429\ \ \ \textcolor{keywordflow}{if}\ (\_object-\/>is\_of\_type(Texture::get\_class\_type()))\ \{}
+\DoxyCodeLine{01430\ \ \ \ \ \textcolor{keywordflow}{return}\ pgo-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_aa8955cb8109a28da78f52de756baa1e8}{dequeue\_texture}}((\mbox{\hyperlink{classTexture}{Texture}}\ *)\_object.p());}
+\DoxyCodeLine{01431\ }
+\DoxyCodeLine{01432\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_object-\/>is\_of\_type(Geom::get\_class\_type()))\ \{}
+\DoxyCodeLine{01433\ \ \ \ \ \textcolor{keywordflow}{return}\ pgo-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_ac54dc4c1cfa5591ec1dc4d4d20cf4544}{dequeue\_geom}}((\mbox{\hyperlink{classGeom}{Geom}}\ *)\_object.p());}
+\DoxyCodeLine{01434\ }
+\DoxyCodeLine{01435\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_object-\/>is\_of\_type(Shader::get\_class\_type()))\ \{}
+\DoxyCodeLine{01436\ \ \ \ \ \textcolor{keywordflow}{return}\ pgo-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_a541897e01cf3cd0f8fb55b3597c8eeb3}{dequeue\_shader}}((\mbox{\hyperlink{classShader}{Shader}}\ *)\_object.p());}
+\DoxyCodeLine{01437\ }
+\DoxyCodeLine{01438\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_object-\/>is\_of\_type(GeomVertexArrayData::get\_class\_type()))\ \{}
+\DoxyCodeLine{01439\ \ \ \ \ \textcolor{keywordflow}{return}\ pgo-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_a1e4bdb510823b3ad5359172953879f67}{dequeue\_vertex\_buffer}}((\mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *)\_object.p());}
+\DoxyCodeLine{01440\ }
+\DoxyCodeLine{01441\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_object-\/>is\_of\_type(GeomPrimitive::get\_class\_type()))\ \{}
+\DoxyCodeLine{01442\ \ \ \ \ \textcolor{keywordflow}{return}\ pgo-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_aff8d32c6ab9684ac0df1b14173bc0879}{dequeue\_index\_buffer}}((\mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}}\ *)\_object.p());}
+\DoxyCodeLine{01443\ }
+\DoxyCodeLine{01444\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_object-\/>is\_of\_type(ShaderBuffer::get\_class\_type()))\ \{}
+\DoxyCodeLine{01445\ \ \ \ \ \textcolor{keywordflow}{return}\ pgo-\/>\mbox{\hyperlink{classPreparedGraphicsObjects_ac0e3898509b4b30d463edd780a18d693}{dequeue\_shader\_buffer}}((\mbox{\hyperlink{classShaderBuffer}{ShaderBuffer}}\ *)\_object.p());}
+\DoxyCodeLine{01446\ \ \ \}}
+\DoxyCodeLine{01447\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01448\ \}}
+\DoxyCodeLine{01449\ }
+\DoxyCodeLine{01458\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_ad96b7c6ca74936b909b764d473dd7507}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01459\ \mbox{\hyperlink{classPreparedGraphicsObjects_ad96b7c6ca74936b909b764d473dd7507}{begin\_frame}}(\mbox{\hyperlink{classGraphicsStateGuardianBase}{GraphicsStateGuardianBase}}\ *gsg,\ \mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{01460\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock,\ current\_thread);}
+\DoxyCodeLine{01461\ }
+\DoxyCodeLine{01462\ \ \ \textcolor{comment}{//\ First,\ release\ all\ the\ textures,\ geoms,\ and\ buffers\ awaiting\ release.}}
+\DoxyCodeLine{01463\ \ \ \textcolor{keywordflow}{if}\ (!\_released\_textures.empty())\ \{}
+\DoxyCodeLine{01464\ \ \ \ \ gsg-\/>release\_textures(\_released\_textures);}
+\DoxyCodeLine{01465\ \ \ \ \ \_released\_textures.clear();}
+\DoxyCodeLine{01466\ \ \ \}}
+\DoxyCodeLine{01467\ }
+\DoxyCodeLine{01468\ \ \ \textcolor{keywordflow}{if}\ (!\_released\_samplers.empty())\ \{}
+\DoxyCodeLine{01469\ \ \ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classSamplerContext}{SamplerContext}}\ *sc\ :\ \_released\_samplers)\ \{}
+\DoxyCodeLine{01470\ \ \ \ \ \ \ gsg-\/>release\_sampler(sc);}
+\DoxyCodeLine{01471\ \ \ \ \ \}}
+\DoxyCodeLine{01472\ \ \ \ \ \_released\_samplers.clear();}
+\DoxyCodeLine{01473\ \ \ \}}
+\DoxyCodeLine{01474\ }
+\DoxyCodeLine{01475\ \ \ \textcolor{keywordflow}{if}\ (!\_released\_geoms.empty())\ \{}
+\DoxyCodeLine{01476\ \ \ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classGeomContext}{GeomContext}}\ *gc\ :\ \_released\_geoms)\ \{}
+\DoxyCodeLine{01477\ \ \ \ \ \ \ gsg-\/>release\_geom(gc);}
+\DoxyCodeLine{01478\ \ \ \ \ \}}
+\DoxyCodeLine{01479\ \ \ \ \ \_released\_geoms.clear();}
+\DoxyCodeLine{01480\ \ \ \}}
+\DoxyCodeLine{01481\ }
+\DoxyCodeLine{01482\ \ \ \textcolor{keywordflow}{if}\ (!\_released\_shaders.empty())\ \{}
+\DoxyCodeLine{01483\ \ \ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classShaderContext}{ShaderContext}}\ *sc\ :\ \_released\_shaders)\ \{}
+\DoxyCodeLine{01484\ \ \ \ \ \ \ gsg-\/>release\_shader(sc);}
+\DoxyCodeLine{01485\ \ \ \ \ \}}
+\DoxyCodeLine{01486\ \ \ \ \ \_released\_shaders.clear();}
+\DoxyCodeLine{01487\ \ \ \}}
+\DoxyCodeLine{01488\ }
+\DoxyCodeLine{01489\ \ \ \textcolor{keywordflow}{if}\ (!\_released\_vertex\_buffers.empty())\ \{}
+\DoxyCodeLine{01490\ \ \ \ \ gsg-\/>release\_vertex\_buffers(\_released\_vertex\_buffers);}
+\DoxyCodeLine{01491\ \ \ \ \ \_released\_vertex\_buffers.clear();}
+\DoxyCodeLine{01492\ \ \ \}}
+\DoxyCodeLine{01493\ }
+\DoxyCodeLine{01494\ \ \ \textcolor{keywordflow}{if}\ (!\_released\_index\_buffers.empty())\ \{}
+\DoxyCodeLine{01495\ \ \ \ \ gsg-\/>release\_index\_buffers(\_released\_index\_buffers);}
+\DoxyCodeLine{01496\ \ \ \ \ \_released\_index\_buffers.clear();}
+\DoxyCodeLine{01497\ \ \ \}}
+\DoxyCodeLine{01498\ }
+\DoxyCodeLine{01499\ \ \ \textcolor{keywordflow}{if}\ (!\_released\_shader\_buffers.empty())\ \{}
+\DoxyCodeLine{01500\ \ \ \ \ gsg-\/>release\_shader\_buffers(\_released\_shader\_buffers);}
+\DoxyCodeLine{01501\ \ \ \ \ \_released\_shader\_buffers.clear();}
+\DoxyCodeLine{01502\ \ \ \}}
+\DoxyCodeLine{01503\ }
+\DoxyCodeLine{01504\ \ \ \textcolor{comment}{//\ Reset\ the\ residency\ trackers.}}
+\DoxyCodeLine{01505\ \ \ \_texture\_residency.\mbox{\hyperlink{classBufferResidencyTracker_acd049007438778390b37997cead73ebe}{begin\_frame}}(current\_thread);}
+\DoxyCodeLine{01506\ \ \ \_vbuffer\_residency.\mbox{\hyperlink{classBufferResidencyTracker_acd049007438778390b37997cead73ebe}{begin\_frame}}(current\_thread);}
+\DoxyCodeLine{01507\ \ \ \_ibuffer\_residency.\mbox{\hyperlink{classBufferResidencyTracker_acd049007438778390b37997cead73ebe}{begin\_frame}}(current\_thread);}
+\DoxyCodeLine{01508\ \ \ \_sbuffer\_residency.\mbox{\hyperlink{classBufferResidencyTracker_acd049007438778390b37997cead73ebe}{begin\_frame}}(current\_thread);}
+\DoxyCodeLine{01509\ }
+\DoxyCodeLine{01510\ \ \ \textcolor{comment}{//\ Now\ prepare\ all\ the\ textures,\ geoms,\ and\ buffers\ awaiting\ preparation.}}
+\DoxyCodeLine{01511\ \ \ EnqueuedTextures::iterator\ qti;}
+\DoxyCodeLine{01512\ \ \ \textcolor{keywordflow}{for}\ (qti\ =\ \_enqueued\_textures.begin();}
+\DoxyCodeLine{01513\ \ \ \ \ \ \ \ qti\ !=\ \_enqueued\_textures.end();}
+\DoxyCodeLine{01514\ \ \ \ \ \ \ \ ++qti)\ \{}
+\DoxyCodeLine{01515\ \ \ \ \ \mbox{\hyperlink{classTexture}{Texture}}\ *tex\ =\ qti-\/>first;}
+\DoxyCodeLine{01516\ \ \ \ \ \mbox{\hyperlink{classTextureContext}{TextureContext}}\ *tc\ =\ tex-\/>\mbox{\hyperlink{classTexture_a6b3856662e05f463811735252aaae40f}{prepare\_now}}(\textcolor{keyword}{this},\ gsg);}
+\DoxyCodeLine{01517\ \ \ \ \ \textcolor{keywordflow}{if}\ (tc\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01518\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tex-\/>get\_num\_async\_transfer\_buffers()\ ==\ 0)\ \{}
+\DoxyCodeLine{01519\ \ \ \ \ \ \ \ \ gsg-\/>update\_texture(tc,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{01520\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (qti-\/>second\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01521\ \ \ \ \ \ \ \ \ \ \ qti-\/>second-\/>set\_result(tc);}
+\DoxyCodeLine{01522\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01523\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01524\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Async\ update}}
+\DoxyCodeLine{01525\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classCompletionToken}{CompletionToken}}\ token;}
+\DoxyCodeLine{01526\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (qti-\/>second\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01527\ \ \ \ \ \ \ \ \ \ \ token\ =\ [tc,\ fut\ =\ std::move(qti-\/>second)]\ (\textcolor{keywordtype}{bool}\ success)\ \{}
+\DoxyCodeLine{01528\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (success)\ \{}
+\DoxyCodeLine{01529\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ fut-\/>set\_result(tc);}
+\DoxyCodeLine{01530\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01531\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ fut-\/>notify\_removed();}
+\DoxyCodeLine{01532\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01533\ \ \ \ \ \ \ \ \ \ \ \};}
+\DoxyCodeLine{01534\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01535\ \ \ \ \ \ \ \ \ gsg-\/>update\_texture(tc,\ \textcolor{keyword}{false},\ std::move(token));}
+\DoxyCodeLine{01536\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01537\ \ \ \ \ \}}
+\DoxyCodeLine{01538\ \ \ \}}
+\DoxyCodeLine{01539\ }
+\DoxyCodeLine{01540\ \ \ \_enqueued\_textures.clear();}
+\DoxyCodeLine{01541\ }
+\DoxyCodeLine{01542\ \ \ EnqueuedSamplers::iterator\ qsmi;}
+\DoxyCodeLine{01543\ \ \ \textcolor{keywordflow}{for}\ (qsmi\ =\ \_enqueued\_samplers.begin();}
+\DoxyCodeLine{01544\ \ \ \ \ \ \ \ qsmi\ !=\ \_enqueued\_samplers.end();}
+\DoxyCodeLine{01545\ \ \ \ \ \ \ \ ++qsmi)\ \{}
+\DoxyCodeLine{01546\ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classSamplerState}{SamplerState}}\ \&sampler\ =\ (*qsmi);}
+\DoxyCodeLine{01547\ \ \ \ \ sampler.prepare\_now(\textcolor{keyword}{this},\ gsg);}
+\DoxyCodeLine{01548\ \ \ \}}
+\DoxyCodeLine{01549\ }
+\DoxyCodeLine{01550\ \ \ \_enqueued\_samplers.clear();}
+\DoxyCodeLine{01551\ }
+\DoxyCodeLine{01552\ \ \ EnqueuedGeoms::iterator\ qgi;}
+\DoxyCodeLine{01553\ \ \ \textcolor{keywordflow}{for}\ (qgi\ =\ \_enqueued\_geoms.begin();}
+\DoxyCodeLine{01554\ \ \ \ \ \ \ \ qgi\ !=\ \_enqueued\_geoms.end();}
+\DoxyCodeLine{01555\ \ \ \ \ \ \ \ ++qgi)\ \{}
+\DoxyCodeLine{01556\ \ \ \ \ \mbox{\hyperlink{classGeom}{Geom}}\ *geom\ =\ (*qgi);}
+\DoxyCodeLine{01557\ \ \ \ \ geom-\/>\mbox{\hyperlink{classGeom_a8d0f1d79caa99fcdb4392b5c9ba2b288}{prepare\_now}}(\textcolor{keyword}{this},\ gsg);}
+\DoxyCodeLine{01558\ \ \ \}}
+\DoxyCodeLine{01559\ }
+\DoxyCodeLine{01560\ \ \ \_enqueued\_geoms.clear();}
+\DoxyCodeLine{01561\ }
+\DoxyCodeLine{01562\ \ \ EnqueuedShaders::iterator\ qsi;}
+\DoxyCodeLine{01563\ \ \ \textcolor{keywordflow}{for}\ (qsi\ =\ \_enqueued\_shaders.begin();}
+\DoxyCodeLine{01564\ \ \ \ \ \ \ \ qsi\ !=\ \_enqueued\_shaders.end();}
+\DoxyCodeLine{01565\ \ \ \ \ \ \ \ ++qsi)\ \{}
+\DoxyCodeLine{01566\ \ \ \ \ \mbox{\hyperlink{classShader}{Shader}}\ *shader\ =\ qsi-\/>first;}
+\DoxyCodeLine{01567\ \ \ \ \ \mbox{\hyperlink{classShaderContext}{ShaderContext}}\ *sc\ =\ shader-\/>prepare\_now(\textcolor{keyword}{this},\ gsg);}
+\DoxyCodeLine{01568\ \ \ \ \ \textcolor{keywordflow}{if}\ (qsi-\/>second\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01569\ \ \ \ \ \ \ qsi-\/>second-\/>set\_result(sc);}
+\DoxyCodeLine{01570\ \ \ \ \ \}}
+\DoxyCodeLine{01571\ \ \ \}}
+\DoxyCodeLine{01572\ }
+\DoxyCodeLine{01573\ \ \ \_enqueued\_shaders.clear();}
+\DoxyCodeLine{01574\ }
+\DoxyCodeLine{01575\ \ \ EnqueuedVertexBuffers::iterator\ qvbi;}
+\DoxyCodeLine{01576\ \ \ \textcolor{keywordflow}{for}\ (qvbi\ =\ \_enqueued\_vertex\_buffers.begin();}
+\DoxyCodeLine{01577\ \ \ \ \ \ \ \ qvbi\ !=\ \_enqueued\_vertex\_buffers.end();}
+\DoxyCodeLine{01578\ \ \ \ \ \ \ \ ++qvbi)\ \{}
+\DoxyCodeLine{01579\ \ \ \ \ \mbox{\hyperlink{classGeomVertexArrayData}{GeomVertexArrayData}}\ *data\ =\ (*qvbi);}
+\DoxyCodeLine{01580\ \ \ \ \ data-\/>\mbox{\hyperlink{classGeomVertexArrayData_ad2f7ad8e84a6cf685ca1820cf6aaaa83}{prepare\_now}}(\textcolor{keyword}{this},\ gsg);}
+\DoxyCodeLine{01581\ \ \ \}}
+\DoxyCodeLine{01582\ }
+\DoxyCodeLine{01583\ \ \ \_enqueued\_vertex\_buffers.clear();}
+\DoxyCodeLine{01584\ }
+\DoxyCodeLine{01585\ \ \ EnqueuedIndexBuffers::iterator\ qibi;}
+\DoxyCodeLine{01586\ \ \ \textcolor{keywordflow}{for}\ (qibi\ =\ \_enqueued\_index\_buffers.begin();}
+\DoxyCodeLine{01587\ \ \ \ \ \ \ \ qibi\ !=\ \_enqueued\_index\_buffers.end();}
+\DoxyCodeLine{01588\ \ \ \ \ \ \ \ ++qibi)\ \{}
+\DoxyCodeLine{01589\ \ \ \ \ \mbox{\hyperlink{classGeomPrimitive}{GeomPrimitive}}\ *data\ =\ (*qibi);}
+\DoxyCodeLine{01590\ \ \ \ \ \textcolor{comment}{//\ We\ need\ this\ check\ because\ the\ actual\ index\ data\ may\ not\ actually\ have}}
+\DoxyCodeLine{01591\ \ \ \ \ \textcolor{comment}{//\ propagated\ to\ the\ draw\ thread\ yet.}}
+\DoxyCodeLine{01592\ \ \ \ \ \textcolor{keywordflow}{if}\ (data-\/>is\_indexed())\ \{}
+\DoxyCodeLine{01593\ \ \ \ \ \ \ data-\/>\mbox{\hyperlink{classGeomPrimitive_aec8910343d0c141c01e9aac118597015}{prepare\_now}}(\textcolor{keyword}{this},\ gsg);}
+\DoxyCodeLine{01594\ \ \ \ \ \}}
+\DoxyCodeLine{01595\ \ \ \}}
+\DoxyCodeLine{01596\ }
+\DoxyCodeLine{01597\ \ \ \_enqueued\_index\_buffers.clear();}
+\DoxyCodeLine{01598\ }
+\DoxyCodeLine{01599\ \ \ \textcolor{keywordflow}{for}\ (\mbox{\hyperlink{classShaderBuffer}{ShaderBuffer}}\ *buffer\ :\ \_enqueued\_shader\_buffers)\ \{}
+\DoxyCodeLine{01600\ \ \ \ \ buffer-\/>prepare\_now(\textcolor{keyword}{this},\ gsg);}
+\DoxyCodeLine{01601\ \ \ \}}
+\DoxyCodeLine{01602\ }
+\DoxyCodeLine{01603\ \ \ \_enqueued\_shader\_buffers.clear();}
+\DoxyCodeLine{01604\ \}}
+\DoxyCodeLine{01605\ }
+\DoxyCodeLine{01610\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPreparedGraphicsObjects_ab5cda370924af2053e2920e42790f83e}{PreparedGraphicsObjects::}}}
+\DoxyCodeLine{01611\ \mbox{\hyperlink{classPreparedGraphicsObjects_ab5cda370924af2053e2920e42790f83e}{end\_frame}}(\mbox{\hyperlink{classThread}{Thread}}\ *current\_thread)\ \{}
+\DoxyCodeLine{01612\ \ \ \mbox{\hyperlink{classReMutexHolder}{ReMutexHolder}}\ holder(\_lock,\ current\_thread);}
+\DoxyCodeLine{01613\ }
+\DoxyCodeLine{01614\ \ \ \_texture\_residency.\mbox{\hyperlink{classBufferResidencyTracker_a4b87d6a7f12e316ba0594c68a413d669}{end\_frame}}(current\_thread);}
+\DoxyCodeLine{01615\ \ \ \_vbuffer\_residency.\mbox{\hyperlink{classBufferResidencyTracker_a4b87d6a7f12e316ba0594c68a413d669}{end\_frame}}(current\_thread);}
+\DoxyCodeLine{01616\ \ \ \_ibuffer\_residency.\mbox{\hyperlink{classBufferResidencyTracker_a4b87d6a7f12e316ba0594c68a413d669}{end\_frame}}(current\_thread);}
+\DoxyCodeLine{01617\ \ \ \_sbuffer\_residency.\mbox{\hyperlink{classBufferResidencyTracker_a4b87d6a7f12e316ba0594c68a413d669}{end\_frame}}(current\_thread);}
+\DoxyCodeLine{01618\ \}}
+\DoxyCodeLine{01619\ }
+\DoxyCodeLine{01623\ std::string\ PreparedGraphicsObjects::}
+\DoxyCodeLine{01624\ init\_name()\ \{}
+\DoxyCodeLine{01625\ \ \ ++\_name\_index;}
+\DoxyCodeLine{01626\ \ \ \mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}}\ strm;}
+\DoxyCodeLine{01627\ \ \ strm\ <<\ \textcolor{stringliteral}{"{}context"{}}\ <<\ \_name\_index;}
+\DoxyCodeLine{01628\ \ \ \textcolor{keywordflow}{return}\ strm.str();}
+\DoxyCodeLine{01629\ \}}
+\DoxyCodeLine{01630\ }
+\DoxyCodeLine{01638\ \textcolor{keywordtype}{void}\ PreparedGraphicsObjects::}
+\DoxyCodeLine{01639\ cache\_unprepared\_buffer(\mbox{\hyperlink{classBufferContext}{BufferContext}}\ *buffer,\ \textcolor{keywordtype}{size\_t}\ data\_size\_bytes,}
+\DoxyCodeLine{01640\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ GeomEnums::UsageHint\ usage\_hint,}
+\DoxyCodeLine{01641\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpmap}{PreparedGraphicsObjects::BufferCache}}\ \&buffer\_cache,}
+\DoxyCodeLine{01642\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classplist}{PreparedGraphicsObjects::BufferCacheLRU}}\ \&buffer\_cache\_lru,}
+\DoxyCodeLine{01643\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ \&buffer\_cache\_size,}
+\DoxyCodeLine{01644\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ released\_buffer\_cache\_size,}
+\DoxyCodeLine{01645\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpvector}{pvector<BufferContext\ *>}}\ \&released\_buffers)\ \{}
+\DoxyCodeLine{01646\ \ \ BufferCacheKey\ key;}
+\DoxyCodeLine{01647\ \ \ key.\_data\_size\_bytes\ =\ data\_size\_bytes;}
+\DoxyCodeLine{01648\ \ \ key.\_usage\_hint\ =\ usage\_hint;}
+\DoxyCodeLine{01649\ }
+\DoxyCodeLine{01650\ \ \ buffer\_cache[key].push\_back(buffer);}
+\DoxyCodeLine{01651\ \ \ buffer\_cache\_size\ +=\ data\_size\_bytes;}
+\DoxyCodeLine{01652\ }
+\DoxyCodeLine{01653\ \ \ \textcolor{comment}{//\ Move\ the\ key\ to\ the\ head\ of\ the\ LRU.}}
+\DoxyCodeLine{01654\ \ \ BufferCacheLRU::iterator\ li\ =}
+\DoxyCodeLine{01655\ \ \ \ \ find(buffer\_cache\_lru.begin(),\ buffer\_cache\_lru.end(),\ key);}
+\DoxyCodeLine{01656\ \ \ \textcolor{keywordflow}{if}\ (li\ !=\ buffer\_cache\_lru.end())\ \{}
+\DoxyCodeLine{01657\ \ \ \ \ buffer\_cache\_lru.erase(li);}
+\DoxyCodeLine{01658\ \ \ \}}
+\DoxyCodeLine{01659\ \ \ buffer\_cache\_lru.insert(buffer\_cache\_lru.begin(),\ key);}
+\DoxyCodeLine{01660\ }
+\DoxyCodeLine{01661\ \ \ \textcolor{comment}{//\ Now\ release\ not-\/recently-\/used\ buffers\ until\ we\ fit\ within\ the\ constrained}}
+\DoxyCodeLine{01662\ \ \ \textcolor{comment}{//\ size.}}
+\DoxyCodeLine{01663\ \ \ \textcolor{keywordflow}{while}\ ((\textcolor{keywordtype}{int})buffer\_cache\_size\ >\ released\_buffer\_cache\_size)\ \{}
+\DoxyCodeLine{01664\ \ \ \ \ nassertv(!buffer\_cache\_lru.empty());}
+\DoxyCodeLine{01665\ \ \ \ \ \textcolor{keyword}{const}\ BufferCacheKey\ \&release\_key\ =\ *buffer\_cache\_lru.rbegin();}
+\DoxyCodeLine{01666\ \ \ \ \ BufferList\ \&buffer\_list\ =\ buffer\_cache[release\_key];}
+\DoxyCodeLine{01667\ \ \ \ \ \textcolor{keywordflow}{while}\ (!buffer\_list.empty()\ \&\&}
+\DoxyCodeLine{01668\ \ \ \ \ \ \ \ \ \ \ \ (\textcolor{keywordtype}{int})buffer\_cache\_size\ >\ released\_buffer\_cache\_size)\ \{}
+\DoxyCodeLine{01669\ \ \ \ \ \ \ \mbox{\hyperlink{classBufferContext}{BufferContext}}\ *released\_buffer\ =\ buffer\_list.back();}
+\DoxyCodeLine{01670\ \ \ \ \ \ \ buffer\_list.pop\_back();}
+\DoxyCodeLine{01671\ \ \ \ \ \ \ released\_buffers.push\_back(released\_buffer);}
+\DoxyCodeLine{01672\ \ \ \ \ \ \ buffer\_cache\_size\ -\/=\ release\_key.\_data\_size\_bytes;}
+\DoxyCodeLine{01673\ \ \ \ \ \}}
+\DoxyCodeLine{01674\ }
+\DoxyCodeLine{01675\ \ \ \ \ \textcolor{keywordflow}{if}\ (buffer\_list.empty())\ \{}
+\DoxyCodeLine{01676\ \ \ \ \ \ \ buffer\_cache.erase(release\_key);}
+\DoxyCodeLine{01677\ \ \ \ \ \ \ buffer\_cache\_lru.pop\_back();}
+\DoxyCodeLine{01678\ \ \ \ \ \}}
+\DoxyCodeLine{01679\ \ \ \}}
+\DoxyCodeLine{01680\ \}}
+\DoxyCodeLine{01681\ }
+\DoxyCodeLine{01686\ \mbox{\hyperlink{classBufferContext}{BufferContext}}\ *PreparedGraphicsObjects::}
+\DoxyCodeLine{01687\ get\_cached\_buffer(\textcolor{keywordtype}{size\_t}\ data\_size\_bytes,\ GeomEnums::UsageHint\ usage\_hint,}
+\DoxyCodeLine{01688\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classpmap}{PreparedGraphicsObjects::BufferCache}}\ \&buffer\_cache,}
+\DoxyCodeLine{01689\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classplist}{PreparedGraphicsObjects::BufferCacheLRU}}\ \&buffer\_cache\_lru,}
+\DoxyCodeLine{01690\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ \&buffer\_cache\_size)\ \{}
+\DoxyCodeLine{01691\ \ \ BufferCacheKey\ key;}
+\DoxyCodeLine{01692\ \ \ key.\_data\_size\_bytes\ =\ data\_size\_bytes;}
+\DoxyCodeLine{01693\ \ \ key.\_usage\_hint\ =\ usage\_hint;}
+\DoxyCodeLine{01694\ }
+\DoxyCodeLine{01695\ \ \ BufferCache::iterator\ bci\ =\ buffer\_cache.find(key);}
+\DoxyCodeLine{01696\ \ \ \textcolor{keywordflow}{if}\ (bci\ ==\ buffer\_cache.end())\ \{}
+\DoxyCodeLine{01697\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{01698\ \ \ \}}
+\DoxyCodeLine{01699\ }
+\DoxyCodeLine{01700\ \ \ BufferList\ \&buffer\_list\ =\ (*bci).second;}
+\DoxyCodeLine{01701\ \ \ nassertr(!buffer\_list.empty(),\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{01702\ }
+\DoxyCodeLine{01703\ \ \ \mbox{\hyperlink{classBufferContext}{BufferContext}}\ *buffer\ =\ buffer\_list.back();}
+\DoxyCodeLine{01704\ \ \ buffer\_list.pop\_back();}
+\DoxyCodeLine{01705\ \ \ \textcolor{keywordflow}{if}\ (buffer\_list.empty())\ \{}
+\DoxyCodeLine{01706\ \ \ \ \ buffer\_cache.erase(bci);}
+\DoxyCodeLine{01707\ \ \ \ \ BufferCacheLRU::iterator\ li\ =}
+\DoxyCodeLine{01708\ \ \ \ \ \ \ find(buffer\_cache\_lru.begin(),\ buffer\_cache\_lru.end(),\ key);}
+\DoxyCodeLine{01709\ \ \ \ \ \textcolor{keywordflow}{if}\ (li\ !=\ buffer\_cache\_lru.end())\ \{}
+\DoxyCodeLine{01710\ \ \ \ \ \ \ buffer\_cache\_lru.erase(li);}
+\DoxyCodeLine{01711\ \ \ \ \ \}}
+\DoxyCodeLine{01712\ \ \ \}}
+\DoxyCodeLine{01713\ }
+\DoxyCodeLine{01714\ \ \ buffer\_cache\_size\ -\/=\ data\_size\_bytes;}
+\DoxyCodeLine{01715\ \ \ \textcolor{keywordflow}{return}\ buffer;}
+\DoxyCodeLine{01716\ \}}
+
+\end{DoxyCode}

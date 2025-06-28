@@ -1,0 +1,894 @@
+\doxysection{execution\+Environment.\+cxx}
+\hypertarget{executionEnvironment_8cxx_source}{}\label{executionEnvironment_8cxx_source}\index{dtool/src/dtoolutil/executionEnvironment.cxx@{dtool/src/dtoolutil/executionEnvironment.cxx}}
+\mbox{\hyperlink{executionEnvironment_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{executionEnvironment_8h}{executionEnvironment.h}}"{}}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}pandaVersion.h"{}}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ <assert.h>}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ <errno.h>}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ <stdio.h>}\ \ \textcolor{comment}{//\ for\ perror}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{keyword}{using\ }std::cerr;}
+\DoxyCodeLine{00022\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#ifdef\ \_\_APPLE\_\_}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#include\ <sys/param.h>}\ \ \textcolor{comment}{//\ for\ realpath}}
+\DoxyCodeLine{00026\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_\_APPLE\_\_}}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00029\ \textcolor{comment}{//\ Windows\ requires\ this\ for\ getcwd().}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#include\ <direct.h>}}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#define\ getcwd\ \_getcwd}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{comment}{//\ And\ this\ is\ for\ GetModuleFileName().}}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#include\ <\mbox{\hyperlink{windows_8h}{windows.h}}>}}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \textcolor{comment}{//\ And\ this\ is\ for\ CommandLineToArgvW.}}
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\#include\ <shellapi.h>}}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \textcolor{comment}{//\ SHGetSpecialFolderPath()}}
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\#include\ <shlobj.h>}}
+\DoxyCodeLine{00041\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \textcolor{preprocessor}{\#ifdef\ \_\_APPLE\_\_}}
+\DoxyCodeLine{00044\ \textcolor{comment}{//\ This\ is\ for\ \_NSGetExecutablePath()\ and\ \_NSGetEnviron().}}
+\DoxyCodeLine{00045\ \textcolor{preprocessor}{\#include\ <mach-\/o/dyld.h>}}
+\DoxyCodeLine{00046\ \textcolor{preprocessor}{\#ifndef\ BUILD\_IPHONE}}
+\DoxyCodeLine{00047\ \textcolor{preprocessor}{\#include\ <crt\_externs.h>}\ \ \textcolor{comment}{//\ For\ some\ reason,\ not\ in\ the\ IPhone\ SDK.}}
+\DoxyCodeLine{00048\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00049\ \textcolor{preprocessor}{\#define\ environ\ (*\_NSGetEnviron())}}
+\DoxyCodeLine{00050\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \textcolor{preprocessor}{\#ifdef\ IS\_LINUX}}
+\DoxyCodeLine{00053\ \textcolor{comment}{//\ extern\ char\ **environ\ is\ defined\ here:}}
+\DoxyCodeLine{00054\ \textcolor{preprocessor}{\#include\ <unistd.h>}}
+\DoxyCodeLine{00055\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00057\ \textcolor{preprocessor}{\#ifdef\ IS\_FREEBSD}}
+\DoxyCodeLine{00058\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{char}\ **environ;}
+\DoxyCodeLine{00059\ }
+\DoxyCodeLine{00060\ \textcolor{comment}{//\ This\ is\ for\ sysctl.}}
+\DoxyCodeLine{00061\ \textcolor{preprocessor}{\#include\ <sys/types.h>}}
+\DoxyCodeLine{00062\ \textcolor{preprocessor}{\#include\ <sys/sysctl.h>}}
+\DoxyCodeLine{00063\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ \textcolor{preprocessor}{\#if\ (defined(IS\_LINUX)\ ||\ defined(IS\_FREEBSD))\ \&\&\ !defined(\_\_wasi\_\_)}}
+\DoxyCodeLine{00066\ \textcolor{comment}{//\ For\ link\_map\ and\ dlinfo.}}
+\DoxyCodeLine{00067\ \textcolor{preprocessor}{\#include\ <link.h>}}
+\DoxyCodeLine{00068\ \textcolor{preprocessor}{\#include\ <dlfcn.h>}}
+\DoxyCodeLine{00069\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00071\ \textcolor{comment}{//\ We\ define\ the\ symbol\ PREREAD\_ENVIRONMENT\ if\ we\ cannot\ rely\ on\ getenv()\ to}}
+\DoxyCodeLine{00072\ \textcolor{comment}{//\ read\ environment\ variables\ at\ static\ init\ time.\ \ In\ this\ case,\ we\ must\ read}}
+\DoxyCodeLine{00073\ \textcolor{comment}{//\ all\ of\ the\ environment\ variables\ directly\ and\ cache\ them\ locally.}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \textcolor{preprocessor}{\#if\ !defined(STATIC\_INIT\_GETENV)\ ||\ defined(\_\_EMSCRIPTEN\_\_)}}
+\DoxyCodeLine{00076\ \textcolor{preprocessor}{\#define\ PREREAD\_ENVIRONMENT}}
+\DoxyCodeLine{00077\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00079\ \textcolor{comment}{//\ We\ define\ the\ symbol\ HAVE\_GLOBAL\_ARGV\ if\ we\ have\ global\ variables\ named}}
+\DoxyCodeLine{00080\ \textcolor{comment}{//\ GLOBAL\_ARGCGLOBAL\_ARGV\ that\ we\ can\ read\ at\ static\ init\ time\ to\ determine}}
+\DoxyCodeLine{00081\ \textcolor{comment}{//\ our\ command-\/line\ arguments.}}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00083\ \textcolor{preprocessor}{\#if\ !defined(\_WIN32)\ \&\&\ defined(HAVE\_GLOBAL\_ARGV)\ \&\&\ defined(PROTOTYPE\_GLOBAL\_ARGV)}}
+\DoxyCodeLine{00084\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{char}\ **GLOBAL\_ARGV;}
+\DoxyCodeLine{00085\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{int}\ GLOBAL\_ARGC;}
+\DoxyCodeLine{00086\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00088\ \textcolor{comment}{//\ One\ of\ the\ responsibilities\ of\ ExecutionEnvironment\ is\ to\ determine\ the\ path}}
+\DoxyCodeLine{00089\ \textcolor{comment}{//\ to\ the\ binary\ file\ that\ contains\ itself\ (this\ is\ useful\ for\ making\ other}}
+\DoxyCodeLine{00090\ \textcolor{comment}{//\ components\ able\ to\ read\ files\ relative\ to\ Panda's\ installation\ directory).}}
+\DoxyCodeLine{00091\ \textcolor{comment}{//\ When\ built\ statically,\ this\ is\ easy\ -\/\ just\ use\ the\ main\ executable\ filename.}}
+\DoxyCodeLine{00092\ \textcolor{comment}{//\ When\ built\ shared,\ ExecutionEnvironment\ will\ introspect\ the\ memory\ map\ of}}
+\DoxyCodeLine{00093\ \textcolor{comment}{//\ the\ running\ process\ to\ look\ for\ dynamic\ library\ paths\ matching\ this\ list\ of}}
+\DoxyCodeLine{00094\ \textcolor{comment}{//\ predetermined\ filenames\ (ordered\ most\ likely\ to\ least\ likely).}}
+\DoxyCodeLine{00095\ }
+\DoxyCodeLine{00096\ \textcolor{preprocessor}{\#ifndef\ LINK\_ALL\_STATIC}}
+\DoxyCodeLine{00097\ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *\textcolor{keyword}{const}\ libp3dtool\_filenames[]\ =\ \{}
+\DoxyCodeLine{00098\ \textcolor{preprocessor}{\#if\ defined(LIBP3DTOOL\_FILENAMES)}}
+\DoxyCodeLine{00099\ }
+\DoxyCodeLine{00100\ \ \ \textcolor{comment}{//\ The\ build\ system\ is\ communicating\ the\ expected\ filename(s)\ for\ the}}
+\DoxyCodeLine{00101\ \ \ \textcolor{comment}{//\ libp3dtool\ dynamic\ library\ -\/\ no\ guesswork\ needed.}}
+\DoxyCodeLine{00102\ \ \ LIBP3DTOOL\_FILENAMES}
+\DoxyCodeLine{00103\ }
+\DoxyCodeLine{00104\ \textcolor{preprocessor}{\#elif\ defined(\_WIN32)}}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00106\ \textcolor{preprocessor}{\#ifdef\ \_DEBUG}}
+\DoxyCodeLine{00107\ \ \ \textcolor{stringliteral}{"{}libp3dtool\_d.dll"{}},}
+\DoxyCodeLine{00108\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00109\ \ \ \textcolor{stringliteral}{"{}libp3dtool.dll"{}},}
+\DoxyCodeLine{00110\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \textcolor{preprocessor}{\#elif\ defined(\_\_APPLE\_\_)}}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00114\ \ \ \textcolor{stringliteral}{"{}libp3dtool."{}}\ PANDA\_ABI\_VERSION\_STR\ \textcolor{stringliteral}{"{}.dylib"{}},}
+\DoxyCodeLine{00115\ \ \ \textcolor{stringliteral}{"{}libp3dtool.dylib"{}},}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00117\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \ \ \textcolor{stringliteral}{"{}libp3dtool.so."{}}\ PANDA\_ABI\_VERSION\_STR,}
+\DoxyCodeLine{00120\ \ \ \textcolor{stringliteral}{"{}libp3dtool.so"{}},}
+\DoxyCodeLine{00121\ }
+\DoxyCodeLine{00122\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00123\ \};}
+\DoxyCodeLine{00124\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{/*\ !LINK\_ALL\_STATIC\ */}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \textcolor{preprocessor}{\#if\ defined(\_\_EMSCRIPTEN\_\_)\ \&\&\ !defined(CPPPARSER)}}
+\DoxyCodeLine{00127\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \textcolor{keywordtype}{void}\ EMSCRIPTEN\_KEEPALIVE}
+\DoxyCodeLine{00128\ \_set\_env\_var(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *var,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *value)\ \{}
+\DoxyCodeLine{00129\ \ \ \mbox{\hyperlink{classExecutionEnvironment}{ExecutionEnvironment}}\ *ptr\ =\ ExecutionEnvironment::get\_ptr();}
+\DoxyCodeLine{00130\ \ \ ptr-\/>\_variables[std::string(var)]\ =\ std::string(value);}
+\DoxyCodeLine{00131\ \}}
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \textcolor{keywordtype}{void}\ EMSCRIPTEN\_KEEPALIVE}
+\DoxyCodeLine{00134\ \_set\_binary\_name(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *path)\ \{}
+\DoxyCodeLine{00135\ \ \ ExecutionEnvironment::set\_binary\_name(std::string(path));}
+\DoxyCodeLine{00136\ \}}
+\DoxyCodeLine{00137\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00139\ \textcolor{comment}{//\ Linux\ with\ GNU\ libc\ does\ have\ global\ argv/argc\ variables,\ but\ we\ can't}}
+\DoxyCodeLine{00140\ \textcolor{comment}{//\ safely\ access\ them\ at\ stat\ init\ time-\/-\/at\ least,\ not\ in\ libc5.\ (It\ does\ seem}}
+\DoxyCodeLine{00141\ \textcolor{comment}{//\ to\ work\ with\ glibc2,\ however.)}}
+\DoxyCodeLine{00142\ }
+\DoxyCodeLine{00143\ \mbox{\hyperlink{classExecutionEnvironment}{ExecutionEnvironment}}\ *ExecutionEnvironment::\_global\_ptr\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00144\ }
+\DoxyCodeLine{00149\ ExecutionEnvironment::}
+\DoxyCodeLine{00150\ ExecutionEnvironment()\ \{}
+\DoxyCodeLine{00151\ \ \ read\_environment\_variables();}
+\DoxyCodeLine{00152\ \ \ read\_args();}
+\DoxyCodeLine{00153\ \}}
+\DoxyCodeLine{00154\ }
+\DoxyCodeLine{00162\ \textcolor{keywordtype}{string}\ ExecutionEnvironment::}
+\DoxyCodeLine{00163\ expand\_string(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&str)\ \{}
+\DoxyCodeLine{00164\ \ \ \textcolor{keywordtype}{string}\ result;}
+\DoxyCodeLine{00165\ }
+\DoxyCodeLine{00166\ \ \ \textcolor{keywordtype}{size\_t}\ last\ =\ 0;}
+\DoxyCodeLine{00167\ \ \ \textcolor{keywordtype}{size\_t}\ dollar\ =\ str.find(\textcolor{charliteral}{'\$'});}
+\DoxyCodeLine{00168\ \ \ \textcolor{keywordflow}{while}\ (dollar\ !=\ string::npos\ \&\&\ dollar\ +\ 1\ <\ str.length())\ \{}
+\DoxyCodeLine{00169\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ start\ =\ dollar\ +\ 1;}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00171\ \ \ \ \ \textcolor{keywordflow}{if}\ (str[start]\ ==\ \textcolor{charliteral}{'\$'})\ \{}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \textcolor{comment}{//\ A\ double\ dollar\ sign\ maps\ to\ a\ single\ dollar\ sign.}}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ result\ +=\ str.substr(last,\ start\ -\/\ last);}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ last\ =\ start\ +\ 1;}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00176\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ varname;}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ end\ =\ start;}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (str[start]\ ==\ \textcolor{charliteral}{'\{'})\ \{}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Curly\ braces\ delimit\ the\ variable\ name\ explicitly.}}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ end\ =\ str.find(\textcolor{charliteral}{'\}'},\ start\ +\ 1);}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (end\ !=\ string::npos)\ \{}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \ \ \ \ varname\ =\ str.substr(start\ +\ 1,\ end\ -\/\ (start\ +\ 1));}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \ \ \ \ end++;}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (end\ ==\ start)\ \{}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Scan\ for\ the\ end\ of\ the\ variable\ name.}}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (end\ <\ str.length()\ \&\&\ (isalnum(str[end])\ ||\ str[end]\ ==\ \textcolor{charliteral}{'\_'}))\ \{}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \ \ end++;}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ varname\ =\ str.substr(start,\ end\ -\/\ start);}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00196\ }
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ subst\ =}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ result\ +=\ str.substr(last,\ dollar\ -\/\ last);}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ result\ +=\ get\_environment\_variable(varname);}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ last\ =\ end;}
+\DoxyCodeLine{00201\ \ \ \ \ \}}
+\DoxyCodeLine{00202\ }
+\DoxyCodeLine{00203\ \ \ \ \ dollar\ =\ str.find(\textcolor{charliteral}{'\$'},\ last);}
+\DoxyCodeLine{00204\ \ \ \}}
+\DoxyCodeLine{00205\ }
+\DoxyCodeLine{00206\ \ \ result\ +=\ str.substr(last);}
+\DoxyCodeLine{00207\ }
+\DoxyCodeLine{00208\ \ \ \textcolor{keywordflow}{return}\ result;}
+\DoxyCodeLine{00209\ \}}
+\DoxyCodeLine{00210\ }
+\DoxyCodeLine{00214\ \mbox{\hyperlink{classFilename}{Filename}}\ ExecutionEnvironment::}
+\DoxyCodeLine{00215\ get\_cwd()\ \{}
+\DoxyCodeLine{00216\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00217\ \ \ \textcolor{comment}{//\ getcwd()\ requires\ us\ to\ allocate\ a\ dynamic\ buffer\ and\ grow\ it\ on\ demand.}}
+\DoxyCodeLine{00218\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{size\_t}\ bufsize\ =\ 1024;}
+\DoxyCodeLine{00219\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{wchar\_t}\ *buffer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00220\ }
+\DoxyCodeLine{00221\ \ \ \textcolor{keywordflow}{if}\ (buffer\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00222\ \ \ \ \ buffer\ =\ \textcolor{keyword}{new}\ \textcolor{keywordtype}{wchar\_t}[bufsize];}
+\DoxyCodeLine{00223\ \ \ \}}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00225\ \ \ \textcolor{keywordflow}{while}\ (\_wgetcwd(buffer,\ bufsize)\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00226\ \ \ \ \ \textcolor{keywordflow}{if}\ (errno\ !=\ ERANGE)\ \{}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ perror(\textcolor{stringliteral}{"{}getcwd"{}});}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00229\ \ \ \ \ \}}
+\DoxyCodeLine{00230\ \ \ \ \ \textcolor{keyword}{delete}[]\ buffer;}
+\DoxyCodeLine{00231\ \ \ \ \ bufsize\ =\ bufsize\ *\ 2;}
+\DoxyCodeLine{00232\ \ \ \ \ buffer\ =\ \textcolor{keyword}{new}\ \textcolor{keywordtype}{wchar\_t}[bufsize];}
+\DoxyCodeLine{00233\ \ \ \ \ assert(buffer\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00234\ \ \ \}}
+\DoxyCodeLine{00235\ }
+\DoxyCodeLine{00236\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ cwd\ =\ \mbox{\hyperlink{classFilename_a70b3803d8c3509910f06f012c805379c}{Filename::from\_os\_specific\_w}}(buffer);}
+\DoxyCodeLine{00237\ \ \ cwd.\mbox{\hyperlink{classFilename_aa37b95cb83d8f58f2caf0b8d8ff9d628}{make\_true\_case}}();}
+\DoxyCodeLine{00238\ \ \ \textcolor{keywordflow}{return}\ cwd;}
+\DoxyCodeLine{00239\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00240\ \ \ \textcolor{comment}{//\ getcwd()\ requires\ us\ to\ allocate\ a\ dynamic\ buffer\ and\ grow\ it\ on\ demand.}}
+\DoxyCodeLine{00241\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{size\_t}\ bufsize\ =\ 1024;}
+\DoxyCodeLine{00242\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{char}\ *buffer\ =\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00243\ }
+\DoxyCodeLine{00244\ \ \ \textcolor{keywordflow}{if}\ (buffer\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00245\ \ \ \ \ buffer\ =\ \textcolor{keyword}{new}\ \textcolor{keywordtype}{char}[bufsize];}
+\DoxyCodeLine{00246\ \ \ \}}
+\DoxyCodeLine{00247\ }
+\DoxyCodeLine{00248\ \ \ \textcolor{keywordflow}{while}\ (getcwd(buffer,\ bufsize)\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00249\ \ \ \ \ \textcolor{keywordflow}{if}\ (errno\ !=\ ERANGE)\ \{}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ perror(\textcolor{stringliteral}{"{}getcwd"{}});}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00252\ \ \ \ \ \}}
+\DoxyCodeLine{00253\ \ \ \ \ \textcolor{keyword}{delete}[]\ buffer;}
+\DoxyCodeLine{00254\ \ \ \ \ bufsize\ =\ bufsize\ *\ 2;}
+\DoxyCodeLine{00255\ \ \ \ \ buffer\ =\ \textcolor{keyword}{new}\ \textcolor{keywordtype}{char}[bufsize];}
+\DoxyCodeLine{00256\ \ \ \ \ assert(buffer\ !=\ \textcolor{keyword}{nullptr});}
+\DoxyCodeLine{00257\ \ \ \}}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ cwd\ =\ \mbox{\hyperlink{classFilename_ab17a80adaab942d6570d114d6f0675c3}{Filename::from\_os\_specific}}(buffer);}
+\DoxyCodeLine{00260\ \ \ cwd.\mbox{\hyperlink{classFilename_aa37b95cb83d8f58f2caf0b8d8ff9d628}{make\_true\_case}}();}
+\DoxyCodeLine{00261\ \ \ \textcolor{keywordflow}{return}\ cwd;}
+\DoxyCodeLine{00262\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00263\ \}}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00269\ \textcolor{keywordtype}{bool}\ ExecutionEnvironment::}
+\DoxyCodeLine{00270\ ns\_has\_environment\_variable(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&var)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00271\ \ \ \textcolor{keywordflow}{if}\ (\_variables.count(var)\ !=\ 0)\ \{}
+\DoxyCodeLine{00272\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00273\ \ \ \}}
+\DoxyCodeLine{00274\ }
+\DoxyCodeLine{00275\ \textcolor{preprocessor}{\#ifdef\ PREREAD\_ENVIRONMENT}}
+\DoxyCodeLine{00276\ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00277\ \textcolor{preprocessor}{\#elif\ defined(\_WIN32)}}
+\DoxyCodeLine{00278\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ 0;}
+\DoxyCodeLine{00279\ \ \ getenv\_s(\&size,\ \textcolor{keyword}{nullptr},\ 0,\ var.c\_str());}
+\DoxyCodeLine{00280\ \ \ \textcolor{keywordflow}{return}\ size\ !=\ 0;}
+\DoxyCodeLine{00281\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00282\ \ \ \textcolor{keywordflow}{return}\ getenv(var.c\_str())\ !=\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00283\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00284\ \}}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00290\ \textcolor{keywordtype}{string}\ ExecutionEnvironment::}
+\DoxyCodeLine{00291\ ns\_get\_environment\_variable(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&var)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00292\ \ \ EnvironmentVariables::const\_iterator\ evi;}
+\DoxyCodeLine{00293\ \ \ evi\ =\ \_variables.find(var);}
+\DoxyCodeLine{00294\ \ \ \textcolor{keywordflow}{if}\ (evi\ !=\ \_variables.end())\ \{}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordflow}{return}\ (*evi).second;}
+\DoxyCodeLine{00296\ \ \ \}}
+\DoxyCodeLine{00297\ }
+\DoxyCodeLine{00298\ \ \ \textcolor{comment}{//\ Some\ special\ case\ variables.\ \ We\ virtually\ stuff\ these\ values\ into\ the}}
+\DoxyCodeLine{00299\ \ \ \textcolor{comment}{//\ Panda\ environment,\ shadowing\ whatever\ values\ they\ have\ in\ the\ true}}
+\DoxyCodeLine{00300\ \ \ \textcolor{comment}{//\ environment,\ so\ they\ can\ be\ used\ in\ config\ files.}}
+\DoxyCodeLine{00301\ \ \ \textcolor{keywordflow}{if}\ (var\ ==\ \textcolor{stringliteral}{"{}HOME"{}})\ \{}
+\DoxyCodeLine{00302\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classFilename_a5ca0e069e8b712b798b4eeabc14346fe}{Filename::get\_home\_directory}}().\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}();}
+\DoxyCodeLine{00303\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (var\ ==\ \textcolor{stringliteral}{"{}TEMP"{}})\ \{}
+\DoxyCodeLine{00304\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classFilename_a8c57e1b0ca701650369a9551093e5929}{Filename::get\_temp\_directory}}().\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}();}
+\DoxyCodeLine{00305\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (var\ ==\ \textcolor{stringliteral}{"{}USER\_APPDATA"{}})\ \{}
+\DoxyCodeLine{00306\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classFilename_a9391bc82ff07a0f12ed4096f71de13ba}{Filename::get\_user\_appdata\_directory}}().\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}();}
+\DoxyCodeLine{00307\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (var\ ==\ \textcolor{stringliteral}{"{}COMMON\_APPDATA"{}})\ \{}
+\DoxyCodeLine{00308\ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classFilename_a6f997ac5161d2fd83173bc01952ba5e9}{Filename::get\_common\_appdata\_directory}}().\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}();}
+\DoxyCodeLine{00309\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (var\ ==\ \textcolor{stringliteral}{"{}MAIN\_DIR"{}})\ \{}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{comment}{//\ Return\ the\ binary\ name's\ parent\ directory.\ \ If\ we're\ running\ inside\ the}}
+\DoxyCodeLine{00311\ \ \ \ \ \textcolor{comment}{//\ Python\ interpreter,\ this\ will\ be\ overridden\ by\ a\ setting\ from}}
+\DoxyCodeLine{00312\ \ \ \ \ \textcolor{comment}{//\ panda3d/core.py.}}
+\DoxyCodeLine{00313\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_binary\_name.empty())\ \{}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ main\_dir\ (\_binary\_name);}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ main\_dir.make\_absolute();}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \mbox{\hyperlink{classFilename}{Filename}}(main\_dir.get\_dirname()).\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}();}
+\DoxyCodeLine{00317\ \ \ \ \ \}}
+\DoxyCodeLine{00318\ \ \ \}}
+\DoxyCodeLine{00319\ }
+\DoxyCodeLine{00320\ \textcolor{preprocessor}{\#ifndef\ PREREAD\_ENVIRONMENT}}
+\DoxyCodeLine{00321\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00322\ \ \ std::string\ value(128,\ \textcolor{charliteral}{'\(\backslash\)0'});}
+\DoxyCodeLine{00323\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ value.size();}
+\DoxyCodeLine{00324\ \ \ \textcolor{keywordflow}{while}\ (getenv\_s(\&size,\ \&value[0],\ size,\ var.c\_str())\ ==\ ERANGE)\ \{}
+\DoxyCodeLine{00325\ \ \ \ \ value.resize(size);}
+\DoxyCodeLine{00326\ \ \ \}}
+\DoxyCodeLine{00327\ \ \ \textcolor{keywordflow}{if}\ (size\ !=\ 0)\ \{}
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{comment}{//\ Strip\ off\ the\ trailing\ null\ byte.}}
+\DoxyCodeLine{00329\ \ \ \ \ value.resize(size\ -\/\ 1);}
+\DoxyCodeLine{00330\ \ \ \ \ \textcolor{keywordflow}{return}\ value;}
+\DoxyCodeLine{00331\ \ \ \}}
+\DoxyCodeLine{00332\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00333\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *def\ =\ getenv(var.c\_str());}
+\DoxyCodeLine{00334\ \ \ \textcolor{keywordflow}{if}\ (def\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00335\ \ \ \ \ \textcolor{keywordflow}{return}\ def;}
+\DoxyCodeLine{00336\ \ \ \}}
+\DoxyCodeLine{00337\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00338\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00340\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00341\ \ \ \textcolor{comment}{//\ On\ Windows\ only,\ we\ also\ simulate\ several\ standard\ folder\ names\ as}}
+\DoxyCodeLine{00342\ \ \ \textcolor{comment}{//\ "{}environment"{}\ variables.\ \ I\ know\ we're\ supposed\ to\ be\ using}}
+\DoxyCodeLine{00343\ \ \ \textcolor{comment}{//\ KnownFolderID's\ these\ days,\ but\ those\ calls\ aren't\ compatible\ with\ XP,\ so}}
+\DoxyCodeLine{00344\ \ \ \textcolor{comment}{//\ we'll\ continue\ to\ use\ SHGetSpecialFolderPath()\ until\ we're\ forced\ out\ of}}
+\DoxyCodeLine{00345\ \ \ \textcolor{comment}{//\ it.}}
+\DoxyCodeLine{00346\ }
+\DoxyCodeLine{00347\ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{struct\ }\{\ \textcolor{keywordtype}{int}\ id;\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *name;\ \}\ csidl\_table[]\ =\ \{}
+\DoxyCodeLine{00348\ \ \ \ \ \{\ CSIDL\_ADMINTOOLS,\ \textcolor{stringliteral}{"{}ADMINTOOLS"{}}\ \},}
+\DoxyCodeLine{00349\ \ \ \ \ \{\ CSIDL\_ALTSTARTUP,\ \textcolor{stringliteral}{"{}ALTSTARTUP"{}}\ \},}
+\DoxyCodeLine{00350\ \ \ \ \ \{\ CSIDL\_APPDATA,\ \textcolor{stringliteral}{"{}APPDATA"{}}\ \},}
+\DoxyCodeLine{00351\ \ \ \ \ \{\ CSIDL\_BITBUCKET,\ \textcolor{stringliteral}{"{}BITBUCKET"{}}\ \},}
+\DoxyCodeLine{00352\ \ \ \ \ \{\ CSIDL\_CDBURN\_AREA,\ \textcolor{stringliteral}{"{}CDBURN\_AREA"{}}\ \},}
+\DoxyCodeLine{00353\ \ \ \ \ \{\ CSIDL\_COMMON\_ADMINTOOLS,\ \textcolor{stringliteral}{"{}COMMON\_ADMINTOOLS"{}}\ \},}
+\DoxyCodeLine{00354\ \ \ \ \ \{\ CSIDL\_COMMON\_ALTSTARTUP,\ \textcolor{stringliteral}{"{}COMMON\_ALTSTARTUP"{}}\ \},}
+\DoxyCodeLine{00355\ \ \ \ \ \{\ CSIDL\_COMMON\_APPDATA,\ \textcolor{stringliteral}{"{}COMMON\_APPDATA"{}}\ \},}
+\DoxyCodeLine{00356\ \ \ \ \ \{\ CSIDL\_COMMON\_DESKTOPDIRECTORY,\ \textcolor{stringliteral}{"{}COMMON\_DESKTOPDIRECTORY"{}}\ \},}
+\DoxyCodeLine{00357\ \ \ \ \ \{\ CSIDL\_COMMON\_DOCUMENTS,\ \textcolor{stringliteral}{"{}COMMON\_DOCUMENTS"{}}\ \},}
+\DoxyCodeLine{00358\ \ \ \ \ \{\ CSIDL\_COMMON\_FAVORITES,\ \textcolor{stringliteral}{"{}COMMON\_FAVORITES"{}}\ \},}
+\DoxyCodeLine{00359\ \ \ \ \ \{\ CSIDL\_COMMON\_MUSIC,\ \textcolor{stringliteral}{"{}COMMON\_MUSIC"{}}\ \},}
+\DoxyCodeLine{00360\ \ \ \ \ \{\ CSIDL\_COMMON\_OEM\_LINKS,\ \textcolor{stringliteral}{"{}COMMON\_OEM\_LINKS"{}}\ \},}
+\DoxyCodeLine{00361\ \ \ \ \ \{\ CSIDL\_COMMON\_PICTURES,\ \textcolor{stringliteral}{"{}COMMON\_PICTURES"{}}\ \},}
+\DoxyCodeLine{00362\ \ \ \ \ \{\ CSIDL\_COMMON\_PROGRAMS,\ \textcolor{stringliteral}{"{}COMMON\_PROGRAMS"{}}\ \},}
+\DoxyCodeLine{00363\ \ \ \ \ \{\ CSIDL\_COMMON\_STARTMENU,\ \textcolor{stringliteral}{"{}COMMON\_STARTMENU"{}}\ \},}
+\DoxyCodeLine{00364\ \ \ \ \ \{\ CSIDL\_COMMON\_STARTUP,\ \textcolor{stringliteral}{"{}COMMON\_STARTUP"{}}\ \},}
+\DoxyCodeLine{00365\ \ \ \ \ \{\ CSIDL\_COMMON\_TEMPLATES,\ \textcolor{stringliteral}{"{}COMMON\_TEMPLATES"{}}\ \},}
+\DoxyCodeLine{00366\ \ \ \ \ \{\ CSIDL\_COMMON\_VIDEO,\ \textcolor{stringliteral}{"{}COMMON\_VIDEO"{}}\ \},}
+\DoxyCodeLine{00367\ \ \ \ \ \{\ CSIDL\_COMPUTERSNEARME,\ \textcolor{stringliteral}{"{}COMPUTERSNEARME"{}}\ \},}
+\DoxyCodeLine{00368\ \ \ \ \ \{\ CSIDL\_CONNECTIONS,\ \textcolor{stringliteral}{"{}CONNECTIONS"{}}\ \},}
+\DoxyCodeLine{00369\ \ \ \ \ \{\ CSIDL\_CONTROLS,\ \textcolor{stringliteral}{"{}CONTROLS"{}}\ \},}
+\DoxyCodeLine{00370\ \ \ \ \ \{\ CSIDL\_COOKIES,\ \textcolor{stringliteral}{"{}COOKIES"{}}\ \},}
+\DoxyCodeLine{00371\ \ \ \ \ \{\ CSIDL\_DESKTOP,\ \textcolor{stringliteral}{"{}DESKTOP"{}}\ \},}
+\DoxyCodeLine{00372\ \ \ \ \ \{\ CSIDL\_DESKTOPDIRECTORY,\ \textcolor{stringliteral}{"{}DESKTOPDIRECTORY"{}}\ \},}
+\DoxyCodeLine{00373\ \ \ \ \ \{\ CSIDL\_DRIVES,\ \textcolor{stringliteral}{"{}DRIVES"{}}\ \},}
+\DoxyCodeLine{00374\ \ \ \ \ \{\ CSIDL\_FAVORITES,\ \textcolor{stringliteral}{"{}FAVORITES"{}}\ \},}
+\DoxyCodeLine{00375\ \ \ \ \ \{\ CSIDL\_FONTS,\ \textcolor{stringliteral}{"{}FONTS"{}}\ \},}
+\DoxyCodeLine{00376\ \ \ \ \ \{\ CSIDL\_HISTORY,\ \textcolor{stringliteral}{"{}HISTORY"{}}\ \},}
+\DoxyCodeLine{00377\ \ \ \ \ \{\ CSIDL\_INTERNET,\ \textcolor{stringliteral}{"{}INTERNET"{}}\ \},}
+\DoxyCodeLine{00378\ \ \ \ \ \{\ CSIDL\_INTERNET\_CACHE,\ \textcolor{stringliteral}{"{}INTERNET\_CACHE"{}}\ \},}
+\DoxyCodeLine{00379\ \ \ \ \ \{\ CSIDL\_LOCAL\_APPDATA,\ \textcolor{stringliteral}{"{}LOCAL\_APPDATA"{}}\ \},}
+\DoxyCodeLine{00380\ \ \ \ \ \{\ CSIDL\_MYDOCUMENTS,\ \textcolor{stringliteral}{"{}MYDOCUMENTS"{}}\ \},}
+\DoxyCodeLine{00381\ \ \ \ \ \{\ CSIDL\_MYMUSIC,\ \textcolor{stringliteral}{"{}MYMUSIC"{}}\ \},}
+\DoxyCodeLine{00382\ \ \ \ \ \{\ CSIDL\_MYPICTURES,\ \textcolor{stringliteral}{"{}MYPICTURES"{}}\ \},}
+\DoxyCodeLine{00383\ \ \ \ \ \{\ CSIDL\_MYVIDEO,\ \textcolor{stringliteral}{"{}MYVIDEO"{}}\ \},}
+\DoxyCodeLine{00384\ \ \ \ \ \{\ CSIDL\_NETHOOD,\ \textcolor{stringliteral}{"{}NETHOOD"{}}\ \},}
+\DoxyCodeLine{00385\ \ \ \ \ \{\ CSIDL\_NETWORK,\ \textcolor{stringliteral}{"{}NETWORK"{}}\ \},}
+\DoxyCodeLine{00386\ \ \ \ \ \{\ CSIDL\_PERSONAL,\ \textcolor{stringliteral}{"{}PERSONAL"{}}\ \},}
+\DoxyCodeLine{00387\ \ \ \ \ \{\ CSIDL\_PRINTERS,\ \textcolor{stringliteral}{"{}PRINTERS"{}}\ \},}
+\DoxyCodeLine{00388\ \ \ \ \ \{\ CSIDL\_PRINTHOOD,\ \textcolor{stringliteral}{"{}PRINTHOOD"{}}\ \},}
+\DoxyCodeLine{00389\ \ \ \ \ \{\ CSIDL\_PROFILE,\ \textcolor{stringliteral}{"{}PROFILE"{}}\ \},}
+\DoxyCodeLine{00390\ \ \ \ \ \{\ CSIDL\_PROGRAM\_FILES,\ \textcolor{stringliteral}{"{}PROGRAM\_FILES"{}}\ \},}
+\DoxyCodeLine{00391\ \ \ \ \ \{\ CSIDL\_PROGRAM\_FILESX86,\ \textcolor{stringliteral}{"{}PROGRAM\_FILESX86"{}}\ \},}
+\DoxyCodeLine{00392\ \ \ \ \ \{\ CSIDL\_PROGRAM\_FILES\_COMMON,\ \textcolor{stringliteral}{"{}PROGRAM\_FILES\_COMMON"{}}\ \},}
+\DoxyCodeLine{00393\ \ \ \ \ \{\ CSIDL\_PROGRAM\_FILES\_COMMONX86,\ \textcolor{stringliteral}{"{}PROGRAM\_FILES\_COMMONX86"{}}\ \},}
+\DoxyCodeLine{00394\ \ \ \ \ \{\ CSIDL\_PROGRAMS,\ \textcolor{stringliteral}{"{}PROGRAMS"{}}\ \},}
+\DoxyCodeLine{00395\ \ \ \ \ \{\ CSIDL\_RECENT,\ \textcolor{stringliteral}{"{}RECENT"{}}\ \},}
+\DoxyCodeLine{00396\ \ \ \ \ \{\ CSIDL\_RESOURCES,\ \textcolor{stringliteral}{"{}RESOURCES"{}}\ \},}
+\DoxyCodeLine{00397\ \ \ \ \ \{\ CSIDL\_RESOURCES\_LOCALIZED,\ \textcolor{stringliteral}{"{}RESOURCES\_LOCALIZED"{}}\ \},}
+\DoxyCodeLine{00398\ \ \ \ \ \{\ CSIDL\_SENDTO,\ \textcolor{stringliteral}{"{}SENDTO"{}}\ \},}
+\DoxyCodeLine{00399\ \ \ \ \ \{\ CSIDL\_STARTMENU,\ \textcolor{stringliteral}{"{}STARTMENU"{}}\ \},}
+\DoxyCodeLine{00400\ \ \ \ \ \{\ CSIDL\_STARTUP,\ \textcolor{stringliteral}{"{}STARTUP"{}}\ \},}
+\DoxyCodeLine{00401\ \ \ \ \ \{\ CSIDL\_SYSTEM,\ \textcolor{stringliteral}{"{}SYSTEM"{}}\ \},}
+\DoxyCodeLine{00402\ \ \ \ \ \{\ CSIDL\_SYSTEMX86,\ \textcolor{stringliteral}{"{}SYSTEMX86"{}}\ \},}
+\DoxyCodeLine{00403\ \ \ \ \ \{\ CSIDL\_TEMPLATES,\ \textcolor{stringliteral}{"{}TEMPLATES"{}}\ \},}
+\DoxyCodeLine{00404\ \ \ \ \ \{\ CSIDL\_WINDOWS,\ \textcolor{stringliteral}{"{}WINDOWS"{}}\ \},}
+\DoxyCodeLine{00405\ \ \ \ \ \{\ 0,\ \textcolor{keyword}{nullptr}\ \},}
+\DoxyCodeLine{00406\ \ \ \};}
+\DoxyCodeLine{00407\ }
+\DoxyCodeLine{00408\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ csidl\_table[i].name\ !=\ \textcolor{keyword}{nullptr};\ ++i)\ \{}
+\DoxyCodeLine{00409\ \ \ \ \ \textcolor{keywordflow}{if}\ (strcmp(var.c\_str(),\ csidl\_table[i].name)\ ==\ 0)\ \{}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \textcolor{keywordtype}{wchar\_t}\ buffer[MAX\_PATH];}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (SHGetSpecialFolderPathW(\textcolor{keyword}{nullptr},\ buffer,\ csidl\_table[i].\textcolor{keywordtype}{id},\ \textcolor{keyword}{true}))\ \{}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ pathname\ =\ \mbox{\hyperlink{classFilename_a70b3803d8c3509910f06f012c805379c}{Filename::from\_os\_specific\_w}}(buffer);}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ pathname.\mbox{\hyperlink{classFilename_a5965a823b0fda63742c59103e8b447dd}{to\_os\_specific}}();}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00416\ \ \ \ \ \}}
+\DoxyCodeLine{00417\ \ \ \}}
+\DoxyCodeLine{00418\ }
+\DoxyCodeLine{00419\ \textcolor{preprocessor}{\#elif\ !defined(\_\_APPLE\_\_)}}
+\DoxyCodeLine{00420\ \ \ \textcolor{comment}{//\ Similarly,\ we\ define\ fallbacks\ on\ POSIX\ systems\ for\ the\ variables\ defined}}
+\DoxyCodeLine{00421\ \ \ \textcolor{comment}{//\ in\ the\ XDG\ Base\ Directory\ specification,\ so\ that\ they\ can\ be\ safely\ used}}
+\DoxyCodeLine{00422\ \ \ \textcolor{comment}{//\ in\ Config.prc\ files.}}
+\DoxyCodeLine{00423\ \ \ \textcolor{keywordflow}{if}\ (var\ ==\ \textcolor{stringliteral}{"{}XDG\_CONFIG\_HOME"{}})\ \{}
+\DoxyCodeLine{00424\ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ home\_dir\ =\ \mbox{\hyperlink{classFilename_a5ca0e069e8b712b798b4eeabc14346fe}{Filename::get\_home\_directory}}();}
+\DoxyCodeLine{00425\ \ \ \ \ \textcolor{keywordflow}{return}\ home\_dir.get\_fullpath()\ +\ \textcolor{stringliteral}{"{}/.config"{}};}
+\DoxyCodeLine{00426\ }
+\DoxyCodeLine{00427\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (var\ ==\ \textcolor{stringliteral}{"{}XDG\_CACHE\_HOME"{}})\ \{}
+\DoxyCodeLine{00428\ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ home\_dir\ =\ \mbox{\hyperlink{classFilename_a5ca0e069e8b712b798b4eeabc14346fe}{Filename::get\_home\_directory}}();}
+\DoxyCodeLine{00429\ \ \ \ \ \textcolor{keywordflow}{return}\ home\_dir.get\_fullpath()\ +\ \textcolor{stringliteral}{"{}/.cache"{}};}
+\DoxyCodeLine{00430\ }
+\DoxyCodeLine{00431\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (var\ ==\ \textcolor{stringliteral}{"{}XDG\_DATA\_HOME"{}})\ \{}
+\DoxyCodeLine{00432\ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ home\_dir\ =\ \mbox{\hyperlink{classFilename_a5ca0e069e8b712b798b4eeabc14346fe}{Filename::get\_home\_directory}}();}
+\DoxyCodeLine{00433\ \ \ \ \ \textcolor{keywordflow}{return}\ home\_dir.get\_fullpath()\ +\ \textcolor{stringliteral}{"{}/.local/share"{}};}
+\DoxyCodeLine{00434\ }
+\DoxyCodeLine{00435\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (var\ ==\ \textcolor{stringliteral}{"{}XDG\_STATE\_HOME"{}})\ \{}
+\DoxyCodeLine{00436\ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ home\_dir\ =\ \mbox{\hyperlink{classFilename_a5ca0e069e8b712b798b4eeabc14346fe}{Filename::get\_home\_directory}}();}
+\DoxyCodeLine{00437\ \ \ \ \ \textcolor{keywordflow}{return}\ home\_dir.get\_fullpath()\ +\ \textcolor{stringliteral}{"{}/.local/state"{}};}
+\DoxyCodeLine{00438\ \ \ \}}
+\DoxyCodeLine{00439\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ \_WIN32}}
+\DoxyCodeLine{00440\ }
+\DoxyCodeLine{00441\ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00442\ \}}
+\DoxyCodeLine{00443\ }
+\DoxyCodeLine{00448\ \textcolor{keywordtype}{void}\ ExecutionEnvironment::}
+\DoxyCodeLine{00449\ ns\_set\_environment\_variable(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&var,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&value)\ \{}
+\DoxyCodeLine{00450\ \ \ \_variables[var]\ =\ value;}
+\DoxyCodeLine{00451\ }
+\DoxyCodeLine{00452\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00453\ \ \ \_putenv\_s(var.c\_str(),\ value.c\_str());}
+\DoxyCodeLine{00454\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00455\ \ \ setenv(var.c\_str(),\ value.c\_str(),\ 1);}
+\DoxyCodeLine{00456\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00457\ \}}
+\DoxyCodeLine{00458\ }
+\DoxyCodeLine{00462\ \textcolor{keywordtype}{void}\ ExecutionEnvironment::}
+\DoxyCodeLine{00463\ ns\_shadow\_environment\_variable(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&var,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&value)\ \{}
+\DoxyCodeLine{00464\ \ \ \_variables[var]\ =\ value;}
+\DoxyCodeLine{00465\ \ \ \textcolor{comment}{//string\ putstr\ =\ var\ +\ "{}="{}\ +\ value;}}
+\DoxyCodeLine{00466\ \}}
+\DoxyCodeLine{00467\ }
+\DoxyCodeLine{00471\ \textcolor{keywordtype}{void}\ ExecutionEnvironment::}
+\DoxyCodeLine{00472\ ns\_clear\_shadow(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&var)\ \{}
+\DoxyCodeLine{00473\ \ \ EnvironmentVariables::iterator\ vi\ =\ \_variables.find(var);}
+\DoxyCodeLine{00474\ \ \ \textcolor{keywordflow}{if}\ (vi\ ==\ \_variables.end())\ \{}
+\DoxyCodeLine{00475\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00476\ \ \ \}}
+\DoxyCodeLine{00477\ }
+\DoxyCodeLine{00478\ \textcolor{preprocessor}{\#ifdef\ PREREAD\_ENVIRONMENT}}
+\DoxyCodeLine{00479\ \ \ \textcolor{comment}{//\ Now\ we\ have\ to\ replace\ the\ value\ in\ the\ table.}}
+\DoxyCodeLine{00480\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00481\ \ \ std::string\ value(128,\ \textcolor{charliteral}{'\(\backslash\)0'});}
+\DoxyCodeLine{00482\ \ \ \textcolor{keywordtype}{size\_t}\ size\ =\ value.size();}
+\DoxyCodeLine{00483\ \ \ \textcolor{keywordflow}{while}\ (getenv\_s(\&size,\ \&value[0],\ size,\ var.c\_str())\ ==\ ERANGE)\ \{}
+\DoxyCodeLine{00484\ \ \ \ \ value.resize(size);}
+\DoxyCodeLine{00485\ \ \ \}}
+\DoxyCodeLine{00486\ \ \ \textcolor{keywordflow}{if}\ (size\ !=\ 0)\ \{}
+\DoxyCodeLine{00487\ \ \ \ \ \textcolor{comment}{//\ Strip\ off\ the\ trailing\ null\ byte.}}
+\DoxyCodeLine{00488\ \ \ \ \ value.resize(size\ -\/\ 1);}
+\DoxyCodeLine{00489\ \ \ \ \ (*vi).second\ =\ std::move(value);}
+\DoxyCodeLine{00490\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00491\ \ \ \ \ \_variables.erase(vi);}
+\DoxyCodeLine{00492\ \ \ \}}
+\DoxyCodeLine{00493\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00494\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *def\ =\ getenv(var.c\_str());}
+\DoxyCodeLine{00495\ \ \ \textcolor{keywordflow}{if}\ (def\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00496\ \ \ \ \ (*vi).second\ =\ def;}
+\DoxyCodeLine{00497\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00498\ \ \ \ \ \_variables.erase(vi);}
+\DoxyCodeLine{00499\ \ \ \}}
+\DoxyCodeLine{00500\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00501\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ PREREAD\_ENVIRONMENT}}
+\DoxyCodeLine{00502\ \}}
+\DoxyCodeLine{00503\ }
+\DoxyCodeLine{00508\ \textcolor{keywordtype}{size\_t}\ ExecutionEnvironment::}
+\DoxyCodeLine{00509\ ns\_get\_num\_args()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00510\ \ \ \textcolor{keywordflow}{return}\ \_args.size();}
+\DoxyCodeLine{00511\ \}}
+\DoxyCodeLine{00512\ }
+\DoxyCodeLine{00518\ \textcolor{keywordtype}{string}\ ExecutionEnvironment::}
+\DoxyCodeLine{00519\ ns\_get\_arg(\textcolor{keywordtype}{size\_t}\ n)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00520\ \ \ assert(n\ <\ ns\_get\_num\_args());}
+\DoxyCodeLine{00521\ \ \ \textcolor{keywordflow}{return}\ \_args[n];}
+\DoxyCodeLine{00522\ \}}
+\DoxyCodeLine{00523\ }
+\DoxyCodeLine{00528\ \textcolor{keywordtype}{string}\ ExecutionEnvironment::}
+\DoxyCodeLine{00529\ ns\_get\_binary\_name()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00530\ \ \ \textcolor{keywordflow}{if}\ (\_binary\_name.empty())\ \{}
+\DoxyCodeLine{00531\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}unknown"{}};}
+\DoxyCodeLine{00532\ \ \ \}}
+\DoxyCodeLine{00533\ \ \ \textcolor{keywordflow}{return}\ \_binary\_name;}
+\DoxyCodeLine{00534\ \}}
+\DoxyCodeLine{00535\ }
+\DoxyCodeLine{00540\ \textcolor{keywordtype}{string}\ ExecutionEnvironment::}
+\DoxyCodeLine{00541\ ns\_get\_dtool\_name()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00542\ \ \ \textcolor{keywordflow}{if}\ (\_dtool\_name.empty())\ \{}
+\DoxyCodeLine{00543\ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}unknown"{}};}
+\DoxyCodeLine{00544\ \ \ \}}
+\DoxyCodeLine{00545\ \ \ \textcolor{keywordflow}{return}\ \_dtool\_name;}
+\DoxyCodeLine{00546\ \}}
+\DoxyCodeLine{00547\ }
+\DoxyCodeLine{00552\ \mbox{\hyperlink{classExecutionEnvironment}{ExecutionEnvironment}}\ *ExecutionEnvironment::}
+\DoxyCodeLine{00553\ get\_ptr()\ \{}
+\DoxyCodeLine{00554\ \ \ \textcolor{keywordflow}{if}\ (\_global\_ptr\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00555\ \ \ \ \ \_global\_ptr\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{classExecutionEnvironment}{ExecutionEnvironment}};}
+\DoxyCodeLine{00556\ \ \ \}}
+\DoxyCodeLine{00557\ \ \ \textcolor{keywordflow}{return}\ \_global\_ptr;}
+\DoxyCodeLine{00558\ \}}
+\DoxyCodeLine{00559\ }
+\DoxyCodeLine{00560\ }
+\DoxyCodeLine{00565\ \textcolor{keywordtype}{void}\ ExecutionEnvironment::}
+\DoxyCodeLine{00566\ read\_environment\_variables()\ \{}
+\DoxyCodeLine{00567\ \textcolor{preprocessor}{\#ifdef\ PREREAD\_ENVIRONMENT}}
+\DoxyCodeLine{00568\ \textcolor{preprocessor}{\#if\ defined(IS\_OSX)\ ||\ defined(IS\_FREEBSD)\ ||\ defined(IS\_LINUX)}}
+\DoxyCodeLine{00569\ \ \ \textcolor{comment}{//\ In\ the\ case\ of\ Mac,\ we'll\ try\ reading\ \_NSGetEnviron().\ In\ the\ case\ of}}
+\DoxyCodeLine{00570\ \ \ \textcolor{comment}{//\ FreeBSD\ and\ Linux,\ use\ the\ "{}environ"{}\ variable.}}
+\DoxyCodeLine{00571\ }
+\DoxyCodeLine{00572\ \ \ \textcolor{keywordtype}{char}\ **envp;}
+\DoxyCodeLine{00573\ \ \ \textcolor{keywordflow}{for}\ (envp\ =\ environ;\ envp\ \&\&\ *envp;\ envp++)\ \{}
+\DoxyCodeLine{00574\ \ \ \ \ \textcolor{keywordtype}{string}\ variable;}
+\DoxyCodeLine{00575\ \ \ \ \ \textcolor{keywordtype}{string}\ value;}
+\DoxyCodeLine{00576\ }
+\DoxyCodeLine{00577\ \ \ \ \ \textcolor{keywordtype}{char}\ *envc;}
+\DoxyCodeLine{00578\ \ \ \ \ \textcolor{keywordflow}{for}\ (envc\ =\ *envp;\ envc\ \&\&\ *envc\ \&\&\ strncmp(envc,\ \textcolor{stringliteral}{"{}="{}},\ 1)\ !=\ 0;\ envc++)\ \{}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ variable\ +=\ (char)\ *envc;}
+\DoxyCodeLine{00580\ \ \ \ \ \}}
+\DoxyCodeLine{00581\ }
+\DoxyCodeLine{00582\ \ \ \ \ \textcolor{keywordflow}{if}\ (strncmp(envc,\ \textcolor{stringliteral}{"{}="{}},\ 1)\ ==\ 0)\ \{}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (envc++;\ envc\ \&\&\ *envc;\ envc++)\ \{}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ value\ +=\ (char)\ *envc;}
+\DoxyCodeLine{00585\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00586\ \ \ \ \ \}}
+\DoxyCodeLine{00587\ }
+\DoxyCodeLine{00588\ \ \ \ \ \textcolor{keywordflow}{if}\ (!variable.empty())\ \{}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \_variables[variable]\ =\ value;}
+\DoxyCodeLine{00590\ \ \ \ \ \}}
+\DoxyCodeLine{00591\ \ \ \}}
+\DoxyCodeLine{00592\ \textcolor{preprocessor}{\#elif\ defined(\_\_EMSCRIPTEN\_\_)}}
+\DoxyCodeLine{00593\ \ \ \textcolor{comment}{//\ The\ environment\ variables\ get\ loaded\ in\ by\ the\ .js\ file\ before\ main()}}
+\DoxyCodeLine{00594\ \ \ \textcolor{comment}{//\ using\ the\ \_set\_env\_var\ exported\ function,\ defined\ above.\ \ Trying\ to\ load}}
+\DoxyCodeLine{00595\ \ \ \textcolor{comment}{//\ env\ vars\ at\ static\ init\ time\ otherwise\ makes\ some\ optimizations\ more}}
+\DoxyCodeLine{00596\ \ \ \textcolor{comment}{//\ difficult,\ notably\ wasm-\/ctor-\/eval/wizer.}}
+\DoxyCodeLine{00597\ }
+\DoxyCodeLine{00598\ \textcolor{preprocessor}{\#elif\ defined(HAVE\_PROC\_SELF\_ENVIRON)}}
+\DoxyCodeLine{00599\ \ \ \textcolor{comment}{//\ In\ some\ cases,\ we\ may\ have\ a\ file\ called\ procselfenviron\ that\ may\ be\ read}}
+\DoxyCodeLine{00600\ \ \ \textcolor{comment}{//\ to\ determine\ all\ of\ our\ environment\ variables.}}
+\DoxyCodeLine{00601\ }
+\DoxyCodeLine{00602\ \ \ pifstream\ proc(\textcolor{stringliteral}{"{}/proc/self/environ"{}});}
+\DoxyCodeLine{00603\ \ \ \textcolor{keywordflow}{if}\ (proc.fail())\ \{}
+\DoxyCodeLine{00604\ \ \ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}Cannot\ read\ /proc/self/environ;\ environment\ variables\ unavailable.\(\backslash\)n"{}};}
+\DoxyCodeLine{00605\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00606\ \ \ \}}
+\DoxyCodeLine{00607\ }
+\DoxyCodeLine{00608\ \ \ \textcolor{keywordtype}{int}\ ch\ =\ proc.get();}
+\DoxyCodeLine{00609\ \ \ \textcolor{keywordflow}{while}\ (!proc.eof()\ \&\&\ !proc.fail())\ \{}
+\DoxyCodeLine{00610\ \ \ \ \ \textcolor{keywordtype}{string}\ variable;}
+\DoxyCodeLine{00611\ \ \ \ \ \textcolor{keywordtype}{string}\ value;}
+\DoxyCodeLine{00612\ }
+\DoxyCodeLine{00613\ \ \ \ \ \textcolor{keywordflow}{while}\ (!proc.eof()\ \&\&\ !proc.fail()\ \&\&\ ch\ !=\ \textcolor{charliteral}{'='}\ \&\&\ ch\ !=\ \textcolor{charliteral}{'\(\backslash\)0'})\ \{}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ variable\ +=\ (char)ch;}
+\DoxyCodeLine{00615\ \ \ \ \ \ \ ch\ =\ proc.get();}
+\DoxyCodeLine{00616\ \ \ \ \ \}}
+\DoxyCodeLine{00617\ }
+\DoxyCodeLine{00618\ \ \ \ \ \textcolor{keywordflow}{if}\ (ch\ ==\ \textcolor{charliteral}{'='})\ \{}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ ch\ =\ proc.get();}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (!proc.eof()\ \&\&\ !proc.fail()\ \&\&\ ch\ !=\ \textcolor{charliteral}{'\(\backslash\)0'})\ \{}
+\DoxyCodeLine{00621\ \ \ \ \ \ \ \ \ value\ +=\ (char)ch;}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \ \ ch\ =\ proc.get();}
+\DoxyCodeLine{00623\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00624\ \ \ \ \ \}}
+\DoxyCodeLine{00625\ }
+\DoxyCodeLine{00626\ \ \ \ \ \textcolor{keywordflow}{if}\ (!variable.empty())\ \{}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \_variables[variable]\ =\ value;}
+\DoxyCodeLine{00628\ \ \ \ \ \}}
+\DoxyCodeLine{00629\ \ \ \ \ ch\ =\ proc.get();}
+\DoxyCodeLine{00630\ \ \ \}}
+\DoxyCodeLine{00631\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00632\ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}Warning:\ environment\ variables\ unavailable\ to\ dconfig.\(\backslash\)n"{}};}
+\DoxyCodeLine{00633\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00634\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ PREREAD\_ENVIRONMENT}}
+\DoxyCodeLine{00635\ \}}
+\DoxyCodeLine{00636\ }
+\DoxyCodeLine{00641\ \textcolor{keywordtype}{void}\ ExecutionEnvironment::}
+\DoxyCodeLine{00642\ read\_args()\ \{}
+\DoxyCodeLine{00643\ \ \ \textcolor{comment}{//\ First,\ we\ need\ to\ fill\ in\ \_dtool\_name.\ \ This\ contains\ the\ full\ path\ to}}
+\DoxyCodeLine{00644\ \ \ \textcolor{comment}{//\ the\ p3dtool\ library.}}
+\DoxyCodeLine{00645\ }
+\DoxyCodeLine{00646\ \textcolor{preprocessor}{\#ifndef\ LINK\_ALL\_STATIC}}
+\DoxyCodeLine{00647\ \textcolor{preprocessor}{\#if\ defined(\_WIN32)}}
+\DoxyCodeLine{00648\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *filename\ :\ libp3dtool\_filenames)\ \{}
+\DoxyCodeLine{00649\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_dtool\_name.empty())\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00650\ }
+\DoxyCodeLine{00651\ \ \ \ \ HMODULE\ dllhandle\ =\ GetModuleHandle(filename);}
+\DoxyCodeLine{00652\ \ \ \ \ \textcolor{keywordflow}{if}\ (!dllhandle)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00653\ }
+\DoxyCodeLine{00654\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ DWORD\ buffer\_size\ =\ 1024;}
+\DoxyCodeLine{00655\ \ \ \ \ \textcolor{keywordtype}{wchar\_t}\ buffer[buffer\_size];}
+\DoxyCodeLine{00656\ \ \ \ \ DWORD\ size\ =\ GetModuleFileNameW(dllhandle,\ buffer,\ buffer\_size);}
+\DoxyCodeLine{00657\ \ \ \ \ \textcolor{keywordflow}{if}\ (size\ !=\ 0)\ \{}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ tmp\ =\ \mbox{\hyperlink{classFilename_a70b3803d8c3509910f06f012c805379c}{Filename::from\_os\_specific\_w}}(std::wstring(buffer,\ size));}
+\DoxyCodeLine{00659\ \ \ \ \ \ \ tmp.make\_true\_case();}
+\DoxyCodeLine{00660\ \ \ \ \ \ \ \_dtool\_name\ =\ tmp;}
+\DoxyCodeLine{00661\ \ \ \ \ \}}
+\DoxyCodeLine{00662\ \ \ \}}
+\DoxyCodeLine{00663\ }
+\DoxyCodeLine{00664\ \textcolor{preprocessor}{\#elif\ defined(\_\_APPLE\_\_)}}
+\DoxyCodeLine{00665\ \ \ \textcolor{comment}{//\ And\ on\ OSX\ we\ don't\ have\ procselfmaps,\ but\ some\ \_dyld\_*\ functions.}}
+\DoxyCodeLine{00666\ }
+\DoxyCodeLine{00667\ \ \ uint32\_t\ ic\ =\ \_dyld\_image\_count();}
+\DoxyCodeLine{00668\ \ \ \textcolor{keywordflow}{for}\ (uint32\_t\ i\ =\ 0;\ i\ <\ ic;\ ++i)\ \{}
+\DoxyCodeLine{00669\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_dtool\_name.empty())\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00670\ }
+\DoxyCodeLine{00671\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *buffer\ =\ \_dyld\_get\_image\_name(i);}
+\DoxyCodeLine{00672\ \ \ \ \ \textcolor{keywordflow}{if}\ (!buffer)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00673\ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *tail\ =\ strrchr(buffer,\ \textcolor{charliteral}{'/'});}
+\DoxyCodeLine{00674\ \ \ \ \ \textcolor{keywordflow}{if}\ (!tail)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00675\ }
+\DoxyCodeLine{00676\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *filename\ :\ libp3dtool\_filenames)\ \{}
+\DoxyCodeLine{00677\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (strcmp(\&tail[1],\ filename)\ ==\ 0)\ \{}
+\DoxyCodeLine{00678\ \ \ \ \ \ \ \ \ \_dtool\_name\ =\ buffer;}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00680\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00681\ \ \ \ \ \}}
+\DoxyCodeLine{00682\ \ \ \}}
+\DoxyCodeLine{00683\ }
+\DoxyCodeLine{00684\ \textcolor{preprocessor}{\#elif\ defined(RTLD\_DI\_ORIGIN)}}
+\DoxyCodeLine{00685\ \ \ \textcolor{comment}{//\ When\ building\ with\ glibc/uClibc,\ we\ typically\ have\ access\ to\ RTLD\_DI\_ORIGIN\ in\ Unix-\/like\ operating\ systems.}}
+\DoxyCodeLine{00686\ }
+\DoxyCodeLine{00687\ \ \ \textcolor{keywordtype}{char}\ origin[PATH\_MAX\ +\ 1];}
+\DoxyCodeLine{00688\ }
+\DoxyCodeLine{00689\ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *filename\ :\ libp3dtool\_filenames)\ \{}
+\DoxyCodeLine{00690\ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_dtool\_name.empty())\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00691\ }
+\DoxyCodeLine{00692\ \ \ \ \ \textcolor{keywordtype}{void}\ *dtool\_handle\ =\ dlopen(filename,\ RTLD\_NOW\ |\ RTLD\_NOLOAD);}
+\DoxyCodeLine{00693\ \ \ \ \ \textcolor{keywordflow}{if}\ (dtool\_handle\ !=\ \textcolor{keyword}{nullptr}\ \&\&\ dlinfo(dtool\_handle,\ RTLD\_DI\_ORIGIN,\ origin)\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00694\ \ \ \ \ \ \ \_dtool\_name\ =\ origin;}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ \_dtool\_name\ +=\ \textcolor{charliteral}{'/'};}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ \_dtool\_name\ +=\ filename;}
+\DoxyCodeLine{00697\ \ \ \ \ \}}
+\DoxyCodeLine{00698\ \ \ \}}
+\DoxyCodeLine{00699\ }
+\DoxyCodeLine{00700\ \textcolor{preprocessor}{\#elif\ defined(RTLD\_DI\_LINKMAP)}}
+\DoxyCodeLine{00701\ \ \ \textcolor{comment}{//\ On\ platforms\ without\ RTLD\_DI\_ORIGIN,\ we\ can\ use\ dlinfo\ with\ RTLD\_DI\_LINKMAP\ to\ get\ the\ origin\ of\ a\ loaded\ library.}}
+\DoxyCodeLine{00702\ \ \ \textcolor{keywordflow}{if}\ (\_dtool\_name.empty())\ \{}
+\DoxyCodeLine{00703\ \ \ \ \ \textcolor{keyword}{struct\ }link\_map\ *map;}
+\DoxyCodeLine{00704\ \textcolor{preprocessor}{\#ifdef\ RTLD\_SELF}}
+\DoxyCodeLine{00705\ \ \ \ \ \textcolor{keywordtype}{void}\ *self\ =\ RTLD\_SELF;}
+\DoxyCodeLine{00706\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00707\ \ \ \ \ \textcolor{keywordtype}{void}\ *self\ =\ dlopen(NULL,\ RTLD\_NOW\ |\ RTLD\_NOLOAD);}
+\DoxyCodeLine{00708\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00709\ \ \ \ \ \textcolor{keywordflow}{if}\ (dlinfo(self,\ RTLD\_DI\_LINKMAP,\ \&map))\ \{}
+\DoxyCodeLine{00710\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (map\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00711\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_dtool\_name.empty())\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00712\ }
+\DoxyCodeLine{00713\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *head\ =\ strchr(map-\/>l\_name,\ \textcolor{charliteral}{'/'});}
+\DoxyCodeLine{00714\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!head)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00715\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *tail\ =\ strrchr(head,\ \textcolor{charliteral}{'/'});}
+\DoxyCodeLine{00716\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!tail)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00717\ }
+\DoxyCodeLine{00718\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *filename\ :\ libp3dtool\_filenames)\ \{}
+\DoxyCodeLine{00719\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (strcmp(\&tail[1],\ filename)\ ==\ 0)\ \{}
+\DoxyCodeLine{00720\ \ \ \ \ \ \ \ \ \ \ \ \ \_dtool\_name\ =\ head;}
+\DoxyCodeLine{00721\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00722\ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00723\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00724\ }
+\DoxyCodeLine{00725\ \ \ \ \ \ \ \ \ map\ =\ map-\/>l\_next;}
+\DoxyCodeLine{00726\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00727\ \ \ \ \ \}}
+\DoxyCodeLine{00728\ \ \ \}}
+\DoxyCodeLine{00729\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00730\ }
+\DoxyCodeLine{00731\ \textcolor{preprocessor}{\#if\ defined(HAVE\_PROC\_SELF\_MAPS)\ ||\ defined(HAVE\_PROC\_CURPROC\_MAP)}}
+\DoxyCodeLine{00732\ \ \ \textcolor{comment}{//\ Some\ operating\ systems\ provide\ a\ file\ in\ the\ proc\ filesystem.}}
+\DoxyCodeLine{00733\ }
+\DoxyCodeLine{00734\ \ \ \textcolor{keywordflow}{if}\ (\_dtool\_name.empty())\ \{}
+\DoxyCodeLine{00735\ \textcolor{preprocessor}{\#ifdef\ HAVE\_PROC\_CURPROC\_MAP}}
+\DoxyCodeLine{00736\ \ \ \ \ pifstream\ maps(\textcolor{stringliteral}{"{}/proc/curproc/map"{}});}
+\DoxyCodeLine{00737\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00738\ \ \ \ \ pifstream\ maps(\textcolor{stringliteral}{"{}/proc/self/maps"{}});}
+\DoxyCodeLine{00739\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00740\ \ \ \ \ \textcolor{keywordflow}{while}\ (!maps.fail()\ \&\&\ !maps.eof())\ \{}
+\DoxyCodeLine{00741\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_dtool\_name.empty())\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00742\ }
+\DoxyCodeLine{00743\ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[PATH\_MAX];}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ buffer[0]\ =\ 0;}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ maps.getline(buffer,\ PATH\_MAX);}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *head\ =\ strchr(buffer,\ \textcolor{charliteral}{'/'});}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!head)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *tail\ =\ strrchr(head,\ \textcolor{charliteral}{'/'});}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!tail)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00750\ }
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *filename\ :\ libp3dtool\_filenames)\ \{}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (strcmp(\&tail[1],\ filename)\ ==\ 0)\ \{}
+\DoxyCodeLine{00753\ \ \ \ \ \ \ \ \ \ \ \_dtool\_name\ =\ head;}
+\DoxyCodeLine{00754\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00755\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00756\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00757\ \ \ \ \ \}}
+\DoxyCodeLine{00758\ \ \ \ \ maps.close();}
+\DoxyCodeLine{00759\ \ \ \}}
+\DoxyCodeLine{00760\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00761\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{/*\ !LINK\_ALL\_STATIC\ */}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00762\ }
+\DoxyCodeLine{00763\ \ \ \textcolor{comment}{//\ Now,\ we\ need\ to\ fill\ in\ \_binary\_name.\ \ This\ contains\ the\ full\ path\ to\ the}}
+\DoxyCodeLine{00764\ \ \ \textcolor{comment}{//\ currently\ running\ executable.}}
+\DoxyCodeLine{00765\ }
+\DoxyCodeLine{00766\ \textcolor{preprocessor}{\#ifdef\ \_WIN32}}
+\DoxyCodeLine{00767\ \ \ \textcolor{keywordflow}{if}\ (\_binary\_name.empty())\ \{}
+\DoxyCodeLine{00768\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ DWORD\ buffer\_size\ =\ 1024;}
+\DoxyCodeLine{00769\ \ \ \ \ \textcolor{keywordtype}{wchar\_t}\ buffer[buffer\_size];}
+\DoxyCodeLine{00770\ \ \ \ \ DWORD\ size\ =\ GetModuleFileNameW(\textcolor{keyword}{nullptr},\ buffer,\ buffer\_size);}
+\DoxyCodeLine{00771\ \ \ \ \ \textcolor{keywordflow}{if}\ (size\ !=\ 0)\ \{}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \mbox{\hyperlink{classFilename}{Filename}}\ tmp\ =\ \mbox{\hyperlink{classFilename_a70b3803d8c3509910f06f012c805379c}{Filename::from\_os\_specific\_w}}(std::wstring(buffer,\ size));}
+\DoxyCodeLine{00773\ \ \ \ \ \ \ tmp.make\_true\_case();}
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \_binary\_name\ =\ tmp;}
+\DoxyCodeLine{00775\ \ \ \ \ \}}
+\DoxyCodeLine{00776\ \ \ \}}
+\DoxyCodeLine{00777\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00778\ }
+\DoxyCodeLine{00779\ \textcolor{preprocessor}{\#if\ defined(\_\_APPLE\_\_)}}
+\DoxyCodeLine{00780\ \ \ \textcolor{comment}{//\ And\ on\ Mac,\ we\ have\ \_NSGetExecutablePath.}}
+\DoxyCodeLine{00781\ \ \ \textcolor{keywordflow}{if}\ (\_binary\_name.empty())\ \{}
+\DoxyCodeLine{00782\ \ \ \ \ \textcolor{keywordtype}{char}\ *pathbuf\ =\ \textcolor{keyword}{new}\ \textcolor{keywordtype}{char}[PATH\_MAX];}
+\DoxyCodeLine{00783\ \ \ \ \ uint32\_t\ bufsize\ =\ PATH\_MAX;}
+\DoxyCodeLine{00784\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_NSGetExecutablePath(pathbuf,\ \&bufsize)\ ==\ 0)\ \{}
+\DoxyCodeLine{00785\ \ \ \ \ \ \ \_binary\_name\ =\ pathbuf;}
+\DoxyCodeLine{00786\ \ \ \ \ \}}
+\DoxyCodeLine{00787\ \ \ \ \ \textcolor{keyword}{delete}[]\ pathbuf;}
+\DoxyCodeLine{00788\ \ \ \}}
+\DoxyCodeLine{00789\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00790\ }
+\DoxyCodeLine{00791\ \textcolor{preprocessor}{\#if\ defined(IS\_FREEBSD)}}
+\DoxyCodeLine{00792\ \ \ \textcolor{comment}{//\ In\ FreeBSD,\ we\ can\ use\ sysctl\ to\ determine\ the\ pathname.}}
+\DoxyCodeLine{00793\ }
+\DoxyCodeLine{00794\ \ \ \textcolor{keywordflow}{if}\ (\_binary\_name.empty())\ \{}
+\DoxyCodeLine{00795\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ bufsize\ =\ 4096;}
+\DoxyCodeLine{00796\ \ \ \ \ \textcolor{keywordtype}{char}\ buffer[4096];}
+\DoxyCodeLine{00797\ \ \ \ \ \textcolor{keywordtype}{int}\ mib[4]\ =\ \{CTL\_KERN,\ KERN\_PROC,\ KERN\_PROC\_PATHNAME,\ -\/1\};}
+\DoxyCodeLine{00798\ \ \ \ \ mib[3]\ =\ getpid();}
+\DoxyCodeLine{00799\ \ \ \ \ \textcolor{keywordflow}{if}\ (sysctl(mib,\ 4,\ (\textcolor{keywordtype}{void}*)\ buffer,\ \&bufsize,\ \textcolor{keyword}{nullptr},\ 0)\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00800\ \ \ \ \ \ \ perror(\textcolor{stringliteral}{"{}sysctl"{}});}
+\DoxyCodeLine{00801\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00802\ \ \ \ \ \ \ \_binary\_name\ =\ buffer;}
+\DoxyCodeLine{00803\ \ \ \ \ \}}
+\DoxyCodeLine{00804\ \ \ \}}
+\DoxyCodeLine{00805\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00806\ }
+\DoxyCodeLine{00807\ \textcolor{preprocessor}{\#if\ defined(HAVE\_PROC\_SELF\_EXE)\ ||\ defined(HAVE\_PROC\_CURPROC\_FILE)}}
+\DoxyCodeLine{00808\ \ \ \textcolor{comment}{//\ Some\ operating\ systems\ provide\ a\ symbolic\ link\ to\ the\ executable\ in\ the}}
+\DoxyCodeLine{00809\ \ \ \textcolor{comment}{//\ proc\ filesystem.\ \ Use\ readlink\ to\ resolve\ that\ link.}}
+\DoxyCodeLine{00810\ }
+\DoxyCodeLine{00811\ \ \ \textcolor{keywordflow}{if}\ (\_binary\_name.empty())\ \{}
+\DoxyCodeLine{00812\ \ \ \ \ \textcolor{keywordtype}{char}\ readlinkbuf\ [PATH\_MAX];}
+\DoxyCodeLine{00813\ \textcolor{preprocessor}{\#ifdef\ HAVE\_PROC\_CURPROC\_FILE}}
+\DoxyCodeLine{00814\ \ \ \ \ ssize\_t\ pathlen\ =\ readlink(\textcolor{stringliteral}{"{}/proc/curproc/file"{}},\ readlinkbuf,\ PATH\_MAX\ -\/\ 1);}
+\DoxyCodeLine{00815\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00816\ \ \ \ \ ssize\_t\ pathlen\ =\ readlink(\textcolor{stringliteral}{"{}/proc/self/exe"{}},\ readlinkbuf,\ PATH\_MAX\ -\/\ 1);}
+\DoxyCodeLine{00817\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00818\ \ \ \ \ \textcolor{keywordflow}{if}\ (pathlen\ >\ 0)\ \{}
+\DoxyCodeLine{00819\ \ \ \ \ \ \ readlinkbuf[pathlen]\ =\ 0;}
+\DoxyCodeLine{00820\ \ \ \ \ \ \ \_binary\_name\ =\ readlinkbuf;}
+\DoxyCodeLine{00821\ \ \ \ \ \}}
+\DoxyCodeLine{00822\ \ \ \}}
+\DoxyCodeLine{00823\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00824\ }
+\DoxyCodeLine{00825\ \ \ \textcolor{comment}{//\ Next\ we\ need\ to\ fill\ in\ \_args,\ which\ is\ a\ vector\ containing\ the\ command-\/}}
+\DoxyCodeLine{00826\ \ \ \textcolor{comment}{//\ line\ arguments\ that\ the\ executable\ was\ invoked\ with.}}
+\DoxyCodeLine{00827\ }
+\DoxyCodeLine{00828\ \textcolor{preprocessor}{\#if\ defined(\_WIN32)}}
+\DoxyCodeLine{00829\ }
+\DoxyCodeLine{00830\ \ \ \textcolor{comment}{//\ We\ cannot\ rely\ on\ \_\_argv\ when\ Python\ is\ linked\ in\ Unicode\ mode.\ \ Instead,}}
+\DoxyCodeLine{00831\ \ \ \textcolor{comment}{//\ let's\ use\ GetCommandLine.}}
+\DoxyCodeLine{00832\ }
+\DoxyCodeLine{00833\ \ \ LPWSTR\ cmdline\ =\ GetCommandLineW();}
+\DoxyCodeLine{00834\ \ \ \textcolor{keywordtype}{int}\ argc\ =\ 0;}
+\DoxyCodeLine{00835\ \ \ LPWSTR\ *wargv\ =\ CommandLineToArgvW(cmdline,\ \&argc);}
+\DoxyCodeLine{00836\ }
+\DoxyCodeLine{00837\ \ \ \textcolor{keywordflow}{if}\ (wargv\ ==\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00838\ \ \ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}CommandLineToArgvW\ failed;\ command-\/line\ arguments\ unavailable\ to\ config.\(\backslash\)n"{}};}
+\DoxyCodeLine{00839\ }
+\DoxyCodeLine{00840\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00841\ \ \ \ \ \mbox{\hyperlink{classTextEncoder}{TextEncoder}}\ encoder;}
+\DoxyCodeLine{00842\ \ \ \ \ encoder.set\_encoding(Filename::get\_filesystem\_encoding());}
+\DoxyCodeLine{00843\ }
+\DoxyCodeLine{00844\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ argc;\ ++i)\ \{}
+\DoxyCodeLine{00845\ \ \ \ \ \ \ std::wstring\ wtext(wargv[i]);}
+\DoxyCodeLine{00846\ \ \ \ \ \ \ encoder.set\_wtext(wtext);}
+\DoxyCodeLine{00847\ }
+\DoxyCodeLine{00848\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ ==\ 0)\ \{}
+\DoxyCodeLine{00849\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_binary\_name.empty())\ \{}
+\DoxyCodeLine{00850\ \ \ \ \ \ \ \ \ \ \ \_binary\_name\ =\ encoder.get\_text();}
+\DoxyCodeLine{00851\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00852\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00853\ \ \ \ \ \ \ \ \ \_args.push\_back(encoder.get\_text());}
+\DoxyCodeLine{00854\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00855\ \ \ \ \ \}}
+\DoxyCodeLine{00856\ }
+\DoxyCodeLine{00857\ \ \ \ \ LocalFree(wargv);}
+\DoxyCodeLine{00858\ \ \ \}}
+\DoxyCodeLine{00859\ }
+\DoxyCodeLine{00860\ \textcolor{preprocessor}{\#elif\ defined(IS\_FREEBSD)}}
+\DoxyCodeLine{00861\ \ \ \textcolor{comment}{//\ In\ FreeBSD,\ we\ can\ use\ sysctl\ to\ determine\ the\ command-\/line\ arguments.}}
+\DoxyCodeLine{00862\ }
+\DoxyCodeLine{00863\ \ \ \textcolor{keywordtype}{size\_t}\ bufsize\ =\ 0;}
+\DoxyCodeLine{00864\ \ \ \textcolor{keywordtype}{int}\ mib[4]\ =\ \{CTL\_KERN,\ KERN\_PROC,\ KERN\_PROC\_ARGS,\ 0\};}
+\DoxyCodeLine{00865\ \ \ mib[3]\ =\ getpid();}
+\DoxyCodeLine{00866\ \ \ \textcolor{keywordflow}{if}\ (sysctl(mib,\ 4,\ \textcolor{keyword}{nullptr},\ \&bufsize,\ \textcolor{keyword}{nullptr},\ 0)\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00867\ \ \ \ \ perror(\textcolor{stringliteral}{"{}sysctl"{}});}
+\DoxyCodeLine{00868\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00869\ \ \ \ \ \textcolor{keywordtype}{char}\ *buffer\ =\ (\textcolor{keywordtype}{char}\ *)alloca(bufsize);}
+\DoxyCodeLine{00870\ \ \ \ \ \textcolor{keywordflow}{if}\ (sysctl(mib,\ 4,\ buffer,\ \&bufsize,\ \textcolor{keyword}{nullptr},\ 0)\ ==\ -\/1)\ \{}
+\DoxyCodeLine{00871\ \ \ \ \ \ \ perror(\textcolor{stringliteral}{"{}sysctl"{}});}
+\DoxyCodeLine{00872\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00873\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_binary\_name.empty())\ \{}
+\DoxyCodeLine{00874\ \ \ \ \ \ \ \ \ \_binary\_name\ =\ buffer;}
+\DoxyCodeLine{00875\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00876\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ idx\ =\ strlen(buffer)\ +\ 1;}
+\DoxyCodeLine{00877\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (idx\ <\ bufsize)\ \{}
+\DoxyCodeLine{00878\ \ \ \ \ \ \ \ \ \_args.push\_back((\textcolor{keywordtype}{char}*)(buffer\ +\ idx));}
+\DoxyCodeLine{00879\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ newidx\ =\ strlen(buffer\ +\ idx);}
+\DoxyCodeLine{00880\ \ \ \ \ \ \ \ \ idx\ +=\ newidx\ +\ 1;}
+\DoxyCodeLine{00881\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00882\ \ \ \ \ \}}
+\DoxyCodeLine{00883\ \ \ \}}
+\DoxyCodeLine{00884\ }
+\DoxyCodeLine{00885\ \textcolor{preprocessor}{\#elif\ defined(HAVE\_GLOBAL\_ARGV)}}
+\DoxyCodeLine{00886\ \ \ \textcolor{keywordtype}{int}\ argc\ =\ GLOBAL\_ARGC;}
+\DoxyCodeLine{00887\ }
+\DoxyCodeLine{00888\ \ \ \textcolor{comment}{//\ On\ Windows,\ \_\_argv\ can\ be\ NULL\ when\ the\ main\ entry\ point\ is\ compiled\ in}}
+\DoxyCodeLine{00889\ \ \ \textcolor{comment}{//\ Unicode\ mode\ (as\ is\ the\ case\ with\ Python\ 3)}}
+\DoxyCodeLine{00890\ \ \ \textcolor{keywordflow}{if}\ (GLOBAL\_ARGV\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00891\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_binary\_name.empty()\ \&\&\ argc\ >\ 0)\ \{}
+\DoxyCodeLine{00892\ \ \ \ \ \ \ \_binary\_name\ =\ GLOBAL\_ARGV[0];}
+\DoxyCodeLine{00893\ \ \ \ \ \ \ \textcolor{comment}{//\ This\ really\ needs\ to\ be\ resolved\ against\ PATH.}}
+\DoxyCodeLine{00894\ \ \ \ \ \}}
+\DoxyCodeLine{00895\ }
+\DoxyCodeLine{00896\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 1;\ i\ <\ argc;\ i++)\ \{}
+\DoxyCodeLine{00897\ \ \ \ \ \ \ \_args.push\_back(GLOBAL\_ARGV[i]);}
+\DoxyCodeLine{00898\ \ \ \ \ \}}
+\DoxyCodeLine{00899\ \ \ \}}
+\DoxyCodeLine{00900\ }
+\DoxyCodeLine{00901\ \textcolor{preprocessor}{\#elif\ defined(HAVE\_PROC\_SELF\_CMDLINE)\ ||\ defined(HAVE\_PROC\_CURPROC\_CMDLINE)}}
+\DoxyCodeLine{00902\ \ \ \textcolor{comment}{//\ In\ Linux,\ and\ possibly\ in\ other\ systems\ as\ well,\ we\ might\ not\ be\ able\ to}}
+\DoxyCodeLine{00903\ \ \ \textcolor{comment}{//\ use\ the\ global\ ARGCARGV\ variables\ at\ static\ init\ time.\ \ However,\ we\ may}}
+\DoxyCodeLine{00904\ \ \ \textcolor{comment}{//\ be\ lucky\ and\ have\ a\ file\ called\ procselfcmdline\ that\ may\ be\ read\ to}}
+\DoxyCodeLine{00905\ \ \ \textcolor{comment}{//\ determine\ all\ of\ our\ command-\/line\ arguments.}}
+\DoxyCodeLine{00906\ }
+\DoxyCodeLine{00907\ \textcolor{preprocessor}{\#ifdef\ HAVE\_PROC\_CURPROC\_CMDLINE}}
+\DoxyCodeLine{00908\ \ \ pifstream\ proc(\textcolor{stringliteral}{"{}/proc/curproc/cmdline"{}});}
+\DoxyCodeLine{00909\ \ \ \textcolor{keywordflow}{if}\ (proc.fail())\ \{}
+\DoxyCodeLine{00910\ \ \ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}Cannot\ read\ /proc/curproc/cmdline;\ command-\/line\ arguments\ unavailable\ to\ config.\(\backslash\)n"{}};}
+\DoxyCodeLine{00911\ \textcolor{preprocessor}{\#else}}
+\DoxyCodeLine{00912\ \ \ pifstream\ proc(\textcolor{stringliteral}{"{}/proc/self/cmdline"{}});}
+\DoxyCodeLine{00913\ \ \ \textcolor{keywordflow}{if}\ (proc.fail())\ \{}
+\DoxyCodeLine{00914\ \ \ \ \ cerr\ <<\ \textcolor{stringliteral}{"{}Cannot\ read\ /proc/self/cmdline;\ command-\/line\ arguments\ unavailable\ to\ config.\(\backslash\)n"{}};}
+\DoxyCodeLine{00915\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00916\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00917\ \ \ \ \ \textcolor{keywordtype}{int}\ ch\ =\ proc.get();}
+\DoxyCodeLine{00918\ \ \ \ \ \textcolor{keywordtype}{int}\ index\ =\ 0;}
+\DoxyCodeLine{00919\ \ \ \ \ \textcolor{keywordflow}{while}\ (!proc.eof()\ \&\&\ !proc.fail())\ \{}
+\DoxyCodeLine{00920\ \ \ \ \ \ \ \textcolor{keywordtype}{string}\ arg;}
+\DoxyCodeLine{00921\ }
+\DoxyCodeLine{00922\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (!proc.eof()\ \&\&\ !proc.fail()\ \&\&\ ch\ !=\ \textcolor{charliteral}{'\(\backslash\)0'})\ \{}
+\DoxyCodeLine{00923\ \ \ \ \ \ \ \ \ arg\ +=\ (char)ch;}
+\DoxyCodeLine{00924\ \ \ \ \ \ \ \ \ ch\ =\ proc.get();}
+\DoxyCodeLine{00925\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00926\ }
+\DoxyCodeLine{00927\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ ==\ 0)\ \{}
+\DoxyCodeLine{00928\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_binary\_name.empty())}
+\DoxyCodeLine{00929\ \ \ \ \ \ \ \ \ \ \ \_binary\_name\ =\ arg;}
+\DoxyCodeLine{00930\ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00931\ \ \ \ \ \ \ \ \ \_args.push\_back(arg);}
+\DoxyCodeLine{00932\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00933\ \ \ \ \ \ \ index++;}
+\DoxyCodeLine{00934\ }
+\DoxyCodeLine{00935\ \ \ \ \ \ \ ch\ =\ proc.get();}
+\DoxyCodeLine{00936\ \ \ \ \ \}}
+\DoxyCodeLine{00937\ \ \ \}}
+\DoxyCodeLine{00938\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00939\ }
+\DoxyCodeLine{00940\ \textcolor{preprocessor}{\#if\ !defined(\_WIN32)\ \&\&\ !defined(\_\_wasi\_\_)}}
+\DoxyCodeLine{00941\ \ \ \textcolor{comment}{//\ Try\ to\ use\ realpath\ to\ get\ cleaner\ paths.}}
+\DoxyCodeLine{00942\ }
+\DoxyCodeLine{00943\ \ \ \textcolor{keywordflow}{if}\ (!\_binary\_name.empty())\ \{}
+\DoxyCodeLine{00944\ \ \ \ \ \textcolor{keywordtype}{char}\ newpath\ [PATH\_MAX\ +\ 1];}
+\DoxyCodeLine{00945\ \ \ \ \ \textcolor{keywordflow}{if}\ (realpath(\_binary\_name.c\_str(),\ newpath)\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00946\ \ \ \ \ \ \ \_binary\_name\ =\ newpath;}
+\DoxyCodeLine{00947\ \ \ \ \ \}}
+\DoxyCodeLine{00948\ \ \ \}}
+\DoxyCodeLine{00949\ }
+\DoxyCodeLine{00950\ \ \ \textcolor{keywordflow}{if}\ (!\_dtool\_name.empty())\ \{}
+\DoxyCodeLine{00951\ \ \ \ \ \textcolor{keywordtype}{char}\ newpath\ [PATH\_MAX\ +\ 1];}
+\DoxyCodeLine{00952\ \ \ \ \ \textcolor{keywordflow}{if}\ (realpath(\_dtool\_name.c\_str(),\ newpath)\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00953\ \ \ \ \ \ \ \_dtool\_name\ =\ newpath;}
+\DoxyCodeLine{00954\ \ \ \ \ \}}
+\DoxyCodeLine{00955\ \ \ \}}
+\DoxyCodeLine{00956\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ \_WIN32\ \_\_wasi\_\_}}
+\DoxyCodeLine{00957\ }
+\DoxyCodeLine{00958\ \ \ \textcolor{keywordflow}{if}\ (\_dtool\_name.empty())\ \{}
+\DoxyCodeLine{00959\ \ \ \ \ \_dtool\_name\ =\ \_binary\_name;}
+\DoxyCodeLine{00960\ \ \ \}}
+\DoxyCodeLine{00961\ \}}
+
+\end{DoxyCode}

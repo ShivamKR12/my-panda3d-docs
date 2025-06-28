@@ -1,0 +1,277 @@
+\doxysection{http\+Digest\+Authorization.\+cxx}
+\hypertarget{httpDigestAuthorization_8cxx_source}{}\label{httpDigestAuthorization_8cxx_source}\index{panda/src/downloader/httpDigestAuthorization.cxx@{panda/src/downloader/httpDigestAuthorization.cxx}}
+\mbox{\hyperlink{httpDigestAuthorization_8cxx}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{httpDigestAuthorization_8h}{httpDigestAuthorization.h}}"{}}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#if\ defined(HAVE\_OPENSSL)\ ||\ defined(\_\_EMSCRIPTEN\_\_)}}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{hashVal_8h}{hashVal.h}}"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{string__utils_8h}{string\_utils.h}}"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{urlSpec_8h}{urlSpec.h}}"{}}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ <time.h>}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{keyword}{using\ }std::ostream;}
+\DoxyCodeLine{00025\ \textcolor{keyword}{using\ }\mbox{\hyperlink{classstd_1_1ostringstream}{std::ostringstream}};}
+\DoxyCodeLine{00026\ \textcolor{keyword}{using\ }std::string;}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ HTTPDigestAuthorization::\_mechanism\ =\ \textcolor{stringliteral}{"{}digest"{}};}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00033\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00034\ HTTPDigestAuthorization(\textcolor{keyword}{const}\ HTTPAuthorization::Tokens\ \&tokens,}
+\DoxyCodeLine{00035\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \mbox{\hyperlink{classURLSpec}{URLSpec}}\ \&url,\ \textcolor{keywordtype}{bool}\ is\_proxy)\ :}
+\DoxyCodeLine{00036\ \ \ HTTPAuthorization(tokens,\ url,\ is\_proxy)}
+\DoxyCodeLine{00037\ \{}
+\DoxyCodeLine{00038\ \ \ Tokens::const\_iterator\ ti;}
+\DoxyCodeLine{00039\ \ \ ti\ =\ tokens.find(\textcolor{stringliteral}{"{}nonce"{}});}
+\DoxyCodeLine{00040\ \ \ \textcolor{keywordflow}{if}\ (ti\ !=\ tokens.end())\ \{}
+\DoxyCodeLine{00041\ \ \ \ \ \_nonce\ =\ (*ti).second;}
+\DoxyCodeLine{00042\ \ \ \}}
+\DoxyCodeLine{00043\ \ \ \_nonce\_count\ =\ 0;}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \ \ ti\ =\ tokens.find(\textcolor{stringliteral}{"{}opaque"{}});}
+\DoxyCodeLine{00046\ \ \ \textcolor{keywordflow}{if}\ (ti\ !=\ tokens.end())\ \{}
+\DoxyCodeLine{00047\ \ \ \ \ \_opaque\ =\ (*ti).second;}
+\DoxyCodeLine{00048\ \ \ \}}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \ \ \_algorithm\ =\ A\_md5;}
+\DoxyCodeLine{00051\ \ \ ti\ =\ tokens.find(\textcolor{stringliteral}{"{}algorithm"{}});}
+\DoxyCodeLine{00052\ \ \ \textcolor{keywordflow}{if}\ (ti\ !=\ tokens.end())\ \{}
+\DoxyCodeLine{00053\ \ \ \ \ \textcolor{keywordtype}{string}\ algo\_str\ =\ \mbox{\hyperlink{string__utils_8cxx_a8436b3aed06d4a4e245ab303cdf9637e}{downcase}}((*ti).second);}
+\DoxyCodeLine{00054\ \ \ \ \ \textcolor{keywordflow}{if}\ (algo\_str\ ==\ \textcolor{stringliteral}{"{}md5"{}})\ \{}
+\DoxyCodeLine{00055\ \ \ \ \ \ \ \_algorithm\ =\ A\_md5;}
+\DoxyCodeLine{00056\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (algo\_str\ ==\ \textcolor{stringliteral}{"{}md5-\/sess"{}})\ \{}
+\DoxyCodeLine{00057\ \ \ \ \ \ \ \_algorithm\ =\ A\_md5\_sess;}
+\DoxyCodeLine{00058\ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \_algorithm\ =\ A\_unknown;}
+\DoxyCodeLine{00060\ \ \ \ \ \}}
+\DoxyCodeLine{00061\ \ \ \}}
+\DoxyCodeLine{00062\ }
+\DoxyCodeLine{00063\ \ \ \_qop\ =\ 0;}
+\DoxyCodeLine{00064\ \ \ ti\ =\ tokens.find(\textcolor{stringliteral}{"{}qop"{}});}
+\DoxyCodeLine{00065\ \ \ \textcolor{keywordflow}{if}\ (ti\ !=\ tokens.end())\ \{}
+\DoxyCodeLine{00066\ \ \ \ \ \textcolor{keywordtype}{string}\ qop\_str\ =\ \mbox{\hyperlink{string__utils_8cxx_a8436b3aed06d4a4e245ab303cdf9637e}{downcase}}((*ti).second);}
+\DoxyCodeLine{00067\ \ \ \ \ \textcolor{comment}{//\ A\ comma-\/delimited\ list\ of\ tokens.}}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00069\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ p\ =\ 0;}
+\DoxyCodeLine{00070\ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ <\ qop\_str.length())\ \{}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (p\ <\ qop\_str.length()\ \&\&\ isspace(qop\_str[p]))\ \{}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \ \ ++p;}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00074\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ q\ =\ p;}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ last\_char\ =\ p;}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (q\ <\ qop\_str.length()\ \&\&\ qop\_str[q]\ !=\ \textcolor{charliteral}{','})\ \{}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!isspace(qop\_str[q]))\ \{}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \ \ \ \ qop\_str[q]\ =\ tolower(qop\_str[q]);}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \ \ \ \ last\_char\ =\ q;}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \ \ ++q;}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00083\ }
+\DoxyCodeLine{00084\ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (last\_char\ >\ p)\ \{}
+\DoxyCodeLine{00085\ \ \ \ \ \ \ \ \ \_qop\ |=\ match\_qop\_token(qop\_str.substr(p,\ last\_char\ -\/\ p\ +\ 1));}
+\DoxyCodeLine{00086\ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00087\ \ \ \ \ \ \ p\ =\ q\ +\ 1;}
+\DoxyCodeLine{00088\ \ \ \ \ \}}
+\DoxyCodeLine{00089\ \ \ \}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \ \ \textcolor{comment}{//\ Compute\ an\ arbitrary\ client\ nonce.}}
+\DoxyCodeLine{00092\ \ \ ostringstream\ strm;}
+\DoxyCodeLine{00093\ \ \ strm\ <<\ time(\textcolor{keyword}{nullptr})\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ clock()\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ \ <<\ url.get\_url()\ <<\ \textcolor{stringliteral}{"{}:Panda"{}};}
+\DoxyCodeLine{00095\ }
+\DoxyCodeLine{00096\ \ \ \_cnonce\ =\ calc\_md5(strm.str());}
+\DoxyCodeLine{00097\ \}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00102\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00103\ \string~HTTPDigestAuthorization()\ \{}
+\DoxyCodeLine{00104\ \}}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00111\ \textcolor{keywordtype}{bool}\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00112\ is\_valid()\ \{}
+\DoxyCodeLine{00113\ \ \ \textcolor{keywordflow}{return}\ (\_algorithm\ !=\ A\_unknown);}
+\DoxyCodeLine{00114\ \}}
+\DoxyCodeLine{00115\ }
+\DoxyCodeLine{00120\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&HTTPDigestAuthorization::}
+\DoxyCodeLine{00121\ get\_mechanism()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00122\ \ \ \textcolor{keywordflow}{return}\ \_mechanism;}
+\DoxyCodeLine{00123\ \}}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00130\ \textcolor{keywordtype}{string}\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00131\ generate(HTTPEnum::Method\ method,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&request\_path,}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&username,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&body)\ \{}
+\DoxyCodeLine{00133\ \ \ \_nonce\_count++;}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00135\ \ \ \textcolor{keywordtype}{size\_t}\ colon\ =\ username.find(\textcolor{charliteral}{':'});}
+\DoxyCodeLine{00136\ \ \ \textcolor{keywordtype}{string}\ username\_only\ =\ username.substr(0,\ colon);}
+\DoxyCodeLine{00137\ \ \ \textcolor{keywordtype}{string}\ password\_only\ =\ username.substr(colon\ +\ 1);}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00139\ \ \ \textcolor{keywordtype}{string}\ digest\ =\ calc\_request\_digest(username\_only,\ password\_only,}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ method,\ request\_path,\ body);}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00142\ \ \ ostringstream\ strm;}
+\DoxyCodeLine{00143\ \ \ strm\ <<\ \textcolor{stringliteral}{"{}Digest\ username=\(\backslash\)"{}"{}}\ <<\ username.substr(0,\ colon)\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{}"{}}}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ realm=\(\backslash\)"{}"{}}\ <<\ get\_realm()\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{}"{}}}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ nonce=\(\backslash\)"{}"{}}\ <<\ \_nonce\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{}"{}}}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ uri="{}}\ <<\ request\_path}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ response=\(\backslash\)"{}"{}}\ <<\ digest\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{}"{}}}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ algorithm="{}}\ <<\ \_algorithm;}
+\DoxyCodeLine{00149\ }
+\DoxyCodeLine{00150\ \ \ \textcolor{keywordflow}{if}\ (!\_opaque.empty())\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ strm\ <<\ \textcolor{stringliteral}{"{},\ opaque=\(\backslash\)"{}"{}}\ <<\ \_opaque\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{}"{}};}
+\DoxyCodeLine{00152\ \ \ \}}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00154\ \ \ \textcolor{keywordflow}{if}\ (\_chosen\_qop\ !=\ Q\_unused)\ \{}
+\DoxyCodeLine{00155\ \ \ \ \ strm\ <<\ \textcolor{stringliteral}{"{},\ qop="{}}\ <<\ \_chosen\_qop}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ cnonce=\(\backslash\)"{}"{}}\ <<\ \_cnonce\ <<\ \textcolor{stringliteral}{"{}\(\backslash\)"{}"{}}}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \ <<\ \textcolor{stringliteral}{"{},\ nc="{}}\ <<\ get\_hex\_nonce\_count();}
+\DoxyCodeLine{00158\ \ \ \}}
+\DoxyCodeLine{00159\ }
+\DoxyCodeLine{00160\ \ \ \textcolor{keywordflow}{return}\ strm.str();}
+\DoxyCodeLine{00161\ \}}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00167\ \textcolor{keywordtype}{int}\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00168\ match\_qop\_token(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&token)\ \{}
+\DoxyCodeLine{00169\ \ \ \textcolor{keywordflow}{if}\ (token\ ==\ \textcolor{stringliteral}{"{}auth"{}})\ \{}
+\DoxyCodeLine{00170\ \ \ \ \ \textcolor{keywordflow}{return}\ Q\_auth;}
+\DoxyCodeLine{00171\ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (token\ ==\ \textcolor{stringliteral}{"{}auth-\/int"{}})\ \{}
+\DoxyCodeLine{00172\ \ \ \ \ \textcolor{keywordflow}{return}\ Q\_auth\_int;}
+\DoxyCodeLine{00173\ \ \ \}}
+\DoxyCodeLine{00174\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00175\ \}}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00180\ \textcolor{keywordtype}{string}\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00181\ calc\_request\_digest(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&username,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&password,}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ HTTPEnum::Method\ method,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&request\_path,}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&body)\ \{}
+\DoxyCodeLine{00184\ \ \ \_chosen\_qop\ =\ Q\_unused;}
+\DoxyCodeLine{00185\ \ \ \textcolor{keywordtype}{string}\ h\_a1\ =\ calc\_h(get\_a1(username,\ password));}
+\DoxyCodeLine{00186\ \ \ \textcolor{keywordtype}{string}\ h\_a2\ =\ calc\_h(get\_a2(method,\ request\_path,\ body));}
+\DoxyCodeLine{00187\ }
+\DoxyCodeLine{00188\ \ \ ostringstream\ strm;}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00190\ \ \ \textcolor{keywordflow}{if}\ (\_qop\ ==\ 0)\ \{}
+\DoxyCodeLine{00191\ \ \ \ \ \_chosen\_qop\ =\ Q\_unused;}
+\DoxyCodeLine{00192\ \ \ \ \ strm\ <<\ \_nonce\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ h\_a2;}
+\DoxyCodeLine{00193\ }
+\DoxyCodeLine{00194\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00195\ \ \ \ \ strm\ <<\ \_nonce\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ get\_hex\_nonce\_count()\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ \ <<\ \_cnonce\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ \_chosen\_qop\ <<\ \textcolor{stringliteral}{"{}:"{}}}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \ \ \ <<\ h\_a2;}
+\DoxyCodeLine{00198\ \ \ \}}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00200\ \ \ \textcolor{keywordflow}{return}\ calc\_kd(h\_a1,\ strm.str());}
+\DoxyCodeLine{00201\ \}}
+\DoxyCodeLine{00202\ }
+\DoxyCodeLine{00207\ \textcolor{keywordtype}{string}\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00208\ calc\_h(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00209\ \ \ \textcolor{keywordflow}{switch}\ (\_algorithm)\ \{}
+\DoxyCodeLine{00210\ \ \ \textcolor{keywordflow}{case}\ A\_unknown:}
+\DoxyCodeLine{00211\ \ \ \textcolor{keywordflow}{case}\ A\_md5:}
+\DoxyCodeLine{00212\ \ \ \textcolor{keywordflow}{case}\ A\_md5\_sess:}
+\DoxyCodeLine{00213\ \ \ \ \ \textcolor{keywordflow}{return}\ calc\_md5(data);}
+\DoxyCodeLine{00214\ \ \ \}}
+\DoxyCodeLine{00215\ }
+\DoxyCodeLine{00216\ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00217\ \}}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00223\ \textcolor{keywordtype}{string}\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00224\ calc\_kd(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&secret,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&data)\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00225\ \ \ \textcolor{keywordflow}{switch}\ (\_algorithm)\ \{}
+\DoxyCodeLine{00226\ \ \ \textcolor{keywordflow}{case}\ A\_unknown:}
+\DoxyCodeLine{00227\ \ \ \textcolor{keywordflow}{case}\ A\_md5:}
+\DoxyCodeLine{00228\ \ \ \textcolor{keywordflow}{case}\ A\_md5\_sess:}
+\DoxyCodeLine{00229\ \ \ \ \ \textcolor{keywordflow}{return}\ calc\_h(secret\ +\ \textcolor{stringliteral}{"{}:"{}}\ +\ data);}
+\DoxyCodeLine{00230\ \ \ \}}
+\DoxyCodeLine{00231\ }
+\DoxyCodeLine{00232\ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00233\ \}}
+\DoxyCodeLine{00234\ }
+\DoxyCodeLine{00238\ \textcolor{keywordtype}{string}\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00239\ get\_a1(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&username,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&password)\ \{}
+\DoxyCodeLine{00240\ \ \ \textcolor{keywordflow}{switch}\ (\_algorithm)\ \{}
+\DoxyCodeLine{00241\ \ \ \textcolor{keywordflow}{case}\ A\_unknown:}
+\DoxyCodeLine{00242\ \ \ \textcolor{keywordflow}{case}\ A\_md5:}
+\DoxyCodeLine{00243\ \ \ \ \ \textcolor{keywordflow}{return}\ username\ +\ \textcolor{stringliteral}{"{}:"{}}\ +\ get\_realm()\ +\ \textcolor{stringliteral}{"{}:"{}}\ +\ password;}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00245\ \ \ \textcolor{keywordflow}{case}\ A\_md5\_sess:}
+\DoxyCodeLine{00246\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_a1.empty())\ \{}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \_a1\ =\ calc\_h(username\ +\ \textcolor{stringliteral}{"{}:"{}}\ +\ get\_realm()\ +\ \textcolor{stringliteral}{"{}:"{}}\ +\ password)\ +}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}:"{}}\ +\ \_nonce\ +\ \textcolor{stringliteral}{"{}:"{}}\ +\ \_cnonce;}
+\DoxyCodeLine{00249\ \ \ \ \ \}}
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{keywordflow}{return}\ \_a1;}
+\DoxyCodeLine{00251\ \ \ \}}
+\DoxyCodeLine{00252\ }
+\DoxyCodeLine{00253\ \ \ \textcolor{keywordflow}{return}\ string();}
+\DoxyCodeLine{00254\ \}}
+\DoxyCodeLine{00255\ }
+\DoxyCodeLine{00259\ \textcolor{keywordtype}{string}\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00260\ get\_a2(HTTPEnum::Method\ method,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&request\_path,}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&body)\ \{}
+\DoxyCodeLine{00262\ \ \ ostringstream\ strm;}
+\DoxyCodeLine{00263\ }
+\DoxyCodeLine{00264\ \ \ \textcolor{keywordflow}{if}\ ((\_qop\ \&\ Q\_auth\_int)\ !=\ 0\ \&\&\ !body.empty())\ \{}
+\DoxyCodeLine{00265\ \ \ \ \ \_chosen\_qop\ =\ Q\_auth\_int;}
+\DoxyCodeLine{00266\ \ \ \ \ strm\ <<\ method\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ request\_path\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ calc\_h(body);}
+\DoxyCodeLine{00267\ }
+\DoxyCodeLine{00268\ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ \_chosen\_qop\ =\ Q\_auth;}
+\DoxyCodeLine{00270\ \ \ \ \ strm\ <<\ method\ <<\ \textcolor{stringliteral}{"{}:"{}}\ <<\ request\_path;}
+\DoxyCodeLine{00271\ \ \ \}}
+\DoxyCodeLine{00272\ }
+\DoxyCodeLine{00273\ \ \ \textcolor{keywordflow}{return}\ strm.str();}
+\DoxyCodeLine{00274\ \}}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00281\ \textcolor{keywordtype}{string}\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00282\ get\_hex\_nonce\_count()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00283\ \ \ ostringstream\ strm;}
+\DoxyCodeLine{00284\ \ \ strm\ <<\ std::hex\ <<\ std::setfill(\textcolor{charliteral}{'0'})\ <<\ std::setw(8)\ <<\ \_nonce\_count;}
+\DoxyCodeLine{00285\ \ \ \textcolor{keywordflow}{return}\ strm.str();}
+\DoxyCodeLine{00286\ \}}
+\DoxyCodeLine{00287\ }
+\DoxyCodeLine{00292\ \textcolor{keywordtype}{string}\ HTTPDigestAuthorization::}
+\DoxyCodeLine{00293\ calc\_md5(\textcolor{keyword}{const}\ \textcolor{keywordtype}{string}\ \&source)\ \{}
+\DoxyCodeLine{00294\ \ \ \mbox{\hyperlink{classHashVal}{HashVal}}\ hv;}
+\DoxyCodeLine{00295\ \ \ hv.hash\_string(source);}
+\DoxyCodeLine{00296\ \ \ \textcolor{keywordflow}{return}\ hv.as\_hex();}
+\DoxyCodeLine{00297\ \}}
+\DoxyCodeLine{00298\ }
+\DoxyCodeLine{00299\ ostream\ \&}
+\DoxyCodeLine{00300\ operator\ <<\ (ostream\ \&out,\ HTTPDigestAuthorization::Algorithm\ algorithm)\ \{}
+\DoxyCodeLine{00301\ \ \ \textcolor{keywordflow}{switch}\ (algorithm)\ \{}
+\DoxyCodeLine{00302\ \ \ \textcolor{keywordflow}{case}\ HTTPDigestAuthorization::A\_md5:}
+\DoxyCodeLine{00303\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}MD5"{}};}
+\DoxyCodeLine{00304\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00305\ \ \ \textcolor{keywordflow}{case}\ HTTPDigestAuthorization::A\_md5\_sess:}
+\DoxyCodeLine{00306\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}MD5-\/sess"{}};}
+\DoxyCodeLine{00307\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00308\ \ \ \textcolor{keywordflow}{case}\ HTTPDigestAuthorization::A\_unknown:}
+\DoxyCodeLine{00309\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}unknown"{}};}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00311\ \ \ \}}
+\DoxyCodeLine{00312\ }
+\DoxyCodeLine{00313\ \ \ \textcolor{keywordflow}{return}\ out;}
+\DoxyCodeLine{00314\ \}}
+\DoxyCodeLine{00315\ }
+\DoxyCodeLine{00316\ ostream\ \&}
+\DoxyCodeLine{00317\ operator\ <<\ (ostream\ \&out,\ HTTPDigestAuthorization::Qop\ qop)\ \{}
+\DoxyCodeLine{00318\ \ \ \textcolor{keywordflow}{switch}\ (qop)\ \{}
+\DoxyCodeLine{00319\ \ \ \textcolor{keywordflow}{case}\ HTTPDigestAuthorization::Q\_auth:}
+\DoxyCodeLine{00320\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}auth"{}};}
+\DoxyCodeLine{00321\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00322\ \ \ \textcolor{keywordflow}{case}\ HTTPDigestAuthorization::Q\_auth\_int:}
+\DoxyCodeLine{00323\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}auth-\/int"{}};}
+\DoxyCodeLine{00324\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00325\ \ \ \textcolor{keywordflow}{case}\ HTTPDigestAuthorization::Q\_unused:}
+\DoxyCodeLine{00326\ \ \ \ \ out\ <<\ \textcolor{stringliteral}{"{}unused"{}};}
+\DoxyCodeLine{00327\ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00328\ \ \ \}}
+\DoxyCodeLine{00329\ }
+\DoxyCodeLine{00330\ \ \ \textcolor{keywordflow}{return}\ out;}
+\DoxyCodeLine{00331\ \}}
+\DoxyCodeLine{00332\ }
+\DoxyCodeLine{00333\ \textcolor{preprocessor}{\#endif\ \ }\textcolor{comment}{//\ HAVE\_OPENSSL}}
+
+\end{DoxyCode}
