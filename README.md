@@ -1,3 +1,4 @@
+[![Continuous Integration](https://github.com/ShivamKR12/my-panda3d-docs/actions/workflows/ci.yml/badge.svg)](https://github.com/ShivamKR12/my-panda3d-docs/actions/workflows/ci.yml)
 [![Build Status](https://github.com/panda3d/panda3d/workflows/Continuous%20Integration/badge.svg?branch=master)](https://github.com/panda3d/panda3d/actions?query=branch%3Amaster+workflow%3A%22Continuous+Integration%22)
 [![OpenCollective](https://opencollective.com/panda3d/backers/badge.svg)](https://opencollective.com/panda3d)
 [![OpenCollective](https://opencollective.com/panda3d/sponsors/badge.svg)](https://opencollective.com/panda3d)
